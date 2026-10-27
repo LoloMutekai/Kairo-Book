@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a pseudorandom sequence from its seed and state the conditions needed to replay a simulation exactly.">
+<title>C063·M1 · Seed and generator — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mbugoa hthbnf mbti</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C063·M1</p><h1>Seed and generator</h1><p class="objectif"><span>Your goal</span>Calculate a pseudorandom sequence from its seed and state the conditions needed to replay a simulation exactly.</p><p class="prerequis"><strong>Before you start</strong><br>c030-m5 : Poisson · c013-m5 : recursion · c055-m5 : confidence interval · c017-m5 : reproduction protocol</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are preparing a simulation of a service counter. Before managing the queue, you generate a sequence of times between arrivals: 1 min, 2 min, 7 min. You want to be able to recover this exact sequence when a result surprises you. The times, seed and parameters in this scene are fictional; no real arrivals have been measured.</p><p>Imagine a small machine with an internal counter. The seed chooses its starting position. Each call advances this counter according to a fixed rule, then produces a number. The generator is this machine together with its rule and current state; the seed is only its starting point.</p><p>The sequence is called pseudorandom because a deterministic calculation produces it for use in random applications. Knowing the state and the rule lets us predict the next output here. Reproducibility is useful for investigating results; it does not guarantee that the numbers have all the desired statistical properties.</p><p>Initialize once at the start of the run, then advance. Returning to the seed before each arrival restarts the sequence at the same point. Conversely, an extra call consumes an output and shifts the outputs assigned to later arrivals.</p><div class="schemas"><figure><svg viewBox="0 0 360 302" xmlns="http://www.w3.org/2000/svg" role="img"><title>A seed, then an advancing state</title><desc>The seed 3 initializes the generator. Successive calls give the states 0, 1, 6, converted into times between arrivals of 1, 2, 7 minutes. Read the connecting lines from top to bottom.</desc><rect x="35" y="12" width="290" height="42" rx="7" class="cadre-prediction" /><text x="180" y="39" text-anchor="middle">Seed: 3</text><path d="M180 54v24m-5-5 5 5 5-5" class="trait" /><rect x="35" y="80" width="290" height="52" rx="7" class="cadre-resultat" /><text x="180" y="102" text-anchor="middle">State 0</text><text x="180" y="123" text-anchor="middle" class="petite-etiquette">Time: 1 min</text><path d="M180 132v24m-5-5 5 5 5-5" class="trait" /><rect x="35" y="158" width="290" height="52" rx="7" class="cadre-resultat" /><text x="180" y="180" text-anchor="middle">State 1</text><text x="180" y="201" text-anchor="middle" class="petite-etiquette">Time: 2 min</text><path d="M180 210v24m-5-5 5 5 5-5" class="trait" /><rect x="35" y="236" width="290" height="52" rx="7" class="cadre-resultat" /><text x="180" y="258" text-anchor="middle">State 6</text><text x="180" y="279" text-anchor="middle" class="petite-etiquette">Time: 7 min</text></svg><figcaption>The seed is not a first duration. First advance the state, then convert it into minutes. Each rectangle becomes the starting point for the next calculation.</figcaption></figure><figure><svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg" role="img"><title>Replay or restart at each call</title><desc>Keeping the state during the run gives a sequence of 1, 2, 7 minutes. Resetting before each call gives 1, 1, 1 minute. The text distinguishes the procedures without relying on colors.</desc><rect x="18" y="14" width="324" height="82" rx="7" class="cadre-resultat" /><text x="180" y="42" text-anchor="middle">State kept during the run</text><text x="180" y="75" text-anchor="middle">1 min → 2 min → 7 min</text><rect x="18" y="120" width="324" height="82" rx="7" class="cadre-neutre" /><text x="180" y="148" text-anchor="middle">Seed reset before each call</text><text x="180" y="181" text-anchor="middle">1 min → 1 min → 1 min</text></svg><figcaption>Replaying means repeating the complete run from its beginning. Resetting during that run changes the procedure and the times between arrivals.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To replay the sequence, keep the seed, the exact generator, the conversion rule and the same order of calls; during the run, keep the state as it advances.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Generate the sequence of times between arrivals at the counter</h3><p>Let us calculate the first 3 times between arrivals with a miniature generator: multiplier a = 5, increment c = 1, modulus m = 16, seed g = 3. We advance before producing the first output. This generator is a tool for calculations on paper, rather than the implementation cited in the milestone.</p><ol class="etapes"><li><h3>Define the state and the remainder of division</h3><p>n is the number of calls already made; s<sub>n</sub> is the integer state after those calls. Initially, s with subscript 0 equals g. a, c, m and g are dimensionless integers; m is strictly positive. Here each state ranges from 0 to 15 inclusive. A call multiplies the previous state by a, adds c, then keeps the remainder of division by m.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mo>(</mo><mi>a</mi><msub><mi>s</mi><mi>n</mi></msub><mo>+</mo><mi>c</mi><mo>)</mo><mtext> mod </mtext><mi>m</mi></mrow></math></div><p>The symbol mod means “remainder of integer division”. To find it, write b = qm + r, where b is the result before reduction, q is the integer quotient and r is the remainder, all dimensionless. Choose q so that 0 ≤ r &lt; m. This does not mean rounding b/m. The calculation uses exact integers, without overflow.</p></li><li><h3>Advance from the seed</h3><p>Multiply to apply the rule: 5 × 3 = 15. Adding gives 15 + 1 = 16. We need to subtract a multiple of 16 to return to the allowed interval.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>16</mn><mo>=</mo><mn>1</mn><mo>×</mo><mn>16</mn><mo>+</mo><mn>0</mn></mrow></math></div><p>The quotient is 1 and the amount subtracted is 16; the state becomes 16 − 16 = 0. A 0 remainder is allowed. Keep this state without resetting the seed.</p></li><li><h3>Make the next calls with the new state</h3><p>Second call: 5 × 0 = 0, then 0 + 1 = 1. This result is already between 0 and 15: the integer quotient is 0 and the remainder is 1.</p><p>Third call: 5 × 1 = 5, then 5 + 1 = 6. Check the bounds in the same way: the quotient is 0. The state sequence is 0, 1, 6. The seed 3 has not been copied into it as an output.</p></li><li><h3>Distinguish a dimensionless number from a time between arrivals</h3><p>A common way to present the output is to divide the state by m to give a dimensionless output u<sub>n</sub> in the interval from 0 inclusive to 1 exclusive. This rescaling does not turn a deterministic sequence into independent draws.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>u</mi><mi>n</mi></msub><mo>=</mo><mfrac><msub><mi>s</mi><mi>n</mi></msub><mi>m</mi></mfrac><mo>;</mo><msub><mi>d</mi><mi>n</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>+</mo><msub><mi>s</mi><mi>n</mi></msub><mo>)</mo><mo>×</mo><mn>1</mn><mtext> min</mtext></mrow></math></div><p>The outputs are 0, 1/16, 3/8, or 0.0000, 0.0625, 0.3750 in dimensionless form. The fractions are exact; the decimal representations given here are also exact.</p><p>d<sub>n</sub> denotes the time between arrivals assigned to output n. For this exercise alone, we choose the fictional rule “add 1, then count in minutes”. The times between arrivals are therefore 1 + 0 = 1 min, 1 + 1 = 2 min and 1 + 6 = 7 min. These are intervals, rather than cumulative arrival times. This rule is not a justified arrival distribution for a real service counter.</p></li><li><h3>Check the calculation and the conditions for replay</h3><p>Check the first remainder by reversing the calculation: 1 × 16 + 0 = 16. The following states are already less than 16 and nonnegative. The times between arrivals stay positive despite the state 0. These checks verify the reduction and units without measuring statistical quality.</p><p>To reproduce the whole sequence, record the seed 3, the exact rule with a, c and m, the convention “advance before output”, the conversion into minutes and the sequence of calls. In software, also keep the inputs, versions and implementation of the sampling functions. Equal seeds alone are not enough if another call consumes a value.</p><p>A generator with a finite state can eventually return to a previously visited state and repeat the sequence. Our miniature machine is unsuitable for demanding simulations or for generating secrets. Even a perfectly replayed sequence does not demonstrate that the counter model represents reality. The next unit will build the event model; here we have only prepared the source of the numbers.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations: explain why the seed is enough to recover our sequence only if the rule and the calls stay identical. Then justify why a 0 state can give a positive time between arrivals.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I reset the seed before each arrival to make the run reproducible.”</h3><p>Initialize at the start of the complete run, then keep the state as it advances. Otherwise, you always get the first output and the times between arrivals repeat artificially. Compare the two sequences in the diagram.</p><a href="#intuition">Compare the starting procedures</a></li><li><h3>“To find the remainder, I divide and round.”</h3><p>Find the integer quotient q, then subtract qm. Check the equality b = qm + r and the bounds of the remainder. The quotient and the remainder play different roles; the division that gives u comes afterward.</p><a href="#exemple">Repeat the reduction and check it by reversing the calculation</a></li><li><h3>“Same seed: same events, necessarily independent.”</h3><p>The seed fixes a starting point, rather than the assignment of calls to events. An added call shifts the sequence. Neither a different seed nor a successful replay proves statistical independence or the realism of the model.</p><a href="#exercices">Examine the extra call in the final exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-prolonger"><p class="repere">Exercise 1 · Guided calculation</p>
+<h3>Extend the sequence</h3><p>The current state is 6 after the 3 calls in the example. Calculate the next state, its output divided by m and the corresponding time between arrivals, without resetting. Give the integer quotient and check the remainder.</p>
+<label for="reponse-ex-prolonger">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-prolonger" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-prolonger" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-prolonger" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-prolonger" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiply the current state by 5 and add 1 before reducing.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract a multiple of 16; the remainder must be less than 16.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Multiplication gives 5 × 6 = 30; adding gives 31. The integer quotient is 1 and the state is 31 − 16 = 15. Check: 1 × 16 + 15 = 31 and 0 ≤ 15 &lt; 16.</p><p>The dimensionless output is 15/16, or 0.9375. The time between arrivals is (1 + 15) × 1 min = 16 min. The time between arrivals is not the remainder, since a separate conversion gives it its unit.</p><p class="petit-titre">Check your reasoning</p><ul><li>Start from 6, without returning to 3.</li><li>Justify the quotient and the bounds of the remainder.</li><li>Distinguish the dimensionless 15/16 from 16 min.</li></ul></details></article><article class="exercice" id="ex-reinitialiser"><p class="repere">Exercise 2 · Diagnosis with explanation</p>
+<h3>The sequence that keeps restarting</h3><p>A program resets g = 3 before each arrival, then makes a call. What are its first 3 times between arrivals? Fix the procedure to recover the sequence in the example, then explain what to do when you want to replay a complete run.</p>
+<label for="reponse-ex-reinitialiser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reinitialiser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reinitialiser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>After each reset to the seed, what was the first calculated state?</p></details><details class="indice"><summary>Hint 2</summary><p>Separate the start of a run from the start of a new arrival within that run.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Each reset to the seed returns to the calculation whose output state is 0. The times between arrivals become 1 min, 1 min, 1 min. The sequence 1 min, 2 min, 7 min has been lost: the generator no longer advances between arrivals.</p><p>Move initialization before the arrival loop and keep the same generator during the run. To replay the whole run, then recreate the generator from the initial seed and repeat the same sequence of calls. Resuming partway through a run would require the exact current state, or replaying the calls already made.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find the repeated times between arrivals and explain their origin.</li><li>Place initialization at the start of the complete run.</li><li>Distinguish replaying from the beginning from resuming from a current state.</li></ul></details></article><article class="exercice" id="ex-appel"><p class="repere">Exercise 3 · Apply to the protocol</p>
+<h3>The same seed, one extra call</h3><p>Two versions of the counter simulator use our rule and g = 3. Version A makes one call per arrival. Version B first makes a diagnostic call and discards its output, then makes one call per arrival. Give the first 2 times between arrivals for each version. How can you fix the comparison? Does this disagreement prove that the generator is broken?</p>
+<label for="reponse-ex-appel">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-appel" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-appel" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-appel" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-appel" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write out the state sequence and cross out the output consumed by the diagnostic call.</p></details><details class="indice"><summary>Hint 2</summary><p>The same output must correspond to the same arrival for this comparison to be aligned.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A assigns the states 0 then 1 to arrivals: times between arrivals of 1 min then 2 min. B has already consumed 0 for the diagnostic call; it assigns 1 then 6: times between arrivals of 2 min then 7 min. The generated sequence is the same; its assignment to arrivals has changed.</p><p>For this comparison, the diagnostic call must observe without consuming a draw from the arrival generator. You can prepare a shared sequence of times between arrivals, then supply the same element to the same arrival in each version. Recording only the seed does not describe this assignment.</p><p>This shift follows the generator rule. It demonstrates neither a fault nor independence between the sequences. Keeping the sequence makes the comparison replayable; checking the quality of the generator and the relevance of the arrival distribution remains a separate task.</p><p class="petit-titre">Check your reasoning</p><ul><li>Match each time between arrivals to the correct call in both versions.</li><li>Propose a fix that aligns the inputs for arrivals.</li><li>Separate the shift in calls, statistical quality and model validity.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="graine"><summary><span class="repere">Recall 1</span><span>What is the difference between the seed and the current state?</span></summary><p>The seed initializes the generator; the current state changes with each call. Returning to the seed restarts the sequence. To resume partway through a run, you need to recover the state reached, rather than just the starting point.</p></details><details class="carte" data-carte="reste"><summary><span class="repere">Recall 2</span><span>How do you calculate and check the next state of our machine?</span></summary><p>Calculate b = a times the current state + c, write b = qm + r with integer q and 0 ≤ r &lt; m, then keep r. Check by reconstructing b. Dividing the remainder by m then gives u, rather than the new integer state.</p></details><details class="carte" data-carte="rejeu"><summary><span class="repere">Recall 3</span><span>Why is the seed alone not enough to describe a replay?</span></summary><p>You need the same generator, its parameters, the sampling functions and their version, the same inputs and the same order of calls and conversion. An extra call can shift the output assigned to each arrival.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>What does an exactly reproduced sequence prove, and what does it fail to prove?</span></summary><p>It establishes the replay of that sequence under the recorded procedure. It establishes neither independence of the outputs, nor statistical quality of the generator, nor realism of the simulated arrivals.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the lesson, draw the seed, an advancing state and the conversion into a time between arrivals. Then reconstruct a call with its remainder and its reverse check. Finish by explaining what an added call changes and what a successful replay does not demonstrate.</p></div><div class="exports"><a class="bouton" download="c063-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjMtbTE6Z3JhaW5lIiwKICAgICAgInVuaXRlIjogImMwNjMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJncmFpbmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBzZWVkIGFuZCB0aGUgY3VycmVudCBzdGF0ZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc2VlZCBpbml0aWFsaXplcyB0aGUgZ2VuZXJhdG9yOyB0aGUgY3VycmVudCBzdGF0ZSBjaGFuZ2VzIHdpdGggZWFjaCBjYWxsLiBSZXR1cm5pbmcgdG8gdGhlIHNlZWQgcmVzdGFydHMgdGhlIHNlcXVlbmNlLiBUbyByZXN1bWUgcGFydHdheSB0aHJvdWdoIGEgcnVuLCB5b3UgbmVlZCB0byByZWNvdmVyIHRoZSBzdGF0ZSByZWFjaGVkLCByYXRoZXIgdGhhbiBqdXN0IHRoZSBzdGFydGluZyBwb2ludC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2My1tMTpyZXN0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDYzLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVzdGUtZGUtZGl2aXNpb24iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBjYWxjdWxhdGUgYW5kIGNoZWNrIHRoZSBuZXh0IHN0YXRlIG9mIG91ciBtYWNoaW5lPyIsCiAgICAgICJyZXBvbnNlIjogIkNhbGN1bGF0ZSBiID0gYSB0aW1lcyB0aGUgY3VycmVudCBzdGF0ZSArIGMsIHdyaXRlIGIgPSBxbSArIHIgd2l0aCBpbnRlZ2VyIHEgYW5kIDAg4omkIHIgPCBtLCB0aGVuIGtlZXAgci4gQ2hlY2sgYnkgcmVjb25zdHJ1Y3RpbmcgYi4gRGl2aWRpbmcgdGhlIHJlbWFpbmRlciBieSBtIHRoZW4gZ2l2ZXMgdSwgcmF0aGVyIHRoYW4gdGhlIG5ldyBpbnRlZ2VyIHN0YXRlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDYzLW0xOnJlamV1IiwKICAgICAgInVuaXRlIjogImMwNjMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXByb2R1Y3RpYmlsaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyB0aGUgc2VlZCBhbG9uZSBub3QgZW5vdWdoIHRvIGRlc2NyaWJlIGEgcmVwbGF5PyIsCiAgICAgICJyZXBvbnNlIjogIllvdSBuZWVkIHRoZSBzYW1lIGdlbmVyYXRvciwgaXRzIHBhcmFtZXRlcnMsIHRoZSBzYW1wbGluZyBmdW5jdGlvbnMgYW5kIHRoZWlyIHZlcnNpb24sIHRoZSBzYW1lIGlucHV0cyBhbmQgdGhlIHNhbWUgb3JkZXIgb2YgY2FsbHMgYW5kIGNvbnZlcnNpb24uIEFuIGV4dHJhIGNhbGwgY2FuIHNoaWZ0IHRoZSBvdXRwdXQgYXNzaWduZWQgdG8gZWFjaCBhcnJpdmFsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDYzLW0xOmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDYzLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHNldWRvYWxlYXRvaXJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhbiBleGFjdGx5IHJlcHJvZHVjZWQgc2VxdWVuY2UgcHJvdmUsIGFuZCB3aGF0IGRvZXMgaXQgZmFpbCB0byBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBlc3RhYmxpc2hlcyB0aGUgcmVwbGF5IG9mIHRoYXQgc2VxdWVuY2UgdW5kZXIgdGhlIHJlY29yZGVkIHByb2NlZHVyZS4gSXQgZXN0YWJsaXNoZXMgbmVpdGhlciBpbmRlcGVuZGVuY2Ugb2YgdGhlIG91dHB1dHMsIG5vciBzdGF0aXN0aWNhbCBxdWFsaXR5IG9mIHRoZSBnZW5lcmF0b3IsIG5vciByZWFsaXNtIG9mIHRoZSBzaW11bGF0ZWQgYXJyaXZhbHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c063-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBzZWVkIGFuZCB0aGUgY3VycmVudCBzdGF0ZT8JVGhlIHNlZWQgaW5pdGlhbGl6ZXMgdGhlIGdlbmVyYXRvcjsgdGhlIGN1cnJlbnQgc3RhdGUgY2hhbmdlcyB3aXRoIGVhY2ggY2FsbC4gUmV0dXJuaW5nIHRvIHRoZSBzZWVkIHJlc3RhcnRzIHRoZSBzZXF1ZW5jZS4gVG8gcmVzdW1lIHBhcnR3YXkgdGhyb3VnaCBhIHJ1biwgeW91IG5lZWQgdG8gcmVjb3ZlciB0aGUgc3RhdGUgcmVhY2hlZCwgcmF0aGVyIHRoYW4ganVzdCB0aGUgc3RhcnRpbmcgcG9pbnQuCXRvZGFpIGMwNjMtbTEgZ3JhaW5lCkhvdyBkbyB5b3UgY2FsY3VsYXRlIGFuZCBjaGVjayB0aGUgbmV4dCBzdGF0ZSBvZiBvdXIgbWFjaGluZT8JQ2FsY3VsYXRlIGIgPSBhIHRpbWVzIHRoZSBjdXJyZW50IHN0YXRlICsgYywgd3JpdGUgYiA9IHFtICsgciB3aXRoIGludGVnZXIgcSBhbmQgMCDiiaQgciA8IG0sIHRoZW4ga2VlcCByLiBDaGVjayBieSByZWNvbnN0cnVjdGluZyBiLiBEaXZpZGluZyB0aGUgcmVtYWluZGVyIGJ5IG0gdGhlbiBnaXZlcyB1LCByYXRoZXIgdGhhbiB0aGUgbmV3IGludGVnZXIgc3RhdGUuCXRvZGFpIGMwNjMtbTEgcmVzdGUtZGUtZGl2aXNpb24KV2h5IGlzIHRoZSBzZWVkIGFsb25lIG5vdCBlbm91Z2ggdG8gZGVzY3JpYmUgYSByZXBsYXk/CVlvdSBuZWVkIHRoZSBzYW1lIGdlbmVyYXRvciwgaXRzIHBhcmFtZXRlcnMsIHRoZSBzYW1wbGluZyBmdW5jdGlvbnMgYW5kIHRoZWlyIHZlcnNpb24sIHRoZSBzYW1lIGlucHV0cyBhbmQgdGhlIHNhbWUgb3JkZXIgb2YgY2FsbHMgYW5kIGNvbnZlcnNpb24uIEFuIGV4dHJhIGNhbGwgY2FuIHNoaWZ0IHRoZSBvdXRwdXQgYXNzaWduZWQgdG8gZWFjaCBhcnJpdmFsLgl0b2RhaSBjMDYzLW0xIHJlcHJvZHVjdGliaWxpdGUKV2hhdCBkb2VzIGFuIGV4YWN0bHkgcmVwcm9kdWNlZCBzZXF1ZW5jZSBwcm92ZSwgYW5kIHdoYXQgZG9lcyBpdCBmYWlsIHRvIHByb3ZlPwlJdCBlc3RhYmxpc2hlcyB0aGUgcmVwbGF5IG9mIHRoYXQgc2VxdWVuY2UgdW5kZXIgdGhlIHJlY29yZGVkIHByb2NlZHVyZS4gSXQgZXN0YWJsaXNoZXMgbmVpdGhlciBpbmRlcGVuZGVuY2Ugb2YgdGhlIG91dHB1dHMsIG5vciBzdGF0aXN0aWNhbCBxdWFsaXR5IG9mIHRoZSBnZW5lcmF0b3IsIG5vciByZWFsaXNtIG9mIHRoZSBzaW11bGF0ZWQgYXJyaXZhbHMuCXRvZGFpIGMwNjMtbTEgcHNldWRvYWxlYXRvaXJlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mbugoa hthbnf mbti</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize a seed and the calls that consume the sequence</h3><dl><div><dt>What you understand</dt><dd>The seed fixes a starting point and calls advance a state. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jkhbxd toybdx paheeb kjudhh fkpiwc lyczpd gtmquo aqspsy qwdxcv vzrsij jrwryx nshxhh yuuzaa mc</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zwzawn ilgkew fmscbb pmbofr xmbfte akgjhv hplfhq ggmgsr rwhyyj anyjlj ondjzu jnyxdc tcgqvv gsyhrr himwau owixqn erkxxu teggxb tlozrh tcdrtw zscqbi qktwbt ldxpud vjkmuq</span></span></dd></div><div><dt>Your level</dt><dd>Level 2 to prepare for: repeat the calls, explain a misplaced reset and diagnose a shift in a sequence. Reading, consulting a solution or producing an assisted answer never counts as having attained a level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bizdbg hyqgwm aahmql ytjkkb ukrqkb lrhbvm gqvjyj ztfqwl coztab vljqbo ixzvgv nibqdq xmydqx wxhtez xjugwy egigbs wnbmsn yhfzzs hpgcwd dboius hvhguc tvcnwl opkqnf vbadzo</span></span></dd></div><div><dt>Next steps</dt><dd>Redo the exercises without help on another day and explain the limits of replay. The next unit will connect draws to a Bernoulli model and a discrete trajectory. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pdkkcp uqigef xxpjsl lnwbiu bfckix xkclfa olysbs hyxrtw jhyucp pwpcuq hljwdc nllajp kcluuh ne</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c063-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c062-m5.html">Previous</a> · <a href="c063-m2.html">Next</a></nav>
+<footer><p>Course book · C063·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

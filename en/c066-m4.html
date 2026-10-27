@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Identify spread that depends on batch type, measure it using residuals, and explain what it changes about uncertainty in a regression.">
+<title>C066·M4 · Heteroscedasticity — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">utijyh gzwgyl ejjj</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C066·M4</p><h1>Heteroscedasticity</h1><p class="objectif"><span>Your goal</span>Identify spread that depends on batch type, measure it using residuals, and explain what it changes about uncertainty in a regression.</p><p class="prerequis"><strong>Before you start</strong><br>c065-m5 : prediction interval · c050-m5 : conditioning · c061-m5 : identifiability and uncertainty · c066-m1 : matrix OLS · c066-m2 : collinearity · c066-m3 : indicator variables</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a packing workshop, small batches almost always take the expected time. Large batches sometimes take less time, and sometimes much more. Even when the mean time for each category is predicted correctly, the uncertainty margin need not be the same for both.</p><p>Heteroscedasticity means that the spread of errors varies with the characteristics used for prediction. Homoscedasticity is the opposite assumption: a common error variance. A higher mean for large batches is not enough to distinguish between them; we need to examine deviations around each mean.</p><p>Our scenario and all its times are fictional. We observe 6 batches, assumed to be independent, classified as small or large. The diagram already subtracts the group mean from each time: the points show residuals, in minutes. Two neighboring points at the same height represent equal times, not a change of category.</p><p>Variance is a probabilistic average of squared deviations from an expected value. Here it is expressed in square minutes, written min². A residual is a deviation calculated after fitting; it helps us examine the unknown error variance without itself being that variance.</p><div class="schemas"><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same centers, different spreads</title><desc>Residuals in minutes, on the same vertical scale. For small batches, 2 residuals equal -1 and 2 equal 1. For large batches, the residuals equal -3 and 3. Both groups are centered on 0; the second has more spread.</desc><text x="18" y="26">Deviations after fitting</text><text x="18" y="54" class="petite-etiquette">Residual (min)</text><line x1="65" y1="72" x2="65" y2="230" class="trait" /><line x1="65" y1="150" x2="338" y2="150" class="trait" /><line x1="60" y1="90" x2="70" y2="90" class="trait" /><line x1="60" y1="210" x2="70" y2="210" class="trait" /><text x="50" y="96" text-anchor="end">+3</text><text x="50" y="156" text-anchor="end">0</text><text x="50" y="216" text-anchor="end">-3</text><circle cx="114" cy="130" r="5" class="point-prediction" /><circle cx="134" cy="130" r="5" class="point-prediction" /><circle cx="114" cy="170" r="5" class="point-prediction" /><circle cx="134" cy="170" r="5" class="point-prediction" /><circle cx="274" cy="90" r="6" class="point-mesure" /><circle cx="274" cy="210" r="6" class="point-mesure" /><text x="124" y="252" text-anchor="middle">Small batches</text><text x="274" y="252" text-anchor="middle">Large batches</text><text x="124" y="277" text-anchor="middle" class="petite-etiquette">4 observations</text><text x="274" y="277" text-anchor="middle" class="petite-etiquette">2 observations</text></svg><figcaption>The horizontal axis separates the categories; only height represents the residual. Small batches deviate from their mean by 1 min, and large batches by 3 min. The signs cancel out in both groups, but the squares do not.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Examine the spread of deviations after accounting for the mean. An overall mean of squares can hide very different spreads across batches.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Compare deviations after fitting the means</h3><p>Small batches: 9, 9, 11, 11 min. Large batches: 17, 23 min. Batch type is the only characteristic in this particular case of the linear model. We fit an intercept and an indicator variable, then describe the residuals; we calculate neither a significance test nor a confidence interval.</p><ol class="etapes"><li><h3>Separate the mean time from the error</h3><p>For batch i, yᵢ is the time in minutes, and dᵢ is the known, unitless indicator for a large batch: 0 for small, 1 for large. The unknown parameters a and b are in minutes: a is the mean for small batches, and b is the difference in means between large and small batches. εᵢ denotes the random error around this mean, in minutes. The index i identifies an observation; n denotes the number of observations.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><msub><mi>d</mi><mi>i</mi></msub><mo>+</mo><msub><mi>ε</mi><mi>i</mi></msub></mrow></math></div><p>D denotes the set of fixed indicator values for the sample. We assume independent errors with finite variances and 0 conditional mean: E(εᵢ | D) = 0 min. E means expectation, that is, the mean under the probabilistic model; the bar | means “given.” The presence of both categories makes the intercept and indicator columns linearly independent here.</p><p>Var denotes conditional variance. The notation σᵢ squared represents the variance of εᵢ, in min². Under homoscedasticity it is the same for all batches; under heteroscedasticity it can depend on the category. Neither normality nor equal variances are needed for the group means we are about to fit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><msub><mi>ε</mi><mi>i</mi></msub><mo>|</mo><mi>D</mi><mo>)</mo><mo>=</mo><msubsup><mi>σ</mi><mi>i</mi><mn>2</mn></msubsup></mrow></math></div></li><li><h3>Fit the mean for each category</h3><p>Ordinary least squares chooses the coefficients that minimize the sum of squared residuals. With an intercept and this indicator, this amounts to choosing each group mean separately. A hat distinguishes the fitted coefficient from the unknown parameter.</p><p>Small batches: the 2 times of 9 min total 18 min; the 2 times of 11 min total 22 min. Their sum is 40 min, divided by 4 observations: the fitted mean is 10 min.</p><p>Large batches: 17 + 23 = 40 min; 40 ÷ 2 = 20 min. Thus â = 10 min and b̂ = 20 − 10 = 10 min. The fitted time ŷᵢ is â + b̂dᵢ: 10 min for a small batch and 20 min for a large one.</p></li><li><h3>Calculate the residuals with their signs</h3><p>eᵢ = yᵢ − ŷᵢ is the residual, in minutes. It is observable after fitting. The error εᵢ is relative to the true unknown mean: we cannot equate the two on the basis of these data alone.</p><p>Small batches: 9 − 10 = -1 min, then 11 − 10 = 1 min; each value appears 2 times. Large batches: 17 − 20 = -3 min and 23 − 20 = 3 min.</p><p>Check the centering: a pair of small-batch residuals totals 0 min; the large-batch pair totals 0 min. The mean residual is therefore 0 min in each group. This centering comes from fitting the means here: it does not prove the probabilistic assumption about εᵢ.</p></li><li><h3>Measure spread without letting signs cancel</h3><p>To describe the size of the residuals in group G, we use D_G, their mean square. G represents a category here, and n_G is its number of observations; the sum runs over observations i in that category. D_G is in min². Squaring prevents negative and positive residuals from canceling out.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>D</mi><mi>G</mi></msub><mo>=</mo><mfrac><mn>1</mn><msub><mi>n</mi><mi>G</mi></msub></mfrac><msub><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>G</mi></mrow></msub><msubsup><mi>e</mi><mi>i</mi><mn>2</mn></msubsup></mrow></math></div><p>For small batches, (-1) squared gives 1 min² and (1) squared gives 1 min². A pair contributes 2 min²; with the 2 pairs, the sum is 4 min². D_P = 4 ÷ 4 = 1 min², where P denotes small batches.</p><p>For large batches, the squares are 9 and 9 min²: their sum is 18 min². D_G = 18 ÷ 2 = 9 min². Their ratio is 9 ÷ 1 = 9, with no unit. The mean residuals were equal, but their descriptive spreads are not.</p><p>We divide by the number of observations to describe this sample. These D values are not unbiased estimators of the error variances: the means were fitted using the same observations. This ratio is not a test for heteroscedasticity.</p></li><li><h3>See what pooling hides</h3><p>Pooling the categories adds 4 + 18 = 22 min² of squares. The overall mean square is 22 ÷ 6 = 11/3 min², or approximately 3.67 min². It is a weighted average based on group sizes, not the simple average of the group D values.</p><p>Check using another expression: (4 × 1 + 2 × 9) ÷ 6 = 11/3 min². This value is indeed between 1 and 9 min², but it loses the category information. Using it as a common spread would overestimate the descriptive spread of small batches and underestimate that of large batches.</p><p>This overall number remains useful as a summary. The problem is using it to claim that the same uncertainty applies everywhere. It must not be confused with the usual estimate of a common variance, whose denominator accounts for the number of fitted coefficients.</p></li><li><h3>Distinguish coefficients from coefficient uncertainty</h3><p>Allowing different variances does not change the ordinary least squares criterion: our fitted means remain 10 and 20 min. With a correctly specified conditional mean and errors whose conditional mean is 0, heteroscedasticity alone does not bias these coefficients. However, the usual uncertainty formulas based on a common variance can become incorrect.</p><p>A heteroscedasticity-robust covariance estimate estimates coefficient uncertainty while allowing the contribution of observations to vary. The covariance matrix is a table containing their variances and how their estimation errors vary together. In our parameterization, its entries are in min². Changing this covariance estimate while keeping the ordinary least squares fit does not move the coefficients.</p><p>This uncertainty correction fixes neither an incorrect mean nor dependence between batches. Its usual justification concerns large samples; our small fictional dataset cannot guarantee an interval or a coverage probability. Calculating standard errors and using formal diagnostics belong to the next unit.</p></li><li><h3>State a diagnosis that the data can support</h3><p>The calculation establishes that the residuals in this sample have different spreads depending on batch type. This motivates examining the conditional variance of the errors; it does not by itself establish that this variance differs in the population. Even with a common variance, a small sample can display unequal spreads.</p><p>Before drawing a conclusion, check that the mean uses the right characteristics, then examine whether the spread changes across more comparable observations. An omitted curvature can leave residuals that shift systematically; related batches can violate independence. The diagram is a starting point for these checks, not their result.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations and reconstruct the means, residuals, and spreads by group. Why does a 0 sum of residuals fail to guarantee a common variance? Then explain why correcting coefficient uncertainty does not necessarily change the coefficient values.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Large batches take longer, so they are heteroscedastic.”</h3><p>A difference in means is already represented by the indicator. First subtract the predicted mean time for each category, then compare the residual spreads. In our example, the signs average out in both categories, but the squares differ.</p><a href="#intuition">Compare heights around the same 0</a></li><li><h3>“The mean residual is 0, so the residuals have the same variance.”</h3><p>Cancellation of signs concerns centering. Revisit the squares: D_P is 1 min² and D_G is 9 min². They describe spread that the signed sum erased.</p><a href="#exemple">Recalculate the squares by category</a></li><li><h3>“A robust covariance estimate makes the regression correct in every case.”</h3><p>It targets coefficient uncertainty under specific assumptions. By itself, it does not change the fitted means, remove bias due to an omitted characteristic, or automatically handle dependence. Our sample guarantees no interval coverage.</p><a href="#exemple">Reread the consequences and limitations</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-residu"><p class="repere">Exercise 1 · Warm-up · a deviation and its square</p>
+<h3>The batch finished early</h3><p>In the same workshop, revisit the large batch taking 17 min and its fitted time of 20 min. Calculate its residual and its square with their units. Does the negative residual mean a negative variance?</p>
+<label for="reponse-ex-residu">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-residu" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-residu" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-residu" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-residu" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtract the fitted time from the observed time.</p></details><details class="indice"><summary>Hint 2</summary><p>Squaring multiplies the deviation by itself; both factors keep their signs.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The residual is 17 − 20 = -3 min: the batch finished earlier than predicted. Its square is (-3) × (-3) = 9 min².</p><p>The sign of the residual gives the direction of the deviation. Its square is positive; a variance does not become negative because an observation is below its mean. This single square does not measure the variance of all large batches.</p><p class="petit-titre">Check your reasoning</p><ul><li>Residual -3 min, calculated in the correct direction.</li><li>Square 9 min², with no negative sign.</li><li>Distinguish an individual deviation from spread in a population.</li></ul></details></article><article class="exercice" id="ex-unites"><p class="repere">Exercise 2 · Application · change units</p>
+<h3>The stopwatch switches to seconds</h3><p>Keep exactly the same batches, but express all times in seconds: 1 min = 60 s. Without fitting another model, convert D_P = 1 min² and D_G = 9 min². Should their ratio change? Justify your answer before calculating.</p>
+<label for="reponse-ex-unites">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-unites" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-unites" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-unites" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-unites" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each residual is multiplied by 60, so its square receives this factor twice.</p></details><details class="indice"><summary>Hint 2</summary><p>In the ratio of the spreads, the same factor appears in the numerator and denominator.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Changing units does not change the relative difference in spread. The factor for the squares is 60 × 60 = 3600. Thus D_P becomes 1 × 3600 = 3600 s²; D_G becomes 9 × 3600 = 32400 s².</p><p>The ratio is 32400 ÷ 3600 = 9, as in minutes. Multiplying only by 60 would confuse a deviation with a squared deviation.</p><p class="petit-titre">Check your reasoning</p><ul><li>Conversion factor squared.</li><li>Results 3600 s² and 32400 s².</li><li>Unchanged ratio 9, with no unit and with a justification.</li></ul></details></article><article class="exercice" id="ex-diagnostic"><p class="repere">Exercise 3 · Transfer · critique a conclusion</p>
+<h3>An overly reassuring summary</h3><p>A colleague pools the residuals and announces: “The spread is 3.67 min² for all batches. The mean residual is 0, so the usual intervals must be valid. Otherwise, a robust covariance estimate will also correct the means.” Respond using the calculation by group, what remains unknown, and what should be examined next.</p>
+<label for="reponse-ex-diagnostic">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-diagnostic" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-diagnostic" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-diagnostic" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-diagnostic" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The overall summary keeps the squares but loses their category.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate three things: fitted mean, unknown error variance, and estimated coefficient uncertainty.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The overall summary is exactly 11/3 min², rounded to 3.67 min². Yet the mean squares by group are 1 and 9 min². The common summary hides this difference; 0 centering imposes no equality of spreads.</p><p>These residuals do not suffice to establish population error variances or the validity of the intervals. We need to examine the specified mean, the conditional spread across more comparable batches, and the independence of observations.</p><p>With the ordinary least squares fit unchanged, a robust covariance estimate changes the estimated coefficient uncertainty, not the fitted times of 10 and 20 min. If the mean is misspecified, it needs to be reexamined; covariance robustness does not fix it.</p><p class="petit-titre">Check your reasoning</p><ul><li>Contrast 1 and 9 min² with the overall summary without confusing mean and variance.</li><li>Treat population variances and interval coverage as unestablished facts.</li><li>Propose a check of the mean and spread, and name the limitation related to dependence.</li><li>Distinguish coefficient estimation from estimation of their covariance.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="definition"><summary><span class="repere">Recall 1</span><span>What do we compare when discussing heteroscedasticity?</span></summary><p>The variance of the errors conditional on the characteristics used for prediction. It varies with these characteristics. A difference in mean time between small and large batches is not enough.</p></details><details class="carte" data-carte="residu"><summary><span class="repere">Recall 2</span><span>Why must we distinguish εᵢ from eᵢ?</span></summary><p>εᵢ is the deviation from the true unknown mean; eᵢ is the deviation from the mean fitted using the sample. Residuals can be calculated, but they do not reveal the errors or their population variances exactly.</p></details><details class="carte" data-carte="dispersion"><summary><span class="repere">Recall 3</span><span>In the workshop, why does a 0 mean residual fail to guarantee a common spread?</span></summary><p>The signs cancel out in both groups. Yet their squares give 1 min² for small batches and 9 min² for large batches, a ratio of 9. These descriptive means are not a formal test.</p></details><details class="carte" data-carte="coefficients"><summary><span class="repere">Recall 4</span><span>Does heteroscedasticity necessarily bias ordinary least squares coefficients?</span></summary><p>No. With a correctly specified mean, errors with 0 conditional mean, and linearly independent predictor columns, it does not by itself create bias. It can invalidate an uncertainty estimate that assumes a common variance.</p></details><details class="carte" data-carte="robustesse"><summary><span class="repere">Recall 5</span><span>What does a robust covariance estimate change, and what does it fail to fix?</span></summary><p>With the ordinary least squares fit unchanged, it changes the estimated coefficient uncertainty. It fixes neither an incorrect mean nor, automatically, dependence, and it does not guarantee interval coverage for our small sample.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the example, reconstruct this sequence in your own words: conditional mean, residuals, squares by category, overall summary and lost information, then the consequence for coefficient uncertainty. Recover 1 and 9 min², and finish with a sentence about what the sample does not prove. Reading or answering after a hint does not establish an attained level; try again without support after at least 2 days.</p></div><div class="exports"><a class="bouton" download="c066-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjYtbTQ6ZGVmaW5pdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDY2LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaGV0ZXJvc2NlZGFzdGljaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gd2UgY29tcGFyZSB3aGVuIGRpc2N1c3NpbmcgaGV0ZXJvc2NlZGFzdGljaXR5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSB2YXJpYW5jZSBvZiB0aGUgZXJyb3JzIGNvbmRpdGlvbmFsIG9uIHRoZSBjaGFyYWN0ZXJpc3RpY3MgdXNlZCBmb3IgcHJlZGljdGlvbi4gSXQgdmFyaWVzIHdpdGggdGhlc2UgY2hhcmFjdGVyaXN0aWNzLiBBIGRpZmZlcmVuY2UgaW4gbWVhbiB0aW1lIGJldHdlZW4gc21hbGwgYW5kIGxhcmdlIGJhdGNoZXMgaXMgbm90IGVub3VnaC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ni1tNDpyZXNpZHUiLAogICAgICAidW5pdGUiOiAiYzA2Ni1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVycmV1ci1ldC1yZXNpZHUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IG11c3Qgd2UgZGlzdGluZ3Vpc2ggzrXhtaIgZnJvbSBl4bWiPyIsCiAgICAgICJyZXBvbnNlIjogIs614bWiIGlzIHRoZSBkZXZpYXRpb24gZnJvbSB0aGUgdHJ1ZSB1bmtub3duIG1lYW47IGXhtaIgaXMgdGhlIGRldmlhdGlvbiBmcm9tIHRoZSBtZWFuIGZpdHRlZCB1c2luZyB0aGUgc2FtcGxlLiBSZXNpZHVhbHMgY2FuIGJlIGNhbGN1bGF0ZWQsIGJ1dCB0aGV5IGRvIG5vdCByZXZlYWwgdGhlIGVycm9ycyBvciB0aGVpciBwb3B1bGF0aW9uIHZhcmlhbmNlcyBleGFjdGx5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDY2LW00OmRpc3BlcnNpb24iLAogICAgICAidW5pdGUiOiAiYzA2Ni1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRpc3BlcnNpb24tY29uZGl0aW9ubmVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiSW4gdGhlIHdvcmtzaG9wLCB3aHkgZG9lcyBhIDAgbWVhbiByZXNpZHVhbCBmYWlsIHRvIGd1YXJhbnRlZSBhIGNvbW1vbiBzcHJlYWQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHNpZ25zIGNhbmNlbCBvdXQgaW4gYm90aCBncm91cHMuIFlldCB0aGVpciBzcXVhcmVzIGdpdmUgMSBtaW7CsiBmb3Igc21hbGwgYmF0Y2hlcyBhbmQgOSBtaW7CsiBmb3IgbGFyZ2UgYmF0Y2hlcywgYSByYXRpbyBvZiA5LiBUaGVzZSBkZXNjcmlwdGl2ZSBtZWFucyBhcmUgbm90IGEgZm9ybWFsIHRlc3QuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjYtbTQ6Y29lZmZpY2llbnRzIiwKICAgICAgInVuaXRlIjogImMwNjYtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbmNlcnRpdHVkZS1kZXMtY29lZmZpY2llbnRzIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgaGV0ZXJvc2NlZGFzdGljaXR5IG5lY2Vzc2FyaWx5IGJpYXMgb3JkaW5hcnkgbGVhc3Qgc3F1YXJlcyBjb2VmZmljaWVudHM/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIFdpdGggYSBjb3JyZWN0bHkgc3BlY2lmaWVkIG1lYW4sIGVycm9ycyB3aXRoIDAgY29uZGl0aW9uYWwgbWVhbiwgYW5kIGxpbmVhcmx5IGluZGVwZW5kZW50IHByZWRpY3RvciBjb2x1bW5zLCBpdCBkb2VzIG5vdCBieSBpdHNlbGYgY3JlYXRlIGJpYXMuIEl0IGNhbiBpbnZhbGlkYXRlIGFuIHVuY2VydGFpbnR5IGVzdGltYXRlIHRoYXQgYXNzdW1lcyBhIGNvbW1vbiB2YXJpYW5jZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ni1tNDpyb2J1c3Rlc3NlIiwKICAgICAgInVuaXRlIjogImMwNjYtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUtZGUtcm9idXN0ZXNzZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSByb2J1c3QgY292YXJpYW5jZSBlc3RpbWF0ZSBjaGFuZ2UsIGFuZCB3aGF0IGRvZXMgaXQgZmFpbCB0byBmaXg/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCB0aGUgb3JkaW5hcnkgbGVhc3Qgc3F1YXJlcyBmaXQgdW5jaGFuZ2VkLCBpdCBjaGFuZ2VzIHRoZSBlc3RpbWF0ZWQgY29lZmZpY2llbnQgdW5jZXJ0YWludHkuIEl0IGZpeGVzIG5laXRoZXIgYW4gaW5jb3JyZWN0IG1lYW4gbm9yLCBhdXRvbWF0aWNhbGx5LCBkZXBlbmRlbmNlLCBhbmQgaXQgZG9lcyBub3QgZ3VhcmFudGVlIGludGVydmFsIGNvdmVyYWdlIGZvciBvdXIgc21hbGwgc2FtcGxlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c066-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB3ZSBjb21wYXJlIHdoZW4gZGlzY3Vzc2luZyBoZXRlcm9zY2VkYXN0aWNpdHk/CVRoZSB2YXJpYW5jZSBvZiB0aGUgZXJyb3JzIGNvbmRpdGlvbmFsIG9uIHRoZSBjaGFyYWN0ZXJpc3RpY3MgdXNlZCBmb3IgcHJlZGljdGlvbi4gSXQgdmFyaWVzIHdpdGggdGhlc2UgY2hhcmFjdGVyaXN0aWNzLiBBIGRpZmZlcmVuY2UgaW4gbWVhbiB0aW1lIGJldHdlZW4gc21hbGwgYW5kIGxhcmdlIGJhdGNoZXMgaXMgbm90IGVub3VnaC4JdG9kYWkgYzA2Ni1tNCBoZXRlcm9zY2VkYXN0aWNpdGUKV2h5IG11c3Qgd2UgZGlzdGluZ3Vpc2ggzrXhtaIgZnJvbSBl4bWiPwnOteG1oiBpcyB0aGUgZGV2aWF0aW9uIGZyb20gdGhlIHRydWUgdW5rbm93biBtZWFuOyBl4bWiIGlzIHRoZSBkZXZpYXRpb24gZnJvbSB0aGUgbWVhbiBmaXR0ZWQgdXNpbmcgdGhlIHNhbXBsZS4gUmVzaWR1YWxzIGNhbiBiZSBjYWxjdWxhdGVkLCBidXQgdGhleSBkbyBub3QgcmV2ZWFsIHRoZSBlcnJvcnMgb3IgdGhlaXIgcG9wdWxhdGlvbiB2YXJpYW5jZXMgZXhhY3RseS4JdG9kYWkgYzA2Ni1tNCBlcnJldXItZXQtcmVzaWR1CkluIHRoZSB3b3Jrc2hvcCwgd2h5IGRvZXMgYSAwIG1lYW4gcmVzaWR1YWwgZmFpbCB0byBndWFyYW50ZWUgYSBjb21tb24gc3ByZWFkPwlUaGUgc2lnbnMgY2FuY2VsIG91dCBpbiBib3RoIGdyb3Vwcy4gWWV0IHRoZWlyIHNxdWFyZXMgZ2l2ZSAxIG1pbsKyIGZvciBzbWFsbCBiYXRjaGVzIGFuZCA5IG1pbsKyIGZvciBsYXJnZSBiYXRjaGVzLCBhIHJhdGlvIG9mIDkuIFRoZXNlIGRlc2NyaXB0aXZlIG1lYW5zIGFyZSBub3QgYSBmb3JtYWwgdGVzdC4JdG9kYWkgYzA2Ni1tNCBkaXNwZXJzaW9uLWNvbmRpdGlvbm5lbGxlCkRvZXMgaGV0ZXJvc2NlZGFzdGljaXR5IG5lY2Vzc2FyaWx5IGJpYXMgb3JkaW5hcnkgbGVhc3Qgc3F1YXJlcyBjb2VmZmljaWVudHM/CU5vLiBXaXRoIGEgY29ycmVjdGx5IHNwZWNpZmllZCBtZWFuLCBlcnJvcnMgd2l0aCAwIGNvbmRpdGlvbmFsIG1lYW4sIGFuZCBsaW5lYXJseSBpbmRlcGVuZGVudCBwcmVkaWN0b3IgY29sdW1ucywgaXQgZG9lcyBub3QgYnkgaXRzZWxmIGNyZWF0ZSBiaWFzLiBJdCBjYW4gaW52YWxpZGF0ZSBhbiB1bmNlcnRhaW50eSBlc3RpbWF0ZSB0aGF0IGFzc3VtZXMgYSBjb21tb24gdmFyaWFuY2UuCXRvZGFpIGMwNjYtbTQgaW5jZXJ0aXR1ZGUtZGVzLWNvZWZmaWNpZW50cwpXaGF0IGRvZXMgYSByb2J1c3QgY292YXJpYW5jZSBlc3RpbWF0ZSBjaGFuZ2UsIGFuZCB3aGF0IGRvZXMgaXQgZmFpbCB0byBmaXg/CVdpdGggdGhlIG9yZGluYXJ5IGxlYXN0IHNxdWFyZXMgZml0IHVuY2hhbmdlZCwgaXQgY2hhbmdlcyB0aGUgZXN0aW1hdGVkIGNvZWZmaWNpZW50IHVuY2VydGFpbnR5LiBJdCBmaXhlcyBuZWl0aGVyIGFuIGluY29ycmVjdCBtZWFuIG5vciwgYXV0b21hdGljYWxseSwgZGVwZW5kZW5jZSwgYW5kIGl0IGRvZXMgbm90IGd1YXJhbnRlZSBpbnRlcnZhbCBjb3ZlcmFnZSBmb3Igb3VyIHNtYWxsIHNhbXBsZS4JdG9kYWkgYzA2Ni1tNCBsaW1pdGUtZGUtcm9idXN0ZXNzZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">utijyh gzwgyl ejjj</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Identify a common spread in a forecast calculation</h3><dl><div><dt>What you understand</dt><dd>An overall spread can hide different deviations under different conditions. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">szyfgw hgxhvr akiixe idpqhb qfkqqe awbaok khkhex uicldi hapzyb qbfzke xbndqs npvbuc jyrbiw nm</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ympuui ptxavx llrbpp ojarnu uguase kynynd tvirbj nxegdz pyfwkh xuhbze qlkjqt qsgkqk jephsz omguvu kgvtsb qiyvfp bynkba dsgyag klrgdi ubrnkc fknagp ojvggk ytqgea qnbgpp</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Prepare for Level 2: redo the residuals and their squares, separate centering from spread, then explain why a common scale deserves a diagnostic check. An assisted answer or reading the implementation does not prove any attained level.</dd></div><div><dt>Evidence and what remains unknown</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bjxvkk dbwqtb tydvkl lxnpmr hexbhs ufhlok jrmezl ufkxip qsdtrt pbmpwq llkljd btxfdu ukzbva yvqaph hxbnig iazqsz mmmztu onjwtw wqtgmm pcdlwp cvgeay ukakku uiakhn tptrlh</span></span></dd></div><div><dt>Next step</dt><dd>Redo the reasoning without support after a delay. Continue with c066-m5, standard errors and diagnostics. Examining this mechanism in actual use will require a separate, authorized check of the integration and assumptions; no activation or empirical validation is carried out in this unit.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c066-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c066-m3.html">Previous</a> · <a href="c066-m5.html">Next</a></nav>
+<footer><p>Course book · C066·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

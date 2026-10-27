@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the hinge loss of a batch, explain why a correct classification can still be penalized, and recognize the threshold where the slope changes.">
+<title>C140·M2 · Hinge loss — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fwmvvv xaikve dxzk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C140·M2</p><h1>Hinge loss</h1><p class="objectif"><span>Your goal</span>Calculate the hinge loss of a batch, explain why a correct classification can still be penalized, and recognize the threshold where the slope changes.</p><p class="prerequis"><strong>Before you start</strong><br>c059-m6 : Deterministic discrete Bellman · c099-m5 : probability calibration · c040-m5 : least squares · c140-m1 : margin</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop wants to route its parcels for fragile or standard handling. Its model produces a score: the positive side selects “fragile”, and the negative side selects “standard”. Predicting the correct class does not tell us whether the parcel is far from the decision boundary. A small change in the score could still move it to the other side.</p><p>Hinge loss penalizes the shortfall from a signed margin of 1. Here, loss means a mathematical cost to reduce. A parcel on the wrong side is penalized; a parcel on the correct side but too close to the boundary is still penalized; a parcel that has reached the required margin has no further cost under this loss.</p><p>Our single scenario is a fictional batch of 4 parcels, A, B, C and D. A and B are fragile; C and D are standard. The labels are assumed to be known and reliable for this exercise. The visual features, scores and all values are fictional and have no physical units. They provide no measure of the quality of a real sorting process.</p><p>The first diagram compares the parcels after accounting for their true class. B is correctly classified, but its loss remains positive. C receives the same score as B with a different label: the same side of the boundary works against it. The second diagram shows why the loss is called a hinge: the descending line meets a plateau at the required threshold.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Being on the correct side can still incur a penalty</title><desc>In the fictional batch, A has margin 1.50 and loss 0; B has margin 0.50 and loss 0.50; C has margin -0.50 and loss 1.50; D has margin 1 and loss 0. All these values are dimensionless. The sign of the margin indicates the correct or incorrect side.</desc><text x="42" y="30" text-anchor="middle" class="petite-etiquette">Parcel</text><text x="160" y="30" text-anchor="middle" class="petite-etiquette">Margin m</text><text x="285" y="30" text-anchor="middle" class="petite-etiquette">Loss ℓ</text><rect x="15" y="48" width="330" height="38" rx="6" class="cadre-neutre" /><text x="42" y="74" text-anchor="middle">A</text><text x="160" y="74" text-anchor="middle">1.50</text><text x="285" y="74" text-anchor="middle">0</text><rect x="15" y="96" width="330" height="38" rx="6" class="cadre-resultat" /><text x="42" y="122" text-anchor="middle">B</text><text x="160" y="122" text-anchor="middle">0.50</text><text x="285" y="122" text-anchor="middle">0.50</text><rect x="15" y="144" width="330" height="38" rx="6" class="cadre-prediction" /><text x="42" y="170" text-anchor="middle">C</text><text x="160" y="170" text-anchor="middle">-0.50</text><text x="285" y="170" text-anchor="middle">1.50</text><rect x="15" y="192" width="330" height="38" rx="6" class="cadre-neutre" /><text x="42" y="218" text-anchor="middle">D</text><text x="160" y="218" text-anchor="middle">1</text><text x="285" y="218" text-anchor="middle">0</text><text x="180" y="257" text-anchor="middle" class="petite-etiquette">Dimensionless margins and losses</text></svg><figcaption>B is correctly classified with a margin below 1. C is misclassified: its margin is negative. D is exactly at the margin threshold, so its loss is 0. The letters and values make the diagram readable without relying on color.</figcaption></figure><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>The hinge between the penalty and the plateau</title><desc>Margin m is the horizontal axis and loss ℓ is the vertical axis, both dimensionless. The line passes through margin -1 and loss 2, then through margin 0 and loss 1. It meets the plateau of loss 0 at margin 1 and stays there beyond it.</desc><text x="18" y="28">ℓ (dimensionless)</text><line x1="130" y1="240" x2="130" y2="42" class="trait" /><line x1="30" y1="220" x2="338" y2="220" class="trait" /><polyline points="50,60 210,220 330,220" class="chemin-correction" /><line x1="50" y1="216" x2="50" y2="225" class="trait" /><line x1="210" y1="216" x2="210" y2="225" class="trait" /><line x1="290" y1="216" x2="290" y2="225" class="trait" /><text x="50" y="248" text-anchor="middle">-1</text><text x="130" y="248" text-anchor="middle">0</text><text x="210" y="248" text-anchor="middle">1</text><text x="290" y="248" text-anchor="middle">2</text><text x="112" y="65" text-anchor="end">2</text><text x="112" y="145" text-anchor="end">1</text><text x="112" y="211" text-anchor="end">0</text><circle cx="210" cy="220" r="5" class="resultat" /><text x="255" y="164" text-anchor="middle" class="petite-etiquette">Hinge</text><text x="255" y="188" text-anchor="middle" class="petite-etiquette">m = 1</text><text x="338" y="279" text-anchor="end">m (dimensionless)</text></svg><figcaption>Before the hinge, each unit gained in margin removes a unit of loss. From m = 1 onward, this loss no longer rewards an increase in margin. The decision boundary is at m = 0, separate from the hinge.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Orient the score using the true label, subtract this margin from 1, then keep the larger of this shortfall and 0. Calculate the loss for each parcel before taking the average.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Evaluate the batch before changing the model</h3><p>The fictional model uses a visual feature x and the score f(x) = wx + b, with w = 1/2 and b = 0. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gvgkvg zvqrtt ndpk</span></span> The true labels are 1 for A and B, -1 for C and D. Let us evaluate the average loss of this fixed model without claiming to have trained it.</p><ol class="etapes"><li><h3>Define what the score means</h3><p>x is the parcel’s visual feature, w is the coefficient multiplying it, and b is the score offset. f is the name of the function and f(x) is its value for this parcel. These quantities have no physical units. A positive score predicts “fragile”, and a negative score predicts “standard”; by convention, we assign a 0 score to “fragile”. No score in the batch is at this tie.</p><p>y denotes the true label, encoded in the set { -1, 1 }. This is a class known for the calculation, rather than the model’s prediction. We keep the same encoding, parameters and score scale across the whole batch. B and C have the same feature value but different classes: this feature alone cannot distinguish them.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mi>w</mi><mi>x</mi><mo>+</mo><mi>b</mi></mrow></math></div><p>Since b = 0, the scores are calculated using products alone: A gives 1/2 × 3 = 1.50; B gives 1/2 × 1 = 0.50; C gives 1/2 × 1 = 0.50; D gives 1/2 × (-2) = -1.</p></li><li><h3>Orient each score toward the true class</h3><p>The signed margin m is the product of the label and the score. The factor y preserves the sign of the score for a fragile parcel and reverses it for a standard parcel. A strictly positive margin therefore means that the score favors the correct class; a strictly negative margin means that it favors the wrong class.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>m</mi><mo>=</mo><mi>y</mi><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math></div><p>The margins are therefore m_A = 1 × 1.50 = 1.50; m_B = 1 × 0.50 = 0.50; m_C = (-1) × 0.50 = -0.50; m_D = (-1) × (-1) = 1. C is the only misclassified parcel.</p><p>m is a functional margin, meaning that it is measured on the score scale. It is neither a physical distance nor a probability. Changing the size of the parameters can change m even if the signs of the predictions stay the same; the second exercise will let you check this.</p></li><li><h3>Turn a margin shortfall into a loss</h3><p>We require m to be at least 1. The raw shortfall is 1 − m. If it is negative, the required margin has been exceeded: keeping this shortfall as a cost would reward that excess. We therefore replace negative shortfalls with 0. The symbol ℓ denotes the individual loss, and max selects the larger of its arguments.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ℓ</mi><mo>(</mo><mi>m</mi><mo>)</mo><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>−</mo><mi>m</mi><mo>)</mo></mrow></math></div><p>We can reconstruct the formula without memorizing it. Let ξ, the Greek letter xi, be the dimensionless margin compensation. Require ξ ≥ 0 and m + ξ ≥ 1. This last condition requires ξ ≥ 1 − m. The smallest compensation satisfying both conditions is precisely ℓ(m). This reasoning explains the maximum and the floor at 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ℓ</mi><mo>(</mo><mi>m</mi><mo>)</mo><mo>=</mo><mo>{</mo><mtable><mtr><mtd><mn>1</mn><mo>−</mo><mi>m</mi></mtd><mtd><mtext>si </mtext><mi>m</mi><mo>&lt;</mo><mn>1</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mtext>si </mtext><mi>m</mi><mo>≥</mo><mn>1</mn></mtd></mtr></mtable></mrow></math></div><p>The margin threshold 1 sets a scale convention. The loss is not bounded by 1: a very negative margin produces a larger cost. All losses on this page are dimensionless, on this conventional scale.</p></li><li><h3>Calculate A and B: two correct classifications, two costs</h3><p>For A, the shortfall is 1 − 1.50 = -0.50. It is negative: the maximum selects 0, giving ℓ_A = 0. We do not keep the negative shortfall as a reward.</p><p>For B, the shortfall is 1 − 0.50 = 0.50. It is positive: the maximum keeps it, giving ℓ_B = 0.50. B is correctly classified, but its margin does not yet meet the requirement. Reducing its loss can therefore encourage clearer separation without correcting a wrong classification.</p></li><li><h3>Calculate C and D: the wrong side and equality</h3><p>For C, first preserve the sign of the margin: 1 − (-0.50) = 1.50. Subtracting a negative margin increases the shortfall. The maximum keeps this value, giving ℓ_C = 1.50, greater than 1.</p><p>For D, the margin is exactly 1. The shortfall is 1 − 1 = 0 and ℓ_D = 0. Equality does belong to the region of 0 loss. D reaches the margin; it is not on the decision boundary, which corresponds to a 0 score.</p></li><li><h3>Add, average, then check</h3><p>i denotes a parcel in the batch, n is the number of parcels, and L is their average loss. Here n = 4. The letter Σ asks us to add the losses across all parcels, from index 1 to index n. We give them all the same weight.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>ℓ</mi><mo>(</mo><msub><mi>m</mi><mi>i</mi></msub><mo>)</mo></mrow></math></div><p>In pairs, A and B cost 0 + 0.50 = 0.50; C and D cost 1.50 + 0 = 1.50. The total is 0.50 + 1.50 = 2. Dividing by the number of parcels gives L = 2/4 = 0.50, dimensionless.</p><p>Individual check: all losses are nonnegative; m_A + ℓ_A exceeds 1, while m_B + ℓ_B, m_C + ℓ_C and m_D + ℓ_D reach exactly 1. Each loss is the smallest admissible compensation. Total check: B and C are the only contributors, and their losses do add up to 2.</p><p>L evaluates this model on this fictional batch. It is neither an error probability, a measure of performance on new parcels, nor evidence that training has occurred. The last exercise shows why each shortfall must be clipped before averaging.</p></li><li><h3>Read the slope and the point where it changes</h3><p>Consider the loss as a function of m. The slope, the change in loss per unit of margin, is -1 as long as m is below 1: increasing the margin by a given amount reduces the loss by the same amount, provided we stay on this branch. For m above 1, the slope is 0. The branch values meet at the threshold, so the loss is continuous there.</p><p>At m = 1, the slopes from the left and right differ: there is no single ordinary derivative at this hinge. The curve is convex: the line segment between two points on the curve stays on or above it. We can see this here because the slope increases as we move from the descending branch to the plateau.</p><p>The slope -1 concerns m, rather than the score f(x) directly. For a standard parcel, increasing the score reduces the margin because y = -1: as long as the loss is active, this increases the cost. The penalty indicates what should be improved; by itself, it does not provide the entire training procedure for a support vector machine. Controlling the size of the parameters and choosing an algorithm also require their own conditions.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Why does B have a cost even though it is correctly classified? Why does C’s positive score work against it? Reconstruct the loss from the conditions on ξ, then explain exactly what happens at the margin threshold.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The class is correct, so the loss must be 0.”</h3><p>The correct sign is enough for classification, but the loss requires a margin of at least 1. B has margin 0.50 and loss 0.50. Start again from the two thresholds: the boundary at 0, and the required margin at 1.</p><a href="#intuition">Compare B and D, then the two thresholds in the diagram</a></li><li><h3>“I take the maximum of the score and the threshold; the label is no longer needed.”</h3><p>First multiply the score by the true label. For C, y = -1 and the score is 0.50, so the margin is -0.50 and the loss is 1.50. The maximum then acts on 0 and the shortfall 1 − m. Do not cap a loss greater than 1.</p><a href="#exemple">Review the orientation of the score and the calculation for C</a></li><li><h3>“I can average the margins before applying the loss.”</h3><p>The maximum removes negative shortfalls separately. Taking the average before applying it would let a very well separated parcel offset a penalty that the individual loss should have kept. Calculate both expressions in the last exercise.</p><a href="#exercices">Compare the two orders of calculation</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-egalite"><p class="repere">Exercise 1 · Application · sign and threshold</p>
+<h3>D moves closer to the boundary</h3><p>For a variant of the same parcel D, keep the label -1 and replace its score with -3/4, or -0.75, dimensionless. Calculate its margin and loss. Has the predicted class changed? Explain why the loss changes nevertheless.</p>
+<label for="reponse-ex-egalite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-egalite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-egalite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-egalite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-egalite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For a negative label, be sure to multiply the negative score by -1.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the resulting margin with 1, then clip the shortfall at 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The margin becomes (-1) × (-3/4) = 3/4 = 0.75. The positive shortfall is 1 − 3/4 = 1/4: the loss is 0.25, dimensionless.</p><p>The score remains negative, so the model still predicts “standard”, the correct class. D previously had margin 1 and loss 0. It is now on the correct side but below the required margin: its loss becomes positive.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain a positive margin 0.75 and a loss 0.25.</li><li>You justify the class using the sign of the score, then the loss using the margin threshold.</li><li>You present neither the margin nor the loss as a probability.</li></ul></details></article><article class="exercice" id="ex-echelle"><p class="repere">Exercise 2 · Comparison · calculation on the batch</p>
+<h3>Is doubling the scores enough?</h3><p>Return to the entire original batch. Multiply w and b by 2, and therefore all scores by 2, without changing the labels or the margin threshold 1. Before calculating, predict the classes. Then calculate the new margins, individual losses and average. Does eliminating B’s cost prove that the batch’s cost has decreased?</p>
+<label for="reponse-ex-echelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-echelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-echelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-echelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-echelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A strictly positive factor preserves the sign of the score and multiplies each margin by the same factor.</p></details><details class="indice"><summary>Hint 2</summary><p>B reaches the hinge. For C, the increased positive score favors the wrong class even more.</p></details><details class="indice"><summary>Hint 3</summary><p>After clipping, only C contributes to the new sum.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The predicted classes stay the same: multiplying a nonzero score by 2 preserves its sign. The margins become, in the order A, B, C, D: 3, 1, -1 and 2.</p><p>A, B and D reach or exceed 1: their losses are 0. For C, the shortfall is 1 − (-1) = 2, so its loss is 2. The new losses are 0, 0, 2, 0.</p><p>The average is 2/4 = 0.50, exactly the same as the original model’s 0.50. B no longer contributes, but C costs more. In this batch, the reduction in B’s cost is fully offset by the increase in C’s cost.</p><p>The loss depends on the score scale, even when the classes stay the same. This comparison shows neither an optimal model nor a real improvement. The identical feature values of B and C with opposite labels explain why amplifying their shared score cannot satisfy both margins at once.</p><p class="petit-titre">Check your reasoning</p><ul><li>You predict unchanged classes before doing the calculations.</li><li>You recover the new margins, then C’s cost of 2.</li><li>You calculate the average instead of drawing a conclusion from parcel B alone.</li><li>You explain the role of the opposite labels of B and C.</li></ul></details></article><article class="exercice" id="ex-moyenne"><p class="repere">Exercise 3 · Diagnosis · order of operations</p>
+<h3>Repair an average calculation</h3><p>Someone uses the original batch, adds the margins, divides by 4, then applies max(0, 1 − average margin). They claim to have calculated the batch’s average loss. Repeat their calculation, compare it with L, and explain the repair. Do not use the doubled scores from the previous exercise.</p>
+<label for="reponse-ex-moyenne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-moyenne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-moyenne" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-moyenne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-moyenne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add the margins with their signs: C contributes negatively.</p></details><details class="indice"><summary>Hint 2</summary><p>The claimed calculation applies the maximum once. The definition of L applies it separately to each parcel.</p></details><details class="indice"><summary>Hint 3</summary><p>For A, the negative shortfall is removed before taking the correct average; in the claimed calculation, it can still offset other shortfalls.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sum of the margins of A and B is 2; that of C and D is 1/2. Together, they total 5/2. Their average is 5/2/4 = 5/8 = 0.625.</p><p>The loss of this average margin is max(0, 1 − 5/8) = 3/8 = 0.375. It differs from the correct average L = 1/2 = 0.500. The difference is 1/8 = 0.125, dimensionless.</p><p>A’s raw shortfall is -0.50. The individual maximum replaces it with 0. When we average the margins first, this negative shortfall remains in the total and offsets part of the shortfalls of B and C. We have changed the quantity being measured.</p><p>Repair: for each parcel, calculate y × f(x), form 1 − this margin, take the maximum with 0, and only then add and divide by the number of parcels. The average of the losses and the loss of the average may coincide on other batches; our counterexample is enough to refute their general interchangeability.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain 5/8 for the original average margin.</li><li>You distinguish 3/8 from 1/2 and calculate their difference.</li><li>You locate the error in placing the maximum after the average.</li><li>You explain concretely the role of A’s negative shortfall.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="marge-signee"><summary><span class="repere">Recall 1</span><span>Why multiply the score by the true label before evaluating the loss?</span></summary><p>With labels -1 and 1, m = y × f(x) becomes positive when the score favors the correct class. For a standard parcel, a positive score therefore produces a negative margin.</p></details><details class="carte" data-carte="perte-charniere"><summary><span class="repere">Recall 2</span><span>Reconstruct the formula from the conditions on the compensation ξ.</span></summary><p>We need ξ ≥ 0 and m + ξ ≥ 1, hence also ξ ≥ 1 − m. The smallest compensation is ℓ(m) = max(0, 1 − m). It is dimensionless on the chosen score scale.</p></details><details class="carte" data-carte="bonne-classe"><summary><span class="repere">Recall 3</span><span>When does a correctly classified parcel still have a positive loss?</span></summary><p>A margin strictly between 0 and 1 gives the correct class but a positive loss: B has margin 0.50 and loss 0.50. A 0 margin also gives a loss of 1; the class then depends on the tie convention. At the margin threshold 1, the loss becomes 0.</p></details><details class="carte" data-carte="pente-charniere"><summary><span class="repere">Recall 4</span><span>What are the slopes of the loss as a function of m, and what happens at the hinge?</span></summary><p>For m below 1, the slope is -1; for m above 1, it is 0. At m = 1, the loss is continuous but has no single ordinary derivative. These slopes concern the margin, rather than directly the score for a given class.</p></details><details class="carte" data-carte="moyenner-les-pertes"><summary><span class="repere">Recall 5</span><span>In what order should you evaluate a batch, and what does this result fail to demonstrate?</span></summary><p>Calculate each signed margin, then each clipped loss; add the losses and divide by the number of parcels. On our fictional batch, L = 0.50. This average demonstrates neither training, an error probability, nor the quality of the model on new parcels.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without support: start with the score and the true label; orient the score into a margin; find the smallest nonnegative compensation needed to reach 1; derive the loss; calculate each loss before the average. Include the case of a correct classification that is still penalized, the point where the slope changes, and one limit on what the batch’s cost lets you conclude.</p></div><div class="exports"><a class="bouton" download="c140-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDAtbTI6bWFyZ2Utc2lnbmVlIiwKICAgICAgInVuaXRlIjogImMxNDAtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtYXJnZS1zaWduZWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IG11bHRpcGx5IHRoZSBzY29yZSBieSB0aGUgdHJ1ZSBsYWJlbCBiZWZvcmUgZXZhbHVhdGluZyB0aGUgbG9zcz8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIGxhYmVscyAtMSBhbmQgMSwgbSA9IHkgw5cgZih4KSBiZWNvbWVzIHBvc2l0aXZlIHdoZW4gdGhlIHNjb3JlIGZhdm9ycyB0aGUgY29ycmVjdCBjbGFzcy4gRm9yIGEgc3RhbmRhcmQgcGFyY2VsLCBhIHBvc2l0aXZlIHNjb3JlIHRoZXJlZm9yZSBwcm9kdWNlcyBhIG5lZ2F0aXZlIG1hcmdpbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tMjpwZXJ0ZS1jaGFybmllcmUiLAogICAgICAidW5pdGUiOiAiYzE0MC1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlcnRlLWEtY2hhcm5pZXJlIiwKICAgICAgInF1ZXN0aW9uIjogIlJlY29uc3RydWN0IHRoZSBmb3JtdWxhIGZyb20gdGhlIGNvbmRpdGlvbnMgb24gdGhlIGNvbXBlbnNhdGlvbiDOvi4iLAogICAgICAicmVwb25zZSI6ICJXZSBuZWVkIM6+IOKJpSAwIGFuZCBtICsgzr4g4omlIDEsIGhlbmNlIGFsc28gzr4g4omlIDEg4oiSIG0uIFRoZSBzbWFsbGVzdCBjb21wZW5zYXRpb24gaXMg4oSTKG0pID0gbWF4KDAsIDEg4oiSIG0pLiBJdCBpcyBkaW1lbnNpb25sZXNzIG9uIHRoZSBjaG9zZW4gc2NvcmUgc2NhbGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDAtbTI6Ym9ubmUtY2xhc3NlIiwKICAgICAgInVuaXRlIjogImMxNDAtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzZXVpbC1kZS1tYXJnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGVuIGRvZXMgYSBjb3JyZWN0bHkgY2xhc3NpZmllZCBwYXJjZWwgc3RpbGwgaGF2ZSBhIHBvc2l0aXZlIGxvc3M/IiwKICAgICAgInJlcG9uc2UiOiAiQSBtYXJnaW4gc3RyaWN0bHkgYmV0d2VlbiAwIGFuZCAxIGdpdmVzIHRoZSBjb3JyZWN0IGNsYXNzIGJ1dCBhIHBvc2l0aXZlIGxvc3M6IEIgaGFzIG1hcmdpbiAwLjUwIGFuZCBsb3NzIDAuNTAuIEEgMCBtYXJnaW4gYWxzbyBnaXZlcyBhIGxvc3Mgb2YgMTsgdGhlIGNsYXNzIHRoZW4gZGVwZW5kcyBvbiB0aGUgdGllIGNvbnZlbnRpb24uIEF0IHRoZSBtYXJnaW4gdGhyZXNob2xkIDEsIHRoZSBsb3NzIGJlY29tZXMgMC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tMjpwZW50ZS1jaGFybmllcmUiLAogICAgICAidW5pdGUiOiAiYzE0MC1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlbnRlLWRlLWxhLXBlcnRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgYXJlIHRoZSBzbG9wZXMgb2YgdGhlIGxvc3MgYXMgYSBmdW5jdGlvbiBvZiBtLCBhbmQgd2hhdCBoYXBwZW5zIGF0IHRoZSBoaW5nZT8iLAogICAgICAicmVwb25zZSI6ICJGb3IgbSBiZWxvdyAxLCB0aGUgc2xvcGUgaXMgLTE7IGZvciBtIGFib3ZlIDEsIGl0IGlzIDAuIEF0IG0gPSAxLCB0aGUgbG9zcyBpcyBjb250aW51b3VzIGJ1dCBoYXMgbm8gc2luZ2xlIG9yZGluYXJ5IGRlcml2YXRpdmUuIFRoZXNlIHNsb3BlcyBjb25jZXJuIHRoZSBtYXJnaW4sIHJhdGhlciB0aGFuIGRpcmVjdGx5IHRoZSBzY29yZSBmb3IgYSBnaXZlbiBjbGFzcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tMjptb3llbm5lci1sZXMtcGVydGVzIiwKICAgICAgInVuaXRlIjogImMxNDAtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb3llbm5lLWRlcy1wZXJ0ZXMiLAogICAgICAicXVlc3Rpb24iOiAiSW4gd2hhdCBvcmRlciBzaG91bGQgeW91IGV2YWx1YXRlIGEgYmF0Y2gsIGFuZCB3aGF0IGRvZXMgdGhpcyByZXN1bHQgZmFpbCB0byBkZW1vbnN0cmF0ZT8iLAogICAgICAicmVwb25zZSI6ICJDYWxjdWxhdGUgZWFjaCBzaWduZWQgbWFyZ2luLCB0aGVuIGVhY2ggY2xpcHBlZCBsb3NzOyBhZGQgdGhlIGxvc3NlcyBhbmQgZGl2aWRlIGJ5IHRoZSBudW1iZXIgb2YgcGFyY2Vscy4gT24gb3VyIGZpY3Rpb25hbCBiYXRjaCwgTCA9IDAuNTAuIFRoaXMgYXZlcmFnZSBkZW1vbnN0cmF0ZXMgbmVpdGhlciB0cmFpbmluZywgYW4gZXJyb3IgcHJvYmFiaWxpdHksIG5vciB0aGUgcXVhbGl0eSBvZiB0aGUgbW9kZWwgb24gbmV3IHBhcmNlbHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c140-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IG11bHRpcGx5IHRoZSBzY29yZSBieSB0aGUgdHJ1ZSBsYWJlbCBiZWZvcmUgZXZhbHVhdGluZyB0aGUgbG9zcz8JV2l0aCBsYWJlbHMgLTEgYW5kIDEsIG0gPSB5IMOXIGYoeCkgYmVjb21lcyBwb3NpdGl2ZSB3aGVuIHRoZSBzY29yZSBmYXZvcnMgdGhlIGNvcnJlY3QgY2xhc3MuIEZvciBhIHN0YW5kYXJkIHBhcmNlbCwgYSBwb3NpdGl2ZSBzY29yZSB0aGVyZWZvcmUgcHJvZHVjZXMgYSBuZWdhdGl2ZSBtYXJnaW4uCXRvZGFpIGMxNDAtbTIgbWFyZ2Utc2lnbmVlClJlY29uc3RydWN0IHRoZSBmb3JtdWxhIGZyb20gdGhlIGNvbmRpdGlvbnMgb24gdGhlIGNvbXBlbnNhdGlvbiDOvi4JV2UgbmVlZCDOviDiiaUgMCBhbmQgbSArIM6+IOKJpSAxLCBoZW5jZSBhbHNvIM6+IOKJpSAxIOKIkiBtLiBUaGUgc21hbGxlc3QgY29tcGVuc2F0aW9uIGlzIOKEkyhtKSA9IG1heCgwLCAxIOKIkiBtKS4gSXQgaXMgZGltZW5zaW9ubGVzcyBvbiB0aGUgY2hvc2VuIHNjb3JlIHNjYWxlLgl0b2RhaSBjMTQwLW0yIHBlcnRlLWEtY2hhcm5pZXJlCldoZW4gZG9lcyBhIGNvcnJlY3RseSBjbGFzc2lmaWVkIHBhcmNlbCBzdGlsbCBoYXZlIGEgcG9zaXRpdmUgbG9zcz8JQSBtYXJnaW4gc3RyaWN0bHkgYmV0d2VlbiAwIGFuZCAxIGdpdmVzIHRoZSBjb3JyZWN0IGNsYXNzIGJ1dCBhIHBvc2l0aXZlIGxvc3M6IEIgaGFzIG1hcmdpbiAwLjUwIGFuZCBsb3NzIDAuNTAuIEEgMCBtYXJnaW4gYWxzbyBnaXZlcyBhIGxvc3Mgb2YgMTsgdGhlIGNsYXNzIHRoZW4gZGVwZW5kcyBvbiB0aGUgdGllIGNvbnZlbnRpb24uIEF0IHRoZSBtYXJnaW4gdGhyZXNob2xkIDEsIHRoZSBsb3NzIGJlY29tZXMgMC4JdG9kYWkgYzE0MC1tMiBzZXVpbC1kZS1tYXJnZQpXaGF0IGFyZSB0aGUgc2xvcGVzIG9mIHRoZSBsb3NzIGFzIGEgZnVuY3Rpb24gb2YgbSwgYW5kIHdoYXQgaGFwcGVucyBhdCB0aGUgaGluZ2U/CUZvciBtIGJlbG93IDEsIHRoZSBzbG9wZSBpcyAtMTsgZm9yIG0gYWJvdmUgMSwgaXQgaXMgMC4gQXQgbSA9IDEsIHRoZSBsb3NzIGlzIGNvbnRpbnVvdXMgYnV0IGhhcyBubyBzaW5nbGUgb3JkaW5hcnkgZGVyaXZhdGl2ZS4gVGhlc2Ugc2xvcGVzIGNvbmNlcm4gdGhlIG1hcmdpbiwgcmF0aGVyIHRoYW4gZGlyZWN0bHkgdGhlIHNjb3JlIGZvciBhIGdpdmVuIGNsYXNzLgl0b2RhaSBjMTQwLW0yIHBlbnRlLWRlLWxhLXBlcnRlCkluIHdoYXQgb3JkZXIgc2hvdWxkIHlvdSBldmFsdWF0ZSBhIGJhdGNoLCBhbmQgd2hhdCBkb2VzIHRoaXMgcmVzdWx0IGZhaWwgdG8gZGVtb25zdHJhdGU/CUNhbGN1bGF0ZSBlYWNoIHNpZ25lZCBtYXJnaW4sIHRoZW4gZWFjaCBjbGlwcGVkIGxvc3M7IGFkZCB0aGUgbG9zc2VzIGFuZCBkaXZpZGUgYnkgdGhlIG51bWJlciBvZiBwYXJjZWxzLiBPbiBvdXIgZmljdGlvbmFsIGJhdGNoLCBMID0gMC41MC4gVGhpcyBhdmVyYWdlIGRlbW9uc3RyYXRlcyBuZWl0aGVyIHRyYWluaW5nLCBhbiBlcnJvciBwcm9iYWJpbGl0eSwgbm9yIHRoZSBxdWFsaXR5IG9mIHRoZSBtb2RlbCBvbiBuZXcgcGFyY2Vscy4JdG9kYWkgYzE0MC1tMiBtb3llbm5lLWRlcy1wZXJ0ZXMK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fwmvvv xaikve dxzk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tglfjd pjfpcu cynuok rbmgrz arozof fzoojf jveb</span></span></h3><dl><div><dt>What you understand</dt><dd>Clipping at 0 keeps the positive part of an expression. Hinge loss uses this operation on the margin shortfall; the same operation can be used to create a score with a different meaning. This reading checkpoint does not correspond to any numbered architectural milestone of C140.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eelkyp xugpfh sibycp tvphfa vdklcx ariktk ibnopk vkyzyk myigav ycagkn xqsolp tcudsi igcwzc nhuqye vftiuh velxvf sbyhdc gcyiwg hxncfr hmmlcx ytscxj uqveej wrfccl ddxrfl</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for Level 2: reconstruct the formula, justify the signs, calculate the batch’s loss and repair the order of operations without support. Reading, an assisted answer and a successful page check do not confer any attained level. Repeating the reasoning on another day remains necessary to test its availability in memory.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yvoeba xqcohh rwvpju dymwzl jarlbt rrzfdp tqojzy idnssf psyrlq tjnrrb jojblp ohiqbx jyftcj dypdvt wieyiy cgubxp ujkntv dzzwqn pmmokp ecbtcw tzmuov nfogkt uaqxbs bbsnab</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the fictional batch and its checks before preparing the next unit on the dual. To attribute a hinge loss role to real code, its labels, scores, objective and consumer would need to be identified separately. An authorized execution and evaluation would then require their own evidence.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c140-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c140-m1.html">Previous</a> · <a href="c140-m3.html">Next</a></nav>
+<footer><p>Course book · C140·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

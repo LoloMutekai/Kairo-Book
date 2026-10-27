@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Choose the weight variance of a dense layer so that the signal maintains a stable variance at the start of training, then justify this choice, its assumptions and its limits.">
+<title>C103·M1 · Initialization — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qwleuj mdzgwl fwdn</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C103·M1</p><h1>Initialization</h1><p class="objectif"><span>Your goal</span>Choose the weight variance of a dense layer so that the signal maintains a stable variance at the start of training, then justify this choice, its assumptions and its limits.</p><p class="prerequis"><strong>Before you start</strong><br>c102-m5 : finite difference check · c099-m5 : probability calibration · c067-m5 : pipeline</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A dense network is a stack of layers. Each layer mixes its inputs using weights, then passes the result to the next layer. Before the first training step, these weights are randomly drawn numbers: this is initialization. It is more than a tuning detail. It sets the scale of the signal passing through the stack, and therefore also the scale of the gradients that training will receive at the start.</p><p>Think of a chain of amplifiers. If each one amplifies a little too much, the signal explodes after a few stages; if each one attenuates a little too much, it dies away. At the start, a classifier with enormous outputs reports extreme probabilities without having learned anything, which is the opposite of the calibration seen earlier. The idea is therefore to set the amplification of each layer around 1.</p><p>Two points help avoid a bad start. First, equal weights, including 0 weights, make the neurons in a layer interchangeable: randomness serves to differentiate them. Second, this randomness must be reproducible: in a pipeline, set and record a seed so that exactly the same draw can be repeated.</p><p>Our only example is fictional: 3 dense layers of the same width 100, inputs with variance 1, no physical units and no activation function. Activations are covered in the next unit of the chapter. These values describe a mathematical exercise; they are neither a measurement nor a recipe validated on data.</p><div class="schemas"><figure><svg viewBox="0 0 360 214" xmlns="http://www.w3.org/2000/svg" role="img"><title>Output variance layer by layer</title><desc>Two stacks of 3 layers receive an input with variance 1. With weight variance 1, the variance rises to 100, 10000 and then 1000000. With weight variance 0.01, it stays at 1.</desc><text x="8" y="20" class="petite-etiquette">Weights with variance σ² = 1</text><rect x="8" y="28" width="76" height="44" rx="7" class="cadre-neutre" /><text x="46" y="56" text-anchor="middle">1</text><line x1="84" y1="50" x2="98" y2="50" class="trait" /><rect x="98" y="28" width="76" height="44" rx="7" class="cadre-prediction" /><text x="136" y="56" text-anchor="middle">100</text><line x1="174" y1="50" x2="188" y2="50" class="trait" /><rect x="188" y="28" width="76" height="44" rx="7" class="cadre-prediction" /><text x="226" y="56" text-anchor="middle">10000</text><line x1="264" y1="50" x2="278" y2="50" class="trait" /><rect x="278" y="28" width="76" height="44" rx="7" class="cadre-prediction" /><text x="316" y="56" text-anchor="middle">1000000</text><text x="46" y="90" text-anchor="middle" class="petite-etiquette">input</text><text x="136" y="90" text-anchor="middle" class="petite-etiquette">first</text><text x="226" y="90" text-anchor="middle" class="petite-etiquette">second</text><text x="316" y="90" text-anchor="middle" class="petite-etiquette">third</text><text x="8" y="128" class="petite-etiquette">Weights with variance σ² = 0.01</text><rect x="8" y="136" width="76" height="44" rx="7" class="cadre-neutre" /><text x="46" y="164" text-anchor="middle">1</text><line x1="84" y1="158" x2="98" y2="158" class="trait" /><rect x="98" y="136" width="76" height="44" rx="7" class="cadre-resultat" /><text x="136" y="164" text-anchor="middle">1</text><line x1="174" y1="158" x2="188" y2="158" class="trait" /><rect x="188" y="136" width="76" height="44" rx="7" class="cadre-resultat" /><text x="226" y="164" text-anchor="middle">1</text><line x1="264" y1="158" x2="278" y2="158" class="trait" /><rect x="278" y="136" width="76" height="44" rx="7" class="cadre-resultat" /><text x="316" y="164" text-anchor="middle">1</text><text x="180" y="204" text-anchor="middle" class="petite-etiquette">variance of each output, unitless</text></svg><figcaption>Fictional, unitless values. In the upper stack, the gain per layer is 100 and the variances grow rapidly; in the lower one, it is 1 and the variance stays stable.</figcaption></figure><figure><svg viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg" role="img"><title>One output sums n terms</title><desc>Four of the n inputs are shown, each multiplied by a weight, leading to a sum z. Each term contributes variance σ² v; n terms contribute n σ² v.</desc><circle cx="36" cy="28" r="9" class="point-mesure" /><circle cx="36" cy="68" r="9" class="point-mesure" /><circle cx="36" cy="108" r="9" class="point-mesure" /><circle cx="36" cy="148" r="9" class="point-mesure" /><text x="36" y="182" text-anchor="middle" class="petite-etiquette">… n inputs x</text><line x1="45" y1="28" x2="165" y2="88" class="trait" /><line x1="45" y1="68" x2="165" y2="88" class="trait" /><line x1="45" y1="108" x2="165" y2="88" class="trait" /><line x1="45" y1="148" x2="165" y2="88" class="trait" /><text x="100" y="20" class="petite-etiquette">each term w · x: variance σ² v</text><rect x="165" y="58" width="80" height="60" rx="7" class="cadre-neutre" /><text x="205" y="94" text-anchor="middle">z = Σ w x</text><line x1="245" y1="88" x2="285" y2="88" class="trait" /><rect x="285" y="58" width="62" height="60" rx="7" class="cadre-resultat" /><text x="316" y="94" text-anchor="middle">V</text><text x="240" y="150" text-anchor="middle" class="petite-etiquette">V = n × σ² × v</text></svg><figcaption>The terms have 0 mean and their cross products have 0 mean: their variances add up, giving the factor n.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>A linear dense layer multiplies the signal variance by n × σ², where n is the number of inputs and σ² is the variance of each weight. Choosing σ² equal to 1 / n aims for a gain equal to 1; draw the weights randomly, with 0 mean and independently, never all equal.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Three layers of width 100: two ways to draw the weights</h3><p>A fictional stack has 3 linear dense layers, each with 100 inputs. The inputs have variance v equal to 1. Compare the output variance when the weights have variance σ² = 1, then when it equals 1 / n.</p><ol class="etapes"><li><h3>Define the symbols and assumptions</h3><p>An output z of the layer is the sum of n products, with no bias or activation:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>w</mi><mi>i</mi></msub><msub><mi>x</mi><mi>i</mi></msub></mrow></math></div><p>Here x denotes an input, w a weight, and n the number of inputs to the layer. σ² is the common variance of the weights, v the variance of the inputs and V that of z. Everything is unitless in this exercise; with an input expressed in a unit u, v and V would be in u² and σ² would remain unitless.</p><p>Assumptions: the weights are drawn independently of one another, with 0 mean; they are independent of the inputs; the inputs have 0 mean. The inputs do not need to be independent of one another. Without these assumptions, the following rule must be reconsidered.</p></li><li><h3>Calculate the variance of an output</h3><p>Take a term w x. Since w and x are independent, the mean of (w x)² is the mean of w² multiplied by that of x², giving σ² × v. The term has 0 mean, so its variance is σ² v.</p><p>For two different terms, the product of the two weights has 0 mean because the weights are independent and have 0 mean: the cross terms disappear. The variance of the sum is the sum of the variances of its n terms:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>=</mo><mi>n</mi><mo>×</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>×</mo><mi>v</mi></mrow></math></div></li><li><h3>Move to a stack: the gains multiply</h3><p>Let g = n σ² be the variance gain of a layer. The output has 0 mean, so the mean of its square is V. The weights of the next layer are drawn independently of this output: the same rule applies, with V replacing v. After L layers:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mi>L</mi></msub><mo>=</mo><msup><mi>g</mi><mi>L</mi></msup><mo>×</mo><mi>v</mi></mrow></math></div><p>This result describes the variance at the time of the draw, for a linear stack. It says nothing about subsequent training or the effect of activations.</p></li><li><h3>First draw: σ² = 1</h3><p>The gain is 100 × 1 = 100. The successive variances are therefore 1 × 100 = 100, then 100 × 100 = 10000, then 10000 × 100 = 1000000.</p><p>For the standard deviation, which returns to the scale of the inputs, take the square root: the square root of the gain is 10, since 10 × 10 = 100. After 3 layers, the standard deviation is multiplied by 10 × 10 × 10 = 1000. An output of this size would saturate a classifier from the start.</p></li><li><h3>Second draw: σ² = 1 / n</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>=</mo><mn>0.01</mn></mrow></math></div><p>The gain becomes 100 × 0.01 = 1. The variances remain 1, 1 and then 1: the stack does not distort the scale at the start. The standard deviation of the weights is the square root of 0.01, giving 0.1, since 0.1 × 0.1 = 0.01.</p><p>For layers of the same width, the Glorot rule σ² = 2 / (n + m) gives this choice again, with m the number of outputs: 100 + 100 = 200, and 2 / 200 = 0.01. Cases with unequal widths are the subject of the last exercise.</p></li><li><h3>Check using limiting cases and enumeration</h3><p>If σ² were 0, the gain would be 100 × 0 = 0 and the output variance 0 × 1 = 0: the signal dies away, and all neurons in a layer are identical. At the other extreme, the first draw shows the explosion.</p><p>A reading pitfall: drawing weights with a standard deviation equal to 1 / n instead of a variance. The variance would then be (1 / n)² = 0.0001, the gain 0.01 and the variance after 3 layers 0.000001: the signal dies away.</p><p>To cross-check the rule without reusing it, calculs.py enumerates all cases of a tiny network where each weight is plus or minus the same amplitude and each input is plus or minus 1, then compares the mean of the squares with n σ² v. In a real network, a finite difference check of the gradient also verifies that the resulting scale is the one the code calculates.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why do layer gains multiply instead of adding up? And what assumption about the weights must be stated for the cross terms to disappear?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Setting everything to 0 is the most neutral choice.”</h3><p>With σ² equal to 0, the gain is 0: the output is 0, and equal weights produce identical neurons, which receive the same inputs and, in a symmetric network, the same gradient. Randomness with 0 mean serves to break this symmetry.</p><a href="#intuition">Reread the intuition about symmetry</a></li><li><h3>“Small weights are always more cautious.”</h3><p>A gain below 1 accumulates from one layer to the next: with a standard deviation set to 1 / n, the variance falls to 0.000001 after 3 layers. Cautious means close to 1, rather than as small as possible.</p><a href="#exemple">Revisit the check using limiting cases</a></li><li><h3>“σ = 1 / n and σ² = 1 / n are the same rule.”</h3><p>σ² is a variance, and σ is its standard deviation. For n = 100, σ² = 0.01 corresponds to σ = 0.1; taking σ = 0.01 gives σ² = 0.0001. Always check whether the formula refers to a variance or a standard deviation.</p><a href="#exercices">Redo the exercise on input width</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-largeur"><p class="repere">Exercise 1 · Explained application</p>
+<h3>A wider layer</h3><p>A fictional layer receives n = 400 inputs with variance 1. What weight variance σ² keeps its gain equal to 1? Also give the corresponding standard deviation.</p>
+<label for="reponse-ex-largeur">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-largeur" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-largeur" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-largeur" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-largeur" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the gain n × σ² = 1 and isolate σ².</p></details><details class="indice"><summary>Hint 2</summary><p>The standard deviation is the square root of the variance: find a number whose square equals σ².</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The gain is n × σ². Setting it to 1 gives σ² = 1 / 400 = 0.0025. Check: 400 × 0.0025 = 1.</p><p>The standard deviation is 0.05, since 0.05 × 0.05 = 0.0025. With σ² = 1, the gain would be 400 and the output standard deviation would be multiplied by 20 at each layer. The wider the layer, the smaller σ² must be.</p><p class="petit-titre">Check your reasoning</p><ul><li>Solve for a gain equal to 1, without reusing the value from the lesson.</li><li>Distinguish variance from standard deviation, with a check by squaring.</li><li>State that σ² decreases as n increases.</li></ul></details></article><article class="exercice" id="ex-diagnostic"><p class="repere">Exercise 2 · Diagnosis</p>
+<h3>A colleague’s choice</h3><p>A colleague sets σ² = 0.02 for layers of width 100, with an input variance of 1, in a linear stack. Calculate the gain, the variance after 3 layers and then after 6 layers, and say whether you find the choice suitable. All values are fictional.</p>
+<label for="reponse-ex-diagnostic">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-diagnostic" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-diagnostic" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-diagnostic" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-diagnostic" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the gain n × σ², then multiply it as many times as there are layers.</p></details><details class="indice"><summary>Hint 2</summary><p>For 6 layers, reuse the result after 3 layers: 6 layers are two stacks of 3 layers.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Gain: 100 × 0.02 = 2. Variances: 1 × 2 = 2, then 4, then 8 after 3 layers. After 6 layers: 8 × 8 = 64, since the input variance is 1.</p><p>The gain is greater than 1: the variance doubles at each layer and the growth is geometric. This choice is unsuitable for a linear stack. It could be considered with certain activations, the subject of the next unit, but that is outside our case here.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the gain before calculating the stack.</li><li>Show the repeated multiplication of the gains.</li><li>Draw a conclusion about the gain relative to 1, recalling the linear stack assumption.</li></ul></details></article><article class="exercice" id="ex-asymetrique"><p class="repere">Exercise 3 · Transfer</p>
+<h3>A layer that narrows</h3><p>A fictional layer goes from n = 100 inputs to m = 50 outputs. The forward gain is n σ²; in backpropagation, the gradient received by an input sums m terms, so the backward gain is m σ². Compare σ² = 1 / n and σ² = 2 / (n + m).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mfrac><mn>2</mn><mrow><mi>n</mi><mo>+</mo><mi>m</mi></mrow></mfrac></mrow></math></div>
+<label for="reponse-ex-asymetrique">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-asymetrique" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-asymetrique" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-asymetrique" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-asymetrique" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For each choice of σ², calculate the forward gain n σ² and the backward gain m σ².</p></details><details class="indice"><summary>Hint 2</summary><p>Compare each gain with 1: which of the two choices is perfect in one direction and imperfect in the other?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>With σ² = 1 / n = 0.01: forward gain 1, backward gain 50 × 0.01 = 0.5. The forward variance is preserved, and the backward variance is divided by 2.</p><p>With σ² = 2 / (100 + 50) = 2 / 150 = 1/75: forward gain 100 × 1/75 = 4/3 and backward gain 50 × 1/75 = 2/3. Check: their ratio is 2, that is, n / m.</p><p>The compromise is perfect in neither direction when the widths differ: it distributes the deviation instead of concentrating it on one side. For equal widths, it gives 1 / n again. These results are gains at the time of the draw, rather than a guarantee about training.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate both gains for each choice.</li><li>Explain why the backward gain depends on m.</li><li>State that the compromise does not set both gains to 1 if n and m differ.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="gain"><summary><span class="repere">Recall 1</span><span>What is the variance gain of a linear dense layer with n inputs whose weights have variance σ²?</span></summary><p>It is n × σ²: the output variance is n × σ² × v, with v the variance of the inputs.</p></details><details class="carte" data-carte="hypotheses"><summary><span class="repere">Recall 2</span><span>What assumptions justify V = n σ² v?</span></summary><p>Weights with 0 mean and the same variance, drawn independently of one another and of the inputs; inputs with 0 mean; no bias or activation.</p></details><details class="carte" data-carte="symetrie"><summary><span class="repere">Recall 3</span><span>Why avoid equal weights, including 0 weights?</span></summary><p>The neurons in a layer would remain interchangeable. A random draw with 0 mean differentiates them; 0 also makes the output 0.</p></details><details class="carte" data-carte="variance-ecart"><summary><span class="repere">Recall 4</span><span>In σ² = 1 / n, which quantity is equal to 1 / n?</span></summary><p>The variance of the weights. The standard deviation is its square root; setting it equal to 1 / n would give a variance that is far too small.</p></details><details class="carte" data-carte="glorot"><summary><span class="repere">Recall 5</span><span>What does σ² = 2 / (n + m) make a compromise between when n and m differ?</span></summary><p>The forward gain n σ² and the backward gain m σ²: neither is exactly equal to 1, but their deviation is distributed between the two directions.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Define n, σ², v and V; state the assumptions of 0 means and independence; calculate the variance of an output n σ² v; multiply the gains from layer to layer; choose σ² to aim for a gain equal to 1; distinguish variance from standard deviation; check using limiting cases and enumeration; set and record the seed for the draw.</p></div><div class="exports"><a class="bouton" download="c103-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTE6Z2FpbiIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZ2Fpbi1kZS12YXJpYW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSB2YXJpYW5jZSBnYWluIG9mIGEgbGluZWFyIGRlbnNlIGxheWVyIHdpdGggbiBpbnB1dHMgd2hvc2Ugd2VpZ2h0cyBoYXZlIHZhcmlhbmNlIM+DwrI/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgaXMgbiDDlyDPg8KyOiB0aGUgb3V0cHV0IHZhcmlhbmNlIGlzIG4gw5cgz4PCsiDDlyB2LCB3aXRoIHYgdGhlIHZhcmlhbmNlIG9mIHRoZSBpbnB1dHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTE6aHlwb3RoZXNlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaHlwb3RoZXNlcy1pbml0aWFsaXNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGFzc3VtcHRpb25zIGp1c3RpZnkgViA9IG4gz4PCsiB2PyIsCiAgICAgICJyZXBvbnNlIjogIldlaWdodHMgd2l0aCAwIG1lYW4gYW5kIHRoZSBzYW1lIHZhcmlhbmNlLCBkcmF3biBpbmRlcGVuZGVudGx5IG9mIG9uZSBhbm90aGVyIGFuZCBvZiB0aGUgaW5wdXRzOyBpbnB1dHMgd2l0aCAwIG1lYW47IG5vIGJpYXMgb3IgYWN0aXZhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMy1tMTpzeW1ldHJpZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3ltZXRyaWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGF2b2lkIGVxdWFsIHdlaWdodHMsIGluY2x1ZGluZyAwIHdlaWdodHM/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIG5ldXJvbnMgaW4gYSBsYXllciB3b3VsZCByZW1haW4gaW50ZXJjaGFuZ2VhYmxlLiBBIHJhbmRvbSBkcmF3IHdpdGggMCBtZWFuIGRpZmZlcmVudGlhdGVzIHRoZW07IDAgYWxzbyBtYWtlcyB0aGUgb3V0cHV0IDAuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTE6dmFyaWFuY2UtZWNhcnQiLAogICAgICAidW5pdGUiOiAiYzEwMy1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInZhcmlhbmNlLWVjYXJ0LXR5cGUiLAogICAgICAicXVlc3Rpb24iOiAiSW4gz4PCsiA9IDEgLyBuLCB3aGljaCBxdWFudGl0eSBpcyBlcXVhbCB0byAxIC8gbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdmFyaWFuY2Ugb2YgdGhlIHdlaWdodHMuIFRoZSBzdGFuZGFyZCBkZXZpYXRpb24gaXMgaXRzIHNxdWFyZSByb290OyBzZXR0aW5nIGl0IGVxdWFsIHRvIDEgLyBuIHdvdWxkIGdpdmUgYSB2YXJpYW5jZSB0aGF0IGlzIGZhciB0b28gc21hbGwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTE6Z2xvcm90IiwKICAgICAgInVuaXRlIjogImMxMDMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb21wcm9taXMtZ2xvcm90IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyDPg8KyID0gMiAvIChuICsgbSkgbWFrZSBhIGNvbXByb21pc2UgYmV0d2VlbiB3aGVuIG4gYW5kIG0gZGlmZmVyPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBmb3J3YXJkIGdhaW4gbiDPg8KyIGFuZCB0aGUgYmFja3dhcmQgZ2FpbiBtIM+DwrI6IG5laXRoZXIgaXMgZXhhY3RseSBlcXVhbCB0byAxLCBidXQgdGhlaXIgZGV2aWF0aW9uIGlzIGRpc3RyaWJ1dGVkIGJldHdlZW4gdGhlIHR3byBkaXJlY3Rpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c103-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgdmFyaWFuY2UgZ2FpbiBvZiBhIGxpbmVhciBkZW5zZSBsYXllciB3aXRoIG4gaW5wdXRzIHdob3NlIHdlaWdodHMgaGF2ZSB2YXJpYW5jZSDPg8KyPwlJdCBpcyBuIMOXIM+DwrI6IHRoZSBvdXRwdXQgdmFyaWFuY2UgaXMgbiDDlyDPg8KyIMOXIHYsIHdpdGggdiB0aGUgdmFyaWFuY2Ugb2YgdGhlIGlucHV0cy4JdG9kYWkgYzEwMy1tMSBnYWluLWRlLXZhcmlhbmNlCldoYXQgYXNzdW1wdGlvbnMganVzdGlmeSBWID0gbiDPg8KyIHY/CVdlaWdodHMgd2l0aCAwIG1lYW4gYW5kIHRoZSBzYW1lIHZhcmlhbmNlLCBkcmF3biBpbmRlcGVuZGVudGx5IG9mIG9uZSBhbm90aGVyIGFuZCBvZiB0aGUgaW5wdXRzOyBpbnB1dHMgd2l0aCAwIG1lYW47IG5vIGJpYXMgb3IgYWN0aXZhdGlvbi4JdG9kYWkgYzEwMy1tMSBoeXBvdGhlc2VzLWluaXRpYWxpc2F0aW9uCldoeSBhdm9pZCBlcXVhbCB3ZWlnaHRzLCBpbmNsdWRpbmcgMCB3ZWlnaHRzPwlUaGUgbmV1cm9ucyBpbiBhIGxheWVyIHdvdWxkIHJlbWFpbiBpbnRlcmNoYW5nZWFibGUuIEEgcmFuZG9tIGRyYXcgd2l0aCAwIG1lYW4gZGlmZmVyZW50aWF0ZXMgdGhlbTsgMCBhbHNvIG1ha2VzIHRoZSBvdXRwdXQgMC4JdG9kYWkgYzEwMy1tMSBzeW1ldHJpZQpJbiDPg8KyID0gMSAvIG4sIHdoaWNoIHF1YW50aXR5IGlzIGVxdWFsIHRvIDEgLyBuPwlUaGUgdmFyaWFuY2Ugb2YgdGhlIHdlaWdodHMuIFRoZSBzdGFuZGFyZCBkZXZpYXRpb24gaXMgaXRzIHNxdWFyZSByb290OyBzZXR0aW5nIGl0IGVxdWFsIHRvIDEgLyBuIHdvdWxkIGdpdmUgYSB2YXJpYW5jZSB0aGF0IGlzIGZhciB0b28gc21hbGwuCXRvZGFpIGMxMDMtbTEgdmFyaWFuY2UtZWNhcnQtdHlwZQpXaGF0IGRvZXMgz4PCsiA9IDIgLyAobiArIG0pIG1ha2UgYSBjb21wcm9taXNlIGJldHdlZW4gd2hlbiBuIGFuZCBtIGRpZmZlcj8JVGhlIGZvcndhcmQgZ2FpbiBuIM+DwrIgYW5kIHRoZSBiYWNrd2FyZCBnYWluIG0gz4PCsjogbmVpdGhlciBpcyBleGFjdGx5IGVxdWFsIHRvIDEsIGJ1dCB0aGVpciBkZXZpYXRpb24gaXMgZGlzdHJpYnV0ZWQgYmV0d2VlbiB0aGUgdHdvIGRpcmVjdGlvbnMuCXRvZGFpIGMxMDMtbTEgY29tcHJvbWlzLWdsb3JvdAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qwleuj mdzgwl fwdn</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · set and record the seed for a draw</h3><dl><div><dt>What you understand</dt><dd>At the start, a dense layer multiplies the signal variance by n σ²; the choice of σ² sets this gain, and the draw must be exactly reproducible.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zifrbw zgfeue zfiegr yzepxn uobize jbsrst xlokcu poklah wdwimy chtqmg ievciw nppcca vwbqsc yepjqi flqaas ojvbuv knmdwp zfejeg sjtynz ebcqgz dvdmwu oqpsgw tfnzil nnyjyq</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: derive V = n σ² v with its assumptions, calculate the gain of a stack, distinguish variance from standard deviation, and justify the forward–backward asymmetry. Reading the lesson and the code does not establish any attained level, nor does an assisted answer.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uzlfgo glvfkd btmbqf vcpxgc egspvb qjrrfe yvyclp jdryaw rsbkmk utjrbq spzbtt hpnrca aojtvq qfxgnk mkzhsz rloxvx mxildb bnjybv jmcmvk gtvliw svgnaw lbhoam klokfy plwpwp</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example and the limiting cases without support, then read the unit on activations, which change the gain. Before any real use, identify the actual initialization code involved, check its variance by measuring a draw and record the seed in the pipeline.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c103-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c102-m5.html">Previous</a> · <a href="c103-m2.html">Next</a></nav>
+<footer><p>Course book · C103·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

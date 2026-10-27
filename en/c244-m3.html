@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Separate the search for the centre and width of an SVI slice from its inner linear solve, then check the resulting coefficients and residuals.">
+<title>C244·M3 · Quasi-explicit calibration — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">orpgzx bmepxp oqzu</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C244·M3</p><h1>Quasi-explicit calibration</h1><p class="objectif"><span>Your goal</span>Separate the search for the centre and width of an SVI slice from its inner linear solve, then check the resulting coefficients and residuals.</p><p class="prerequis"><strong>Before you start</strong><br>c243-m5 : SSVI · c051-m5 : error diagnostics · c220-m5 : numerical reproducibility · c198-m5 : independent validation · c244-m1 : initialisation · c244-m2 : constraints</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>On a calibration worksheet, you have 3 observations for options with the same expiry. They show a left wing that is higher than the right wing. You want to fit an SVI slice: a curve of total variance against relative strike. All the data on this worksheet are fictional, chosen to allow exact calculation.</p><p>Imagine a curve template whose centre and width you fix first. Once you have chosen this geometry, you still need to adjust the level, slope and amplitude of a rounded component. These adjustments add linearly: you can solve for them together, rather than searching for all the parameters by trial and error.</p><p>The calibration is called quasi-explicit because this separation leaves an outer search for the centre and width. The inner solve depends on each pair tried; it must be repeated whenever that pair changes. The constraints still have to be satisfied in this solve.</p><p>We will solve exactly for a single trial geometry, then explain how it fits into the search. Interpolation between expiries and price range diagnostics belong to the following units.</p><div class="schemas"><figure><svg viewBox="0 0 360 264" xmlns="http://www.w3.org/2000/svg" role="img"><title>An outer search and an inner solve</title><desc>For each trial centre m and width s, solve for a, d and c, then calculate the cost J. Here m is 0 and s is 0.20. A new geometry requires a new solve.</desc><rect x="20" y="12" width="320" height="64" rx="7" class="cadre-prediction" /><text x="180" y="38" text-anchor="middle">Choose m and s</text><text x="180" y="61" text-anchor="middle" class="petite-etiquette">Here: m = 0 ; s = 0.20</text><path d="M180 76v22m-5-5 5 5 5-5" class="trait" /><rect x="20" y="98" width="320" height="64" rx="7" class="cadre-neutre" /><text x="180" y="124" text-anchor="middle">Solve for a, d and c</text><text x="180" y="147" text-anchor="middle" class="petite-etiquette">Satisfy the constraints</text><path d="M180 162v22m-5-5 5 5 5-5" class="trait" /><rect x="20" y="184" width="320" height="64" rx="7" class="cadre-resultat" /><text x="180" y="210" text-anchor="middle">Recalculate J</text><text x="180" y="233" text-anchor="middle" class="petite-etiquette">Then compare choices of m and s</text></svg><figcaption>The middle block is solved again for each outer pair. The diagram describes the order of operations; it makes no claim about measured speed.</figcaption></figure><figure><svg viewBox="0 0 360 234" xmlns="http://www.w3.org/2000/svg" role="img"><title>The fictional worksheet to fit</title><desc>Three dimensionless observations: at k equal to -0.15, W is 0.075; at the centre, k equal to 0, W is 0.050; at k equal to 0.15, W is 0.045. The relative positions are symmetric; the variances are not.</desc><text x="30" y="28">Position k</text><text x="330" y="28" text-anchor="end">Variance W</text><rect x="20" y="42" width="320" height="46" rx="6" class="cadre-neutre" /><text x="30" y="72">Left: -0.15</text><text x="330" y="72" text-anchor="end">0.075</text><rect x="20" y="102" width="320" height="46" rx="6" class="cadre-neutre" /><text x="30" y="132">Centre: 0</text><text x="330" y="132" text-anchor="end">0.050</text><rect x="20" y="162" width="320" height="46" rx="6" class="cadre-neutre" /><text x="30" y="192">Right: 0.15</text><text x="330" y="192" text-anchor="end">0.045</text></svg><figcaption>The difference between the wings will tell us about the slope; their average will tell us about the symmetric component. W denotes an observation of total variance, with no physical unit.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fix the geometry, solve for the linear coefficients under the chosen constraints, and recalculate the error; repeat to compare geometries.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Solve for a slice on the calibration worksheet</h3><p>For a single expiry, the observed pairs (k ; W) are (-3/20 ; 3/40), (0 ; 1/20), (3/20 ; 9/200). They are exact and fictional. For this outer trial, fix the centre m = 0 and the width s = 1/5. Each observation receives the same weight.</p><ol class="etapes"><li><h3>Define the slice and what is fixed</h3><p>k = ln(K/F) is the natural logarithm of the ratio of strike price K to forward price F, both positive and expressed in the same currency. This ratio and k are dimensionless. W is the observed total variance: the square of annualised implied volatility multiplied by the time T in years; the units cancel. w(k) is the total variance predicted by the curve.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>[</mo><mi>ρ</mi><mo>(</mo><mi>k</mi><mo>−</mo><mi>m</mi><mo>)</mo><mo>+</mo><msqrt><mrow><msup><mrow><mo>(</mo><mi>k</mi><mo>−</mo><mi>m</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mi>s</mi><mn>2</mn></msup></mrow></msqrt><mo>]</mo></mrow></math></div><p>a sets the level, b the amplitude, and ρ the asymmetry; m is a centre used in the parametrisation, which is not necessarily the minimum of w; s is a strictly positive width. All these parameters have no physical unit in these coordinates. s is the SVI width, not implied volatility. We keep the same expiry, observations and weights throughout the inner solve.</p><p>The bounds and arbitrage tests from the previous unit remain relevant. We will specify a simple inner domain; it does not replace their full audit.</p></li><li><h3>Identify the linear coefficients</h3><p>For each observation i, set yᵢ = (kᵢ − m)/s and let zᵢ be the positive square root of the sum of 1 and the square of yᵢ. Here the index i denotes left, centre or right. Since s is positive, the square root of the sum of the squares of kᵢ − m and s is s zᵢ. Setting c = bs and d = ρbs gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><mi>a</mi><mo>+</mo><mi>d</mi><msub><mi>y</mi><mi>i</mi></msub><mo>+</mo><mi>c</mi><msub><mi>z</mi><mi>i</mi></msub></mrow></math></div><p>yᵢ and zᵢ are now known, dimensionless numbers. a, d and c have units of total variance, so they also have no physical unit. For fixed m and s, the model is linear in these coefficients, which allows the inner solve.</p><p>On the right, y = 3/20 ÷ 1/5 = 3/4. Its square is 9/16; 1 + 9/16 = 25/16. The positive square root is 5/4, verified by 5/4 × 5/4 = 25/16. On the left, y is -3/4 and z remains 5/4. At the centre, y is 0 and z is 1.</p></li><li><h3>Write the inner problem before solving it</h3><p>H is the matrix whose rows contain the coefficients of a, d and c; θ is the column (a ; d ; c). W is the column of observations in the order left, centre, right. The product Hθ gives the predictions. Here H has 3 rows and 3 columns:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>H</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>-3/4</mn></mtd><mtd><mn>5/4</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>3/4</mn></mtd><mtd><mn>5/4</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The residual rᵢ is the prediction minus the observation: rᵢ = a + d yᵢ + c zᵢ − Wᵢ. The cost J adds their squares; it has units of total variance squared. We seek the coefficients that minimise it within the allowed domain D.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>=</mo><mo>∑</mo><msubsup><mi>r</mi><mi>i</mi><mn>2</mn></msubsup><mo>=</mo><mo>∑</mo><msup><mrow><mo>(</mo><mi>a</mi><mo>+</mo><mi>d</mi><msub><mi>y</mi><mi>i</mi></msub><mo>+</mo><mi>c</mi><msub><mi>z</mi><mi>i</mi></msub><mo>−</mo><msub><mi>W</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>The sums run over all observations. This is linear least squares: a quadratic cost in a, d and c, even though the transformed positions come from a square root. Our worksheet allows us to solve Hθ = W exactly. With more noisy observations, we minimise J without requiring every equation to be satisfied.</p></li><li><h3>Subtract the wings to isolate d</h3><p>The wing equations are W left = a − (3/4)d + (5/4)c and W right = a + (3/4)d + (5/4)c. Subtracting left from right eliminates a and c because their coefficients are identical.</p><p>The difference between the observations is 9/200 − 3/40 = -3/100, or -0.03 units of total variance. The difference between the transformed positions is 3/4 − (-3/4) = 3/2. Thus d = -3/100 ÷ 3/2 = -1/50, or -0.02 units of total variance.</p><p>Sign check: the right wing is lower, while its position is greater. The coefficient d must therefore be negative; it is.</p></li><li><h3>Average the wings to recover c, then a</h3><p>The average of the wings eliminates d: the opposite terms cancel. It is (3/40 + 9/200)/2 = 3/25/2 = 3/50. At the centre, the equation gives W centre = a + c = 1/20.</p><p>Subtracting the central equation from the average eliminates a. The difference in level is 3/50 − 1/20 = 1/100. The coefficient of c is 5/4 − 1 = 1/4. Thus c = 1/100 ÷ 1/4 = 1/25, or 0.04 units of total variance.</p><p>This leaves a = 1/20 − 1/25 = 1/100, or 0.01 units of total variance. Check: a + c = 1/100 + 1/25 = 1/20; the central observation is recovered.</p></li><li><h3>Return to the SVI parameters and check the chosen domain</h3><p>Since s &gt; 0 and c &gt; 0, we recover b = c/s = 1/25 ÷ 1/5 = 1/5, or 0.20, and ρ = d/c = -1/50 ÷ 1/25 = -1/2, or -0.50. Returning via b = c or ρ = d would overlook the change of variables. If c is 0, the constraint |d| ≤ c requires d = 0: b is 0 and ρ is no longer identifiable from the curve.</p><p>For this worksheet, choose D defined by a ≥ 0, c ≥ 0, |d| ≤ c and c + |d| ≤ 2s. The first bound is deliberately conservative: some positive slices allow negative a. Since zᵢ ≥ |yᵢ|, c zᵢ + d yᵢ ≥ 0 in this domain; w therefore remains at least equal to a.</p><p>The last bound requires the asymptotic slopes b(1 ± ρ) to be no greater than 2. It can also be written |d| ≤ 2s − c. Here 2s = 2/5, |d| = 1/50 ≤ 1/25 and |d| ≤ 9/25. a is positive; our candidate is feasible for D and its |ρ| is strictly less than 1.</p><p>These positivity and slope checks do not certify the absence of butterfly arbitrage. They do not compare several expiries either. A calibration that satisfies D still requires these separate checks. If the unconstrained solution lies outside D, the inner problem must be solved under constraints; clipping its coefficients separately is not enough, as the final exercise will show.</p></li><li><h3>Recalculate the predictions using two forms</h3><p>On the right, d y = -3/200 and c z = 1/20; the prediction is 1/100 + (-3/200) + 1/20 = 9/200. On the left, the sign of the product d y reverses: 1/100 − (-3/200) + 1/20 = 3/40. At the centre, we recover 1/20. The 3 residuals are 0; their sum of squares is J = 0.</p><p>The independent check returns to the original SVI form. On the wings, the square root of the sum of the square of k and the square of s is s z = (1/5) × (5/4); substitute a, b, ρ, m and s into the first formula and recover the same W values. This also checks the parameter conversion, rather than merely repeating Hθ.</p><p>The determinant of H is 2 × (3/4) × (5/4 − 1) = 3/8, which is nonzero. The columns are therefore independent: for this geometry, the inner coefficients are unique. On a more general worksheet, you must check this independence and sensitivity to rounding; a nearly dependent system can give unstable parameters despite a small error.</p></li><li><h3>Put the solve back into the outer search</h3><p>Let Φ(m,s) be the smallest cost J obtained after solving the inner problem in D for the pair (m,s). Φ also has units of total variance squared. An outer procedure proposes a new pair with s &gt; 0, rebuilds yᵢ, zᵢ and H, solves again for a, d, c, then compares Φ. The bounds, observations and weights must remain comparable across trials.</p><p>This is what remains numerical in “quasi-explicit”. In the general case, this search may encounter several minima; a numerical stopping point does not certify the global optimum. Here, J = 0 already reaches the lowest possible error bound on our worksheet, since a sum of squares is nonnegative.</p><p>This 0 error is nevertheless insufficient to identify the 5 SVI parameters uniquely, since the uniqueness proved applied only to the 3 coefficients for fixed m and s. It is neither a test on new observations nor a validation of the entire surface.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps. Explain why subtracting the wings isolates d, why their average allows you to recover c, and why changing s requires you to repeat the solve. Then name something that 0 J does not prove.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The calibration is linear, so I can solve for all the parameters at once.”</h3><p>The positions yᵢ and zᵢ depend on m and s. Only a, d and c are linear once that pair is fixed. The outer search must rebuild the inner problem at each trial.</p><a href="#intuition">Reread the outer and inner blocks</a></li><li><h3>“I apply bounds to the coefficients after solving: that gives the best allowed fit.”</h3><p>Changing a coefficient moves several predictions. The other coefficients must be able to readjust together. The counterexample in the final exercise gives a feasible solution that is better than simple clipping.</p><a href="#exercices">Compare the costs in the exercise on the bound</a></li><li><h3>“The error is 0: the slice is validated and the parameters are certain.”</h3><p>J concerns only the supplied points and the chosen weights. The independence of H gives uniqueness conditional on m and s, not uniqueness of all the parameters. Arbitrage, stability and independent validation checks remain.</p><a href="#exemple">Review the check and what the error establishes</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-coordonnees"><p class="repere">Exercise 1 · Guided application</p>
+<h3>Recover the left row</h3><p>On the same worksheet, keep m = 0 and s = 1/5. Recalculate y and z for k = -3/20, then write the corresponding row of H. Verify the square root without using an approximate decimal.</p>
+<label for="reponse-ex-coordonnees">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-coordonnees" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-coordonnees" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-coordonnees" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-coordonnees" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Divide k − m by s; squaring then removes the negative sign.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the square of 5/4 with 1 plus the square of -3/4.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>y = (-3/20 − 0)/(1/5) = -3/4. Its square is 9/16. We obtain 1 + 9/16 = 25/16; the positive square root is 5/4 since its square is 25/16.</p><p>The row is [1 ; -3/4 ; 5/4], in the order a, d, c. The negative sign stays in the d column; the a and c columns are identical to those of the right wing. All coordinates are dimensionless.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the sign of y and take the positive square root for z.</li><li>Justify the square root by its exact square.</li><li>Keep the order a, d, c in H.</li></ul></details></article><article class="exercice" id="ex-reconstruction"><p class="repere">Exercise 2 · Independent solution on paper</p>
+<h3>Reconstruct the parameters without copying the page</h3><p>Hide the full calculation. Using the same observations and the same pair (m,s), recover d, c, a, then b and ρ. Justify the eliminations and check at least the right wing in the original SVI formula.</p>
+<label for="reponse-ex-reconstruction">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reconstruction" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reconstruction" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reconstruction" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reconstruction" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The difference of right minus left eliminates the symmetric component.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract the central observation from the average of the wings, then divide by z − 1.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The difference between the wings gives d = (-3/100)/(3/2) = -1/50. Their average is 3/50; it exceeds the centre by 1/100. Thus c = (1/100)/(1/4) = 1/25; a = 1/20 − 1/25 = 1/100.</p><p>Then b = 1/25/(1/5) = 1/5 and ρ = -1/50/(1/25) = -1/2. On the right, the original formula gives a + b[ρk + sz] = 1/100 + (1/5)[(-1/2)(3/20) + (1/5)(5/4)] = 9/200. All the parameters in this scenario have no physical unit.</p><p>Recovering the right observation checks both the solve and the conversion. This success with a hint is an assisted answer; repeat the reasoning without support in a later session.</p><p class="petit-titre">Check your reasoning</p><ul><li>State which terms each subtraction or average eliminates.</li><li>Obtain the exact coefficients before the decimals.</li><li>Check the original form, keeping s in the transformed square root.</li></ul></details></article><article class="exercice" id="ex-borne"><p class="repere">Exercise 3 · Diagnosis and counterexample</p>
+<h3>A new bound on the same worksheet</h3><p>A fictional specification adds a ≥ 0.02 to the domain D. Only a is replaced by 1/50, while d = -1/50, c = 1/25 are retained. Calculate the cost of this clipping. Compare it with the feasible candidate a = 1/50, d = -1/50, c = 3/100. Can we claim that clipping a solves the constrained problem?</p>
+<label for="reponse-ex-borne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-borne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-borne" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-borne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-borne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>If only a increases, every prediction increases by the same amount.</p></details><details class="indice"><summary>Hint 2</summary><p>For the second candidate, the centre returns to 1/20. On a wing, the decrease in c is multiplied by 5/4, whereas the increase in a is not.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Clipping increases a by 1/50 − 1/100 = 1/100. The 3 residuals therefore equal 1/100, each with square 1/10000. The cost becomes J clipped = 3 × 1/10000 = 3/10000, or 0.000300 units of total variance squared.</p><p>For the proposed candidate, a + c = 1/50 + 3/100 = 1/20: the central residual is 0. On the wings, the change is (1/50 − 1/100) + (3/100 − 1/25) × (5/4) = -1/400. The residuals are therefore (-1/400 ; 0 ; -1/400). Each nonzero square is 1/160000; J trial = 2 × 1/160000 = 1/80000 units of total variance squared.</p><p>The candidate satisfies the new bound on a, c ≥ |d| and c + |d| ≤ 2/5. Since 1/80000 &lt; 3/10000, clipping is not optimal. We have exhibited a better feasible candidate; this is enough to refute the claim of optimality, without claiming that this second candidate is itself the constrained minimum. The coefficients must be optimised again together.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the residuals on the same observations and with the same weights.</li><li>Check that the counterexample is feasible before comparing costs.</li><li>Distinguish a better candidate from a proof of optimality.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="separation"><summary><span class="repere">Recall 1</span><span>What do we fix before solving for an SVI slice linearly?</span></summary><p>The centre m and the strictly positive width s. The coordinates yᵢ and zᵢ become known; we then solve for a, d and c. Changing m or s requires us to rebuild and solve the problem again.</p></details><details class="carte" data-carte="conversion"><summary><span class="repere">Recall 2</span><span>How do we convert the linear coefficients into SVI parameters? Which limiting case requires care?</span></summary><p>c = bs and d = ρbs, so b = c/s and ρ = d/c for positive c. If c is 0, d must also be 0 in our domain; b is 0 and ρ is not identifiable.</p></details><details class="carte" data-carte="symetrie"><summary><span class="repere">Recall 3</span><span>Why are the difference and then the average of the wings sufficient on our worksheet?</span></summary><p>The transformed positions are opposites and their z values are equal. The difference eliminates a and c to isolate d. The average eliminates d; its difference from the centre isolates c, then a follows from the centre.</p></details><details class="carte" data-carte="contraintes"><summary><span class="repere">Recall 4</span><span>Why does applying bounds to the coefficients afterwards fail to guarantee the constrained minimum?</span></summary><p>The coefficients act together on the same predictions. After clipping, the others can readjust and reduce the cost. The problem must be solved with its constraints and its residuals recalculated.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does 0 J demonstrate on this worksheet, and what still needs checking?</span></summary><p>The supplied observations are reproduced exactly, and their quadratic cost reaches its lower bound. This does not demonstrate uniqueness of all the parameters, stability, complete absence of arbitrage or quality on new observations.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without support: define the transformed coordinates and coefficients; explain what becomes linear; recover the original parameters; name the cost and constraints; locate the outer search; finish with the limits of an exact fit. Reading or an assisted answer never establishes that a level has been attained.</p></div><div class="exports"><a class="bouton" download="c244-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDQtbTM6c2VwYXJhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2FsaWJyYXRpb24tcXVhc2ktZXhwbGljaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gd2UgZml4IGJlZm9yZSBzb2x2aW5nIGZvciBhbiBTVkkgc2xpY2UgbGluZWFybHk/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNlbnRyZSBtIGFuZCB0aGUgc3RyaWN0bHkgcG9zaXRpdmUgd2lkdGggcy4gVGhlIGNvb3JkaW5hdGVzIHnhtaIgYW5kIHrhtaIgYmVjb21lIGtub3duOyB3ZSB0aGVuIHNvbHZlIGZvciBhLCBkIGFuZCBjLiBDaGFuZ2luZyBtIG9yIHMgcmVxdWlyZXMgdXMgdG8gcmVidWlsZCBhbmQgc29sdmUgdGhlIHByb2JsZW0gYWdhaW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDQtbTM6Y29udmVyc2lvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2hhbmdlbWVudC1kZS12YXJpYWJsZXMtc3ZpIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB3ZSBjb252ZXJ0IHRoZSBsaW5lYXIgY29lZmZpY2llbnRzIGludG8gU1ZJIHBhcmFtZXRlcnM/IFdoaWNoIGxpbWl0aW5nIGNhc2UgcmVxdWlyZXMgY2FyZT8iLAogICAgICAicmVwb25zZSI6ICJjID0gYnMgYW5kIGQgPSDPgWJzLCBzbyBiID0gYy9zIGFuZCDPgSA9IGQvYyBmb3IgcG9zaXRpdmUgYy4gSWYgYyBpcyAwLCBkIG11c3QgYWxzbyBiZSAwIGluIG91ciBkb21haW47IGIgaXMgMCBhbmQgz4EgaXMgbm90IGlkZW50aWZpYWJsZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0NC1tMzpzeW1ldHJpZSIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZWxpbWluYXRpb24tc3ltZXRyaXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgYXJlIHRoZSBkaWZmZXJlbmNlIGFuZCB0aGVuIHRoZSBhdmVyYWdlIG9mIHRoZSB3aW5ncyBzdWZmaWNpZW50IG9uIG91ciB3b3Jrc2hlZXQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHRyYW5zZm9ybWVkIHBvc2l0aW9ucyBhcmUgb3Bwb3NpdGVzIGFuZCB0aGVpciB6IHZhbHVlcyBhcmUgZXF1YWwuIFRoZSBkaWZmZXJlbmNlIGVsaW1pbmF0ZXMgYSBhbmQgYyB0byBpc29sYXRlIGQuIFRoZSBhdmVyYWdlIGVsaW1pbmF0ZXMgZDsgaXRzIGRpZmZlcmVuY2UgZnJvbSB0aGUgY2VudHJlIGlzb2xhdGVzIGMsIHRoZW4gYSBmb2xsb3dzIGZyb20gdGhlIGNlbnRyZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0NC1tMzpjb250cmFpbnRlcyIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVzb2x1dGlvbi1zb3VzLWNvbnRyYWludGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGFwcGx5aW5nIGJvdW5kcyB0byB0aGUgY29lZmZpY2llbnRzIGFmdGVyd2FyZHMgZmFpbCB0byBndWFyYW50ZWUgdGhlIGNvbnN0cmFpbmVkIG1pbmltdW0/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNvZWZmaWNpZW50cyBhY3QgdG9nZXRoZXIgb24gdGhlIHNhbWUgcHJlZGljdGlvbnMuIEFmdGVyIGNsaXBwaW5nLCB0aGUgb3RoZXJzIGNhbiByZWFkanVzdCBhbmQgcmVkdWNlIHRoZSBjb3N0LiBUaGUgcHJvYmxlbSBtdXN0IGJlIHNvbHZlZCB3aXRoIGl0cyBjb25zdHJhaW50cyBhbmQgaXRzIHJlc2lkdWFscyByZWNhbGN1bGF0ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDQtbTM6cG9ydGVlIiwKICAgICAgInVuaXRlIjogImMyNDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YWxpZGF0aW9uLWRlLWNhbGlicmF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyAwIEogZGVtb25zdHJhdGUgb24gdGhpcyB3b3Jrc2hlZXQsIGFuZCB3aGF0IHN0aWxsIG5lZWRzIGNoZWNraW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBzdXBwbGllZCBvYnNlcnZhdGlvbnMgYXJlIHJlcHJvZHVjZWQgZXhhY3RseSwgYW5kIHRoZWlyIHF1YWRyYXRpYyBjb3N0IHJlYWNoZXMgaXRzIGxvd2VyIGJvdW5kLiBUaGlzIGRvZXMgbm90IGRlbW9uc3RyYXRlIHVuaXF1ZW5lc3Mgb2YgYWxsIHRoZSBwYXJhbWV0ZXJzLCBzdGFiaWxpdHksIGNvbXBsZXRlIGFic2VuY2Ugb2YgYXJiaXRyYWdlIG9yIHF1YWxpdHkgb24gbmV3IG9ic2VydmF0aW9ucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c244-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB3ZSBmaXggYmVmb3JlIHNvbHZpbmcgZm9yIGFuIFNWSSBzbGljZSBsaW5lYXJseT8JVGhlIGNlbnRyZSBtIGFuZCB0aGUgc3RyaWN0bHkgcG9zaXRpdmUgd2lkdGggcy4gVGhlIGNvb3JkaW5hdGVzIHnhtaIgYW5kIHrhtaIgYmVjb21lIGtub3duOyB3ZSB0aGVuIHNvbHZlIGZvciBhLCBkIGFuZCBjLiBDaGFuZ2luZyBtIG9yIHMgcmVxdWlyZXMgdXMgdG8gcmVidWlsZCBhbmQgc29sdmUgdGhlIHByb2JsZW0gYWdhaW4uCXRvZGFpIGMyNDQtbTMgY2FsaWJyYXRpb24tcXVhc2ktZXhwbGljaXRlCkhvdyBkbyB3ZSBjb252ZXJ0IHRoZSBsaW5lYXIgY29lZmZpY2llbnRzIGludG8gU1ZJIHBhcmFtZXRlcnM/IFdoaWNoIGxpbWl0aW5nIGNhc2UgcmVxdWlyZXMgY2FyZT8JYyA9IGJzIGFuZCBkID0gz4Ficywgc28gYiA9IGMvcyBhbmQgz4EgPSBkL2MgZm9yIHBvc2l0aXZlIGMuIElmIGMgaXMgMCwgZCBtdXN0IGFsc28gYmUgMCBpbiBvdXIgZG9tYWluOyBiIGlzIDAgYW5kIM+BIGlzIG5vdCBpZGVudGlmaWFibGUuCXRvZGFpIGMyNDQtbTMgY2hhbmdlbWVudC1kZS12YXJpYWJsZXMtc3ZpCldoeSBhcmUgdGhlIGRpZmZlcmVuY2UgYW5kIHRoZW4gdGhlIGF2ZXJhZ2Ugb2YgdGhlIHdpbmdzIHN1ZmZpY2llbnQgb24gb3VyIHdvcmtzaGVldD8JVGhlIHRyYW5zZm9ybWVkIHBvc2l0aW9ucyBhcmUgb3Bwb3NpdGVzIGFuZCB0aGVpciB6IHZhbHVlcyBhcmUgZXF1YWwuIFRoZSBkaWZmZXJlbmNlIGVsaW1pbmF0ZXMgYSBhbmQgYyB0byBpc29sYXRlIGQuIFRoZSBhdmVyYWdlIGVsaW1pbmF0ZXMgZDsgaXRzIGRpZmZlcmVuY2UgZnJvbSB0aGUgY2VudHJlIGlzb2xhdGVzIGMsIHRoZW4gYSBmb2xsb3dzIGZyb20gdGhlIGNlbnRyZS4JdG9kYWkgYzI0NC1tMyBlbGltaW5hdGlvbi1zeW1ldHJpcXVlCldoeSBkb2VzIGFwcGx5aW5nIGJvdW5kcyB0byB0aGUgY29lZmZpY2llbnRzIGFmdGVyd2FyZHMgZmFpbCB0byBndWFyYW50ZWUgdGhlIGNvbnN0cmFpbmVkIG1pbmltdW0/CVRoZSBjb2VmZmljaWVudHMgYWN0IHRvZ2V0aGVyIG9uIHRoZSBzYW1lIHByZWRpY3Rpb25zLiBBZnRlciBjbGlwcGluZywgdGhlIG90aGVycyBjYW4gcmVhZGp1c3QgYW5kIHJlZHVjZSB0aGUgY29zdC4gVGhlIHByb2JsZW0gbXVzdCBiZSBzb2x2ZWQgd2l0aCBpdHMgY29uc3RyYWludHMgYW5kIGl0cyByZXNpZHVhbHMgcmVjYWxjdWxhdGVkLgl0b2RhaSBjMjQ0LW0zIHJlc29sdXRpb24tc291cy1jb250cmFpbnRlcwpXaGF0IGRvZXMgMCBKIGRlbW9uc3RyYXRlIG9uIHRoaXMgd29ya3NoZWV0LCBhbmQgd2hhdCBzdGlsbCBuZWVkcyBjaGVja2luZz8JVGhlIHN1cHBsaWVkIG9ic2VydmF0aW9ucyBhcmUgcmVwcm9kdWNlZCBleGFjdGx5LCBhbmQgdGhlaXIgcXVhZHJhdGljIGNvc3QgcmVhY2hlcyBpdHMgbG93ZXIgYm91bmQuIFRoaXMgZG9lcyBub3QgZGVtb25zdHJhdGUgdW5pcXVlbmVzcyBvZiBhbGwgdGhlIHBhcmFtZXRlcnMsIHN0YWJpbGl0eSwgY29tcGxldGUgYWJzZW5jZSBvZiBhcmJpdHJhZ2Ugb3IgcXVhbGl0eSBvbiBuZXcgb2JzZXJ2YXRpb25zLgl0b2RhaSBjMjQ0LW0zIHZhbGlkYXRpb24tZGUtY2FsaWJyYXRpb24K">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">orpgzx bmepxp oqzu</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Comparative reading · receiving a least squares solution</h3><dl><div><dt>What you understand</dt><dd>Fixed geometry turns SVI into an inner linear solve. Receiving coefficients still requires checking their residuals, feasibility and identifiability.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ehqkhe fpzrmi vbdjrz qjmvql hfwnpx efbkwi phsjly mcjdqh ovxrba qgwmqw heyovy vikbxw xhdehk ilwnye gljwdx axapbb xiuotd gdtpyo nkiuih kuamkk sdlfsf dqygtr jojtwp vhmhib</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for level 4 by reconstructing without support: change of variables, solve, conversion, checks and the objection about the bound. Then distinguish an independent answer from an assisted answer, and repeat after a delay. Reading never establishes that a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wvfhey zznvfv ovvcih hmocfx kiykdm ckgszd duksdk qmfpow iyhoga gszudd tyvxms odkdzv cewfgf ffhrjn puwiva ebpiej tmpgbw jctcyw elijef btauoh eewaot sfprsy djfzst aebujy</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the counterexample about the bound without looking at the solution. Then continue with feasible interpolation between expiries. Any real reuse of a solver would require a separate check of its inputs, constraints and authorised consumer.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c244-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c244-m2.html">Previous</a> · <a href="c244-m4.html">Next</a></nav>
+<footer><p>Course book · C244·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

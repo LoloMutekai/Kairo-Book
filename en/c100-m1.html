@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Fit a line to training readings, predict a held-out reading, and assess the error against a baseline with no slope, distinguishing fitting from prediction.">
+<title>C100·M1 · Predictive regression — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zzpapv nhfkvm etza</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C100·M1</p><h1>Predictive regression</h1><p class="objectif"><span>Your goal</span>Fit a line to training readings, predict a held-out reading, and assess the error against a baseline with no slope, distinguishing fitting from prediction.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c059-m6 : discrete deterministic Bellman · c066-m5 : standard errors and diagnostics</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small water bath is warming slowly. A thermometer has provided 4 readings, one per minute, from time 0 to 3 min. We want to say what temperature it will show at time 4 min before taking that reading. The values in this scene are fictional: they are for calculations by hand and do not describe any real device.</p><p>Prediction does not mean guessing the future. It means choosing a simple rule from past readings, a line whose slope is expressed in °C per minute, then applying it at a time it has never seen. We choose the line that makes the sum of squared vertical deviations from the training readings as small as possible: this is the method of least squares.</p><p>Two actions must be distinguished. Fitting means choosing the slope and intercept using the training readings. Prediction means applying this line at a time whose reading was held out, then comparing. Only this comparison measures prediction: the line agrees with its own points because those points were used to choose it.</p><p>We also need a baseline with no slope: always predict the mean of the training readings, 22 °C. If the line does no better than this baseline on held-out readings, its slope adds no predictive value.</p><p>This unit does not establish the general quality of a model: a single held-out time illustrates the mechanism without measuring that quality. Coefficient penalties and the bias–variance tradeoff are covered in the following units of the chapter; we do not use them here.</p><div class="schemas"><figure><svg viewBox="0 0 440 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Fitted line and held-out reading</title><desc>Four training readings, from 20 to 24 degrees between minutes 0 and 3, define a line. At minute 4, the line predicts 25.5 degrees; the held-out reading is 26 degrees. The training mean, 22 degrees, serves as the baseline.</desc><line x1="40" y1="215" x2="300" y2="215" class="trait" /><line x1="40" y1="215" x2="40" y2="60" class="trait" /><line x1="50" y1="150" x2="290" y2="150" class="trait" /><line x1="50" y1="192" x2="290" y2="80" class="chemin-correction" /><circle cx="50" cy="190" r="6" class="point-mesure" /><circle cx="110" cy="170" r="6" class="point-mesure" /><circle cx="170" cy="130" r="6" class="point-mesure" /><circle cx="230" cy="110" r="6" class="point-mesure" /><circle cx="290" cy="80" r="6" class="point-prediction" /><circle cx="290" cy="70" r="6" class="resultat" /><text x="14" y="54" class="petite-etiquette">°C</text><text x="50" y="238" text-anchor="middle" class="petite-etiquette">0</text><text x="110" y="238" text-anchor="middle" class="petite-etiquette">1</text><text x="170" y="238" text-anchor="middle" class="petite-etiquette">2</text><text x="230" y="238" text-anchor="middle" class="petite-etiquette">3</text><text x="290" y="238" text-anchor="middle" class="petite-etiquette">4</text><text x="318" y="238" class="petite-etiquette">min</text><circle cx="20" cy="18" r="6" class="point-mesure" /><text x="34" y="23" class="petite-etiquette">training readings</text><line x1="14" y1="38" x2="28" y2="38" class="chemin-correction" /><text x="34" y="43" class="petite-etiquette">line fitted to them</text><text x="46" y="142" class="petite-etiquette">mean: 22 °C</text><text x="302" y="68" class="petite-etiquette">read: 26 °C</text><text x="302" y="94" class="petite-etiquette">predicted: 25.5 °C</text></svg><figcaption>The line is derived from the four purple points. The reading at minute 4 (in gold) was held out; the pink point is what the line predicted for it. The thin horizontal line is the baseline with no slope.</figcaption></figure><figure><svg viewBox="0 0 440 320" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two stages: fit, then predict</title><desc>First, fit the line using 4 readings, from minute 0 to minute 3. This gives a slope of 1.4 degrees per minute and an intercept of 19.9 degrees. It predicts 25.5 degrees at minute 4; the reading of 26 degrees gives an error of 0.5 degree, compared with 4 degrees for the baseline.</desc><rect x="20" y="10" width="400" height="56" rx="7" class="cadre-neutre" /><text x="220" y="34" text-anchor="middle">Fit: 4 readings, 0 to 3 min</text><text x="220" y="56" text-anchor="middle" class="petite-etiquette">the reading at 4 min stays hidden</text><line x1="220" y1="66" x2="220" y2="90" class="trait" /><rect x="20" y="90" width="400" height="56" rx="7" class="cadre-prediction" /><text x="220" y="114" text-anchor="middle">Line: slope 1.4 °C/min</text><text x="220" y="136" text-anchor="middle" class="petite-etiquette">intercept 19.9 °C, through the mean point</text><line x1="220" y1="146" x2="220" y2="170" class="trait" /><rect x="20" y="170" width="400" height="56" rx="7" class="cadre-resultat" /><text x="220" y="194" text-anchor="middle">Predict at 4 min: 25.5 °C</text><text x="220" y="216" text-anchor="middle" class="petite-etiquette">use the line without changing it</text><line x1="220" y1="226" x2="220" y2="250" class="trait" /><rect x="20" y="250" width="400" height="60" rx="7" class="cadre-neutre" /><text x="220" y="274" text-anchor="middle">Compare with 26 °C read: error 0.5 °C</text><text x="220" y="296" text-anchor="middle" class="petite-etiquette">baseline (mean 22 °C): error 4 °C</text></svg><figcaption>The training readings are used once, to fix the line. The held-out time is used only for the final test.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fit using only the training readings: slope = sum of cross-products of deviations divided by the sum of squared time deviations, with the line passing through the mean point. Predict at a held-out time, then assess the error against the training mean baseline.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Predicting the reading at minute 4</h3><p>Fictional water bath readings, in °C, at times 0, 1, 2, and 3 min: 20, 21, 23, and 24 °C. The reading at 4 min is held out: it is 26 °C, but it must not be used to fit the line. Let us predict it, then assess the error.</p><ol class="etapes"><li><h3>Name the quantities and state the assumptions</h3><p>t is the reading time, in minutes; y is the temperature read, in °C; n = 4 is the number of training readings. The line we seek is written ŷ = b + a t: ŷ (&quot;y hat&quot;) is the predicted temperature, a is the slope in °C per minute, and b is the y-intercept in °C, meaning the value of the line at the time origin.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>b</mi><mo>+</mo><mi>a</mi><mo>·</mo><mi>t</mi></mrow></math></div><p>Assumptions: over the range of training times, from 0 to 3 min, the temperature follows an approximately straight line; the held-out reading comes from the same bath and thermometer; at least two training times differ, otherwise the slope is undefined. We add no probability distribution: choosing the line by least squares is purely algebraic.</p></li><li><h3>Center the readings on their means</h3><p>Mean time: t̄ = (0 + 1 + 2 + 3) ÷ 4 = 6 ÷ 4 = 1.5 min. Mean reading: ȳ = (20 + 21 + 23 + 24) ÷ 4 = 88 ÷ 4 = 22 °C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>u</mi><mi>i</mi></msub><mo>=</mo><msub><mi>t</mi><mi>i</mi></msub><mo>−</mo><mover><mi>t</mi><mo>¯</mo></mover><mo>,</mo><mtext> </mtext><msub><mi>v</mi><mi>i</mi></msub><mo>=</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mover><mi>y</mi><mo>¯</mo></mover></mrow></math></div><p>The time deviations u are -1.5, -0.5, 0.5, and 1.5 min; the temperature deviations v are -2, -1, 1, and 2 °C. Check: in each series, the deviations cancel out and their sum is 0. Reason for centering: the mean point becomes the origin for the deviations, and the slope no longer depends on the intercept.</p></li><li><h3>Calculate the slope</h3><p>Choosing a means minimizing the sum of squared vertical deviations between the readings and the line. Once the line is constrained to pass through the mean point, this sum is written Σ (v − a u)²; setting its derivative with respect to a to 0 gives a Σ u² = Σ u v. The sums are taken over the 4 training readings.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>a</mi><mo>=</mo><mfrac><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>u</mi><mi>i</mi></msub><msub><mi>v</mi><mi>i</mi></msub></mrow><mrow><msub><mo>∑</mo><mi>i</mi></msub><msubsup><mi>u</mi><mi>i</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></math></div><p>Products u v, in min·°C: 3.0, 0.5, 0.5, and 3.0; their sum, the sum of cross-products, is 7 min·°C. Squares u², in min²: 2.25, 0.25, 0.25, and 2.25; their sum is 5 min². A positive product indicates that the time deviation and reading deviation have the same sign: it pushes the slope upward.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>a</mi><mo>=</mo><mfrac><mn>7</mn><mn>5</mn></mfrac><mo>=</mo><mn>1.4</mn><mtext> °C/min</mtext></mrow></math></div></li><li><h3>Make the line pass through the mean point</h3><p>Setting the derivative with respect to b to 0 requires the vertical training deviations to cancel out: the line therefore passes through the mean point (t̄, ȳ). This gives b = ȳ − a t̄.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>=</mo><mn>22</mn><mo>−</mo><mn>1.4</mn><mo>×</mo><mn>1.5</mn><mo>=</mo><mn>22</mn><mo>−</mo><mn>2.1</mn><mo>=</mo><mn>19.9</mn><mtext> °C</mtext></mrow></math></div><p>The fixed line is therefore ŷ = 19.9 + 1.4 t, with t in minutes and ŷ in °C. From here on, it stays unchanged.</p></li><li><h3>Predict at the held-out time</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mn>19.9</mn><mo>+</mo><mn>1.4</mn><mo>×</mo><mn>4</mn><mo>=</mo><mn>19.9</mn><mo>+</mo><mn>5.6</mn><mo>=</mo><mn>25.5</mn><mtext> °C</mtext></mrow></math></div><p>The time 4 min was included in neither the means nor the sums: the prediction is made without it. The units agree, because a slope in °C per minute multiplied by minutes gives °C.</p></li><li><h3>Compare with the reading and the baseline</h3><p>The error is e = y − ŷ, where y is the held-out reading: e = 26 − 25.5 = 0.5 °C. It is positive: the line predicted slightly below the reading. The baseline with no slope predicts the training mean, 22 °C, and has an error of 26 − 22 = 4 °C.</p><p>At this time, the line has an error of 0.5 °C compared with 4 °C for the baseline. This finding concerns a single reading: it demonstrates the method without measuring the quality of the model.</p></li><li><h3>Check the result</h3><p>Mean point: 19.9 + 1.4 × 1.5 = 22 °C, the mean of the readings, as required. Sign and order of magnitude: the readings rise from 20 to 24 °C between 0 and 3 min, so we expect a positive slope of the same order as this difference divided by this duration; 1.4 °C/min is reasonable. Units: minutes for t, °C for ŷ, °C/min for a.</p><p>This unit’s calculs.py file also cross-checks the slope using the normal equations, verifies that the vertical training deviations cancel out, and checks that nearby lines leave a larger sum of squares. These checks do not replace holding out new readings.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why must the reading at 4 min be excluded from calculating the slope, even if it would bring the line closer to that point? Also explain why the error is assessed against the training mean.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The least-squares line passes through all the training points.”</h3><p>It passes through the mean point and balances the vertical deviations without making each one 0. Return to the step that positions the line: only the mean point is guaranteed.</p><a href="#exemple">Review the intercept calculation</a></li><li><h3>“Good agreement with the training readings proves good prediction.”</h3><p>These points were used to choose the slope and intercept: some agreement is built in. Only a held-out reading, compared with the baseline, measures prediction.</p><a href="#exercices">Go to the exercise on holding out readings</a></li><li><h3>“The line remains valid at any time.”</h3><p>It has only seen times from 0 to 3 min. Far from this range, as at 10 min, the calculation gives a number with nothing to support it.</p><a href="#exercices">Review the extrapolation exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-extrapolation"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>Predicting far beyond the training range</h3><p>Using the line from the example (slope 1.4 °C/min, intercept 19.9 °C), calculate the predicted temperature at time 10 min. Compare this time with the training range, then state what you can claim.</p>
+<label for="reponse-ex-extrapolation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-extrapolation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-extrapolation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-extrapolation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-extrapolation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Apply ŷ = b + a t: first the product, then the sum.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare 10 with the training times, from 0 to 3 min.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Product: 1.4 × 10 = 14 °C. Sum: 19.9 + 14 = 33.9 °C.</p><p>The time 10 min is far beyond the last training time, 3 min: no reading supports this result. We can state what the line calculates, but cannot claim that the bath will reach this temperature.</p><p class="petit-titre">Check your reasoning</p><ul><li>Product followed by sum, with the units °C/min, min, and °C.</li><li>Distinction between the line’s calculation and the actual temperature.</li></ul></details></article><article class="exercice" id="ex-reference"><p class="repere">Exercise 2 · Guided comparison</p>
+<h3>The line versus the training mean</h3><p>For the reading at 4 min, calculate the ratio of the line’s error (0.5 °C) to the baseline’s error (4 °C). What does this ratio tell you, and what does it not tell you?</p>
+<label for="reponse-ex-reference">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reference" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reference" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reference" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reference" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Divide an error in °C by another error in °C: the ratio has no unit.</p></details><details class="indice"><summary>Hint 2</summary><p>Ask yourself how many held-out readings were used to obtain it.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Ratio: 0.5 ÷ 4 = 0.125, with no unit. It is less than 1: at this time, the line has a smaller error than the baseline.</p><p>It says nothing general: a single held-out time does not establish that the slope provides information, and another time could give the opposite result.</p><p class="petit-titre">Check your reasoning</p><ul><li>Ratio with no unit, compared with 1.</li><li>Explicit limitation: only one held-out reading.</li></ul></details></article><article class="exercice" id="ex-fuite"><p class="repere">Exercise 3 · Diagnosis</p>
+<h3>A prediction that has seen its answer</h3><p>A colleague fits the line using the 4 training readings and the reading at 4 min, then announces: &quot;the line predicts the reading at 4 min with a small error.&quot; What mistake do you see? Propose a corrected procedure.</p>
+<label for="reponse-ex-fuite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fuite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fuite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fuite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fuite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Which readings were used to choose the slope and intercept?</p></details><details class="indice"><summary>Hint 2</summary><p>What does the deviation between a line and a point that helped shape it measure?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The reading at 4 min was included in the fit: the line was pulled toward it, so the deviation looks artificially small. This is no longer a prediction; it is agreement obtained after seeing the reading.</p><p>Corrected procedure: decide in advance which readings to hold out, keeping the most recent ones for testing when readings are ordered by time; fit without them, as in the example, where the error is 0.5 °C; compare with the mean calculated from the same training readings; repeat with several held-out readings before drawing a conclusion.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify that the held-out reading was used in fitting.</li><li>Separate fitting from testing, with a baseline that has no slope.</li><li>Draw no conclusion from a single reading.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="moindres-carres"><summary><span class="repere">Recall 1</span><span>What does the least-squares line minimize?</span></summary><p>The sum of squared vertical deviations between the training readings and the line.</p></details><details class="carte" data-carte="pente"><summary><span class="repere">Recall 2</span><span>How is the slope obtained, and in what unit?</span></summary><p>By dividing the sum of cross-products of deviations from the mean by the sum of squared time deviations; its unit is the unit of y per unit of t, here °C per minute.</p></details><details class="carte" data-carte="reference"><summary><span class="repere">Recall 3</span><span>Why compare the line with the training mean?</span></summary><p>This baseline predicts without using t. If the line does not beat it on held-out readings, its slope adds no predictive value.</p></details><details class="carte" data-carte="mise-de-cote"><summary><span class="repere">Recall 4</span><span>Why hold out a reading before fitting?</span></summary><p>A reading used to choose the line makes the error look artificially small. Only an unused reading measures a prediction.</p></details><details class="carte" data-carte="plage"><summary><span class="repere">Recall 5</span><span>What can we say about a prediction far from the training times?</span></summary><p>The line calculates it, but no reading supports it: it is an extrapolation and must not be presented as a measurement.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Fit the line using only the training readings: deviations from the mean, slope = sum of cross-products divided by the sum of squared time deviations, intercept determined by the mean point. Hold out a time, predict, compare the error with the training mean baseline, and state the slope’s unit, the range of validity, and the fact that a single time does not establish a conclusion.</p></div><div class="exports"><a class="bouton" download="c100-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTE6bW9pbmRyZXMtY2FycmVzIiwKICAgICAgInVuaXRlIjogImMxMDAtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb2luZHJlcy1jYXJyZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBsZWFzdC1zcXVhcmVzIGxpbmUgbWluaW1pemU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHN1bSBvZiBzcXVhcmVkIHZlcnRpY2FsIGRldmlhdGlvbnMgYmV0d2VlbiB0aGUgdHJhaW5pbmcgcmVhZGluZ3MgYW5kIHRoZSBsaW5lLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0xOnBlbnRlIiwKICAgICAgInVuaXRlIjogImMxMDAtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwZW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgaXMgdGhlIHNsb3BlIG9idGFpbmVkLCBhbmQgaW4gd2hhdCB1bml0PyIsCiAgICAgICJyZXBvbnNlIjogIkJ5IGRpdmlkaW5nIHRoZSBzdW0gb2YgY3Jvc3MtcHJvZHVjdHMgb2YgZGV2aWF0aW9ucyBmcm9tIHRoZSBtZWFuIGJ5IHRoZSBzdW0gb2Ygc3F1YXJlZCB0aW1lIGRldmlhdGlvbnM7IGl0cyB1bml0IGlzIHRoZSB1bml0IG9mIHkgcGVyIHVuaXQgb2YgdCwgaGVyZSDCsEMgcGVyIG1pbnV0ZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMC1tMTpyZWZlcmVuY2UiLAogICAgICAidW5pdGUiOiAiYzEwMC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlZmVyZW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY29tcGFyZSB0aGUgbGluZSB3aXRoIHRoZSB0cmFpbmluZyBtZWFuPyIsCiAgICAgICJyZXBvbnNlIjogIlRoaXMgYmFzZWxpbmUgcHJlZGljdHMgd2l0aG91dCB1c2luZyB0LiBJZiB0aGUgbGluZSBkb2VzIG5vdCBiZWF0IGl0IG9uIGhlbGQtb3V0IHJlYWRpbmdzLCBpdHMgc2xvcGUgYWRkcyBubyBwcmVkaWN0aXZlIHZhbHVlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0xOm1pc2UtZGUtY290ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWlzZS1kZS1jb3RlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBob2xkIG91dCBhIHJlYWRpbmcgYmVmb3JlIGZpdHRpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiQSByZWFkaW5nIHVzZWQgdG8gY2hvb3NlIHRoZSBsaW5lIG1ha2VzIHRoZSBlcnJvciBsb29rIGFydGlmaWNpYWxseSBzbWFsbC4gT25seSBhbiB1bnVzZWQgcmVhZGluZyBtZWFzdXJlcyBhIHByZWRpY3Rpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTE6cGxhZ2UiLAogICAgICAidW5pdGUiOiAiYzEwMC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBsYWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgY2FuIHdlIHNheSBhYm91dCBhIHByZWRpY3Rpb24gZmFyIGZyb20gdGhlIHRyYWluaW5nIHRpbWVzPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBsaW5lIGNhbGN1bGF0ZXMgaXQsIGJ1dCBubyByZWFkaW5nIHN1cHBvcnRzIGl0OiBpdCBpcyBhbiBleHRyYXBvbGF0aW9uIGFuZCBtdXN0IG5vdCBiZSBwcmVzZW50ZWQgYXMgYSBtZWFzdXJlbWVudC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c100-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBsZWFzdC1zcXVhcmVzIGxpbmUgbWluaW1pemU/CVRoZSBzdW0gb2Ygc3F1YXJlZCB2ZXJ0aWNhbCBkZXZpYXRpb25zIGJldHdlZW4gdGhlIHRyYWluaW5nIHJlYWRpbmdzIGFuZCB0aGUgbGluZS4JdG9kYWkgYzEwMC1tMSBtb2luZHJlcy1jYXJyZXMKSG93IGlzIHRoZSBzbG9wZSBvYnRhaW5lZCwgYW5kIGluIHdoYXQgdW5pdD8JQnkgZGl2aWRpbmcgdGhlIHN1bSBvZiBjcm9zcy1wcm9kdWN0cyBvZiBkZXZpYXRpb25zIGZyb20gdGhlIG1lYW4gYnkgdGhlIHN1bSBvZiBzcXVhcmVkIHRpbWUgZGV2aWF0aW9uczsgaXRzIHVuaXQgaXMgdGhlIHVuaXQgb2YgeSBwZXIgdW5pdCBvZiB0LCBoZXJlIMKwQyBwZXIgbWludXRlLgl0b2RhaSBjMTAwLW0xIHBlbnRlCldoeSBjb21wYXJlIHRoZSBsaW5lIHdpdGggdGhlIHRyYWluaW5nIG1lYW4/CVRoaXMgYmFzZWxpbmUgcHJlZGljdHMgd2l0aG91dCB1c2luZyB0LiBJZiB0aGUgbGluZSBkb2VzIG5vdCBiZWF0IGl0IG9uIGhlbGQtb3V0IHJlYWRpbmdzLCBpdHMgc2xvcGUgYWRkcyBubyBwcmVkaWN0aXZlIHZhbHVlLgl0b2RhaSBjMTAwLW0xIHJlZmVyZW5jZQpXaHkgaG9sZCBvdXQgYSByZWFkaW5nIGJlZm9yZSBmaXR0aW5nPwlBIHJlYWRpbmcgdXNlZCB0byBjaG9vc2UgdGhlIGxpbmUgbWFrZXMgdGhlIGVycm9yIGxvb2sgYXJ0aWZpY2lhbGx5IHNtYWxsLiBPbmx5IGFuIHVudXNlZCByZWFkaW5nIG1lYXN1cmVzIGEgcHJlZGljdGlvbi4JdG9kYWkgYzEwMC1tMSBtaXNlLWRlLWNvdGUKV2hhdCBjYW4gd2Ugc2F5IGFib3V0IGEgcHJlZGljdGlvbiBmYXIgZnJvbSB0aGUgdHJhaW5pbmcgdGltZXM/CVRoZSBsaW5lIGNhbGN1bGF0ZXMgaXQsIGJ1dCBubyByZWFkaW5nIHN1cHBvcnRzIGl0OiBpdCBpcyBhbiBleHRyYXBvbGF0aW9uIGFuZCBtdXN0IG5vdCBiZSBwcmVzZW50ZWQgYXMgYSBtZWFzdXJlbWVudC4JdG9kYWkgYzEwMC1tMSBwbGFnZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zzpapv nhfkvm etza</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · recognize fitting and holding out readings in the code</h3><dl><div><dt>What you understand</dt><dd>A line fitted to training readings gives a prediction at a held-out time; the error is assessed against a baseline with no slope, and a single time does not establish a conclusion.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mzfbew tgweoh sccilk yarbbh mnuhxu lntnyl tbjegk lhztsg zqhqvo iqxwll tjaxni txrnez cjibbt ftgohv kyduxq gegvpo lgmvqg jpawbk qtfsiv gzgfoz exwwff asvtxd xuwebq xwhbjl pjsgdn lkufxo olzzdk kktfbh nfceoz vagqhq wynwqt kopxoa qxfspt sqkcag jytctm dosruw dxpjti gs</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: calculate the slope, intercept, and error again using other readings without support, then explain holding out readings. Reading this lesson or obtaining an assisted answer does not certify any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qxueah lpxqks xnkmpv gwopye vyuwiw zlifgk dkfhfe pdmefy icqmfc nsgdnl zqstoq hwdcgf tmmika rbfmwg irezuy dbdytf ylpngq cezkqw egrpoq lysnlx dpxqse lqsaqq zmkfjm zkfzwf twccux lciiqm fuylxp gaqffy zfntpt ixnnht ehlydy aoolxy eueyah ykaoaf ytlojk tujjup djiyxd nf</span></span></dd></div><div><dt>To continue</dt><dd>Work through the example again with other readings, then read the following units of the chapter (ridge, lasso, bias–variance). Before any real use, separately check the integration, range of validity, and holding out of readings using authorized data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c100-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c099-m5.html">Previous</a> · <a href="c100-m2.html">Next</a></nav>
+<footer><p>Course book · C100·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a Fourier estimator of integrated covariance from asynchronous observations, then check its normalization and scope.">
+<title>C257·M4 · Fourier estimator — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ivahxa hyaxfz otzr</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C257·M4</p><h1>Fourier estimator</h1><p class="objectif"><span>Your goal</span>Calculate a Fourier estimator of integrated covariance from asynchronous observations, then check its normalization and scope.</p><p class="prerequis"><strong>Before you start</strong><br>c166-m5 : spectral truncation · c227-m5 : Ito-Tanaka · c179-m5 : ARCH-GARCH · c061-m5 : identifiability and uncertainty · c234-m5 : existence conditions · c073-m5 : interaction and repeated measures · c257-m1 : microstructure noise · c257-m2 : asynchrony · c257-m3 : integrated variation</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Two fictional securities, A and B, are observed over 4 minutes. Between readings, A changes by 2 and then 1 reading units; B changes by 1 and then 2. Their intermediate readings occur at 2 minutes for A and 1 minute for B. Multiplying their first changes together would treat different intervals as simultaneous observations.</p><p>Another approach asks each series how its changes are distributed over time: multiply them by a cosine, then by a sine, evaluated at their own times. These sums are its Fourier coefficients. Two series can then be compared at the same frequency without inventing a missing reading.</p><p>Here a frequency describes a number of cycles over the entire horizon. The 0 mode ignores the times; the other modes vary the weights over time. The estimator combines products of corresponding coefficients. The second diagram introduces another interpretation of the same calculation: each pair of changes receives a weight depending on the difference between their times.</p><p>All values are fictional. A reading unit u equals 1/100 of a logarithm of price: this is a teaching scale, not a currency. The target is the covariance accumulated over the horizon. Integrated variance is the case where a series is compared with itself; a covariance between A and B can have either sign.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two clocks, the same horizon</title><desc>Over 4 minutes, A is observed at times 0, 2 and 4; B at times 0, 1 and 4. The increments of A are 2 and then 1 reading units; those of B are 1 and then 2. Each increment is assigned to the start of its interval.</desc><text x="20" y="28">A: two intervals</text><text x="120" y="65" text-anchor="middle" class="petite-etiquette">+2 u</text><text x="250" y="65" text-anchor="middle" class="petite-etiquette">+1 u</text><line x1="55" y1="90" x2="315" y2="90" class="trait" /><circle cx="55" cy="90" r="5" class="point-prediction" /><circle cx="185" cy="90" r="5" class="point-prediction" /><circle cx="315" cy="90" r="5" class="point-prediction" /><text x="55" y="120" text-anchor="middle">0</text><text x="185" y="120" text-anchor="middle">2</text><text x="315" y="120" text-anchor="middle">4</text><text x="20" y="165">B: two other intervals</text><text x="87" y="200" text-anchor="middle" class="petite-etiquette">+1 u</text><text x="218" y="200" text-anchor="middle" class="petite-etiquette">+2 u</text><line x1="55" y1="225" x2="315" y2="225" class="trait" /><circle cx="55" cy="225" r="5" class="point-mesure" /><circle cx="120" cy="225" r="5" class="point-mesure" /><circle cx="315" cy="225" r="5" class="point-mesure" /><text x="55" y="255" text-anchor="middle">0</text><text x="120" y="255" text-anchor="middle">1</text><text x="315" y="255" text-anchor="middle">4</text><text x="180" y="288" text-anchor="middle" class="petite-etiquette">Times in minutes; no interpolation</text></svg><figcaption>The points are observations; the segments are intervals carrying an increment. The formula uses the start of each interval, even though the increment is only known at its end.</figcaption></figure><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Weights between interval starts</title><desc>For cutoff N equal to 1, the pair weights are 1, 1/3, -1/3 and 1/3. The rows are the start times 0 and 2 of A; the columns are the start times 0 and 1 of B. Each weight must still be multiplied by the two corresponding increments.</desc><text x="180" y="26" text-anchor="middle">Compare all pairs</text><text x="169" y="66" text-anchor="middle" class="petite-etiquette">B: 0 min</text><text x="275" y="66" text-anchor="middle" class="petite-etiquette">B: 1 min</text><rect x="116" y="82" width="212" height="120" rx="7" class="cadre-neutre" /><line x1="222" y1="82" x2="222" y2="202" class="trait" /><line x1="116" y1="142" x2="328" y2="142" class="trait" /><text x="20" y="118" class="petite-etiquette">A: 0 min</text><text x="20" y="178" class="petite-etiquette">A: 2 min</text><text x="169" y="119" text-anchor="middle">1</text><text x="275" y="119" text-anchor="middle">1/3</text><text x="169" y="179" text-anchor="middle">-1/3</text><text x="275" y="179" text-anchor="middle">1/3</text><text x="180" y="241" text-anchor="middle" class="petite-etiquette">A weight can be negative</text><text x="180" y="270" text-anchor="middle" class="petite-etiquette">These are not probabilities</text></svg><figcaption>This weight matrix will appear again in the check. It compares all pairs of intervals; it represents neither their overlap durations nor probabilities.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep each series at its own observation times; calculate the same modes; combine their products with the stated normalization; distinguish integrated covariance from its average rate and from instantaneous covariance.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A complete calculation without aligning the clocks</h3><p>A has observation times (0, 2, 4) min and increments (2, 1) u. B has observation times (0, 1, 4) min and increments (1, 2) u. Set the cutoff to N = 1 to learn the mechanism; this choice is not claimed to be optimal.</p><ol class="etapes"><li><h3>Name the target, data and assumptions</h3><p>X denotes A or B. P_X(t) is its strictly positive price; P_ref is a fixed positive reference price, expressed in the same currency. We write p_X(t) = 100 × ln(P_X(t)/P_ref). The logarithm therefore acts on a dimensionless ratio. p_X is expressed in our unit u. A starting level no longer matters after taking differences.</p><p>t_j^X is the time of the reading with index j, in minutes; n_X is the number of intervals for X. The times run from 0 to T and are strictly increasing. Here T = 4 min and each series has 2 intervals. The increment r_j^X, in u, is the difference between the next reading and the current reading. It is assigned to t_j^X, the start of the interval:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>r</mi><mi>j</mi><mi>X</mi></msubsup><mo>=</mo><msub><mi>p</mi><mi>X</mi></msub><mo>(</mo><msubsup><mi>t</mi><mrow><mi>j</mi><mo>+</mo><mn>1</mn></mrow><mi>X</mi></msubsup><mo>)</mo><mo>−</mo><msub><mi>p</mi><mi>X</mi></msub><mo>(</mo><msubsup><mi>t</mi><mi>j</mi><mi>X</mi></msubsup><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>I</mi><mi>AB</mi></msub><mo>=</mo><msubsup><mo>∫</mo><mn>0</mn><mi>T</mi></msubsup><msub><mi>Σ</mi><mi>AB</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mi>dt</mi></mrow></math></div><p>I_AB is the target integrated covariance, in u². Σ_AB(t) is the instantaneous covariance rate, in u²/min; dt is the duration element in minutes. This is not the covariance of two lists of levels. In the latent model, the log prices are continuous Ito diffusions, with drifts and volatilities bounded over the horizon and continuous volatilities; their quadratic covariation gives this integral.</p><p>The teaching calculation adds neither quote errors nor jumps. With microstructure noise, the formula can still be calculated, but its statistical quality must be studied separately. The observation times are given and no arrival distribution is inferred. Such a short sample cannot demonstrate convergence of the estimator or reveal I_AB.</p></li><li><h3>Convert times into phases and define the sums</h3><p>N is the cutoff, a nonnegative integer. k is an integer frequency index. θ_j^X = 2π × t_j^X/T is the dimensionless phase in radians; π is the circle constant. Do not confuse mode k with a frequency in hertz: k counts cycles over the horizon. C_X(k) and S_X(k) denote the cosine and sine sums, in u.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>C</mi><mi>X</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mrow><msub><mi>n</mi><mi>X</mi></msub><mo>−</mo><mn>1</mn></mrow></msubsup><msubsup><mi>r</mi><mi>j</mi><mi>X</mi></msubsup><mo>cos</mo><mo>(</mo><mi>k</mi><msubsup><mi>θ</mi><mi>j</mi><mi>X</mi></msubsup><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>S</mi><mi>X</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mrow><msub><mi>n</mi><mi>X</mi></msub><mo>−</mo><mn>1</mn></mrow></msubsup><msubsup><mi>r</mi><mi>j</mi><mi>X</mi></msubsup><mo>sin</mo><mo>(</mo><mi>k</mi><msubsup><mi>θ</mi><mi>j</mi><mi>X</mi></msubsup><mo>)</mo></mrow></math></div><p>We use raw sums of increments: no inverse factor of T or 2π is included in C and S. This fixes the normalization for the following calculation. The scaled start times of A are 0 and 1/2; those of B are 0 and 1/4. At mode 1, the phases are therefore (0, π) for A and (0, π/2) for B.</p><p>At phases 0, π/2, π, the pairs (cosine; sine) are respectively (1; 0), (0; 1), (-1; 0). These exact values avoid any trigonometric rounding in this example.</p></li><li><h3>Calculate the coefficients by hand</h3><p>At the 0 mode, all cosines equal 1 and all sines equal 0. Thus C_A(0) = 2 + 1 = 3 u; C_B(0) = 1 + 2 = 3 u. The sine sums are 0. The 0 mode retains only the total change of each series.</p><p>For A at mode 1: C_A(1) = 2 × 1 + 1 × (-1) = 1 u; S_A(1) = 2 × 0 + 1 × 0 = 0 u. The later change is subtracted in the cosine component.</p><p>For B at the same mode: C_B(1) = 1 × 1 + 2 × 0 = 1 u; S_B(1) = 1 × 0 + 2 × 1 = 2 u. Its later change appears here in the sine component. No value of B at the intermediate observation time of A has been fabricated.</p></li><li><h3>Combine the modes with the correct normalization</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>I</mi><mo>^</mo></mover><mrow><mi>AB</mi><mo>,</mo><mi>N</mi></mrow></msub><mo>=</mo><mfrac><mrow><msub><mi>C</mi><mi>A</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><msub><mi>C</mi><mi>B</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><mo>+</mo><mn>2</mn><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup><mo>[</mo><msub><mi>C</mi><mi>A</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><msub><mi>C</mi><mi>B</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>+</mo><msub><mi>S</mi><mi>A</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><msub><mi>S</mi><mi>B</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>]</mo></mrow><mrow><mn>2</mn><mi>N</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow></math></div><p>The hat indicates an estimate. The denominator counts the modes from −N to N. For real data, C_X(−k) = C_X(k) and S_X(−k) = −S_X(k). In the product between a frequency of one series and the opposite frequency of the other, the imaginary terms of opposite modes cancel: their common real contribution is C_A(k)C_B(k) + S_A(k)S_B(k). The factor 2 combines this pair; the 0 mode is counted only once.</p><p>Here the 0-mode product is 3 × 3 = 9 u². The real product of the positive mode is 1 × 1 + 0 × 2 = 1 + 0 = 1 u². The pair of opposite modes contributes 2 × 1 = 2 u².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>I</mi><mo>^</mo></mover><mi>AB</mi></msub><mo>=</mo><mfrac><mrow><mn>9</mn><mo>+</mo><mn>2</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mn>11/3</mn><mtext> u²</mtext></mrow></math></div><p>The result is approximately 3.6667 u². Sines and cosines are dimensionless: each product correctly retains the unit u². No additional factor T is required for this convention of raw sums and this integrated target.</p></li><li><h3>Check using pairs of increments</h3><p>Expanding the products of sums yields cos(a)cos(b) + sin(a)sin(b) = cos(a − b), where a and b are two angles. Each pair of increments therefore receives a weight D_N(δ), the normalized Dirichlet kernel; δ = (t_j^A − t_l^B)/T is a dimensionless scaled time difference. l is the interval index for B.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>D</mi><mi>N</mi></msub><mo>(</mo><mi>δ</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>1</mn><mo>+</mo><mn>2</mn><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup><mo>cos</mo><mo>(</mo><mn>2</mn><mi>π</mi><mi>k</mi><mi>δ</mi><mo>)</mo></mrow><mrow><mn>2</mn><mi>N</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow></math></div><p>With N = 1, the weights are: D_N(0) = 1; D_N(±1/4) = 1/3; D_N(1/2) = -1/3. This reproduces the second diagram exactly. The negative weight must be retained.</p><p>For start times (0; 0) min: 2 × 1 × 1 = 2 u². For (0; 1) min: 2 × 2 × 1/3 = 4/3 u².</p><p>For (2; 0) min: 1 × 1 × (-1/3) = -1/3 u². For (2; 1) min: 1 × 2 × 1/3 = 2/3 u².</p><p>The sum is 2 + 4/3 + (-1/3) + 2/3 = 11/3 u². Products of coefficients and products of increments give the same exact rational number: this is an algebraic check, not a comparison with the unknown true covariance.</p></li><li><h3>Interpret the estimate without treating it as the truth</h3><p>Since 1 u corresponds to 1/100 of a logarithm, the squared scale factor is 10000. The covariance on the scale of the unmultiplied logarithms is 11/3/10000 = 11/30000 logarithm², or approximately 0.000367 logarithm². Keep the exact fraction; the decimal representation is rounded.</p><p>Dividing by T would produce a different quantity: the estimated average rate over the horizon, 11/3/4 = 11/12 u²/min, approximately 0.9167 u²/min. This average rate does not reconstruct Σ_AB(t) at each instant. No square root is taken: a cross-covariance is not a standard deviation.</p><p>The absence of prior synchronization is a property of the calculation. It removes neither finite-sample biases nor the effects of noise. Establishing convergence would require a sequence of increasingly dense observations, controlled growth of N and appropriate probabilistic assumptions; this tiny example does not provide that proof.</p><p>Mathematical verification reference: the monograph by Mancino, Recchioni and Sanfelici cited in the architecture, the chapter on integrated covariance, and the formulas for the estimator and kernel. The present expression uses raw cosine and sine coefficients; the source also uses complex coefficients divided by 2π, which leads to different normalization factors before simplification.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps: recover the phases from the observation times, explain the factor that combines opposite modes, then say why the integrated result does not include division by the duration. Finally, reconstruct the check using pairs and state precisely what it actually verifies.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A price for B must be invented at every observation time of A before starting.”</h3><p>Calculate the sums for B at its own observation times and for A at its own times. Their common reference is frequency k over the same horizon. Interpolation would change the increments and therefore the quantity calculated.</p><a href="#intuition">Review the two clocks and the intervals</a></li><li><h3>“I divide the sum of products by T: it is always an average.”</h3><p>The normalization of the estimator comes from the number of modes, 2N + 1, with the raw sums defined here. Dividing the result by T afterwards gives an average rate, with a different unit. Check the convention before adding a factor.</p><a href="#exemple">Review the combination of modes and the unit check</a></li><li><h3>“Fourier uses all the data, so noise and asynchrony are resolved.”</h3><p>The observation times are preserved, but the choice of modes and the assumptions remain decisive. The check using pairs proves a computational identity; it measures neither bias, statistical error nor improvement in a real case.</p><a href="#exercices">Test what the 0 mode actually shows</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-phases"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Recover the missing component</h3><p>Using the original data for B, reconstruct C_B(1) and S_B(1) from the observation times. Explain why omitting the sine component loses information, even though its contribution to the cross product is 0 in this example.</p>
+<label for="reponse-ex-phases">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-phases" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-phases" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-phases" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-phases" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Divide the start times by T; the final time closes the last interval but carries no new increment.</p></details><details class="indice"><summary>Hint 2</summary><p>At a quarter cycle, the cosine is 0 and the sine equals 1.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The start times are 0 and 1 min, giving phases 0 and π/2. C_B(1) = 1 × 1 + 2 × 0 = 1 u. S_B(1) = 1 × 0 + 2 × 1 = 2 u.</p><p>The second change of B is carried by the sine. Removing it would distort its coefficients. Only in this case, S_A(1) = 0, so the sine cross product is 0 u²; this particular cancellation does not justify a general rule that removes sines.</p><p class="petit-titre">Check your reasoning</p><ul><li>I use interval starts rather than end times.</li><li>I give the coefficients 1 u and 2 u with their phases.</li><li>I distinguish a 0 term in this particular product from information that does not exist.</li></ul></details></article><article class="exercice" id="ex-paires"><p class="repere">Exercise 2 · Reconstruction on paper</p>
+<h3>Reproduce the result without the coefficients</h3><p>Hide the example calculation and use the weight matrix. Recover the estimated covariance, detailing every contribution. Justify the sign of the weight associated with start times 2 and 0 min.</p>
+<label for="reponse-ex-paires">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-paires" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-paires" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-paires" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-paires" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiply each cell by the increment of its row and that of its column.</p></details><details class="indice"><summary>Hint 2</summary><p>For a half-period difference, cos(π) = -1: the numerator of the weight is 1 + 2 × (-1).</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The products of increments are 2, 4, 1 and 2 u². Applying the weights gives 2, 4/3, -1/3 and 2/3 u². The first row sums to 10/3 u²; the second to 1/3 u²; the total is 11/3 u².</p><p>For the pair separated by half a period, the numerator is -1 and the denominator is 3: the weight is -1/3. Replacing this cell with its absolute value would change the estimator. We are checking an identity between two expressions without knowing the latent covariance.</p><p class="petit-titre">Check your reasoning</p><ul><li>I retain the negative sign of the contribution -1/3 u².</li><li>I recover 11/3 u² without intermediate rounding.</li><li>I explain why this agreement does not establish statistical accuracy.</li></ul></details></article><article class="exercice" id="ex-mode-nul"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>The same result after shifting observation times?</h3><p>In the same setting, keep only N = 0. Calculate the estimator. Then imagine that the intermediate observation time of B changes while its increments and endpoints stay fixed. Does the result at this single mode change? Someone concludes that asynchrony therefore never causes a problem: respond to this claim.</p>
+<label for="reponse-ex-mode-nul">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-mode-nul" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-mode-nul" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-mode-nul" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-mode-nul" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A sum with no positive mode retains only the product of total changes.</p></details><details class="indice"><summary>Hint 2</summary><p>Identify the information lost by the 0-mode coefficients before drawing a conclusion about the real phenomenon.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For N = 0, the denominator is 1 and the sum over positive modes is empty. The estimator equals 3 × 3 = 9 u². It no longer depends on intermediate observation times: moving the reading of B without changing the increments leaves this number unchanged.</p><p>This invariance comes from the loss of timing information at the 0 mode. It proves neither that asynchrony has no effect on a useful estimate nor that the error is smaller. Comparing 9 u² with 11/3 u² shows dependence on the cutoff; without the true covariance or a protocol for measuring error, we cannot tell which is better. The next unit will study the choice of frequencies and mean squared error.</p><p class="petit-titre">Check your reasoning</p><ul><li>I recover 9 u² and its lack of dependence on observation times.</li><li>I explain the lost information instead of announcing that a problem has been solved.</li><li>I refuse to rank cutoffs solely by the size of the result.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="dates"><summary><span class="repere">Recall 1</span><span>How can A and B be compared without a common observation grid?</span></summary><p>For each series, calculate the cosine and sine sums at the starts of its own intervals, then compare the coefficients at the same frequencies over the same horizon. This calculation requires no interpolation.</p></details><details class="carte" data-carte="normalisation"><summary><span class="repere">Recall 2</span><span>Where do the denominator and the doubling of positive modes come from?</span></summary><p>There are 2N + 1 modes from −N to N. Opposite modes give the same real contribution to the cross product: double the positive ones while counting the 0 mode only once. This formula assumes the raw sums defined on the page.</p></details><details class="carte" data-carte="cible"><summary><span class="repere">Recall 3</span><span>What would an additional division by T change?</span></summary><p>It would give the average rate over the horizon, in u²/min, instead of the integrated covariance in u². This average rate is not the instantaneous covariance function.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 4</span><span>Why expand the products into pairs of increments?</span></summary><p>The normalized Dirichlet kernel weights each pair according to its time difference. Recovering the same rational number checks the signs, phases and normalization; it does not prove the absence of bias or noise.</p></details><details class="carte" data-carte="coupure"><summary><span class="repere">Recall 5</span><span>Why does 0-mode stability under shifts in observation times fail to prove good estimation?</span></summary><p>The 0 mode sees only total changes. Its invariance reflects lost timing information. Assessing a cutoff requires error analysis, not just a stable or small result.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without rereading: draw the clocks for A and B, name the increments and their start times, recover the cosine and sine sums and then their combination. Explain the check using pairs, the unit of the result and the limit of this check. Reconstruct it again on another day without a hint; an assisted answer remains an assisted answer, and reading alone does not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c257-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTctbTQ6ZGF0ZXMiLAogICAgICAidW5pdGUiOiAiYzI1Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvZWZmaWNpZW50cy1zdXItZGF0ZXMtcHJvcHJlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIEEgYW5kIEIgYmUgY29tcGFyZWQgd2l0aG91dCBhIGNvbW1vbiBvYnNlcnZhdGlvbiBncmlkPyIsCiAgICAgICJyZXBvbnNlIjogIkZvciBlYWNoIHNlcmllcywgY2FsY3VsYXRlIHRoZSBjb3NpbmUgYW5kIHNpbmUgc3VtcyBhdCB0aGUgc3RhcnRzIG9mIGl0cyBvd24gaW50ZXJ2YWxzLCB0aGVuIGNvbXBhcmUgdGhlIGNvZWZmaWNpZW50cyBhdCB0aGUgc2FtZSBmcmVxdWVuY2llcyBvdmVyIHRoZSBzYW1lIGhvcml6b24uIFRoaXMgY2FsY3VsYXRpb24gcmVxdWlyZXMgbm8gaW50ZXJwb2xhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI1Ny1tNDpub3JtYWxpc2F0aW9uIiwKICAgICAgInVuaXRlIjogImMyNTctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb2Rlcy1vcHBvc2VzIiwKICAgICAgInF1ZXN0aW9uIjogIldoZXJlIGRvIHRoZSBkZW5vbWluYXRvciBhbmQgdGhlIGRvdWJsaW5nIG9mIHBvc2l0aXZlIG1vZGVzIGNvbWUgZnJvbT8iLAogICAgICAicmVwb25zZSI6ICJUaGVyZSBhcmUgMk4gKyAxIG1vZGVzIGZyb20g4oiSTiB0byBOLiBPcHBvc2l0ZSBtb2RlcyBnaXZlIHRoZSBzYW1lIHJlYWwgY29udHJpYnV0aW9uIHRvIHRoZSBjcm9zcyBwcm9kdWN0OiBkb3VibGUgdGhlIHBvc2l0aXZlIG9uZXMgd2hpbGUgY291bnRpbmcgdGhlIDAgbW9kZSBvbmx5IG9uY2UuIFRoaXMgZm9ybXVsYSBhc3N1bWVzIHRoZSByYXcgc3VtcyBkZWZpbmVkIG9uIHRoZSBwYWdlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjU3LW00OmNpYmxlIiwKICAgICAgInVuaXRlIjogImMyNTctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb3ZhcmlhbmNlLWludGVncmVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgd291bGQgYW4gYWRkaXRpb25hbCBkaXZpc2lvbiBieSBUIGNoYW5nZT8iLAogICAgICAicmVwb25zZSI6ICJJdCB3b3VsZCBnaXZlIHRoZSBhdmVyYWdlIHJhdGUgb3ZlciB0aGUgaG9yaXpvbiwgaW4gdcKyL21pbiwgaW5zdGVhZCBvZiB0aGUgaW50ZWdyYXRlZCBjb3ZhcmlhbmNlIGluIHXCsi4gVGhpcyBhdmVyYWdlIHJhdGUgaXMgbm90IHRoZSBpbnN0YW50YW5lb3VzIGNvdmFyaWFuY2UgZnVuY3Rpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTctbTQ6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzI1Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlLWFsZ2VicmlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGV4cGFuZCB0aGUgcHJvZHVjdHMgaW50byBwYWlycyBvZiBpbmNyZW1lbnRzPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBub3JtYWxpemVkIERpcmljaGxldCBrZXJuZWwgd2VpZ2h0cyBlYWNoIHBhaXIgYWNjb3JkaW5nIHRvIGl0cyB0aW1lIGRpZmZlcmVuY2UuIFJlY292ZXJpbmcgdGhlIHNhbWUgcmF0aW9uYWwgbnVtYmVyIGNoZWNrcyB0aGUgc2lnbnMsIHBoYXNlcyBhbmQgbm9ybWFsaXphdGlvbjsgaXQgZG9lcyBub3QgcHJvdmUgdGhlIGFic2VuY2Ugb2YgYmlhcyBvciBub2lzZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI1Ny1tNDpjb3VwdXJlIiwKICAgICAgInVuaXRlIjogImMyNTctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb3J0ZWUtZHUtbW9kZS1udWwiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgMC1tb2RlIHN0YWJpbGl0eSB1bmRlciBzaGlmdHMgaW4gb2JzZXJ2YXRpb24gdGltZXMgZmFpbCB0byBwcm92ZSBnb29kIGVzdGltYXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIDAgbW9kZSBzZWVzIG9ubHkgdG90YWwgY2hhbmdlcy4gSXRzIGludmFyaWFuY2UgcmVmbGVjdHMgbG9zdCB0aW1pbmcgaW5mb3JtYXRpb24uIEFzc2Vzc2luZyBhIGN1dG9mZiByZXF1aXJlcyBlcnJvciBhbmFseXNpcywgbm90IGp1c3QgYSBzdGFibGUgb3Igc21hbGwgcmVzdWx0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c257-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGNhbiBBIGFuZCBCIGJlIGNvbXBhcmVkIHdpdGhvdXQgYSBjb21tb24gb2JzZXJ2YXRpb24gZ3JpZD8JRm9yIGVhY2ggc2VyaWVzLCBjYWxjdWxhdGUgdGhlIGNvc2luZSBhbmQgc2luZSBzdW1zIGF0IHRoZSBzdGFydHMgb2YgaXRzIG93biBpbnRlcnZhbHMsIHRoZW4gY29tcGFyZSB0aGUgY29lZmZpY2llbnRzIGF0IHRoZSBzYW1lIGZyZXF1ZW5jaWVzIG92ZXIgdGhlIHNhbWUgaG9yaXpvbi4gVGhpcyBjYWxjdWxhdGlvbiByZXF1aXJlcyBubyBpbnRlcnBvbGF0aW9uLgl0b2RhaSBjMjU3LW00IGNvZWZmaWNpZW50cy1zdXItZGF0ZXMtcHJvcHJlcwpXaGVyZSBkbyB0aGUgZGVub21pbmF0b3IgYW5kIHRoZSBkb3VibGluZyBvZiBwb3NpdGl2ZSBtb2RlcyBjb21lIGZyb20/CVRoZXJlIGFyZSAyTiArIDEgbW9kZXMgZnJvbSDiiJJOIHRvIE4uIE9wcG9zaXRlIG1vZGVzIGdpdmUgdGhlIHNhbWUgcmVhbCBjb250cmlidXRpb24gdG8gdGhlIGNyb3NzIHByb2R1Y3Q6IGRvdWJsZSB0aGUgcG9zaXRpdmUgb25lcyB3aGlsZSBjb3VudGluZyB0aGUgMCBtb2RlIG9ubHkgb25jZS4gVGhpcyBmb3JtdWxhIGFzc3VtZXMgdGhlIHJhdyBzdW1zIGRlZmluZWQgb24gdGhlIHBhZ2UuCXRvZGFpIGMyNTctbTQgbW9kZXMtb3Bwb3NlcwpXaGF0IHdvdWxkIGFuIGFkZGl0aW9uYWwgZGl2aXNpb24gYnkgVCBjaGFuZ2U/CUl0IHdvdWxkIGdpdmUgdGhlIGF2ZXJhZ2UgcmF0ZSBvdmVyIHRoZSBob3Jpem9uLCBpbiB1wrIvbWluLCBpbnN0ZWFkIG9mIHRoZSBpbnRlZ3JhdGVkIGNvdmFyaWFuY2UgaW4gdcKyLiBUaGlzIGF2ZXJhZ2UgcmF0ZSBpcyBub3QgdGhlIGluc3RhbnRhbmVvdXMgY292YXJpYW5jZSBmdW5jdGlvbi4JdG9kYWkgYzI1Ny1tNCBjb3ZhcmlhbmNlLWludGVncmVlCldoeSBleHBhbmQgdGhlIHByb2R1Y3RzIGludG8gcGFpcnMgb2YgaW5jcmVtZW50cz8JVGhlIG5vcm1hbGl6ZWQgRGlyaWNobGV0IGtlcm5lbCB3ZWlnaHRzIGVhY2ggcGFpciBhY2NvcmRpbmcgdG8gaXRzIHRpbWUgZGlmZmVyZW5jZS4gUmVjb3ZlcmluZyB0aGUgc2FtZSByYXRpb25hbCBudW1iZXIgY2hlY2tzIHRoZSBzaWducywgcGhhc2VzIGFuZCBub3JtYWxpemF0aW9uOyBpdCBkb2VzIG5vdCBwcm92ZSB0aGUgYWJzZW5jZSBvZiBiaWFzIG9yIG5vaXNlLgl0b2RhaSBjMjU3LW00IGNvbnRyb2xlLWFsZ2VicmlxdWUKV2h5IGRvZXMgMC1tb2RlIHN0YWJpbGl0eSB1bmRlciBzaGlmdHMgaW4gb2JzZXJ2YXRpb24gdGltZXMgZmFpbCB0byBwcm92ZSBnb29kIGVzdGltYXRpb24/CVRoZSAwIG1vZGUgc2VlcyBvbmx5IHRvdGFsIGNoYW5nZXMuIEl0cyBpbnZhcmlhbmNlIHJlZmxlY3RzIGxvc3QgdGltaW5nIGluZm9ybWF0aW9uLiBBc3Nlc3NpbmcgYSBjdXRvZmYgcmVxdWlyZXMgZXJyb3IgYW5hbHlzaXMsIG5vdCBqdXN0IGEgc3RhYmxlIG9yIHNtYWxsIHJlc3VsdC4JdG9kYWkgYzI1Ny1tNCBwb3J0ZWUtZHUtbW9kZS1udWwK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ivahxa hyaxfz otzr</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Read a dispersion calculation without attributing a spectral estimator to it</h3><dl><div><dt>What you understand</dt><dd>Integrated covariance uses increments, their observation times and a convention for modes. The dispersion of values around their mean answers a different question, even if both calculations contain squares or products.</dd></div><div><dt>Existing code and source</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lxqhcr jvadtn txbqij fjwiil mfowvj kclstq fwwnvg lzpqlu mudlld hmbkjx nvyrso dskyma wwtylb lzwpkx auiffj dbscao egnlug tffzwg fknlzm ilvrtk qoehku euwhbc pbgyql owjqvq</span></span></dd></div><div><dt>Level to prepare</dt><dd>Prepare for the canonical level of this unit: reconstruct the calculation with its phases, justify the normalization and explain the difference between dispersion, integrated covariance and average rate. Reading the page, consulting the correction or answering after a hint does not establish an attained level.</dd></div><div><dt>Evidence and scope</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wnowyq yyklnn bcdybs aagrhp qdwcrb beooxk ljzquv vslckd ybwylr jlwxyn brbawk ombgkn exqfpq jabwyj qlejqw suyqts cdgmfm mvkmrx jafeho gxfxnu wziiuk qmuibv zmfrmi wxckcz</span></span></dd></div><div><dt>Next step</dt><dd>Recalculate the coefficients and the check using pairs without help, then study the choice of frequencies in c257-m5. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uwpcqq qdwmwt cydfuh maabvv laiohn dzdfmf iuexaz adlbzi kwmwyp rxyxpj nawysi boqjmd cgdsvy dytzja hxlqmc itxxpm cgtlmw rtnqwg hymzho iqafvl rwsmmn vnwgog vsllrg pzdcfw</span></span> No project change is made here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c257-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c257-m3.html">Previous</a> · <a href="c257-m5.html">Next</a></nav>
+<footer><p>Course book · C257·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

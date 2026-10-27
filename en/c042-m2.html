@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the length of document vectors, compare their directions using cosine similarity, and normalize them without mistaking this score for evidence of relevance.">
+<title>C042·M2 · Norm, cosine and normalization — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cphruc bgjtjm agrg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C042·M2</p><h1>Norm, cosine and normalization</h1><p class="objectif"><span>Your goal</span>Calculate the length of document vectors, compare their directions using cosine similarity, and normalize them without mistaking this score for evidence of relevance.</p><p class="prerequis"><strong>Before you start</strong><br>c040-m5 : least squares · c041-m5 : transactions and windows · c025-m5 : O, Omega and Theta · c036-m5 : annotated charts · c042-m1 : document and stable identifier</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a bicycle repair workshop, you are looking for a sheet about braking. For this exercise, we keep only the counts of the words “brake” and “wheel” in each text, in that order. The query contains 3 occurrences of “brake” and 4 of “wheel”; the sheet contains 4 and 3. All these counts are fictional. No model was queried to produce them.</p><p>Each text becomes an arrow: its horizontal displacement counts “brake”, and its vertical displacement counts “wheel”. This is its vector representation. An arrow has a length and a direction. Repeating the entire sheet makes its arrow longer but leaves the ratio between its components unchanged. This does not necessarily add useful information about adjusting the brake.</p><p>Here, the norm measures the length of the arrow. Cosine similarity compares directions by removing the effect of lengths. Normalization means bringing each nonzero arrow to length 1 by dividing all its components by its own norm. We can then compare directions using a dot product, which we will write out.</p><p>Before calculating, predict what should stay the same if the text of the sheet is copied 2 times: its length, its direction, or both? This counting model helps us understand the calculation. It understands neither the sentences nor the quality of a repair.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two texts, two arrows on the same axes</title><desc>The perpendicular axes count occurrences of brake and wheel, using the same scale. The query q runs from the origin to (3 ; 4), and the sheet d to (4 ; 3). Their directions are close but not identical.</desc><line x1="55" y1="245" x2="305" y2="245" class="trait" /><path d="M297 240l8 5-8 5" class="trait" /><line x1="55" y1="245" x2="55" y2="30" class="trait" /><path d="M50 38l5-8 5 8" class="trait" /><text x="50" y="18" text-anchor="middle">wheel</text><text x="304" y="274" text-anchor="end">brake</text><text x="40" y="266" text-anchor="middle">0</text><line x1="55" y1="245" x2="175" y2="85" class="trait" /><path d="M164 90l11-5-2 12" class="trait" /><circle cx="175" cy="85" r="4" class="point-prediction" /><text x="92" y="59" class="prediction">q = (3 ; 4)</text><line x1="55" y1="245" x2="215" y2="125" class="trait" /><path d="M204 127l11-2-5 11" class="trait" /><circle cx="215" cy="125" r="4" class="point-mesure" /><text x="229" y="116" class="mesure">d = (4 ; 3)</text><text x="180" y="294" text-anchor="middle" class="petite-etiquette">Same count unit on both axes</text></svg><figcaption>q denotes the query; d denotes the sheet. The axes use the same scale: the length and angle in the drawing represent the chosen Euclidean calculation. Color accompanies the letters; it does not replace them.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Divide each arrow by its own length</title><desc>The query q and the sheet d each have norm 5. After division, q hat is (3/5 ; 4/5) and d hat is (4/5 ; 3/5). Each has norm 1; their directions remain different.</desc><rect x="15" y="18" width="150" height="76" rx="7" class="cadre-prediction" /><text x="90" y="47" text-anchor="middle">Query q</text><text x="90" y="76" text-anchor="middle">(3 ; 4)</text><rect x="195" y="18" width="150" height="76" rx="7" class="cadre-neutre" /><text x="270" y="47" text-anchor="middle">Sheet d</text><text x="270" y="76" text-anchor="middle">(4 ; 3)</text><line x1="90" y1="94" x2="90" y2="153" class="trait" /><line x1="270" y1="94" x2="270" y2="153" class="trait" /><text x="90" y="128" text-anchor="middle">÷ 5</text><text x="270" y="128" text-anchor="middle">÷ 5</text><rect x="15" y="153" width="150" height="85" rx="7" class="cadre-resultat" /><text x="90" y="181" text-anchor="middle">q̂ = (3/5 ; 4/5)</text><text x="90" y="216" text-anchor="middle">Norm 1</text><rect x="195" y="153" width="150" height="85" rx="7" class="cadre-resultat" /><text x="270" y="181" text-anchor="middle">d̂ = (4/5 ; 3/5)</text><text x="270" y="216" text-anchor="middle">Norm 1</text><text x="180" y="269" text-anchor="middle" class="petite-etiquette">Direction kept, norm fixed</text></svg><figcaption>The norms are equal in our example, but each vector must be divided by its own norm. The normalized components are dimensionless; they are no longer occurrence counts.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Calculate each norm; check that it is nonzero; divide the dot product by the product of the norms. Normalizing each vector lets you recover the same cosine similarity using a dot product.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Compare the query with the braking sheet</h3><p>Using the fictional counts q = (3 ; 4) and d = (4 ; 3), let us calculate the norms, the dot product and the cosine similarity, then recover the result after normalization. The first component always counts “brake”, and the second counts “wheel”.</p><ol class="etapes"><li><h3>Define the symbols and the assumptions of the geometry</h3><p>q is the query vector; d is the sheet vector. The subscripts f and r label the “brake” and “wheel” components, respectively. Each component is measured here in occurrences. We choose perpendicular axes with the same unit and the same weight. Such a basis is called orthonormal. Without this choice, a different formula for length might be needed.</p><p>The vectors being compared must have the same components in the same order. In this scene, their components are nonnegative real numbers, and the vectors are nonzero. We use exact arithmetic. The symbol · will denote the dot product of vectors; × denotes multiplication of numbers. The double bars ‖ ‖ denote the Euclidean norm.</p></li><li><h3>Measure lengths without confusing them with totals</h3><p>The Pythagorean theorem gives the square of the length as the sum of the squares of the components. The positive square root gives a length again. The squares are in occurrences squared, and the norm returns to occurrences.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>‖</mo><mi>q</mi><mo>‖</mo><mo>=</mo><msqrt><mrow><msup><msub><mi>q</mi><mi>f</mi></msub><mn>2</mn></msup><mo>+</mo><msup><msub><mi>q</mi><mi>r</mi></msub><mn>2</mn></msup></mrow></msqrt></mrow></math></div><p>For q: 3 × 3 = 9, then 4 × 4 = 16. The sum is 25; its positive square root is 5, because 5 × 5 = 25. Thus ‖q‖ = 5 occurrences.</p><p>For d: 4 × 4 = 16, then 3 × 3 = 9. The sum is 25, so ‖d‖ = 5 occurrences. Adding the components would count the selected words; it would not give the Euclidean length.</p></li><li><h3>Pair corresponding components</h3><p>The dot product multiplies components that have the same role, then adds the products. We pair “brake” with “brake” and “wheel” with “wheel”. Here, its unit is occurrences squared.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>q</mi><mo>·</mo><mi>d</mi><mo>=</mo><msub><mi>q</mi><mi>f</mi></msub><msub><mi>d</mi><mi>f</mi></msub><mo>+</mo><msub><mi>q</mi><mi>r</mi></msub><msub><mi>d</mi><mi>r</mi></msub></mrow></math></div><p>The contribution from “brake” is 3 × 4 = 12. The contribution from “wheel” is 4 × 3 = 12. The dot product is therefore 12 + 12 = 24 occurrences squared. Its value still depends on the lengths.</p></li><li><h3>Remove the lengths to compare directions</h3><p>θ denotes the angle between the arrows in the chosen geometry; if we measured it here, we would express it in degrees. c(q,d) names the cosine similarity score, which equals the cosine of this angle. We do not need to calculate the angle itself. For nonzero vectors:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>c</mi><mo>(</mo><mi>q</mi><mo>,</mo><mi>d</mi><mo>)</mo><mo>=</mo><mi>cos</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>q</mi><mo>·</mo><mi>d</mi></mrow><mrow><mo>‖</mo><mi>q</mi><mo>‖</mo><mo>×</mo><mo>‖</mo><mi>d</mi><mo>‖</mo></mrow></mfrac></mrow></math></div><p>The denominator is 5 × 5 = 25 occurrences squared. The units in the numerator and denominator cancel. We obtain 24/25 = 24/25, or 0.96, which is dimensionless. This score is closer to 1 than to 0: the directions are close.</p><p>For arbitrary real vectors, the cosine lies between -1 and 1. The value 1 indicates the same direction, 0 perpendicular directions, and -1 opposite directions. With our nonnegative counts, only scores from 0 to 1 are possible. A 0 score would be a defined result for nonzero vectors; it must not be confused with an impossible calculation.</p></li><li><h3>Normalize each vector by its own norm</h3><p>Here, the hat means “normalized vector”. Dividing the vector means dividing each of its components by the same positive norm. This operation preserves direction and gives a unit norm. It does not force the sum of the components to equal 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>q</mi><mo>^</mo></mover><mo>=</mo><mfrac><mi>q</mi><mrow><mo>‖</mo><mi>q</mi><mo>‖</mo></mrow></mfrac><mo>;</mo><mover><mi>d</mi><mo>^</mo></mover><mo>=</mo><mfrac><mi>d</mi><mrow><mo>‖</mo><mi>d</mi><mo>‖</mo></mrow></mfrac></mrow></math></div><p>q̂ = (3/5 ; 4/5) = (3/5 ; 4/5), or (0.60 ; 0.80). Similarly, d̂ = (4/5 ; 3/5), or (0.80 ; 0.60). Each component is now dimensionless. Let us keep the exact fractions for the following operations.</p></li><li><h3>Check the unit norm and recover the score</h3><p>Check q̂: the sum of the squares is 9/25 + 16/25 = 1. Its norm is therefore 1. For d̂: 16/25 + 9/25 = 1; its norm is also 1.</p><p>The dot product of the normalized vectors is 3/5 × 4/5 + 4/5 × 3/5 = 12/25 + 12/25 = 24/25. This exactly recovers the previous cosine similarity. The product of norms in the denominator is now 1 × 1, giving the equality:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>q</mi><mo>^</mo></mover><mo>·</mo><mover><mi>d</mi><mo>^</mo></mover><mo>=</mo><mi>c</mi><mo>(</mo><mi>q</mi><mo>,</mo><mi>d</mi><mo>)</mo></mrow></math></div><p>Normalizing both vectors guarantees this equality. Normalizing only the query is not enough to equate the dot product with cosine similarity in general.</p></li><li><h3>State exactly what the result establishes</h3><p>The calculation establishes that the directions are close for our representation and geometry. It does not say that the sheet explains braking correctly. An incorrect sheet can use the same words in the same proportions. You must read its content to judge its relevance.</p><p>The 0 vector, whose components all equal 0, has norm 0. It has no direction to compare: division by its norm and cosine similarity are undefined. Before any division, you must therefore check the norms and flag the 0 case. The mathematical calculation does not prescribe an alternative document result.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps and reconstruct the process from the counts. Why does the square root appear in the norm? Why do the norms disappear after normalization? Finally, name what the score does not prove about the sheet.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“To normalize, I divide by the sum of the components.”</h3><p>That would fix a sum, rather than the Euclidean length. Calculate the square root of the sum of the squares, then divide each component by this norm. Check that the sum of the squares of the resulting components equals 1.</p><a href="#exemple">Review the steps “Measure lengths” and “Check the unit norm”</a></li><li><h3>“The dot product increases when I copy the sheet, so it becomes closer.”</h3><p>Repeating the entire text multiplies both the raw dot product and the norm of the sheet. The quotient can therefore stay the same. When both vectors have unit norm, their dot product gives the cosine similarity; this guarantee does not hold for arbitrary lengths.</p><a href="#exercices">Redo the exercise “Copy the entire sheet”</a></li><li><h3>“If all the counts are 0, the cosine similarity is 0.”</h3><p>A 0 norm makes the denominator 0: the score is undefined. A valid 0 cosine requires perpendicular nonzero vectors. Keep a 0 result separate from the inability to calculate.</p><a href="#exemple">Return to “State exactly what the result establishes”</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-requete"><p class="repere">Exercise 1 · Application · guided calculation</p>
+<h3>The query now includes only brake</h3><p>In the same workshop, replace the query with p = (5 ; 0), still in occurrences of “brake” followed by “wheel”. The sheet remains d = (4 ; 3). Calculate ‖p‖, the normalized vector p̂ and the cosine similarity c(p,d). Explain the division and give the units.</p>
+<label for="reponse-ex-requete">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-requete" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-requete" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-requete" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-requete" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The square of the 0 component contributes nothing to the norm. The norm of p remains positive.</p></details><details class="indice"><summary>Hint 2</summary><p>After normalization, the dot product with d̂ keeps only the “brake” component of d̂.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>p has norm 5 occurrences: the positive square root of 5 squared is 5. Dividing each component by this norm gives p̂ = (1 ; 0), which is dimensionless.</p><p>The raw dot product is 5 × 4 + 0 × 3 = 20 occurrences squared. The product of the norms is 5 × 5 = 25 occurrences squared. The cosine similarity is 20/25 = 4/5, or 0.80, which is dimensionless.</p><p>Another check: p̂ · d̂ = 1 × 4/5 + 0 × 3/5 = 4/5. The score remains below 1 because d has a nonzero “wheel” component, whereas p does not.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate a positive norm and retain its unit before the division.</li><li>Obtain a vector with unit norm, then the same score by both methods.</li><li>Explain why the cosine similarity does not reach 1.</li></ul></details></article><article class="exercice" id="ex-copie"><p class="repere">Exercise 2 · Reasoning · change of scale</p>
+<h3>Copy the entire sheet</h3><p>Return to q and d from the example. The text of the sheet is copied 2 times: its counts become d′ = (8 ; 6). The prime denotes this version. Predict the cosine similarity before calculating. Then calculate ‖d′‖, q · d′, the cosine similarity and d̂′. Does a larger raw dot product prove that the directions are closer?</p>
+<label for="reponse-ex-copie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-copie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-copie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-copie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-copie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A positive factor applied to the entire arrow multiplies its length by that same factor.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the factor that appears in the numerator with the one that appears in the denominator.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The direction does not change, so we predict the same cosine similarity. The norm becomes 2 × 5 = 10 occurrences. To check it another way, the sum of the squares of the components of d′ equals the square of 10; its positive square root is therefore indeed 10.</p><p>The dot product is 3 × 8 + 4 × 6 = 24 + 24 = 48 occurrences squared. The denominator is 5 × 10 = 50 in the same unit. The cosine similarity is 48/50 = 24/25 = 0.96: it is unchanged.</p><p>d̂′ = (8/10 ; 6/10) = (4/5 ; 3/5) = d̂. Normalization has removed the common positive factor. The raw dot product has doubled, without bringing the directions closer and without proving that there is any additional useful content.</p><p>The reasoning holds for any factor λ strictly greater than 0: λ denotes a dimensionless number that multiplies all the components of d. The numerator and the norm of d are multiplied by λ, which cancels in the quotient. A 0 factor would make the comparison undefined; a negative factor would reverse the direction.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict the invariance, then justify the cancellation of the positive factor in the quotient.</li><li>Distinguish the increase in the raw dot product from the unchanged cosine similarity.</li><li>Check that the normalized components remain exactly those of d̂.</li></ul></details></article><article class="exercice" id="ex-limites"><p class="repere">Exercise 3 · Diagnosis · result and absence of a score</p>
+<h3>Can a search draw a conclusion from these numbers?</h3><p>A report on the same sheet claims: “Its cosine similarity of 0.96 guarantees that it correctly meets the need. A query containing neither ‘brake’ nor ‘wheel’ will receive the score 0.” Examine these claims separately. For the second claim, write the query vector, its norm, and what prevents or permits the calculation. Suggest an honest wording for the report.</p>
+<label for="reponse-ex-limites">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-limites" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-limites" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-limites" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-limites" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The calculation sees only the counts. What is lost when the sentences are ignored?</p></details><details class="indice"><summary>Hint 2</summary><p>For a query represented by (0 ; 0), write the denominator of the cosine similarity before discussing a score.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The score 0.96 is indeed the score for q and d, but it does not guarantee a correct answer. Our representation contains neither the explanations in the sheet nor their accuracy. The conclusion must be limited to how close the directions of the count vectors are.</p><p>A query without the selected words becomes (0 ; 0), with norm 0. With d, the numerator is 0 and the denominator is 0 × 5 = 0. Division by 0 is impossible. We therefore cannot normalize this query or assign it the cosine similarity 0 using the formula.</p><p>Possible wording: “For the initial query, the vector similarity is 0.96; the relevance of the content still needs to be checked. For a query that is the 0 vector in our representation, the cosine similarity is undefined.” Flagging this case is a separate decision from any alternative search strategy. This formula provides no such strategy.</p><p class="petit-titre">Check your reasoning</p><ul><li>Separate the calculated score from a judgment about the actual relevance of the text.</li><li>Show the 0 norm and the 0 denominator without inventing a quotient.</li><li>Write a conclusion that distinguishes a defined result from an impossible comparison.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="norme"><summary><span class="repere">Recall 1</span><span>How do you find the Euclidean norm of our count vector?</span></summary><p>For the perpendicular axes with the same unit chosen here, add the squares of the components, then take the positive square root. The squares have the unit squared; the norm returns to the unit of the components.</p></details><details class="carte" data-carte="cosinus"><summary><span class="repere">Recall 2</span><span>What does cosine similarity divide, and what conditions must you check?</span></summary><p>Divide the dot product by the product of the norms. The vectors must be nonzero and expressed in the same coordinates and geometry. The result is dimensionless and compares directions.</p></details><details class="carte" data-carte="normalisation"><summary><span class="repere">Recall 3</span><span>What check distinguishes Euclidean normalization from simply dividing by a total?</span></summary><p>After dividing each vector by its own positive norm, the sum of the squares of its components equals 1. The norm is therefore 1, without requiring the sum of the components to equal 1. The dot product of the two normalized vectors recovers the cosine similarity.</p></details><details class="carte" data-carte="echelle"><summary><span class="repere">Recall 4</span><span>Why does copying the entire sheet leave its cosine similarity with the query unchanged?</span></summary><p>The common positive factor multiplies the dot product and the norm of the sheet. It cancels in the quotient. The length changes; the direction and the cosine similarity stay the same.</p></details><details class="carte" data-carte="limites"><summary><span class="repere">Recall 5</span><span>Distinguish a 0 cosine, an undefined cosine and evidence of relevance.</span></summary><p>A 0 cosine concerns perpendicular nonzero vectors. A 0 norm makes the cosine undefined. A defined score, even a high one, does not prove that the sheet correctly meets the need: it assesses only the chosen representation.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct this process: shared coordinates and units, sum of squares then positive square root, dot product then division by the nonzero norms. Explain why normalizing both vectors reduces the cosine similarity to their dot product. Finish by stating what still needs to be checked in the content of the sheet and how the 0 vector is handled mathematically.</p></div><div class="exports"><a class="bouton" download="c042-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDItbTI6bm9ybWUiLAogICAgICAidW5pdGUiOiAiYzA0Mi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5vcm1lIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB5b3UgZmluZCB0aGUgRXVjbGlkZWFuIG5vcm0gb2Ygb3VyIGNvdW50IHZlY3Rvcj8iLAogICAgICAicmVwb25zZSI6ICJGb3IgdGhlIHBlcnBlbmRpY3VsYXIgYXhlcyB3aXRoIHRoZSBzYW1lIHVuaXQgY2hvc2VuIGhlcmUsIGFkZCB0aGUgc3F1YXJlcyBvZiB0aGUgY29tcG9uZW50cywgdGhlbiB0YWtlIHRoZSBwb3NpdGl2ZSBzcXVhcmUgcm9vdC4gVGhlIHNxdWFyZXMgaGF2ZSB0aGUgdW5pdCBzcXVhcmVkOyB0aGUgbm9ybSByZXR1cm5zIHRvIHRoZSB1bml0IG9mIHRoZSBjb21wb25lbnRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQyLW0yOmNvc2ludXMiLAogICAgICAidW5pdGUiOiAiYzA0Mi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvc2ludXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGNvc2luZSBzaW1pbGFyaXR5IGRpdmlkZSwgYW5kIHdoYXQgY29uZGl0aW9ucyBtdXN0IHlvdSBjaGVjaz8iLAogICAgICAicmVwb25zZSI6ICJEaXZpZGUgdGhlIGRvdCBwcm9kdWN0IGJ5IHRoZSBwcm9kdWN0IG9mIHRoZSBub3Jtcy4gVGhlIHZlY3RvcnMgbXVzdCBiZSBub256ZXJvIGFuZCBleHByZXNzZWQgaW4gdGhlIHNhbWUgY29vcmRpbmF0ZXMgYW5kIGdlb21ldHJ5LiBUaGUgcmVzdWx0IGlzIGRpbWVuc2lvbmxlc3MgYW5kIGNvbXBhcmVzIGRpcmVjdGlvbnMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDItbTI6bm9ybWFsaXNhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDQyLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibm9ybWFsaXNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNoZWNrIGRpc3Rpbmd1aXNoZXMgRXVjbGlkZWFuIG5vcm1hbGl6YXRpb24gZnJvbSBzaW1wbHkgZGl2aWRpbmcgYnkgYSB0b3RhbD8iLAogICAgICAicmVwb25zZSI6ICJBZnRlciBkaXZpZGluZyBlYWNoIHZlY3RvciBieSBpdHMgb3duIHBvc2l0aXZlIG5vcm0sIHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgaXRzIGNvbXBvbmVudHMgZXF1YWxzIDEuIFRoZSBub3JtIGlzIHRoZXJlZm9yZSAxLCB3aXRob3V0IHJlcXVpcmluZyB0aGUgc3VtIG9mIHRoZSBjb21wb25lbnRzIHRvIGVxdWFsIDEuIFRoZSBkb3QgcHJvZHVjdCBvZiB0aGUgdHdvIG5vcm1hbGl6ZWQgdmVjdG9ycyByZWNvdmVycyB0aGUgY29zaW5lIHNpbWlsYXJpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDItbTI6ZWNoZWxsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDQyLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29zaW51cy1lY2hlbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGNvcHlpbmcgdGhlIGVudGlyZSBzaGVldCBsZWF2ZSBpdHMgY29zaW5lIHNpbWlsYXJpdHkgd2l0aCB0aGUgcXVlcnkgdW5jaGFuZ2VkPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjb21tb24gcG9zaXRpdmUgZmFjdG9yIG11bHRpcGxpZXMgdGhlIGRvdCBwcm9kdWN0IGFuZCB0aGUgbm9ybSBvZiB0aGUgc2hlZXQuIEl0IGNhbmNlbHMgaW4gdGhlIHF1b3RpZW50LiBUaGUgbGVuZ3RoIGNoYW5nZXM7IHRoZSBkaXJlY3Rpb24gYW5kIHRoZSBjb3NpbmUgc2ltaWxhcml0eSBzdGF5IHRoZSBzYW1lLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQyLW0yOmxpbWl0ZXMiLAogICAgICAidW5pdGUiOiAiYzA0Mi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvc2ludXMtbGltaXRlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJEaXN0aW5ndWlzaCBhIDAgY29zaW5lLCBhbiB1bmRlZmluZWQgY29zaW5lIGFuZCBldmlkZW5jZSBvZiByZWxldmFuY2UuIiwKICAgICAgInJlcG9uc2UiOiAiQSAwIGNvc2luZSBjb25jZXJucyBwZXJwZW5kaWN1bGFyIG5vbnplcm8gdmVjdG9ycy4gQSAwIG5vcm0gbWFrZXMgdGhlIGNvc2luZSB1bmRlZmluZWQuIEEgZGVmaW5lZCBzY29yZSwgZXZlbiBhIGhpZ2ggb25lLCBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoZSBzaGVldCBjb3JyZWN0bHkgbWVldHMgdGhlIG5lZWQ6IGl0IGFzc2Vzc2VzIG9ubHkgdGhlIGNob3NlbiByZXByZXNlbnRhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c042-m2-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHlvdSBmaW5kIHRoZSBFdWNsaWRlYW4gbm9ybSBvZiBvdXIgY291bnQgdmVjdG9yPwlGb3IgdGhlIHBlcnBlbmRpY3VsYXIgYXhlcyB3aXRoIHRoZSBzYW1lIHVuaXQgY2hvc2VuIGhlcmUsIGFkZCB0aGUgc3F1YXJlcyBvZiB0aGUgY29tcG9uZW50cywgdGhlbiB0YWtlIHRoZSBwb3NpdGl2ZSBzcXVhcmUgcm9vdC4gVGhlIHNxdWFyZXMgaGF2ZSB0aGUgdW5pdCBzcXVhcmVkOyB0aGUgbm9ybSByZXR1cm5zIHRvIHRoZSB1bml0IG9mIHRoZSBjb21wb25lbnRzLgl0b2RhaSBjMDQyLW0yIG5vcm1lCldoYXQgZG9lcyBjb3NpbmUgc2ltaWxhcml0eSBkaXZpZGUsIGFuZCB3aGF0IGNvbmRpdGlvbnMgbXVzdCB5b3UgY2hlY2s/CURpdmlkZSB0aGUgZG90IHByb2R1Y3QgYnkgdGhlIHByb2R1Y3Qgb2YgdGhlIG5vcm1zLiBUaGUgdmVjdG9ycyBtdXN0IGJlIG5vbnplcm8gYW5kIGV4cHJlc3NlZCBpbiB0aGUgc2FtZSBjb29yZGluYXRlcyBhbmQgZ2VvbWV0cnkuIFRoZSByZXN1bHQgaXMgZGltZW5zaW9ubGVzcyBhbmQgY29tcGFyZXMgZGlyZWN0aW9ucy4JdG9kYWkgYzA0Mi1tMiBjb3NpbnVzCldoYXQgY2hlY2sgZGlzdGluZ3Vpc2hlcyBFdWNsaWRlYW4gbm9ybWFsaXphdGlvbiBmcm9tIHNpbXBseSBkaXZpZGluZyBieSBhIHRvdGFsPwlBZnRlciBkaXZpZGluZyBlYWNoIHZlY3RvciBieSBpdHMgb3duIHBvc2l0aXZlIG5vcm0sIHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgaXRzIGNvbXBvbmVudHMgZXF1YWxzIDEuIFRoZSBub3JtIGlzIHRoZXJlZm9yZSAxLCB3aXRob3V0IHJlcXVpcmluZyB0aGUgc3VtIG9mIHRoZSBjb21wb25lbnRzIHRvIGVxdWFsIDEuIFRoZSBkb3QgcHJvZHVjdCBvZiB0aGUgdHdvIG5vcm1hbGl6ZWQgdmVjdG9ycyByZWNvdmVycyB0aGUgY29zaW5lIHNpbWlsYXJpdHkuCXRvZGFpIGMwNDItbTIgbm9ybWFsaXNhdGlvbgpXaHkgZG9lcyBjb3B5aW5nIHRoZSBlbnRpcmUgc2hlZXQgbGVhdmUgaXRzIGNvc2luZSBzaW1pbGFyaXR5IHdpdGggdGhlIHF1ZXJ5IHVuY2hhbmdlZD8JVGhlIGNvbW1vbiBwb3NpdGl2ZSBmYWN0b3IgbXVsdGlwbGllcyB0aGUgZG90IHByb2R1Y3QgYW5kIHRoZSBub3JtIG9mIHRoZSBzaGVldC4gSXQgY2FuY2VscyBpbiB0aGUgcXVvdGllbnQuIFRoZSBsZW5ndGggY2hhbmdlczsgdGhlIGRpcmVjdGlvbiBhbmQgdGhlIGNvc2luZSBzaW1pbGFyaXR5IHN0YXkgdGhlIHNhbWUuCXRvZGFpIGMwNDItbTIgY29zaW51cy1lY2hlbGxlCkRpc3Rpbmd1aXNoIGEgMCBjb3NpbmUsIGFuIHVuZGVmaW5lZCBjb3NpbmUgYW5kIGV2aWRlbmNlIG9mIHJlbGV2YW5jZS4JQSAwIGNvc2luZSBjb25jZXJucyBwZXJwZW5kaWN1bGFyIG5vbnplcm8gdmVjdG9ycy4gQSAwIG5vcm0gbWFrZXMgdGhlIGNvc2luZSB1bmRlZmluZWQuIEEgZGVmaW5lZCBzY29yZSwgZXZlbiBhIGhpZ2ggb25lLCBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoZSBzaGVldCBjb3JyZWN0bHkgbWVldHMgdGhlIG5lZWQ6IGl0IGFzc2Vzc2VzIG9ubHkgdGhlIGNob3NlbiByZXByZXNlbnRhdGlvbi4JdG9kYWkgYzA0Mi1tMiBjb3NpbnVzLWxpbWl0ZXMK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cphruc bgjtjm agrg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tsqktp kbgjrx wngk</span></span> · the geometry of the score</h3><dl><div><dt>What you understand</dt><dd>A norm gives a length, cosine similarity compares directions, and normalization gives a unit norm. The score does not guarantee that the sheet meets the need. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">djlosm hmvdux zatzfx fchcvl hmcwde gyurlb xhndcq letzft xjhziu sjgoch vlpdgn rmwrmt yxvobz ln</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ubjmsd pvtbny bbsatq ewndrx rzdylp wqrsjy gesxgh mbfgbv hoqimb cdqyoi btbrxu jhbgtr qeqony wbypwc jmdrxg phpmof uktkpi qqbxhz wamezs yxriju mcwvsn ldcfqs lodkum dtwaqk</span></span></dd></div><div><dt>The level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ffpmzm hltirz vsvwoe ikvtkg pvkfqd oglsuh fzro</span></span> Preparation for Level b of this milestone comes after C042·M5: you will also need to connect the identifier, vector, score and metadata. Here, demonstrate the norms and cosine similarity, justify normalization, and address the 0 case. Reading or an assisted answer never constitutes an achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fyjnzt qovwqv jcuiwg ldvkbo nmcnjz pqrsfy ybzsyd yuvrns gqqhgi cvzwbl pjnjvm liwziy nqpjef pmavjg bafmjx bypsmc kaoumq cxqpdb zywmfg rbwiqo foafhx plxdzv cpegcc cqusmg hcnays zubfur vhntjh ilgoqm xphtlt ebxhsa hhqgcp hhekgi aijuyk cnllxw nzavrh pvvftk gevnkf ke</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises without hints after a delay, then explain aloud the difference between the raw dot product and cosine similarity. Continue with C042·M3 on the exact index and its cost. To prepare for the complete milestone after C042·M5, you will still need to examine the other document links and, under a separate assignment, gather evidence of execution and quality that is not established here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c042-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c042-m1.html">Previous</a> · <a href="c042-m3.html">Next</a></nav>
+<footer><p>Course book · C042·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

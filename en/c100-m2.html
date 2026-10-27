@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a ridge regression, calculate its slope and explain how the penalty and the scale of the variable affect it.">
+<title>C100·M2 · Ridge — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pyojcl jqpehp qkqx</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C100·M2</p><h1>Ridge</h1><p class="objectif"><span>Your goal</span>Build a ridge regression, calculate its slope and explain how the penalty and the scale of the variable affect it.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c059-m6 : deterministic discrete Bellman · c066-m5 : standard errors and diagnostics · c100-m1 : predictive regression</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a workshop, you want to predict the drying time of sheets from the dryer load. The fictional observations pair load indices -1, 0 and 1 with drying times 8, 10 and 12 min. The index expresses a load difference from the mean, divided by a common reference mass: it is dimensionless.</p><p>The line that fits these observations exactly increases by 2 min per index unit. But fitting a few observations very closely can make the coefficients sensitive to small changes in the data. Ridge regression adds a cost for large slopes. It then accepts differences from the observations to reduce the magnitude of the coefficient.</p><p>Imagine a restraint that pulls the slope towards 0 while leaving the mean height free. The strength of this restraint is set by a parameter called lambda, written λ. With our setting, the slope becomes 1 min per index unit; the line still passes through the mean drying time 10 min at the mean load.</p><p>These data are entirely fictional. The drying times deliberately lie on a line to make the tradeoff visible in a calculation by hand. The example shows what ridge optimizes; it does not demonstrate better predictions for new loads. The choice of λ must be evaluated on observations set aside for validation.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same load, two lines</title><desc>The fictional points are the pairs -1 and 8 minutes, 0 and 10 minutes, 1 and 12 minutes. The unpenalized line passes through them. The ridge line has a smaller slope and predicts 11 minutes at the last index.</desc><text x="20" y="26">Drying time (min)</text><line x1="50" y1="55" x2="50" y2="225" class="trait" /><line x1="50" y1="225" x2="310" y2="225" class="trait" /><text x="36" y="80" text-anchor="end" class="petite-etiquette">12</text><text x="36" y="140" text-anchor="end" class="petite-etiquette">10</text><text x="36" y="200" text-anchor="end" class="petite-etiquette">8</text><path d="M80 195L280 75" class="trait" /><circle cx="80" cy="195" r="6" class="point-mesure" /><circle cx="180" cy="135" r="6" class="point-mesure" /><circle cx="280" cy="75" r="6" class="point-mesure" /><path d="M80 165L280 105" class="chemin-correction" /><circle cx="280" cy="105" r="5" class="resultat" /><text x="298" y="110" class="petite-etiquette">11</text><text x="80" y="246" text-anchor="middle">-1</text><text x="180" y="246" text-anchor="middle">0</text><text x="280" y="246" text-anchor="middle">1</text><text x="180" y="273" text-anchor="middle" class="petite-etiquette">Centered load index</text><text x="180" y="298" text-anchor="middle" class="resultat">Ridge: a smaller slope</text></svg><figcaption>The lavender points are the observations. The thin line is the unpenalized line; the gold line is ridge. At index 1, their predictions are 12 min and 11 min. The vertical axis starts above a drying time of 0.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The cost that ridge compares</title><desc>With the same penalty λ equal to 2, the unregularized slope gives a residual cost of 0 and a penalty of 8 square minutes. The ridge slope gives 2 square minutes of residual cost and 2 square minutes of penalty, or 4 square minutes in total.</desc><rect x="16" y="16" width="328" height="116" rx="7" class="cadre-neutre" /><text x="32" y="44">Slope 2 min, same λ = 2</text><text x="32" y="72" class="petite-etiquette">Residuals: 0 min²</text><text x="32" y="97" class="petite-etiquette">Penalty: 8 min²</text><text x="320" y="119" text-anchor="end">Total 8 min²</text><rect x="16" y="158" width="328" height="116" rx="7" class="cadre-resultat" /><text x="32" y="186">Slope 1 min, same λ = 2</text><text x="32" y="214" class="petite-etiquette">Residuals: 2 min²</text><text x="32" y="239" class="petite-etiquette">Penalty: 2 min²</text><text x="320" y="261" text-anchor="end" class="resultat">Total 4 min²</text><text x="180" y="302" text-anchor="middle" class="petite-etiquette">Compare the full cost</text></svg><figcaption>Here, residuals refers to the sum of their squares. Both slopes are evaluated with the same λ: ridge minimizes this sum plus the penalty, in min².</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Add λ times the squared slope to the residual cost; keep the intercept outside the penalty and state the scale of the variables.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Regularize the dryer slope</h3><p>We keep the 3 fictional pairs (-1 ; 8 min), (0 ; 10 min), (1 ; 12 min). Each observation has the same weight. Set λ = 2 to understand the calculation, without presenting this choice as optimal for a real dryer.</p><ol class="etapes"><li><h3>Define the model and its units</h3><p>For observation i, xᵢ is the dimensionless centered load and yᵢ is the observed drying time in min. The model predicts ŷᵢ = b + βxᵢ. The hat indicates a prediction; b is the intercept, in min; β is the slope, in min per index unit. The number of observations is n = 3; i runs through them from 1 to n.</p><p>The bar denotes a training mean. Here x̄ = (-1 + 0 + 1)/3 = 0. For the drying times, 8 + 10 = 18 min, then 18 + 12 = 30 min; so ȳ = 30/3 = 10 min. This centering is kept when predicting new loads.</p><p>We seek a line by minimizing a quadratic cost. The observations and the load index are given; the linear relationship is our modeling choice. The algebraic solution below provides neither a prediction interval nor a causal interpretation of the slope.</p></li><li><h3>Write the exact cost being used</h3><p>The residual is yᵢ − ŷᵢ, in min. Squaring it prevents a positive difference from canceling a negative difference in the cost. Ridge adds λ times the square of β: a large slope must reduce the squared differences enough to offset this penalty.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>J</mi><mi>λ</mi></msub><mo>(</mo><mi>b</mi><mo>,</mo><mi>β</mi><mo>)</mo><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mi>b</mi><mo>−</mo><mi>β</mi><msub><mi>x</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mi>λ</mi><msup><mi>β</mi><mn>2</mn></msup></mrow></math></div><p>Jλ is in min². With our dimensionless index, λ is dimensionless and nonnegative, and the square of β is in min². We use a sum of squares, without division by n. Another convention would change the numerical value of λ that gives the same fit; the second exercise asks you to check this.</p><p>The intercept b remains free and is not penalized. For any fixed slope, minimizing with respect to b requires the residuals to sum to 0, so b = ȳ − βx̄. Since x̄ = 0, b is 10 min for all the slopes being compared. The penalty pulls towards a constant drying time equal to the mean, rather than a drying time of 0.</p></li><li><h3>Summarize the data with two useful sums</h3><p>Write Sxx for the sum of the squares of xᵢ and Sxy = ∑ xᵢ(yᵢ − ȳ), where ∑ sums over the n observations. Sxx is dimensionless; Sxy is in min. The first measures the spread of the centered load; the second links changes in load and drying time.</p><p>The drying time differences are -2 min, 0 min and 2 min. The extreme loads each have a square of 1; the central load contributes 0. Thus Sxx = 1 + 0 + 1 = 2.</p><p>For Sxy, the first product is (-1) × (-2) = 2 min. The central product is 0. The last is 1 × 2 = 2 min. Their sum gives Sxy = 4 min. Both extreme observations support a positive slope here.</p></li><li><h3>Find the slope that minimizes the cost</h3><p>After setting b = ȳ, Jλ depends only on β. Its derivative, written Jλ′, describes how the cost varies as the slope changes. Differentiating each square and then collecting terms gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>J</mi><mi>λ</mi><mo>′</mo></msubsup><mo>(</mo><mi>β</mi><mo>)</mo><mo>=</mo><mn>2</mn><mo>[</mo><mo>(</mo><msub><mi>S</mi><mtext>xx</mtext></msub><mo>+</mo><mi>λ</mi><mo>)</mo><mi>β</mi><mo>−</mo><msub><mi>S</mi><mtext>xy</mtext></msub><mo>]</mo></mrow></math></div><p>The derivative is 0 when (Sxx + λ)β = Sxy. The second derivative is 2(Sxx + λ), strictly positive whenever Sxx + λ is positive. We then have a unique minimum, rather than merely a slope at which the cost momentarily stops changing.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>β</mi><mo>^</mo></mover><mi>λ</mi></msub><mo>=</mo><mfrac><msub><mi>S</mi><mtext>xy</mtext></msub><mrow><msub><mi>S</mi><mtext>xx</mtext></msub><mo>+</mo><mi>λ</mi></mrow></mfrac><mo>=</mo><mfrac><mn>4</mn><mrow><mn>2</mn><mo>+</mo><mn>2</mn></mrow></mfrac><mo>=</mo><mn>1</mn><mtext> min</mtext></mrow></math></div><p>The denominator is 4. Without a penalty, λ = 0, least squares gives β̂MC = Sxy/Sxx = 2 min. MC is the French abbreviation for least squares. Ridge multiplies this slope by Sxx/(Sxx + λ), here 2/4. With fixed data in this single-variable model, increasing λ moves the slope towards 0.</p></li><li><h3>Return to a prediction in minutes</h3><p>For the load with index x = 1, the slope gives an offset of β̂λx = 1 × 1 = 1 min. Add it to b, since b already represents the drying time at the mean load.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>b</mi><mo>+</mo><msub><mover><mi>β</mi><mo>^</mo></mover><mi>λ</mi></msub><mi>x</mi><mo>=</mo><mn>10</mn><mo>+</mo><mn>1</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>11</mn><mtext> min</mtext></mrow></math></div><p>For the training loads, the ridge predictions are therefore 9, 10 and 11 min. The unpenalized line predicts 8, 10 and 12 min. Ridge has kept the center and reduced the differences between the predictions and this center.</p></li><li><h3>Check the residuals and the full cost</h3><p>The ridge residuals are 8 − 9 = −1 min, 10 − 10 = 0 min and 12 − 11 = 1 min. Their sum is 0, which checks the fit of b. The sum of their squares is 2 min². We also obtain it by multiplying Sxx by the squared difference between the slopes: this difference is 1 min, its square is 1 min², and then 2 × 1 = 2 min².</p><p>The square of the ridge slope is 1 min²; its penalty is 2 × 1 = 2 min². The full cost is therefore Jλ = 2 + 2 = 4 min². For the least squares slope, the residuals are all 0, but its square is 4 min²: the same cost Jλ is 0 + 2 × 4 = 8 min².</p><p>An independent check is to expand the cost for our dryer directly, then complete the square. For any slope β in min, with b = 10 min:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>J</mi><mi>λ</mi></msub><mo>(</mo><mi>β</mi><mo>)</mo><mo>=</mo><mn>4</mn><msup><mrow><mo>(</mo><mi>β</mi><mo>−</mo><mn>1</mn><mtext> min</mtext><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mn>4</mn><mtext> min²</mtext></mrow></math></div><p>The square cannot be negative: the minimum cost is indeed 4 min² at slope 1 min. Yet the training error alone has risen from 0 to 2 min². A decrease in the penalized cost therefore provides no proof of lower error on future data.</p></li><li><h3>Extend the rule to several variables</h3><p>If the dryer is described by several variables, ridge penalizes the sum of the squares of their coefficients. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dpfdqi uopiqz ajdwrw bnntpd xitvke afvpal mqhlqw llwqfb lfrtbq iaqxgr vvdbsv cldlse jxpaax jzpabh xrhwxg tahduq dzrure ytpnnl nccmyj iqyddy wdurqm kahicf bupjxa ivyork</span></span></p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>(</mo><msup><mi>X</mi><mi>ᵀ</mi></msup><mi>X</mi><mo>+</mo><mi>λ</mi><mi>I</mi><mo>)</mo><mover><mi>β</mi><mo>^</mo></mover><mo>=</mo><msup><mi>X</mi><mi>ᵀ</mi></msup><msub><mi>y</mi><mi>c</mi></msub></mrow></math></div><p>This system is the matrix version of (Sxx + λ)β = Sxy; it is solved with a suitable numerical method. For strictly positive λ, adding λI makes the solution unique even if some columns are redundant. In coordinates made dimensionless, the coefficients remain in min and λ remains dimensionless. With several related variables, each coefficient depends on the others: the scalar shrinkage factor in our example does not apply separately to each column.</p><p>Comparing squared coefficients requires chosen scales. For each variable, learn the centering and, if necessary, division by a nonzero standard deviation from the training data only; then apply the same transformations to validation data and new loads. A constant variable requires separate processing. The rescaling exercise explains why this choice matters. Choose λ using validation, then keep the final test separate from tuning.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking, reconstruct the cost, explain why b stays at the mean and recover the slope from Sxx and Sxy. Then justify how ridge can be optimal for this cost while leaving more error on the observations.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Ridge must reduce the error on the training data.”</h3><p>It minimizes the sum of squared residuals plus the penalty. For our dryer, the sum of squared residuals increases from 0 to 2 min², while the full cost at the same λ falls from 8 to 4 min². A separate evaluation is still needed to assess new predictions.</p><a href="#exemple">Check both costs again</a></li><li><h3>“I also penalize the baseline drying time and use the same λ in every convention.”</h3><p>In the model defined here, only the slope enters the penalty; the free intercept keeps b = ȳ. The value of λ also depends on the choice between the sum and the mean of squares. Rewrite the exact cost before comparing settings or software.</p><a href="#exemple">Reread the definition of the cost and the intercept</a></li><li><h3>“Changing the unit of load makes no difference to ridge.”</h3><p>The same line can have a different numerical slope after rescaling. Its square then receives a different penalty if λ stays unchanged. Set the transformations using the training data and check their effect on the objective.</p><a href="#exercices">Solve the dryer rescaling exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-penalite"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Tighten the restraint</h3><p>Keep exactly the same dryer observations and replace λ = 2 with λ = 6. Before calculating, predict the direction of the change in slope. Then calculate the slope, b and the prediction at x = 1. Give the units.</p>
+<label for="reponse-ex-penalite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-penalite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-penalite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-penalite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-penalite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The data have not changed: keep Sxx and Sxy, then change only the denominator.</p></details><details class="indice"><summary>Hint 2</summary><p>The load is centered and b is not penalized: its value remains ȳ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The positive slope must decrease, since its denominator increases: Sxx + λ = 2 + 6 = 8. It is 4/8 = 1/2 min per index unit.</p><p>The intercept remains b = 10 min. At x = 1, ŷ = 10 + (1/2) × 1 = 21/2 min, or 10.5 min. The prediction is closer to the mean than 11 min; its quality for a future load still needs to be evaluated.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict a decrease in the slope before calculating and link it to the denominator.</li><li>Obtain 1/2 min per index unit and keep b = 10 min.</li><li>Give 10.5 min without turning this shrinkage into proof of a better prediction.</li></ul></details></article><article class="exercice" id="ex-convention"><p class="repere">Exercise 2 · Compare two formulations</p>
+<h3>A sum or a mean?</h3><p>A colleague defines Jm as the mean of squared residuals plus λm times the square of β, with n = 3. Which λm gives exactly the same fit as our sum with λ = 2? What result does the colleague obtain by mistakenly keeping λm = 2?</p>
+<label for="reponse-ex-convention">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-convention" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-convention" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-convention" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-convention" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiplying the entire cost by n does not move its minimum.</p></details><details class="indice"><summary>Hint 2</summary><p>After this multiplication, the coefficient of the squared slope becomes nλm.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>λm is the penalty parameter for the mean convention. For nJm to be exactly our Jλ, we need nλm = λ, so λm = 2/3 = 2/3. The slope remains 1 min and the prediction at x = 1 remains 11 min.</p><p>If the colleague keeps λm = 2, the cost multiplied by n has a penalty parameter of 3 × 2 = 6. This gives the result of the previous exercise: slope 1/2 min and prediction 10.5 min. The difference comes from the convention, even though the observations are identical.</p><p class="petit-titre">Check your reasoning</p><ul><li>Write nλm = λ and obtain λm = 2/3.</li><li>Explain why multiplying the entire cost by a positive number preserves its minimum.</li><li>Identify the equivalent penalty parameter 6 when the same number is mistakenly kept.</li></ul></details></article><article class="exercice" id="ex-echelle"><p class="repere">Exercise 3 · Reasoned transfer</p>
+<h3>Recode the same load</h3><p>The colleague recodes the index as x′ = 2x, without changing any drying time or the sum convention. The prime marks the new coordinate. Find Sxx′ and Sxy′. With λ unchanged, calculate the new slope β′ and the prediction for the same physical load, now x′ = 2. Which λ′ restores our original ridge line exactly?</p>
+<label for="reponse-ex-echelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-echelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-echelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-echelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-echelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each squared load is multiplied by the square of the factor; each load–drying time product receives only the factor.</p></details><details class="indice"><summary>Hint 2</summary><p>Predicting the same drying time requires β′x′ = βx. For the same line, β′ must therefore be divided by the factor.</p></details><details class="indice"><summary>Hint 3</summary><p>Express the square of β using β = 2β′, then find the coefficient of the square of β′ in the penalty.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The square of the factor is 4. Thus Sxx′ = 4 × 2 = 8 and Sxy′ = 2 × 4 = 8 min. With λ unchanged, the denominator is 8 + 2 = 10, and β′ = 8/10 = 4/5 min per unit of the new index.</p><p>At x′ = 2, the offset is (4/5) × 2 = 8/5 min. The prediction is 10 + 8/5 = 58/5 min, or 11.6 min. It differs from 11 min: recoding has changed the effective strength of the penalty.</p><p>To keep the same line, β = 2β′. Its original penalty is therefore λ × 4 times the square of β′: we need λ′ = 4 × 2 = 8. The new denominator becomes 8 + 8 = 16; β′ = 8/16 = 1/2 min. The offset is 1 min and the prediction is 11 min: this recovers the original fit for the same physical load.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the factor 2 from its square 4 in the two sums.</li><li>Evaluate the load at the new index 2, rather than at the same number as before.</li><li>Justify λ′ = 8 by showing that the penalties for the same line are identical.</li><li>Recover the prediction 11 min after compensation.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="cout"><summary><span class="repere">Recall 1</span><span>Which cost does ridge minimize, and what role does λ play?</span></summary><p>The sum of squared residuals plus λ times the sum of squared slopes. λ sets the cost of coefficients with large magnitudes. In our convention, the intercept is not penalized.</p></details><details class="carte" data-carte="pente"><summary><span class="repere">Recall 2</span><span>How can you recover the dryer ridge slope from the centered data?</span></summary><p>Form Sxx, the sum of the squares of xᵢ, and Sxy = ∑ xᵢ(yᵢ − ȳ), then solve (Sxx + λ)β = Sxy. The slope is Sxy/(Sxx + λ), with b = ȳ. The positive denominator guarantees a unique minimum.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 3</span><span>Why does a decrease in the penalized cost fail to prove a better prediction?</span></summary><p>This cost can decrease in exchange for a larger training error. New predictions must be evaluated separately; tuning λ on validation data and then consulting a final test kept aside answers a different question from minimizing the training cost.</p></details><details class="carte" data-carte="echelle"><summary><span class="repere">Recall 4</span><span>What information must be fixed before comparing two values of λ?</span></summary><p>The choice between the sum and the mean of squares, the penalized variables and their scale transformations. The transformations are learned from the training data and then kept. The same number can correspond to different effective penalties.</p></details><details class="carte" data-carte="annulation"><summary><span class="repere">Recall 5</span><span>Does ridge require variables to be removed by setting their coefficients to 0?</span></summary><p>The quadratic penalty reduces the magnitude of coefficients without requiring them to be exactly 0. In our scalar formula, with nonzero Sxy, the slope remains nonzero for any finite penalty. A coefficient can still be 0 when the data and the model lead to that value.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct the following sequence without support: state the convention and scale; center the loads; keep the intercept free; form Sxx and Sxy; add λ to the denominator; calculate a prediction; check residuals and penalty separately. Then explain why tuning λ and assessing future quality require an evaluation on data kept aside. An answer produced after a hint remains an assisted answer; reading and immediate success do not establish that any level has been attained.</p></div><div class="exports"><a class="bouton" download="c100-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTI6Y291dCIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGVuYWxpdGUtcXVhZHJhdGlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggY29zdCBkb2VzIHJpZGdlIG1pbmltaXplLCBhbmQgd2hhdCByb2xlIGRvZXMgzrsgcGxheT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc3VtIG9mIHNxdWFyZWQgcmVzaWR1YWxzIHBsdXMgzrsgdGltZXMgdGhlIHN1bSBvZiBzcXVhcmVkIHNsb3Blcy4gzrsgc2V0cyB0aGUgY29zdCBvZiBjb2VmZmljaWVudHMgd2l0aCBsYXJnZSBtYWduaXR1ZGVzLiBJbiBvdXIgY29udmVudGlvbiwgdGhlIGludGVyY2VwdCBpcyBub3QgcGVuYWxpemVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0yOnBlbnRlIiwKICAgICAgInVuaXRlIjogImMxMDAtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzb2x1dGlvbi1yaWRnZS1zY2FsYWlyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSByZWNvdmVyIHRoZSBkcnllciByaWRnZSBzbG9wZSBmcm9tIHRoZSBjZW50ZXJlZCBkYXRhPyIsCiAgICAgICJyZXBvbnNlIjogIkZvcm0gU3h4LCB0aGUgc3VtIG9mIHRoZSBzcXVhcmVzIG9mIHjhtaIsIGFuZCBTeHkgPSDiiJEgeOG1oih54bWiIOKIkiDIsyksIHRoZW4gc29sdmUgKFN4eCArIM67Kc6yID0gU3h5LiBUaGUgc2xvcGUgaXMgU3h5LyhTeHggKyDOuyksIHdpdGggYiA9IMizLiBUaGUgcG9zaXRpdmUgZGVub21pbmF0b3IgZ3VhcmFudGVlcyBhIHVuaXF1ZSBtaW5pbXVtLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0yOmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9ydGVlLWR1LWNvdXQiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgYSBkZWNyZWFzZSBpbiB0aGUgcGVuYWxpemVkIGNvc3QgZmFpbCB0byBwcm92ZSBhIGJldHRlciBwcmVkaWN0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIlRoaXMgY29zdCBjYW4gZGVjcmVhc2UgaW4gZXhjaGFuZ2UgZm9yIGEgbGFyZ2VyIHRyYWluaW5nIGVycm9yLiBOZXcgcHJlZGljdGlvbnMgbXVzdCBiZSBldmFsdWF0ZWQgc2VwYXJhdGVseTsgdHVuaW5nIM67IG9uIHZhbGlkYXRpb24gZGF0YSBhbmQgdGhlbiBjb25zdWx0aW5nIGEgZmluYWwgdGVzdCBrZXB0IGFzaWRlIGFuc3dlcnMgYSBkaWZmZXJlbnQgcXVlc3Rpb24gZnJvbSBtaW5pbWl6aW5nIHRoZSB0cmFpbmluZyBjb3N0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0yOmVjaGVsbGUiLAogICAgICAidW5pdGUiOiAiYzEwMC1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVjaGVsbGUtZXQtY29udmVudGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGluZm9ybWF0aW9uIG11c3QgYmUgZml4ZWQgYmVmb3JlIGNvbXBhcmluZyB0d28gdmFsdWVzIG9mIM67PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjaG9pY2UgYmV0d2VlbiB0aGUgc3VtIGFuZCB0aGUgbWVhbiBvZiBzcXVhcmVzLCB0aGUgcGVuYWxpemVkIHZhcmlhYmxlcyBhbmQgdGhlaXIgc2NhbGUgdHJhbnNmb3JtYXRpb25zLiBUaGUgdHJhbnNmb3JtYXRpb25zIGFyZSBsZWFybmVkIGZyb20gdGhlIHRyYWluaW5nIGRhdGEgYW5kIHRoZW4ga2VwdC4gVGhlIHNhbWUgbnVtYmVyIGNhbiBjb3JyZXNwb25kIHRvIGRpZmZlcmVudCBlZmZlY3RpdmUgcGVuYWx0aWVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0yOmFubnVsYXRpb24iLAogICAgICAidW5pdGUiOiAiYzEwMC1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJldHJhaXQtZGVzLWNvZWZmaWNpZW50cyIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIHJpZGdlIHJlcXVpcmUgdmFyaWFibGVzIHRvIGJlIHJlbW92ZWQgYnkgc2V0dGluZyB0aGVpciBjb2VmZmljaWVudHMgdG8gMD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcXVhZHJhdGljIHBlbmFsdHkgcmVkdWNlcyB0aGUgbWFnbml0dWRlIG9mIGNvZWZmaWNpZW50cyB3aXRob3V0IHJlcXVpcmluZyB0aGVtIHRvIGJlIGV4YWN0bHkgMC4gSW4gb3VyIHNjYWxhciBmb3JtdWxhLCB3aXRoIG5vbnplcm8gU3h5LCB0aGUgc2xvcGUgcmVtYWlucyBub256ZXJvIGZvciBhbnkgZmluaXRlIHBlbmFsdHkuIEEgY29lZmZpY2llbnQgY2FuIHN0aWxsIGJlIDAgd2hlbiB0aGUgZGF0YSBhbmQgdGhlIG1vZGVsIGxlYWQgdG8gdGhhdCB2YWx1ZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c100-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hpY2ggY29zdCBkb2VzIHJpZGdlIG1pbmltaXplLCBhbmQgd2hhdCByb2xlIGRvZXMgzrsgcGxheT8JVGhlIHN1bSBvZiBzcXVhcmVkIHJlc2lkdWFscyBwbHVzIM67IHRpbWVzIHRoZSBzdW0gb2Ygc3F1YXJlZCBzbG9wZXMuIM67IHNldHMgdGhlIGNvc3Qgb2YgY29lZmZpY2llbnRzIHdpdGggbGFyZ2UgbWFnbml0dWRlcy4gSW4gb3VyIGNvbnZlbnRpb24sIHRoZSBpbnRlcmNlcHQgaXMgbm90IHBlbmFsaXplZC4JdG9kYWkgYzEwMC1tMiBwZW5hbGl0ZS1xdWFkcmF0aXF1ZQpIb3cgY2FuIHlvdSByZWNvdmVyIHRoZSBkcnllciByaWRnZSBzbG9wZSBmcm9tIHRoZSBjZW50ZXJlZCBkYXRhPwlGb3JtIFN4eCwgdGhlIHN1bSBvZiB0aGUgc3F1YXJlcyBvZiB44bWiLCBhbmQgU3h5ID0g4oiRIHjhtaIoeeG1oiDiiJIgyLMpLCB0aGVuIHNvbHZlIChTeHggKyDOuynOsiA9IFN4eS4gVGhlIHNsb3BlIGlzIFN4eS8oU3h4ICsgzrspLCB3aXRoIGIgPSDIsy4gVGhlIHBvc2l0aXZlIGRlbm9taW5hdG9yIGd1YXJhbnRlZXMgYSB1bmlxdWUgbWluaW11bS4JdG9kYWkgYzEwMC1tMiBzb2x1dGlvbi1yaWRnZS1zY2FsYWlyZQpXaHkgZG9lcyBhIGRlY3JlYXNlIGluIHRoZSBwZW5hbGl6ZWQgY29zdCBmYWlsIHRvIHByb3ZlIGEgYmV0dGVyIHByZWRpY3Rpb24/CVRoaXMgY29zdCBjYW4gZGVjcmVhc2UgaW4gZXhjaGFuZ2UgZm9yIGEgbGFyZ2VyIHRyYWluaW5nIGVycm9yLiBOZXcgcHJlZGljdGlvbnMgbXVzdCBiZSBldmFsdWF0ZWQgc2VwYXJhdGVseTsgdHVuaW5nIM67IG9uIHZhbGlkYXRpb24gZGF0YSBhbmQgdGhlbiBjb25zdWx0aW5nIGEgZmluYWwgdGVzdCBrZXB0IGFzaWRlIGFuc3dlcnMgYSBkaWZmZXJlbnQgcXVlc3Rpb24gZnJvbSBtaW5pbWl6aW5nIHRoZSB0cmFpbmluZyBjb3N0Lgl0b2RhaSBjMTAwLW0yIHBvcnRlZS1kdS1jb3V0CldoYXQgaW5mb3JtYXRpb24gbXVzdCBiZSBmaXhlZCBiZWZvcmUgY29tcGFyaW5nIHR3byB2YWx1ZXMgb2Ygzrs/CVRoZSBjaG9pY2UgYmV0d2VlbiB0aGUgc3VtIGFuZCB0aGUgbWVhbiBvZiBzcXVhcmVzLCB0aGUgcGVuYWxpemVkIHZhcmlhYmxlcyBhbmQgdGhlaXIgc2NhbGUgdHJhbnNmb3JtYXRpb25zLiBUaGUgdHJhbnNmb3JtYXRpb25zIGFyZSBsZWFybmVkIGZyb20gdGhlIHRyYWluaW5nIGRhdGEgYW5kIHRoZW4ga2VwdC4gVGhlIHNhbWUgbnVtYmVyIGNhbiBjb3JyZXNwb25kIHRvIGRpZmZlcmVudCBlZmZlY3RpdmUgcGVuYWx0aWVzLgl0b2RhaSBjMTAwLW0yIGVjaGVsbGUtZXQtY29udmVudGlvbgpEb2VzIHJpZGdlIHJlcXVpcmUgdmFyaWFibGVzIHRvIGJlIHJlbW92ZWQgYnkgc2V0dGluZyB0aGVpciBjb2VmZmljaWVudHMgdG8gMD8JVGhlIHF1YWRyYXRpYyBwZW5hbHR5IHJlZHVjZXMgdGhlIG1hZ25pdHVkZSBvZiBjb2VmZmljaWVudHMgd2l0aG91dCByZXF1aXJpbmcgdGhlbSB0byBiZSBleGFjdGx5IDAuIEluIG91ciBzY2FsYXIgZm9ybXVsYSwgd2l0aCBub256ZXJvIFN4eSwgdGhlIHNsb3BlIHJlbWFpbnMgbm9uemVybyBmb3IgYW55IGZpbml0ZSBwZW5hbHR5LiBBIGNvZWZmaWNpZW50IGNhbiBzdGlsbCBiZSAwIHdoZW4gdGhlIGRhdGEgYW5kIHRoZSBtb2RlbCBsZWFkIHRvIHRoYXQgdmFsdWUuCXRvZGFpIGMxMDAtbTIgcmV0cmFpdC1kZXMtY29lZmZpY2llbnRzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pyojcl jqpehp qkqx</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize ridge and prepare to verify it</h3><dl><div><dt>What you understand</dt><dd>Ridge chooses a line according to a cost that includes the size of the slopes. You can justify the shrinkage in the dryer example and explain why its predictive value depends on the data and the evaluation.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lccmzo uszsvy jyvyig hymqex udrzkq jtqjhz wrkvvt nizdtu yoiivl abnzai mkmkzq ckladb mkwcqv fqqhcz ptodpp krshms lhulug ajerpq mgdwfb dvbjeo wezepk ojgrgd eqqrut wvpoat</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for Level 2: reconstruct the scalar slope, check the full objective and explain the effects of convention and scale. Reading the page, opening a solution or succeeding with a hint does not validate this level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ukhgsx wjmkli pkjmqh yzyfzb ynvgpp exxjlj xmpeyf ekqcbp xyomvg udqjww wxzzfv nyrnly qjelck sztzjv ulheeo heylza fahdzy lxvaep yuboem miczli xlwfdv ugquti zgkoyk mzjjqj</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises without help during delayed recall. For real use, the authorized call path, the data splits, the learned transformations and an evaluation kept separate from tuning will still need to be checked separately. The next unit will cover lasso; no real result for the dryer or the project is claimed.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c100-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c100-m1.html">Previous</a> · <a href="c100-m3.html">Next</a></nav>
+<footer><p>Course book · C100·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

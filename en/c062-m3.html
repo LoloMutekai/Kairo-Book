@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a binary Brier score, compare probabilities and frequencies by group, and identify what an overall average can hide.">
+<title>C062·M3 · Brier score and reliability by group — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">beaikb fscijc fpxw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C062·M3</p><h1>Brier score and reliability by group</h1><p class="objectif"><span>Your goal</span>Calculate a binary Brier score, compare probabilities and frequencies by group, and identify what an overall average can hide.</p><p class="prerequis"><strong>Before you start</strong><br>c061-m5 : identifiability and uncertainty · c056-m5 : effect size · c009-m5 : reading notes · c062-m1 : measurement, score and probability · c062-m2 : missing value and error</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A delivery service reports, before each departure, the probability of arriving after the promised delivery window. For 4 deliveries, it reports 0.25; for 4 others, 0.75. In each group, 2 deliveries end up late. Did the higher forecasts describe a group that was actually at greater risk?</p><p>All the data in this scene are fictional. We call the group with a forecast of 0.25 A, and the group with a forecast of 0.75 B. Lateness is defined in the same way for all deliveries. Its outcome is 1 if it occurred and 0 otherwise; no outcome is missing from the initial dataset.</p><p>The Brier score measures the difference between each forecast probability and the observed outcome: square this difference, then take the average. A confident forecast contradicted by the outcome incurs a greater loss than a cautious forecast. The smaller this score, the closer the forecasts are to the outcomes according to this calculation.</p><p>Reliability by group asks another question: among deliveries given the same forecast probability, what proportion were actually late? We compare this frequency with the forecast. Here, the frequency is 0.50 in both A and B. The score summarizes the individual differences; the diagram of the groups shows where forecasts differ from frequencies.</p><div class="schemas"><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Forecasts and late deliveries in the fictional dataset</title><desc>Group A: 4 deliveries with a forecast of 0.25, outcomes 1, 1, 0, 0. Group B: 4 deliveries with a forecast of 0.75, the same outcomes. In each group, the frequency of late deliveries is 0.50. The outcomes are indicators, rather than revised probabilities.</desc><rect x="16" y="24" width="328" height="128" rx="8" class="cadre-prediction" /><text x="180" y="54" text-anchor="middle">A · forecast 0.25</text><text x="180" y="90" text-anchor="middle">Outcomes: 1 · 1 · 0 · 0</text><text x="180" y="128" text-anchor="middle">2 late / 4 = 0.50</text><rect x="16" y="176" width="328" height="128" rx="8" class="cadre-neutre" /><text x="180" y="206" text-anchor="middle">B · forecast 0.75</text><text x="180" y="242" text-anchor="middle">Outcomes: 1 · 1 · 0 · 0</text><text x="180" y="280" text-anchor="middle">2 late / 4 = 0.50</text></svg><figcaption>Each outcome corresponds to a distinct delivery. 1 means late, 0 means on time. The groups are defined by the forecast made before this outcome was known.</figcaption></figure><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Reliability diagram for the same dataset</title><desc>The horizontal axis shows the forecast probability, and the vertical axis shows the observed frequency. The diagonal represents equality between them. A is at (0.25; 0.50), above the diagonal. B is at (0.75; 0.50), below it. Each point represents 4 deliveries. The vertical lines show the differences from the diagonal.</desc><text x="18" y="26">Observed frequency</text><path d="M60 60V260H300M60 260L300 60" class="trait" /><path d="M55 60h5M55 160h5M55 260h5M120 260v5M240 260v5M300 260v5" class="trait" /><text x="44" y="66" text-anchor="end" class="petite-etiquette">1</text><text x="44" y="166" text-anchor="end" class="petite-etiquette">0.5</text><text x="44" y="266" text-anchor="end" class="petite-etiquette">0</text><line x1="120" y1="210" x2="120" y2="160" class="chemin-correction" /><line x1="240" y1="110" x2="240" y2="160" class="chemin-correction" /><circle cx="120" cy="160" r="6" class="point-prediction" /><circle cx="240" cy="160" r="6" class="point-mesure" /><text x="103" y="146" class="prediction">A</text><text x="251" y="180" class="mesure">B</text><text x="60" y="286" text-anchor="middle" class="petite-etiquette">0</text><text x="120" y="286" text-anchor="middle" class="petite-etiquette">0.25</text><text x="240" y="286" text-anchor="middle" class="petite-etiquette">0.75</text><text x="300" y="286" text-anchor="middle" class="petite-etiquette">1</text><text x="180" y="317" text-anchor="middle">Forecast probability</text></svg><figcaption>On the diagonal, forecast and frequency agree. A underestimates the frequency of late deliveries in this dataset; B overestimates it. The letters allow the points to be read without relying on colors.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep the original probabilities, calculate the squared differences for each delivery, then compare the average forecast with the frequency in each group, displaying its size.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Evaluate the forecasts before changing them</h3><p>Keep the 8 original forecasts and the outcomes from the first diagram. Calculate the binary Brier score and the reliability of each group, then check whether the overall averages tell the whole story.</p><ol class="etapes"><li><h3>Specify the event, timing and data</h3><p>i denotes a delivery; n = 8 is the total number of deliveries. pᵢ is its probability of being late, forecast before departure, between 0 and 1. yᵢ is the indicator observed after the delivery window closes: 1 for late, 0 for on time. pᵢ and yᵢ have no physical unit; the counts refer to deliveries.</p><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hlwjix wdhcfr vlfrpb ldawwb dcxdai iycejb klyf</span></span> <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ihkncr czzbac tznfvp paeutq ctuuay qkmljh rghl</span></span> The symbols r_A and r_B count the observed late deliveries.</p><p>Each delivery counts once and has the same weight. The forecasts remain those recorded before the outcome. The descriptive calculation does not assume that deliveries are independent; to generalize to future deliveries, we would need to examine, among other things, their dependence, the stability of the situation, and how representative this dataset is.</p></li><li><h3>Calculate the difference for each delivery, then square it</h3><p>bᵢ denotes the loss for a delivery and B the average of these losses, called the Brier score. The symbol Σ means to add the terms for all deliveries. Squaring makes each contribution nonnegative: errors with opposite signs no longer cancel out.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>b</mi><mi>i</mi></msub><mo>=</mo><msup><mrow><mo>(</mo><msub><mi>p</mi><mi>i</mi></msub><mo>−</mo><msub><mi>y</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>;</mo><mi>B</mi><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>b</mi><mi>i</mi></msub></mrow></math></div><p>For a late delivery in A: 1/4 − 1 = -3/4, then (-3/4) × (-3/4) = 9/16 = 0.5625. For an on-time delivery: 1/4 − 0 = 1/4, whose square is 1/16 = 0.0625.</p><p>All these losses, and therefore B, are unitless. Under this binary convention, they lie between 0 and 1. B equals 0 if all probabilities match their outcomes. We count only the event “late”, without adding a second loss for its complement.</p></li><li><h3>Add up the losses in each group</h3><p>In A, the 2 late deliveries contribute 2 × 9/16 = 9/8. The 2 on-time deliveries contribute 2 × 1/16 = 1/8. Their sum S_A is 5/4; the group Brier score is B_A = 5/4 ÷ 4 = 5/16.</p><p>In B, a late delivery gives 3/4 − 1 = -1/4, so its square is 1/16. An on-time delivery gives a square of 9/16. The contributions are 2 × 1/16 = 1/8 and 2 × 9/16 = 9/8. Hence S_B = 5/4 and B_B = 5/4 ÷ 4 = 5/16.</p><p>S_A and S_B denote sums of losses; B_A and B_B denote averages. Here, the groups have the same average: the small and large losses have simply exchanged roles.</p></li><li><h3>Take the average over all deliveries and check it</h3><p>The total sum S = S_A + S_B is 5/4 + 5/4 = 5/2. Divide it by the number of deliveries n = 4 + 4 = 8, since each delivery must have the same weight.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>B</mi><mo>=</mo><mfrac><mrow><mn>5/4</mn><mo>+</mo><mn>5/4</mn></mrow><mrow><mn>4</mn><mo>+</mo><mn>4</mn></mrow></mfrac><mo>=</mo><mn>5/16</mn><mo>=</mo><mn>0.3125</mn></mrow></math></div><p>Check by arranging the terms differently: there are 4 losses of 1/16 and 4 of 9/16. Their sum divided by 8 again gives 5/16. The result does lie between 0 and 1.</p><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hbxtod dftljx ptln</span></span> Taking a simple average of B_A and B_B is a general rule only when the group sizes are equal; different sizes require these weights. In our dataset, because the group averages are equal, changing the weights would not reveal a weighting error.</p></li><li><h3>Read the reliability in each group</h3><p>g denotes a group, A or B; n_g is its size. f_g is its observed frequency of late deliveries, meaning the number of outcomes equal to 1 divided by n_g. p̄_g, the p with a bar, denotes the average of the forecast probabilities in this group. The notation i ∈ g means that we add only the deliveries in the group.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>f</mi><mi>g</mi></msub><mo>=</mo><mfrac><mrow><msub><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>g</mi></mrow></msub><msub><mi>y</mi><mi>i</mi></msub></mrow><msub><mi>n</mi><mi>g</mi></msub></mfrac><mo>;</mo><msub><mover><mi>p</mi><mo>¯</mo></mover><mi>g</mi></msub><mo>=</mo><mfrac><mrow><msub><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>g</mi></mrow></msub><msub><mi>p</mi><mi>i</mi></msub></mrow><msub><mi>n</mi><mi>g</mi></msub></mfrac></mrow></math></div><p>The probabilities are identical within each of our groups: p̄_A = p_A and p̄_B = p_B. A gives f_A = 2/4 = 0.50, for a forecast of 0.25. The difference f_A − p̄_A is 0.25: the point is above the diagonal. B gives f_B = 2/4 = 0.50, for a forecast of 0.75. The difference is -0.25: the point is below it.</p><p>The diagonal represents f_g = p̄_g. Being above it indicates more late deliveries than the average forecast, and being below it indicates fewer. When forecasts take many values, we can define probability bins before observing the outcomes; we then plot their average forecast, rather than arbitrarily using the midpoint of each bin. An empty bin provides no frequency.</p></li><li><h3>Detect differences that cancel out overall</h3><p>The sum of the forecast probabilities is 4 × 1/4 + 4 × 3/4 = 1 + 3 = 4. The average forecast probability is therefore 4/8 = 0.50. The overall observed frequency is 4/8 = 0.50. These averages agree, while the group differences 0.25 and -0.25 cancel each other out.</p><p>Replacing all forecasts with their average before scoring them would change the forecast being evaluated. The constant rule p = 0.50 would have a loss of 1/4 for each delivery, giving a Brier score of 0.2500. This result differs from the original Brier score 0.3125. Squaring comes before averaging; an average forecast does not preserve the original losses.</p><p>The Brier score therefore measures more than a calibration defect: even a constant forecast equal to the observed frequency has a positive score here. Individual outcomes still vary around this forecast. Comparing methods requires the same cases, the same event, and the same scoring convention.</p></li><li><h3>State exactly what the dataset allows us to conclude</h3><p>We have established a Brier score of 5/16 for this fictional dataset, and opposing descriptive differences in its groups. With only 4 deliveries per point, a new observation can shift a frequency substantially. An observed difference is insufficient to demonstrate a lasting defect; observed equality does not prove future calibration either.</p><p>Displaying the group sizes is part of the diagnostic process. We must also keep unavailable outcomes marked as such and state the scope actually evaluated. If a dataset is used to adjust probabilities, judging that adjustment on the same dataset would give an overly favorable evaluation; other outcomes must be set aside to evaluate it. We are not fitting any model here.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Why does agreement between the overall averages fail to guarantee reliability within the groups? Then explain why the Brier score is calculated before replacing the forecasts with an average.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The average forecast matches the overall frequency: everything is calibrated.”</h3><p>Compare A and B separately. Their differences 0.25 and -0.25 cancel out in the overall average. Display the average forecast, frequency and size for each group; even agreement within these groups does not guarantee agreement for every possible subpopulation.</p><a href="#intuition">Reread the points and the diagonal in the diagram</a></li><li><h3>“I average the probabilities first; the Brier score will be identical.”</h3><p>The constant rule would have a score of 0.2500, while the original forecasts give 0.3125 on the same outcomes. Recalculate the individual differences, their squares, then their average; changing the order evaluates a different rule.</p><a href="#exemple">Revisit the squares and the overall check</a></li><li><h3>“The frequency observed in a group is its true future probability.”</h3><p>The quotient describes the available outcomes, with their sample size. Additional deliveries, a different situation or a selection of outcomes can shift it. Keep the frequency as an estimate to be examined; an outcome that is still unknown remains unknown.</p><a href="#exercices">Work through the delivery with a missing outcome</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-pertes"><p class="repere">Exercise 1 · Application · two possible outcomes</p>
+<h3>A high forecast contradicted by the outcome</h3><p>For a delivery in group B with a forecast of 0.75, calculate the loss if it is on time, then if it is late. Which outcome incurs the greater loss for this forecast? Justify your answer without converting the probability into a binary decision.</p>
+<label for="reponse-ex-pertes">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pertes" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pertes" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pertes" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pertes" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>On time means y = 0; late means y = 1.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate p − y in each case, then multiply this difference by itself.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>On time: (3/4 − 0) squared is 9/16 = 0.5625. Late: 3/4 − 1 = -1/4, whose square is 1/16 = 0.0625.</p><p>An on-time outcome contradicts this high forecast more strongly; it receives the greater loss. The negative sign of the other difference does not make its loss negative, since we square it. A high probability does not promise that every delivery will be late.</p><p class="petit-titre">Check your reasoning</p><ul><li>Encode both outcomes without reversing them.</li><li>Give 9/16 and 1/16, with no physical unit.</li><li>Connect the greater loss to the outcome least expected by the forecast.</li></ul></details></article><article class="exercice" id="ex-reference"><p class="repere">Exercise 2 · Complete comparison on paper</p>
+<h3>A reference rule without groups</h3><p>On the same 8 deliveries, compare the original forecasts with a rule that would always have forecast p = 0.50 before departure. Work out the Brier score for each rule and their difference. Can we conclude that the constant rule will be better on new deliveries?</p>
+<label for="reponse-ex-reference">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reference" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reference" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reference" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reference" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The constant rule has the same loss for y = 0 and for y = 1.</p></details><details class="indice"><summary>Hint 2</summary><p>For the original forecasts, keep the probabilities for each group. Then subtract the two scores in the stated order.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For the constant rule, each difference has an absolute value of 1/2, so each square is 1/4. The average is also 1/4 = 0.2500. The original forecasts have a sum of losses of 5/2 over 8 deliveries, giving 5/16 = 0.3125.</p><p>Original Brier score minus reference Brier score: 5/16 − 1/4 = 1/16 = 0.0625. The positive difference means that the constant rule has the smaller Brier score on these fictional cases. This calculation is neither a success rate nor a gain measured in a real service.</p><p>The constant rule matches the overall observed frequency here. This does not demonstrate its future superiority: we have only a small dataset constructed for the exercise. If the rule had been chosen after examining the outcomes, it would in particular need to be evaluated on other deliveries.</p><p class="petit-titre">Check your reasoning</p><ul><li>Compare the two rules on exactly the same outcomes.</li><li>Obtain the difference 1/16 and interpret its sign correctly.</li><li>Limit the conclusion to the fictional dataset; state the need for a separate evaluation to judge a rule chosen using these outcomes.</li></ul></details></article><article class="exercice" id="ex-inconnu"><p class="repere">Exercise 3 · Critical transfer · unavailable outcome</p>
+<h3>One more delivery, with no outcome yet</h3><p>An additional delivery had a forecast of 0.75, but its outcome is unavailable. Someone adds it with y = 0 and publishes the Brier score for the 9 deliveries. Explain the problem, then calculate the two possible scores depending on its future outcome. What can be published now?</p>
+<label for="reponse-ex-inconnu">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-inconnu" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-inconnu" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-inconnu" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-inconnu" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start again from the sum 5/2 of the known losses, before dividing it by 8.</p></details><details class="indice"><summary>Hint 2</summary><p>Add either the loss 1/16 for a late delivery or the loss 9/16 for an on-time delivery, then divide by 9.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Encoding y = 0 asserts an observed on-time outcome. A missing outcome does not provide this observation. We therefore cannot calculate a single realized score for the 9 deliveries.</p><p>If lateness is confirmed, the sum will become 5/2 + 1/16 = 41/16, then B = 41/16 ÷ 9 = 41/144 ≈ 0.2847. If it is ruled out, the sum will become 5/2 + 9/16 = 49/16, then B = 49/144 ≈ 0.3403.</p><p>The final score will be one of these values if no other case changes. These are conditional possibilities, rather than two actual measurements. We can already publish the Brier score 5/16 for the 8 known outcomes, declaring 1 unavailable outcome among 9 deliveries. This describes the observed subset; if missing outcomes mainly concern late deliveries, it will not necessarily represent the whole dataset.</p><p class="petit-titre">Check your reasoning</p><ul><li>Reject treating a missing outcome as an on-time delivery.</li><li>Keep the sum of known losses before adding the new contribution.</li><li>Obtain 41/144 and 49/144 using the new sample size.</li><li>Distinguish the observed score on 8 cases from the possibilities on 9 cases, with the limitation caused by which outcomes are observed.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="rappel-brier"><summary><span class="repere">Recall 1</span><span>How can you reconstruct the binary Brier score, and what do its symbols mean?</span></summary><p>For each delivery i, keep its probability pᵢ forecast before the outcome yᵢ, encoded as 0 or 1. Calculate (pᵢ − yᵢ) squared, add these losses, and divide by the number n of observed deliveries. B is unitless, and a smaller score is preferable on the same cases.</p></details><details class="carte" data-carte="rappel-groupes"><summary><span class="repere">Recall 2</span><span>What information is needed to place a group on the reliability diagram?</span></summary><p>Its size, the average of its forecast probabilities, and the frequency of outcomes equal to 1. The horizontal coordinate of the point is the average forecast and its vertical coordinate is the frequency. The diagonal represents equality between them; an empty bin provides no frequency.</p></details><details class="carte" data-carte="rappel-compensation"><summary><span class="repere">Recall 3</span><span>Why can the overall averages agree while the groups lie away from the diagonal?</span></summary><p>An underestimate in one group and an overestimate in another can cancel out. In the dataset, the differences 0.25 and -0.25 cancel out with equal group sizes. We must examine the groups and their sizes, as well as the total.</p></details><details class="carte" data-carte="rappel-limite"><summary><span class="repere">Recall 4</span><span>Does equality between forecast and frequency in each group prove future calibration?</span></summary><p>No. It describes a particular sample and grouping. Group sizes, the selection of outcomes, their dependence, and changes in the situation limit generalization. A method fitted to these outcomes requires a separate evaluation.</p></details><details class="carte" data-carte="rappel-manquant"><summary><span class="repere">Recall 5</span><span>What happens to the Brier score when an outcome remains unavailable?</span></summary><p>The corresponding loss remains unknown. We can calculate the score for the observed cases while declaring the sample size and missing outcomes, or present explicitly conditional possibilities. Entering 0 would invent a negative observation.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking, reconstruct the delivery protocol: event and time of the forecast; observed binary outcome; difference then square; sum and correct denominator; average forecast, frequency and size for each group. Then explain how differences cancel out overall and what a missing outcome prevents us from concluding. Compare your reconstruction with the page after writing it, then repeat it without support after a delay. Reading, or answering after a hint, does not establish that a level has been attained.</p></div><div class="exports"><a class="bouton" download="c062-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjItbTM6cmFwcGVsLWJyaWVyIiwKICAgICAgInVuaXRlIjogImMwNjItbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJicmllci1iaW5haXJlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4geW91IHJlY29uc3RydWN0IHRoZSBiaW5hcnkgQnJpZXIgc2NvcmUsIGFuZCB3aGF0IGRvIGl0cyBzeW1ib2xzIG1lYW4/IiwKICAgICAgInJlcG9uc2UiOiAiRm9yIGVhY2ggZGVsaXZlcnkgaSwga2VlcCBpdHMgcHJvYmFiaWxpdHkgcOG1oiBmb3JlY2FzdCBiZWZvcmUgdGhlIG91dGNvbWUgeeG1oiwgZW5jb2RlZCBhcyAwIG9yIDEuIENhbGN1bGF0ZSAocOG1oiDiiJIgeeG1oikgc3F1YXJlZCwgYWRkIHRoZXNlIGxvc3NlcywgYW5kIGRpdmlkZSBieSB0aGUgbnVtYmVyIG4gb2Ygb2JzZXJ2ZWQgZGVsaXZlcmllcy4gQiBpcyB1bml0bGVzcywgYW5kIGEgc21hbGxlciBzY29yZSBpcyBwcmVmZXJhYmxlIG9uIHRoZSBzYW1lIGNhc2VzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDYyLW0zOnJhcHBlbC1ncm91cGVzIiwKICAgICAgInVuaXRlIjogImMwNjItbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmaWFiaWxpdGUtcGFyLWdyb3VwZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBpbmZvcm1hdGlvbiBpcyBuZWVkZWQgdG8gcGxhY2UgYSBncm91cCBvbiB0aGUgcmVsaWFiaWxpdHkgZGlhZ3JhbT8iLAogICAgICAicmVwb25zZSI6ICJJdHMgc2l6ZSwgdGhlIGF2ZXJhZ2Ugb2YgaXRzIGZvcmVjYXN0IHByb2JhYmlsaXRpZXMsIGFuZCB0aGUgZnJlcXVlbmN5IG9mIG91dGNvbWVzIGVxdWFsIHRvIDEuIFRoZSBob3Jpem9udGFsIGNvb3JkaW5hdGUgb2YgdGhlIHBvaW50IGlzIHRoZSBhdmVyYWdlIGZvcmVjYXN0IGFuZCBpdHMgdmVydGljYWwgY29vcmRpbmF0ZSBpcyB0aGUgZnJlcXVlbmN5LiBUaGUgZGlhZ29uYWwgcmVwcmVzZW50cyBlcXVhbGl0eSBiZXR3ZWVuIHRoZW07IGFuIGVtcHR5IGJpbiBwcm92aWRlcyBubyBmcmVxdWVuY3kuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjItbTM6cmFwcGVsLWNvbXBlbnNhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDYyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29tcGVuc2F0aW9uLWRlcy1lY2FydHMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiB0aGUgb3ZlcmFsbCBhdmVyYWdlcyBhZ3JlZSB3aGlsZSB0aGUgZ3JvdXBzIGxpZSBhd2F5IGZyb20gdGhlIGRpYWdvbmFsPyIsCiAgICAgICJyZXBvbnNlIjogIkFuIHVuZGVyZXN0aW1hdGUgaW4gb25lIGdyb3VwIGFuZCBhbiBvdmVyZXN0aW1hdGUgaW4gYW5vdGhlciBjYW4gY2FuY2VsIG91dC4gSW4gdGhlIGRhdGFzZXQsIHRoZSBkaWZmZXJlbmNlcyAwLjI1IGFuZCAtMC4yNSBjYW5jZWwgb3V0IHdpdGggZXF1YWwgZ3JvdXAgc2l6ZXMuIFdlIG11c3QgZXhhbWluZSB0aGUgZ3JvdXBzIGFuZCB0aGVpciBzaXplcywgYXMgd2VsbCBhcyB0aGUgdG90YWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjItbTM6cmFwcGVsLWxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDYyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9ydGVlLWRlLWxhLWNhbGlicmF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgZXF1YWxpdHkgYmV0d2VlbiBmb3JlY2FzdCBhbmQgZnJlcXVlbmN5IGluIGVhY2ggZ3JvdXAgcHJvdmUgZnV0dXJlIGNhbGlicmF0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBJdCBkZXNjcmliZXMgYSBwYXJ0aWN1bGFyIHNhbXBsZSBhbmQgZ3JvdXBpbmcuIEdyb3VwIHNpemVzLCB0aGUgc2VsZWN0aW9uIG9mIG91dGNvbWVzLCB0aGVpciBkZXBlbmRlbmNlLCBhbmQgY2hhbmdlcyBpbiB0aGUgc2l0dWF0aW9uIGxpbWl0IGdlbmVyYWxpemF0aW9uLiBBIG1ldGhvZCBmaXR0ZWQgdG8gdGhlc2Ugb3V0Y29tZXMgcmVxdWlyZXMgYSBzZXBhcmF0ZSBldmFsdWF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDYyLW0zOnJhcHBlbC1tYW5xdWFudCIsCiAgICAgICJ1bml0ZSI6ICJjMDYyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVzdWx0YXQtaW5kaXNwb25pYmxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaGFwcGVucyB0byB0aGUgQnJpZXIgc2NvcmUgd2hlbiBhbiBvdXRjb21lIHJlbWFpbnMgdW5hdmFpbGFibGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNvcnJlc3BvbmRpbmcgbG9zcyByZW1haW5zIHVua25vd24uIFdlIGNhbiBjYWxjdWxhdGUgdGhlIHNjb3JlIGZvciB0aGUgb2JzZXJ2ZWQgY2FzZXMgd2hpbGUgZGVjbGFyaW5nIHRoZSBzYW1wbGUgc2l6ZSBhbmQgbWlzc2luZyBvdXRjb21lcywgb3IgcHJlc2VudCBleHBsaWNpdGx5IGNvbmRpdGlvbmFsIHBvc3NpYmlsaXRpZXMuIEVudGVyaW5nIDAgd291bGQgaW52ZW50IGEgbmVnYXRpdmUgb2JzZXJ2YXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c062-m3-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGNhbiB5b3UgcmVjb25zdHJ1Y3QgdGhlIGJpbmFyeSBCcmllciBzY29yZSwgYW5kIHdoYXQgZG8gaXRzIHN5bWJvbHMgbWVhbj8JRm9yIGVhY2ggZGVsaXZlcnkgaSwga2VlcCBpdHMgcHJvYmFiaWxpdHkgcOG1oiBmb3JlY2FzdCBiZWZvcmUgdGhlIG91dGNvbWUgeeG1oiwgZW5jb2RlZCBhcyAwIG9yIDEuIENhbGN1bGF0ZSAocOG1oiDiiJIgeeG1oikgc3F1YXJlZCwgYWRkIHRoZXNlIGxvc3NlcywgYW5kIGRpdmlkZSBieSB0aGUgbnVtYmVyIG4gb2Ygb2JzZXJ2ZWQgZGVsaXZlcmllcy4gQiBpcyB1bml0bGVzcywgYW5kIGEgc21hbGxlciBzY29yZSBpcyBwcmVmZXJhYmxlIG9uIHRoZSBzYW1lIGNhc2VzLgl0b2RhaSBjMDYyLW0zIGJyaWVyLWJpbmFpcmUKV2hhdCBpbmZvcm1hdGlvbiBpcyBuZWVkZWQgdG8gcGxhY2UgYSBncm91cCBvbiB0aGUgcmVsaWFiaWxpdHkgZGlhZ3JhbT8JSXRzIHNpemUsIHRoZSBhdmVyYWdlIG9mIGl0cyBmb3JlY2FzdCBwcm9iYWJpbGl0aWVzLCBhbmQgdGhlIGZyZXF1ZW5jeSBvZiBvdXRjb21lcyBlcXVhbCB0byAxLiBUaGUgaG9yaXpvbnRhbCBjb29yZGluYXRlIG9mIHRoZSBwb2ludCBpcyB0aGUgYXZlcmFnZSBmb3JlY2FzdCBhbmQgaXRzIHZlcnRpY2FsIGNvb3JkaW5hdGUgaXMgdGhlIGZyZXF1ZW5jeS4gVGhlIGRpYWdvbmFsIHJlcHJlc2VudHMgZXF1YWxpdHkgYmV0d2VlbiB0aGVtOyBhbiBlbXB0eSBiaW4gcHJvdmlkZXMgbm8gZnJlcXVlbmN5Lgl0b2RhaSBjMDYyLW0zIGZpYWJpbGl0ZS1wYXItZ3JvdXBlcwpXaHkgY2FuIHRoZSBvdmVyYWxsIGF2ZXJhZ2VzIGFncmVlIHdoaWxlIHRoZSBncm91cHMgbGllIGF3YXkgZnJvbSB0aGUgZGlhZ29uYWw/CUFuIHVuZGVyZXN0aW1hdGUgaW4gb25lIGdyb3VwIGFuZCBhbiBvdmVyZXN0aW1hdGUgaW4gYW5vdGhlciBjYW4gY2FuY2VsIG91dC4gSW4gdGhlIGRhdGFzZXQsIHRoZSBkaWZmZXJlbmNlcyAwLjI1IGFuZCAtMC4yNSBjYW5jZWwgb3V0IHdpdGggZXF1YWwgZ3JvdXAgc2l6ZXMuIFdlIG11c3QgZXhhbWluZSB0aGUgZ3JvdXBzIGFuZCB0aGVpciBzaXplcywgYXMgd2VsbCBhcyB0aGUgdG90YWwuCXRvZGFpIGMwNjItbTMgY29tcGVuc2F0aW9uLWRlcy1lY2FydHMKRG9lcyBlcXVhbGl0eSBiZXR3ZWVuIGZvcmVjYXN0IGFuZCBmcmVxdWVuY3kgaW4gZWFjaCBncm91cCBwcm92ZSBmdXR1cmUgY2FsaWJyYXRpb24/CU5vLiBJdCBkZXNjcmliZXMgYSBwYXJ0aWN1bGFyIHNhbXBsZSBhbmQgZ3JvdXBpbmcuIEdyb3VwIHNpemVzLCB0aGUgc2VsZWN0aW9uIG9mIG91dGNvbWVzLCB0aGVpciBkZXBlbmRlbmNlLCBhbmQgY2hhbmdlcyBpbiB0aGUgc2l0dWF0aW9uIGxpbWl0IGdlbmVyYWxpemF0aW9uLiBBIG1ldGhvZCBmaXR0ZWQgdG8gdGhlc2Ugb3V0Y29tZXMgcmVxdWlyZXMgYSBzZXBhcmF0ZSBldmFsdWF0aW9uLgl0b2RhaSBjMDYyLW0zIHBvcnRlZS1kZS1sYS1jYWxpYnJhdGlvbgpXaGF0IGhhcHBlbnMgdG8gdGhlIEJyaWVyIHNjb3JlIHdoZW4gYW4gb3V0Y29tZSByZW1haW5zIHVuYXZhaWxhYmxlPwlUaGUgY29ycmVzcG9uZGluZyBsb3NzIHJlbWFpbnMgdW5rbm93bi4gV2UgY2FuIGNhbGN1bGF0ZSB0aGUgc2NvcmUgZm9yIHRoZSBvYnNlcnZlZCBjYXNlcyB3aGlsZSBkZWNsYXJpbmcgdGhlIHNhbXBsZSBzaXplIGFuZCBtaXNzaW5nIG91dGNvbWVzLCBvciBwcmVzZW50IGV4cGxpY2l0bHkgY29uZGl0aW9uYWwgcG9zc2liaWxpdGllcy4gRW50ZXJpbmcgMCB3b3VsZCBpbnZlbnQgYSBuZWdhdGl2ZSBvYnNlcnZhdGlvbi4JdG9kYWkgYzA2Mi1tMyByZXN1bHRhdC1pbmRpc3BvbmlibGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">beaikb fscijc fpxw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qgthzi emhvop nwxlvn lxrhlm cjxkfs kfjzau koiq</span></span></h3><dl><div><dt>What you understand</dt><dd>A Brier score evaluates probabilities against binary outcomes; reliability by group compares average forecasts and frequencies. An overall average can hide opposing differences. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zumtty yzncxg vslqtf dzznwq wfvylr dbspmz aajs</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wsnvjs toypnv wtawnn tsxdmd ahhdmv ftcdxs pmjsmz roxcvo bzqqpg ectqtf qqrlbl dyszeo uyodzc fazvyd vaagcj wwpawf qmbeqy owaxlp aowrxi azvakg csccvz lnqnsy jdfqbq lsklxn gixxdt yvitcb fviyom jzsscd vggpvi ivrtrc dcramx ecbtrs ggqlut wdspqp czcxgx gcsaxg rriuaw jr</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2: redo the Brier calculation, reconstruct the points on the diagram, and defend the treatment of the unavailable outcome, without support and then after a delay. An assisted attempt remains assisted. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ovmwjd iukndh zmwqty yvlhzw luvxrm uqumjt asqy</span></span></dd></div><div><dt>Evidence and scope</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">knxcdd mdeyms cxnrlj qeghvq pmlnjl mpekfm bgjtnh qvedxn jtcrby rnqnrs zopzju ipugor lcbckq khmfdx vodbhk kzcums mureyc bhrpoq hduiay jkrpcx srpfux mntbff uuxhup zirzcw</span></span></dd></div><div><dt>Next step</dt><dd>Continue with C062·M4 on thresholds and the cost of errors, then with the audit of priors. To evaluate the method in the code later, it will still be necessary to establish the provenance and chronology of the authorized outcomes, the workflow that calls these operations, and a comparison separate from fitting.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c062-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c062-m2.html">Previous</a> · <a href="c062-m4.html">Next</a></nav>
+<footer><p>Course book · C062·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

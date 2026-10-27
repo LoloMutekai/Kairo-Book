@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Choose a frequency cutoff, reconstruct the retained signal and justify its mean square error without confusing smoothing with denoising.">
+<title>C166·M5 · Spectral truncation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kkjsyp pzqayp iooq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C166·M5</p><h1>Spectral truncation</h1><p class="objectif"><span>Your goal</span>Choose a frequency cutoff, reconstruct the retained signal and justify its mean square error without confusing smoothing with denoising.</p><p class="prerequis"><strong>Before you start</strong><br>c165-m5 : duality · c046-m5 : approximation error · c027-m5 : complex numbers · c166-m1 : Fourier series · c166-m2 : transform · c166-m3 : convolution · c166-m4 : Parseval</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small cart moves in a repeating pattern. Its position includes a slow oscillation and faster ripples. To retain only the slow shape of the motion, we decide to remove frequencies above a cutoff. We do not shorten the observation time or clip the peaks of the curve: we remove entire components.</p><p>The signal in this scene is fictional, known exactly and periodic with period 8 s. Its mean position is 4 mm. Cosines with amplitudes 3 mm, 2 mm and 1 mm are added to this mean. Their frequencies are 1/8 Hz, 1/4 Hz and 3/8 Hz, respectively. One hertz means one cycle per second.</p><p>Here, spectral truncation retains the mean and the modes whose order is no greater than N. A mode is an oscillation at a given frequency; its order is an integer with no unit. With N = 1, we retain only the first oscillation and the mean. The retained coefficients keep exactly the same values.</p><p>The plot becomes smoother, but the removed ripples are part of the defined motion. Nothing has identified them as noise. The question we can calculate is therefore: what difference does this simplification introduce relative to the original signal?</p><div class="schemas"><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>The cutoff acts on frequency</title><desc>The mean of 4 millimetres and the mode with frequency 1/8 hertz are retained. The modes with frequencies 1/4 and 3/8 hertz are removed. Heights represent the actual amplitudes, not energies.</desc><text x="18" y="25">Amplitude in mm</text><line x1="30" y1="190" x2="338" y2="190" class="trait" /><rect x="43" y="62" width="34" height="128" class="cadre-resultat" /><rect x="123" y="94" width="34" height="96" class="cadre-resultat" /><rect x="203" y="126" width="34" height="64" class="cadre-prediction" /><rect x="283" y="158" width="34" height="32" class="cadre-prediction" /><text x="60" y="54" text-anchor="middle">4</text><text x="140" y="86" text-anchor="middle">3</text><text x="220" y="118" text-anchor="middle">2</text><text x="300" y="150" text-anchor="middle">1</text><line x1="180" y1="45" x2="180" y2="198" class="trait" /><text x="60" y="216" text-anchor="middle" class="petite-etiquette">0</text><text x="140" y="216" text-anchor="middle" class="petite-etiquette">1/8</text><text x="220" y="216" text-anchor="middle" class="petite-etiquette">1/4</text><text x="300" y="216" text-anchor="middle" class="petite-etiquette">3/8</text><text x="180" y="243" text-anchor="middle" class="petite-etiquette">Frequency in Hz</text><text x="100" y="269" text-anchor="middle" class="petite-etiquette">Retained</text><text x="263" y="269" text-anchor="middle" class="petite-etiquette">Removed</text></svg><figcaption>The bars show the mean and the cosine amplitudes. The dividing line corresponds to N = 1: no retained amplitude is reduced. An amplitude bar is not an energy bar.</figcaption></figure><figure><svg viewBox="0 0 360 285" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same period before and after the cutoff</title><desc>The original displacement, shown by the thin line, is 10 millimetres at the start of the period. Its truncation, shown by the thick line, is 7 millimetres at the same instant. The difference is 3 millimetres. Both curves are periodic with period 8 seconds.</desc><text x="18" y="25">Displacement in mm</text><line x1="30" y1="40" x2="30" y2="190" class="trait" /><line x1="30" y1="190" x2="336" y2="190" class="trait" /><text x="22" y="195" text-anchor="end" class="petite-etiquette">0</text><text x="22" y="54" text-anchor="end" class="petite-etiquette">10</text><polyline points="30.000,50.000 31.875,50.216 33.750,50.861 35.625,51.930 37.500,53.413 39.375,55.298 41.250,57.567 43.125,60.200 45.000,63.174 46.875,66.464 48.750,70.041 50.625,73.873 52.500,77.930 54.375,82.176 56.250,86.576 58.125,91.094 60.000,95.695 61.875,100.341 63.750,104.998 65.625,109.629 67.500,114.201 69.375,118.682 71.250,123.040 73.125,127.249 75.000,131.280 76.875,135.112 78.750,138.724 80.625,142.097 82.500,145.218 84.375,148.075 86.250,150.661 88.125,152.969 90.000,155.000 91.875,156.754 93.750,158.236 95.625,159.453 97.500,160.415 99.375,161.135 101.250,161.628 103.125,161.910 105.000,162.000 106.875,161.917 108.750,161.682 110.625,161.317 112.500,160.844 114.375,160.284 116.250,159.661 118.125,158.994 120.000,158.305 121.875,157.613 123.750,156.937 125.625,156.294 127.500,155.698 129.375,155.163 131.250,154.700 133.125,154.318 135.000,154.025 136.875,153.824 138.750,153.720 140.625,153.712 142.500,153.799 144.375,153.977 146.250,154.242 148.125,154.586 150.000,155.000 151.875,155.475 153.750,156.001 155.625,156.565 157.500,157.154 159.375,157.758 161.250,158.362 163.125,158.953 165.000,159.521 166.875,160.052 168.750,160.537 170.625,160.965 172.500,161.327 174.375,161.617 176.250,161.828 178.125,161.957 180.000,162.000 181.875,161.957 183.750,161.828 185.625,161.617 187.500,161.327 189.375,160.965 191.250,160.537 193.125,160.052 195.000,159.521 196.875,158.953 198.750,158.362 200.625,157.758 202.500,157.154 204.375,156.565 206.250,156.001 208.125,155.475 210.000,155.000 211.875,154.586 213.750,154.242 215.625,153.977 217.500,153.799 219.375,153.712 221.250,153.720 223.125,153.824 225.000,154.025 226.875,154.318 228.750,154.700 230.625,155.163 232.500,155.698 234.375,156.294 236.250,156.937 238.125,157.613 240.000,158.305 241.875,158.994 243.750,159.661 245.625,160.284 247.500,160.844 249.375,161.317 251.250,161.682 253.125,161.917 255.000,162.000 256.875,161.910 258.750,161.628 260.625,161.135 262.500,160.415 264.375,159.453 266.250,158.236 268.125,156.754 270.000,155.000 271.875,152.969 273.750,150.661 275.625,148.075 277.500,145.218 279.375,142.097 281.250,138.724 283.125,135.112 285.000,131.280 286.875,127.249 288.750,123.040 290.625,118.682 292.500,114.201 294.375,109.629 296.250,104.998 298.125,100.341 300.000,95.695 301.875,91.094 303.750,86.576 305.625,82.176 307.500,77.930 309.375,73.873 311.250,70.041 313.125,66.464 315.000,63.174 316.875,60.200 318.750,57.567 320.625,55.298 322.500,53.413 324.375,51.930 326.250,50.861 328.125,50.216 330.000,50.000" class="trait" /><polyline points="30.000,92.000 31.875,92.032 33.750,92.129 35.625,92.291 37.500,92.517 39.375,92.807 41.250,93.160 43.125,93.577 45.000,94.056 46.875,94.596 48.750,95.197 50.625,95.858 52.500,96.578 54.375,97.355 56.250,98.189 58.125,99.078 60.000,100.021 61.875,101.017 63.750,102.063 65.625,103.158 67.500,104.302 69.375,105.490 71.250,106.723 73.125,107.998 75.000,109.313 76.875,110.666 78.750,112.055 80.625,113.478 82.500,114.932 84.375,116.416 86.250,117.927 88.125,119.463 90.000,121.021 91.875,122.600 93.750,124.195 95.625,125.806 97.500,127.430 99.375,129.063 101.250,130.705 103.125,132.351 105.000,134.000 106.875,135.649 108.750,137.295 110.625,138.937 112.500,140.570 114.375,142.194 116.250,143.805 118.125,145.400 120.000,146.979 121.875,148.537 123.750,150.073 125.625,151.584 127.500,153.068 129.375,154.522 131.250,155.945 133.125,157.334 135.000,158.687 136.875,160.002 138.750,161.277 140.625,162.510 142.500,163.698 144.375,164.842 146.250,165.937 148.125,166.983 150.000,167.979 151.875,168.922 153.750,169.811 155.625,170.645 157.500,171.422 159.375,172.142 161.250,172.803 163.125,173.404 165.000,173.944 166.875,174.423 168.750,174.840 170.625,175.193 172.500,175.483 174.375,175.709 176.250,175.871 178.125,175.968 180.000,176.000 181.875,175.968 183.750,175.871 185.625,175.709 187.500,175.483 189.375,175.193 191.250,174.840 193.125,174.423 195.000,173.944 196.875,173.404 198.750,172.803 200.625,172.142 202.500,171.422 204.375,170.645 206.250,169.811 208.125,168.922 210.000,167.979 211.875,166.983 213.750,165.937 215.625,164.842 217.500,163.698 219.375,162.510 221.250,161.277 223.125,160.002 225.000,158.687 226.875,157.334 228.750,155.945 230.625,154.522 232.500,153.068 234.375,151.584 236.250,150.073 238.125,148.537 240.000,146.979 241.875,145.400 243.750,143.805 245.625,142.194 247.500,140.570 249.375,138.937 251.250,137.295 253.125,135.649 255.000,134.000 256.875,132.351 258.750,130.705 260.625,129.063 262.500,127.430 264.375,125.806 266.250,124.195 268.125,122.600 270.000,121.021 271.875,119.463 273.750,117.927 275.625,116.416 277.500,114.932 279.375,113.478 281.250,112.055 283.125,110.666 285.000,109.313 286.875,107.998 288.750,106.723 290.625,105.490 292.500,104.302 294.375,103.158 296.250,102.063 298.125,101.017 300.000,100.021 301.875,99.078 303.750,98.189 305.625,97.355 307.500,96.578 309.375,95.858 311.250,95.197 313.125,94.596 315.000,94.056 316.875,93.577 318.750,93.160 320.625,92.807 322.500,92.517 324.375,92.291 326.250,92.129 328.125,92.032 330.000,92.000" class="chemin-correction" /><text x="30" y="215" text-anchor="middle" class="petite-etiquette">0</text><text x="180" y="215" text-anchor="middle" class="petite-etiquette">4</text><text x="330" y="215" text-anchor="middle" class="petite-etiquette">8</text><text x="180" y="239" text-anchor="middle" class="petite-etiquette">Time in s</text><text x="180" y="264" text-anchor="middle" class="petite-etiquette">Thin: original · thick: truncation</text></svg><figcaption>The same cart, the same period. The thick line is the truncated reconstruction. At the time origin, it falls short of the original displacement by 3 mm; this local difference is distinct from the mean square error calculated later.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fix the allowed frequencies, retain their coefficients and measure what was rejected using a stated norm. Controlling a mean error does not provide a guarantee at every instant.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Simplify the motion within an error budget</h3><p>The exact coefficients of the motion are given, with no measurement to estimate. First construct the truncation of order N = 1. Then find the smallest nonnegative integer order N for which the mean square error is at most 1 mm². This budget is a fictional choice for the exercise, not a validated mechanical tolerance.</p><ol class="etapes"><li><h3>Define the signal and the reconstruction framework</h3><p>t is time in seconds and T = 8 s is the period. x(t) is the displacement in millimetres relative to a fixed origin. Set ω = 2π/T, the angular frequency in radians per second; π is the constant giving a half turn in radians. The angle ωt is expressed in radians. m = 4 mm is the mean; a<sub>k</sub> is the coefficient of the cosine of order k, in millimetres. The index k has no unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>x</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mi>m</mi><mo>+</mo><msub><mi>a</mi><mn>1</mn></msub><mi>cos</mi><mo>(</mo><mi>ω</mi><mi>t</mi><mo>)</mo><mo>+</mo><msub><mi>a</mi><mn>2</mn></msub><mi>cos</mi><mo>(</mo><mn>2</mn><mi>ω</mi><mi>t</mi><mo>)</mo><mo>+</mo><msub><mi>a</mi><mn>3</mn></msub><mi>cos</mi><mo>(</mo><mn>3</mn><mi>ω</mi><mi>t</mi><mo>)</mo></mrow></math></div><p>Here a<sub>1</sub> = 3 mm, a<sub>2</sub> = 2 mm and a<sub>3</sub> = 1 mm. The other coefficients are 0. The choice of time origin makes all sine coefficients 0 in this example. We work over a full period and its periodic extension, without an observation window or sampling error.</p><p>The general rule applies to a real periodic signal that is square integrable: the integral of its square over a period must be finite. Our finite sum of cosines satisfies this assumption. We use Fourier series and Parseval from the previous units; we do not recalculate a discrete transform.</p></li><li><h3>Write exactly what the cutoff retains</h3><p>In the real convention, b<sub>k</sub> denotes the sine coefficient, in millimetres, and m is directly the signal mean, with no additional factor. Coefficients can be negative in general; in our example, the cosine coefficients are positive and are also their amplitudes. S_N(t) denotes the truncated reconstruction. The sum starts at order 1 and ends at N; for N = 0, it is empty and S_N equals m.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>S</mi><mi>N</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mi>m</mi><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup><mo>[</mo><msub><mi>a</mi><mi>k</mi></msub><mi>cos</mi><mo>(</mo><mi>k</mi><mi>ω</mi><mi>t</mi><mo>)</mo><mo>+</mo><msub><mi>b</mi><mi>k</mi></msub><mi>sin</mi><mo>(</mo><mi>k</mi><mi>ω</mi><mi>t</mi><mo>)</mo><mo>]</mo></mrow></math></div><p>The term of order k has frequency f<sub>k</sub> = k/T, in hertz. With N = 1, the cutoff includes f<sub>1</sub> = 1/8 = 1/8 Hz, or 0.125 Hz. Orders 2 and 3 are rejected because their frequencies exceed this value.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>S</mi><mn>1</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mn>4</mn><mo>+</mo><mn>3</mn><mi>cos</mi><mo>(</mo><mi>ω</mi><mi>t</mi><mo>)</mo><mtext> mm</mtext></mrow></math></div><p>At t = 0 s, each cosine equals 1. The original signal equals 4 + 3 + 2 + 1 = 10 mm; the truncation equals 4 + 3 = 7 mm. This check prevents confusion between the cutoff and a reduction of all amplitudes.</p></li><li><h3>Form the residual and choose the error measure</h3><p>The residual r_N(t) = x(t) − S_N(t), in millimetres, contains exactly the rejected modes. The error E_N is the mean of its square over a period, in square millimetres. The inverse factor of T turns a time integral into a mean; we do not divide by the number of modes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>r</mi><mn>1</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mn>2</mn><mi>cos</mi><mo>(</mo><mn>2</mn><mi>ω</mi><mi>t</mi><mo>)</mo><mo>+</mo><mn>1</mn><mi>cos</mi><mo>(</mo><mn>3</mn><mi>ω</mi><mi>t</mi><mo>)</mo><mtext> mm</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>E</mi><mi>N</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>T</mi></mfrac><msubsup><mo>∫</mo><mn>0</mn><mi>T</mi></msubsup><msup><mrow><mo>|</mo><msub><mi>r</mi><mi>N</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>|</mo></mrow><mn>2</mn></msup><mi>d</mi><mi>t</mi></mrow></math></div><p>The integral alone would have unit mm²·s. E_N has unit mm². The notation ∥u∥_T² will denote this same mean square for any signal u: the norm ∥u∥_T is its square root. The symbol d in dt indicates integration with respect to time.</p></li><li><h3>Calculate the error from the rejected modes</h3><p>Over a full period, the mean square of a cosine of nonzero order is 1/2; the mean of the product of two distinct modes is 0. This is their orthogonality. Expanding r<sub>1</sub>² gives the squares of the two cosines and a cross term whose mean is 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>E</mi><mn>1</mn></msub><mo>=</mo><mfrac><mrow><msup><mn>2</mn><mn>2</mn></msup><mo>+</mo><msup><mn>1</mn><mn>2</mn></msup></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mrow><mn>4</mn><mo>+</mo><mn>1</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mn>5/2</mn><mtext> mm²</mtext></mrow></math></div><p>We therefore obtain 2.50 mm². We add the squares of the rejected amplitudes, then apply the factor 1/2 specific to this real convention. Adding the amplitudes first and then squaring would incorrectly retain a cross term.</p><p>In the following general formula, ∑ means the sum over all orders k strictly greater than N; ∞ indicates that the series may have infinitely many modes. Parseval gives this identity under the assumption of square integrability.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>E</mi><mi>N</mi></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mi>N</mi><mo>+</mo><mn>1</mn></mrow><mo>∞</mo></msubsup><mo>(</mo><msubsup><mi>a</mi><mi>k</mi><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>b</mi><mi>k</mi><mn>2</mn></msubsup><mo>)</mo></mrow></math></div></li><li><h3>Check conservation of mean energy</h3><p>Here, “mean energy” means the mean square of the displacement, in mm²; it is not mechanical energy in joules. The mean m contributes m², whereas each cosine contributes half the square of its amplitude.</p><p>Original signal: 16 + (9 + 4 + 1)/2 = 23 mm². Retained part: 16 + 9/2 = 41/2 mm², or 20.50 mm². Rejected part: 5/2 mm².</p><p>Check: 41/2 + 5/2 = 23 mm². This decomposition works because the residual is orthogonal to the retained part. In particular, it checks that the mean has not been forgotten and that no mode has been counted on both sides.</p></li><li><h3>Choose the first order that meets the budget</h3><p>With N = 0, only the mean remains and E<sub>0</sub> = (9 + 4 + 1)/2 = 7 mm². With N = 1, E<sub>1</sub> = 5/2 mm² still exceeds the budget of 1 mm².</p><p>With N = 2, we restore the cosine with amplitude 2 mm. Only order 3 remains in the residual: E<sub>2</sub> = 1/2 = 1/2 mm², or 0.50 mm². This is the first admissible order. Its maximum frequency is 1/4 Hz, or 0.25 Hz. With N = 3, the entire signal in this finite example is retained and the error is 0 mm².</p><p>E_N can only decrease or remain constant as N increases: adding an order removes a nonnegative quantity from the error sum. This property concerns the distance to the exact original signal, not the distance to an unknown true motion in the presence of noise.</p></li><li><h3>State the exact scope of the result</h3><p>V_N denotes the set of real sums consisting of a constant and sines and cosines of orders from 1 to N. The letter y denotes another approximation belonging to V_N. The Fourier residual is orthogonal to each of these components: expanding the square of x − y makes the cross term vanish and gives the following identity.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mrow><mo>∥</mo><mi>x</mi><mo>−</mo><mi>y</mi><mo>∥</mo></mrow><mi>T</mi><mn>2</mn></msubsup><mo>=</mo><msub><mi>E</mi><mi>N</mi></msub><mo>+</mo><msubsup><mrow><mo>∥</mo><msub><mi>S</mi><mi>N</mi></msub><mo>−</mo><mi>y</mi><mo>∥</mo></mrow><mi>T</mi><mn>2</mn></msubsup><mo>≥</mo><msub><mi>E</mi><mi>N</mi></msub></mrow></math></div><p>S_N is therefore an orthogonal projection: it minimizes the mean square error within this set of allowed frequencies. This result does not allow other frequencies to be chosen freely and does not promise the best approximation at every instant.</p><p>At t = 0 s, r<sub>1</sub> equals 10 − 7 = 3 mm and its square is 9 mm², greater than the mean 2.50 mm². Finally, for any periodic square integrable signal, Parseval guarantees that E_N tends to 0 as N increases without bound; this mean square convergence alone does not guarantee convergence at every point.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Explain why the residual contains exactly the rejected modes, why the squares add up and why the best approximation in V_N can still miss a peak of the motion. Then reconstruct the choice of cutoff with its unit.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Truncating means reducing all amplitudes.”</h3><p>Write down the retained orders before reconstructing. With N = 1, the mean and the fundamental amplitude keep their values; only the coefficients of higher order become 0. Reducing the fundamental as well would change the approximation rule.</p><a href="#exemple">Review the definition of the cutoff</a></li><li><h3>“The error is the square of the sum of the removed amplitudes.”</h3><p>Expand the square of the residual, then take its mean over the full period: products of distinct modes have 0 mean. Squaring 3 mm gives 9 mm² here at the time origin; the mean error is 2.50 mm². Keep the stated error measure.</p><a href="#exemple">Review the residual and the energy check</a></li><li><h3>“If the curve is smoother, it is closer to the real motion.”</h3><p>In our scene, the exact motion contains the fast ripples: removing them creates an error. With noisy readings, we would need to justify separately what is signal and what is noise. A small mean square error does not determine the error at each point either.</p><a href="#exercices">Test this conclusion in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-reconstruire"><p class="repere">Exercise 1 · Direct application</p>
+<h3>What remains of the motion?</h3><p>For the same cart, take N = 2. Write S₂(t), its maximum frequency and the residual. Without integrating, predict whether the mean error increases or decreases compared with N = 1.</p>
+<label for="reponse-ex-reconstruire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reconstruire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reconstruire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reconstruire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reconstruire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Retain the coefficients whose order is no greater than N, including the mean.</p></details><details class="indice"><summary>Hint 2</summary><p>Write x − S₂ before comparing the errors.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>S<sub>2</sub>(t) = 4 + 3 cos(ωt) + 2 cos(2ωt), in millimetres. Its maximum frequency is 2/8 = 1/4 Hz. The residual is r<sub>2</sub>(t) = 1 cos(3ωt), in millimetres.</p><p>Order 2 is no longer in the residual. Its positive squared contribution therefore disappears from the error: the error decreases. The cutoff leaves the fundamental amplitude unchanged.</p><p class="petit-titre">Check your reasoning</p><ul><li>Retain the mean and all allowed orders.</li><li>Give the frequency in Hz and the residual in mm.</li><li>Justify the decrease by identifying the contribution removed from the error.</li></ul></details></article><article class="exercice" id="ex-budget"><p class="repere">Exercise 2 · Calculation and decision</p>
+<h3>Prove that the chosen order is minimal</h3><p>Without rereading, find the smallest nonnegative integer N such that E_N ≤ 1 mm². Calculate the error for the retained order and for the order immediately below it. Explain why this comparison is sufficient here.</p>
+<label for="reponse-ex-budget">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-budget" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-budget" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-budget" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-budget" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The factor 1/2 applies to the squares of the amplitudes of the rejected modes.</p></details><details class="indice"><summary>Hint 2</summary><p>Use the fact that E_N cannot increase as N increases.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At N = 1, orders 2 and 3 are rejected: E<sub>1</sub> = (4 + 1)/2 = 2.50 mm², which exceeds 1 mm². At N = 2, E<sub>2</sub> = 1/2 = 0.50 mm² meets the budget.</p><p>Orders below 1 have an error at least as large as E<sub>1</sub>, by monotonicity. As an explicit check, E<sub>0</sub> = 7 mm². The smallest order is therefore 2; the corresponding maximum frequency is 0.25 Hz. No quality percentage is inferred from this budget.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate both errors with the correct factor.</li><li>Check the inequality against the budget in mm².</li><li>Justify the word “smallest” using monotonicity.</li></ul></details></article><article class="exercice" id="ex-critique"><p class="repere">Exercise 3 · Critique of a conclusion</p>
+<h3>Is a guarantee on the mean enough?</h3><p>A colleague claims: “For N = 1, E₁ is 2.50 mm²; the squared difference therefore stays below this value at every instant, and the removed modes were noise.” Examine these two conclusions separately using our cart.</p>
+<label for="reponse-ex-critique">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-critique" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-critique" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-critique" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-critique" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At the time origin, all cosines equal 1.</p></details><details class="indice"><summary>Hint 2</summary><p>Is the starting signal a noisy reading or an exactly defined fictional motion?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At t = 0 s, x is 10 mm and S<sub>1</sub> is 7 mm. The difference is 3 mm, so its square is 9 mm². It exceeds 2.50 mm²: a mean does not bound every value.</p><p>The second conclusion is not established either. The fast modes are part of the given exact motion; they are not presented as a measurement error. Using the method for denoising would require an additional model and appropriate evidence. Here, the projection minimizes a distance to the supplied signal within the fixed frequency space.</p><p class="petit-titre">Check your reasoning</p><ul><li>Give the numerical counterexample at the time origin.</li><li>Distinguish mm from mm².</li><li>Distinguish mathematically removing a mode from proving that it was noise.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="coupure"><summary><span class="repere">Recall 1</span><span>What does truncation of order N change in the real convention?</span></summary><p>It retains the mean and the sine and cosine coefficients of order at most N; it sets the coefficients of higher orders to 0. The maximum retained frequency is N/T.</p></details><details class="carte" data-carte="erreur"><summary><span class="repere">Recall 2</span><span>How do we obtain the mean square error from the rejected modes?</span></summary><p>Over a full period, orthogonality makes the cross terms vanish. E_N is half the sum of the squares of the rejected sine and cosine coefficients. Its unit is the square of the signal unit.</p></details><details class="carte" data-carte="projection"><summary><span class="repere">Recall 3</span><span>Within which set does S_N minimize the error?</span></summary><p>Among real sums formed from a constant and sines and cosines of order at most N. This fixes the allowed frequencies; it does not promise a minimum error at every instant.</p></details><details class="carte" data-carte="budget"><summary><span class="repere">Recall 4</span><span>Why can increasing N not increase E_N relative to the exact signal?</span></summary><p>Adding an order removes half a sum of squares from the rejected tail, hence a nonnegative quantity. This monotonicity is not a guarantee of denoising relative to an unknown true signal.</p></details><details class="carte" data-carte="convergence"><summary><span class="repere">Recall 5</span><span>What does Parseval guarantee as N increases without bound for a periodic square integrable signal?</span></summary><p>The mean square error of the truncation tends to 0. This convergence is not sufficient to guarantee convergence at every point or to identify which modes might be noise.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Close the answers and reconstruct this chain in your own words: allowed frequencies → retained coefficients → residual → mean error → choice of N → limit of the guarantee. Recover the units and an independent check. Reading a solution or answering after a hint still counts as an assisted answer; it does not demonstrate an attained level. Try again without support after a delay.</p></div><div class="exports"><a class="bouton" download="c166-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNjYtbTU6Y291cHVyZSIsCiAgICAgICJ1bml0ZSI6ICJjMTY2LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidHJvbmNhdHVyZS1zcGVjdHJhbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRydW5jYXRpb24gb2Ygb3JkZXIgTiBjaGFuZ2UgaW4gdGhlIHJlYWwgY29udmVudGlvbj8iLAogICAgICAicmVwb25zZSI6ICJJdCByZXRhaW5zIHRoZSBtZWFuIGFuZCB0aGUgc2luZSBhbmQgY29zaW5lIGNvZWZmaWNpZW50cyBvZiBvcmRlciBhdCBtb3N0IE47IGl0IHNldHMgdGhlIGNvZWZmaWNpZW50cyBvZiBoaWdoZXIgb3JkZXJzIHRvIDAuIFRoZSBtYXhpbXVtIHJldGFpbmVkIGZyZXF1ZW5jeSBpcyBOL1QuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNjYtbTU6ZXJyZXVyIiwKICAgICAgInVuaXRlIjogImMxNjYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlcnJldXItcXVhZHJhdGlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHdlIG9idGFpbiB0aGUgbWVhbiBzcXVhcmUgZXJyb3IgZnJvbSB0aGUgcmVqZWN0ZWQgbW9kZXM/IiwKICAgICAgInJlcG9uc2UiOiAiT3ZlciBhIGZ1bGwgcGVyaW9kLCBvcnRob2dvbmFsaXR5IG1ha2VzIHRoZSBjcm9zcyB0ZXJtcyB2YW5pc2guIEVfTiBpcyBoYWxmIHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgdGhlIHJlamVjdGVkIHNpbmUgYW5kIGNvc2luZSBjb2VmZmljaWVudHMuIEl0cyB1bml0IGlzIHRoZSBzcXVhcmUgb2YgdGhlIHNpZ25hbCB1bml0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTY2LW01OnByb2plY3Rpb24iLAogICAgICAidW5pdGUiOiAiYzE2Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByb2plY3Rpb24tb3J0aG9nb25hbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2l0aGluIHdoaWNoIHNldCBkb2VzIFNfTiBtaW5pbWl6ZSB0aGUgZXJyb3I/IiwKICAgICAgInJlcG9uc2UiOiAiQW1vbmcgcmVhbCBzdW1zIGZvcm1lZCBmcm9tIGEgY29uc3RhbnQgYW5kIHNpbmVzIGFuZCBjb3NpbmVzIG9mIG9yZGVyIGF0IG1vc3QgTi4gVGhpcyBmaXhlcyB0aGUgYWxsb3dlZCBmcmVxdWVuY2llczsgaXQgZG9lcyBub3QgcHJvbWlzZSBhIG1pbmltdW0gZXJyb3IgYXQgZXZlcnkgaW5zdGFudC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE2Ni1tNTpidWRnZXQiLAogICAgICAidW5pdGUiOiAiYzE2Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNob2l4LWRlLWNvdXB1cmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiBpbmNyZWFzaW5nIE4gbm90IGluY3JlYXNlIEVfTiByZWxhdGl2ZSB0byB0aGUgZXhhY3Qgc2lnbmFsPyIsCiAgICAgICJyZXBvbnNlIjogIkFkZGluZyBhbiBvcmRlciByZW1vdmVzIGhhbGYgYSBzdW0gb2Ygc3F1YXJlcyBmcm9tIHRoZSByZWplY3RlZCB0YWlsLCBoZW5jZSBhIG5vbm5lZ2F0aXZlIHF1YW50aXR5LiBUaGlzIG1vbm90b25pY2l0eSBpcyBub3QgYSBndWFyYW50ZWUgb2YgZGVub2lzaW5nIHJlbGF0aXZlIHRvIGFuIHVua25vd24gdHJ1ZSBzaWduYWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNjYtbTU6Y29udmVyZ2VuY2UiLAogICAgICAidW5pdGUiOiAiYzE2Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvcnRlZS1kZS1sYS1jb252ZXJnZW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgUGFyc2V2YWwgZ3VhcmFudGVlIGFzIE4gaW5jcmVhc2VzIHdpdGhvdXQgYm91bmQgZm9yIGEgcGVyaW9kaWMgc3F1YXJlIGludGVncmFibGUgc2lnbmFsPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBtZWFuIHNxdWFyZSBlcnJvciBvZiB0aGUgdHJ1bmNhdGlvbiB0ZW5kcyB0byAwLiBUaGlzIGNvbnZlcmdlbmNlIGlzIG5vdCBzdWZmaWNpZW50IHRvIGd1YXJhbnRlZSBjb252ZXJnZW5jZSBhdCBldmVyeSBwb2ludCBvciB0byBpZGVudGlmeSB3aGljaCBtb2RlcyBtaWdodCBiZSBub2lzZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c166-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRydW5jYXRpb24gb2Ygb3JkZXIgTiBjaGFuZ2UgaW4gdGhlIHJlYWwgY29udmVudGlvbj8JSXQgcmV0YWlucyB0aGUgbWVhbiBhbmQgdGhlIHNpbmUgYW5kIGNvc2luZSBjb2VmZmljaWVudHMgb2Ygb3JkZXIgYXQgbW9zdCBOOyBpdCBzZXRzIHRoZSBjb2VmZmljaWVudHMgb2YgaGlnaGVyIG9yZGVycyB0byAwLiBUaGUgbWF4aW11bSByZXRhaW5lZCBmcmVxdWVuY3kgaXMgTi9ULgl0b2RhaSBjMTY2LW01IHRyb25jYXR1cmUtc3BlY3RyYWxlCkhvdyBkbyB3ZSBvYnRhaW4gdGhlIG1lYW4gc3F1YXJlIGVycm9yIGZyb20gdGhlIHJlamVjdGVkIG1vZGVzPwlPdmVyIGEgZnVsbCBwZXJpb2QsIG9ydGhvZ29uYWxpdHkgbWFrZXMgdGhlIGNyb3NzIHRlcm1zIHZhbmlzaC4gRV9OIGlzIGhhbGYgdGhlIHN1bSBvZiB0aGUgc3F1YXJlcyBvZiB0aGUgcmVqZWN0ZWQgc2luZSBhbmQgY29zaW5lIGNvZWZmaWNpZW50cy4gSXRzIHVuaXQgaXMgdGhlIHNxdWFyZSBvZiB0aGUgc2lnbmFsIHVuaXQuCXRvZGFpIGMxNjYtbTUgZXJyZXVyLXF1YWRyYXRpcXVlCldpdGhpbiB3aGljaCBzZXQgZG9lcyBTX04gbWluaW1pemUgdGhlIGVycm9yPwlBbW9uZyByZWFsIHN1bXMgZm9ybWVkIGZyb20gYSBjb25zdGFudCBhbmQgc2luZXMgYW5kIGNvc2luZXMgb2Ygb3JkZXIgYXQgbW9zdCBOLiBUaGlzIGZpeGVzIHRoZSBhbGxvd2VkIGZyZXF1ZW5jaWVzOyBpdCBkb2VzIG5vdCBwcm9taXNlIGEgbWluaW11bSBlcnJvciBhdCBldmVyeSBpbnN0YW50Lgl0b2RhaSBjMTY2LW01IHByb2plY3Rpb24tb3J0aG9nb25hbGUKV2h5IGNhbiBpbmNyZWFzaW5nIE4gbm90IGluY3JlYXNlIEVfTiByZWxhdGl2ZSB0byB0aGUgZXhhY3Qgc2lnbmFsPwlBZGRpbmcgYW4gb3JkZXIgcmVtb3ZlcyBoYWxmIGEgc3VtIG9mIHNxdWFyZXMgZnJvbSB0aGUgcmVqZWN0ZWQgdGFpbCwgaGVuY2UgYSBub25uZWdhdGl2ZSBxdWFudGl0eS4gVGhpcyBtb25vdG9uaWNpdHkgaXMgbm90IGEgZ3VhcmFudGVlIG9mIGRlbm9pc2luZyByZWxhdGl2ZSB0byBhbiB1bmtub3duIHRydWUgc2lnbmFsLgl0b2RhaSBjMTY2LW01IGNob2l4LWRlLWNvdXB1cmUKV2hhdCBkb2VzIFBhcnNldmFsIGd1YXJhbnRlZSBhcyBOIGluY3JlYXNlcyB3aXRob3V0IGJvdW5kIGZvciBhIHBlcmlvZGljIHNxdWFyZSBpbnRlZ3JhYmxlIHNpZ25hbD8JVGhlIG1lYW4gc3F1YXJlIGVycm9yIG9mIHRoZSB0cnVuY2F0aW9uIHRlbmRzIHRvIDAuIFRoaXMgY29udmVyZ2VuY2UgaXMgbm90IHN1ZmZpY2llbnQgdG8gZ3VhcmFudGVlIGNvbnZlcmdlbmNlIGF0IGV2ZXJ5IHBvaW50IG9yIHRvIGlkZW50aWZ5IHdoaWNoIG1vZGVzIG1pZ2h0IGJlIG5vaXNlLgl0b2RhaSBjMTY2LW01IHBvcnRlZS1kZS1sYS1jb252ZXJnZW5jZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kkjsyp pzqayp iooq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bgmlil tgkrrh jczqul lgeuiq vpsygb weaqfx xxku</span></span></h3><dl><div><dt>What you understand</dt><dd>Spectral truncation removes entire modes and controls a mean square error within a fixed set of frequencies. A mechanism that produces a smoother curve must be identified by its operations before being given this name.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rckmyo dlucjj xizrqu vzxiut mzexah yishjh yzwhqd ouafvk iqkyty jggmmm gkfxyf jspewk qecgqp kkymdr dtcpmq uymwfd xbbcpg ldhmfg owuljx sekdqz wmxybf pjvlpj kiedxr rfdnij</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for Level 3: reconstruct the truncated signal, calculate its energy tail, justify the minimum order and answer an objection about pointwise error. Reading or giving an assisted answer does not establish any attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ggpyny qicrtt lzcley pzmmib rbcohk skvyfz dcrtxa jpojqm wayrdg kutyqi sizdhu jybbjb efsjwn tpzvyk fgeqbs jqfrcg pqdoxu kfqjid dcjmes zyspqv dhpykg vsbsrl pwpyzg ouwnhs</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the cutoff decision without support and explain why the form of a local average alone does not provide our projection guarantee. To apply the method to a real tool, the signal, periodicity and error criterion will still need to be specified, followed by separate checks of implementation, integration and observed behaviour under a dedicated assignment.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c166-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c166-m4.html">Previous</a> · <a href="c167-m1.html">Next</a></nav>
+<footer><p>Course book · C166·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a Jacobian by ordering its inputs and outputs, then use it to predict and check small changes.">
+<title>C057·M4 · Jacobian — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ibtfgu nsziyl gobk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C057·M4</p><h1>Jacobian</h1><p class="objectif"><span>Your goal</span>Build a Jacobian by ordering its inputs and outputs, then use it to predict and check small changes.</p><p class="prerequis"><strong>Before you start</strong><br>c033-m5 : affine approximation · c039-m5 : changes of basis · c027-m5 : complex numbers · c057-m1 : partial derivatives · c057-m2 : differential · c057-m3 : gradient</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You cut a rectangular sheet of length x = 6 cm and width y = 4 cm. You want to know how changing its sides will affect the available area and the length of its boundary. Call its area A, in cm², and its perimeter P, in cm. The scene and all its dimensions are fictional.</p><p>Increasing only x adds a strip of height y: y determines how sensitive the area is to x. Increasing only y adds a strip of length x. For the boundary, each side that changes has an opposite side of the same length: the perimeter therefore increases by 2 times each small increase in length.</p><p>Let a be the change in x and b the change in y, both in cm. When they are positive, the diagram shows the strips ya and xb, together with a corner ab. The strips are enough to predict the change to first order; the corner will explain the difference from the exact area.</p><p>The Jacobian arranges these sensitivities: one row per output, one column per input. With inputs ordered as (x, y) and outputs as (A, P), reading a column answers “if I change only this side, which outputs change?”. Reading a row answers “how does each side affect this output?”.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The strips and the small corner</title><desc>The initial sheet measures 6 cm by 4 cm. Increasing the length by a = 0.20 cm adds the strip ya; increasing the width by b = 0.10 cm adds the strip xb. The corner ab belongs to the new rectangle but not to the strips calculated using the old sides. The increases are exaggerated to keep them visible.</desc><text x="180" y="26" text-anchor="middle">Enlarge the same sheet</text><text x="180" y="50" text-anchor="middle" class="petite-etiquette">x = 6 cm ; y = 4 cm</text><rect x="48" y="92" width="216" height="144" class="cadre-neutre" /><rect x="264" y="92" width="28" height="144" class="cadre-prediction" /><rect x="48" y="64" width="216" height="28" class="cadre-prediction" /><rect x="264" y="64" width="28" height="28" class="cadre-resultat" /><text x="156" y="160" text-anchor="middle">A = 24 cm²</text><text x="156" y="188" text-anchor="middle" class="petite-etiquette">initial sheet</text><text x="156" y="84" text-anchor="middle">xb</text><text x="278" y="170" text-anchor="middle">ya</text><path d="M292 74L310 65" class="trait" /><text x="314" y="63">ab</text><text x="180" y="270" text-anchor="middle">a = 0.20 cm ; b = 0.10 cm</text><text x="180" y="296" text-anchor="middle" class="petite-etiquette">Increases drawn larger</text></svg><figcaption>The pink strips use the initial dimensions; the gold corner still needs to be added in the exact recalculation. The letters and description distinguish these regions without relying on their color.</figcaption></figure><figure><svg viewBox="0 0 360 254" xmlns="http://www.w3.org/2000/svg" role="img"><title>The Jacobian at the initial rectangle</title><desc>The columns follow x then y, and the rows A then P. The area row contains 4 then 6 cm; the perimeter row contains 2 then 2, dimensionless. Each column links one side to both outputs.</desc><text x="180" y="25" text-anchor="middle">One output per row</text><text x="178" y="57" text-anchor="middle">x</text><text x="286" y="57" text-anchor="middle">y</text><rect x="124" y="72" width="216" height="112" class="cadre-neutre" /><line x1="232" y1="72" x2="232" y2="184" class="trait" /><line x1="124" y1="128" x2="340" y2="128" class="trait" /><text x="82" y="107" text-anchor="middle">A</text><text x="82" y="163" text-anchor="middle">P</text><text x="178" y="107" text-anchor="middle">4 cm</text><text x="286" y="107" text-anchor="middle">6 cm</text><text x="178" y="163" text-anchor="middle">2</text><text x="286" y="163" text-anchor="middle">2</text><text x="180" y="216" text-anchor="middle" class="petite-etiquette">A: cm² per cm, hence cm</text><text x="180" y="241" text-anchor="middle" class="petite-etiquette">P: cm per cm, dimensionless</text></svg><figcaption>The entry in row A and column y is 6 cm: it describes the sensitivity of the area to the width. Units may differ from one row to another.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fix the order of the inputs and outputs. Multiply each row of sensitivities by the input changes to obtain the predicted change in the corresponding output.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Predict the area and boundary length after the same cut</h3><p>The sheet changes from (6 cm, 4 cm) to (6.20 cm, 4.10 cm): a = 1/5 cm = 0.20 cm and b = 1/10 cm = 0.10 cm. Predict the changes from the initial sensitivities, then check them by recalculating the outputs.</p><ol class="etapes"><li><h3>Define the function and its domain</h3><p>F denotes the function that returns the column of outputs A and P from the column of inputs x and y. The parentheses (x, y) indicate the same order of coordinates. The starting point p is (6, 4), expressed in cm. We assume a perfectly rectangular sheet, with no thickness or cutting loss, and strictly positive dimensions before and after the change.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>A</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mtd></mtr><mtr><mtd><mi>P</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>x</mi><mi>y</mi></mtd></mtr><mtr><mtd><mn>2</mn><mo>(</mo><mi>x</mi><mo>+</mo><mi>y</mi><mo>)</mo></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Initially: A(p) = 6 × 4 = 24 cm²; P(p) = 2 × (6 + 4) = 2 × 10 = 20 cm.</p></li><li><h3>Give each entry a meaning</h3><p>For a function with n inputs and m outputs, its Jacobian matrix J_F(p) has m rows and n columns. Its entry (i, j) is the partial derivative of output Fᵢ with respect to input xⱼ, evaluated at point p. Here i identifies an output and j an input; ∂ means that the other inputs stay fixed. Each coefficient has the unit of its output divided by the unit of its input.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mrow><mo>(</mo><msub><mi>J</mi><mi>F</mi></msub><mo>(</mo><mi>p</mi><mo>)</mo><mo>)</mo></mrow><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mfrac><mrow><mo>∂</mo><msub><mi>F</mi><mi>i</mi></msub></mrow><mrow><mo>∂</mo><msub><mi>x</mi><mi>j</mi></msub></mrow></mfrac><mo>(</mo><mi>p</mi><mo>)</mo></mrow></math></div><p>Differentiating xy with respect to x leaves y as the coefficient; differentiating with respect to y leaves x. For the perimeter, each derivative is 2. The area row collects the same derivatives as its gradient; in the Jacobian, they are arranged in a row to produce this output.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>J</mi><mi>F</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mfrac><mrow><mo>∂</mo><mi>A</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac></mtd><mtd><mfrac><mrow><mo>∂</mo><mi>A</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac></mtd></mtr><mtr><mtd><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac></mtd><mtd><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>y</mi></mtd><mtd><mi>x</mi></mtd></mtr><mtr><mtd><mn>2</mn></mtd><mtd><mn>2</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>At p, the numerical matrix is [[4, 6], [2, 2]], with size 2 × 2. For inputs expressed in cm, the coefficients in row A are in cm²/cm, hence in cm; those in row P are dimensionless. A Jacobian matrix can also be rectangular when the numbers of inputs and outputs differ.</p></li><li><h3>Move from sensitivities to changes</h3><p>h denotes the column of changes (a, b), in cm. ΔA and ΔP denote the exact changes from the starting state to the final state; here Δ is the symbol for “change”. The symbols dA and dP denote the predicted linear changes: together they form J_F(p)h, the differential applied to h.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>a</mi></mtd></mtr><mtr><mtd><mi>b</mi></mtd></mtr></mtable><mo>]</mo><mo>;</mo><mo>[</mo><mtable><mtr><mtd><mi>dA</mi></mtd></mtr><mtr><mtd><mi>dP</mi></mtd></mtr></mtable><mo>]</mo><mo>=</mo><msub><mi>J</mi><mi>F</mi></msub><mo>(</mo><mi>p</mi><mo>)</mo><mi>h</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>y</mi><mi>a</mi><mo>+</mo><mi>x</mi><mi>b</mi></mtd></mtr><mtr><mtd><mn>2</mn><mi>a</mi><mo>+</mo><mn>2</mn><mi>b</mi></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The multiplication uses a row of the matrix and the column of changes: multiply corresponding components, then add. The result has size 2 × 1. Add the contributions to area together, then the contributions to perimeter together.</p><p>The approximation is F(p + h) ≈ F(p) + J_F(p)h when h is small and F is differentiable at point p. Differentiable means that the error in this approximation becomes negligible relative to the size of the change as that change tends to 0. The existence of partial derivatives alone is not enough in general; their continuity in a neighborhood of the point is a sufficient condition. Here the polynomial formulas satisfy it.</p></li><li><h3>Calculate each product, then each sum</h3><p>For the area: the strip due to x contributes 4 cm × 0.20 cm = 0.80 cm²; the strip due to y contributes 6 cm × 0.10 cm = 0.60 cm². Their sum gives dA = 0.80 + 0.60 = 1.40 cm².</p><p>For the perimeter: 2 × 0.20 = 0.40 cm and 2 × 0.10 = 0.20 cm. Thus dP = 0.40 + 0.20 = 0.60 cm. The sensitivities stay those of the starting point throughout this calculation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>[</mo><mtable><mtr><mtd><mi>dA</mi></mtd></mtr><mtr><mtd><mi>dP</mi></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>6</mn></mtd></mtr><mtr><mtd><mn>2</mn></mtd><mtd><mn>2</mn></mtd></mtr></mtable><mo>]</mo><mo>[</mo><mtable><mtr><mtd><mn>0.20</mn></mtd></mtr><mtr><mtd><mn>0.10</mn></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1.40</mn><mtext> cm²</mtext></mtd></mtr><mtr><mtd><mn>0.60</mn><mtext> cm</mtext></mtd></mtr></mtable><mo>]</mo></mrow></math></div></li><li><h3>Add the starting values</h3><p>The product J_F(p)h gives changes, not final outputs. To predict the final area, add dA to A(p): 24 + 1.40 = 25.40 cm². The predicted perimeter is 20 + 0.60 = 20.60 cm.</p><p>These values are the affine prediction around p: a starting value followed by a linear response to the changes. The Jacobian alone does not contain the value F(p).</p></li><li><h3>Recalculate exactly and explain the difference</h3><p>The new sides are x + a = 6.20 cm and y + b = 4.10 cm. Direct recalculation: A(p + h) = 6.20 × 4.10 = 25.42 cm². The actual change in the model is ΔA = 25.42 − 24 = 1.42 cm², compared with dA = 1.40 cm².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ΔA</mi><mo>=</mo><mo>(</mo><mi>x</mi><mo>+</mo><mi>a</mi><mo>)</mo><mo>(</mo><mi>y</mi><mo>+</mo><mi>b</mi><mo>)</mo><mo>−</mo><mi>x</mi><mi>y</mi><mo>=</mo><mi>y</mi><mi>a</mi><mo>+</mo><mi>x</mi><mi>b</mi><mo>+</mo><mi>a</mi><mi>b</mi><mo>=</mo><mi>dA</mi><mo>+</mo><mi>a</mi><mi>b</mi></mrow></math></div><p>Check using the diagram: only the corner ab = 0.20 × 0.10 = 0.02 cm² is missing. The exact value minus the approximate value is indeed 25.42 − 25.40 = 0.02 cm². The exact fractions are ΔA = 71/50 cm² and ab = 1/50 cm²; here the displayed decimals are exact.</p><p>For the boundary, P(p + h) = 2 × (6.20 + 4.10) = 2 × 10.30 = 20.60 cm, exactly the prediction. Its change is ΔP = dP = 0.60 cm. The perimeter formula is linear: it creates no ab term. The word “small” does not provide a universal tolerance; here recalculation gives the difference to compare with the intended use.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the matrix and reconstruct it from the strips. Why does y multiply a? Why does the product give changes? Finally, explain why the same calculation is approximate for the area and exact for the perimeter.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The inputs go in rows, regardless of order.”</h3><p>With our columns of changes, outputs occupy rows and inputs occupy columns. Write the names A, P on the left and x, y above before filling in the entries. The entry in row A and column y is ∂A/∂y = x; swapping entries without swapping coordinates changes the calculation.</p><a href="#intuition">Reread the headings of the sensitivity table</a></li><li><h3>“J_F(p)h directly gives me the final area and perimeter.”</h3><p>h contains the input changes: J_F(p)h provides the predicted output changes. You still need to add A(p) = 24 cm² and P(p) = 20 cm to obtain the final prediction. Check each unit separately.</p><a href="#exemple">Revisit adding the starting values</a></li><li><h3>“The Jacobian always gives the exact change.”</h3><p>For our area, ΔA = dA + ab. The product of the changes does not appear in the linear prediction. The perimeter prediction is exact for a reason specific to its formula; for the area, reduce the changes and check what remains.</p><a href="#exercices">Compare the difference when the changes are divided</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-colonne"><p class="repere">Exercise 1 · Reading followed by application</p>
+<h3>Only the width changes</h3><p>Start again from the sheet measuring 6 cm by 4 cm. Keep x fixed and increase y by 0.10 cm: a is therefore 0 cm. Without recalculating the whole matrix, choose the column you need, then give ΔA and ΔP. Are these changes exact in this case?</p>
+<label for="reponse-ex-colonne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-colonne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-colonne" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-colonne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-colonne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The second column corresponds to y. The contribution of the first is multiplied by 0.</p></details><details class="indice"><summary>Hint 2</summary><p>The difference from the area prediction is ab. What happens to it if a = 0 cm?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The y column contains 6 cm for the area and 2, dimensionless, for the perimeter. It multiplies b = 0.10 cm. Thus ΔA = 6 × 0.10 = 0.60 cm² and ΔP = 2 × 0.10 = 0.20 cm.</p><p>The corner ab is 0 cm² because a = 0 cm. The linear changes are therefore exact here, including for the area: when x stays fixed, xy depends linearly on y. This does not make the prediction exact for all simultaneous changes.</p><p class="petit-titre">Check your reasoning</p><ul><li>Choose the y column and explain the meaning of its coefficients.</li><li>Obtain 0.60 cm² and 0.20 cm with the correct units.</li><li>Justify exactness by showing that ab vanishes.</li></ul></details></article><article class="exercice" id="ex-signes"><p class="repere">Exercise 2 · Calculation and checking</p>
+<h3>Lengthen while narrowing</h3><p>Start again from the initial dimensions. Take a = 0.20 cm and b = -0.10 cm. Use the Jacobian at the starting point to predict the changes, then calculate the exact area. Does the area increase? Does the prediction overestimate or underestimate it?</p>
+<label for="reponse-ex-signes">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-signes" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-signes" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-signes" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-signes" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Keep the sign of b in each product. For the area, the contributions partly cancel each other.</p></details><details class="indice"><summary>Hint 2</summary><p>Check using the new sides 6.20 cm and 3.90 cm; compare ΔA with dA using the term ab.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The matrix is still the one at the starting point. For the area: dA = 4 × 0.20 + 6 × (-0.10) = 0.80 + (-0.60) = 0.20 cm². For the boundary: dP = 0.40 + (-0.20) = 0.20 cm, exactly.</p><p>The exact area is 6.20 × 3.90 = 24.18 cm². Thus ΔA = 24.18 − 24 = 0.18 cm²: the area increases despite the decrease in y.</p><p>This time ab = -0.02 cm² is negative. The check gives ΔA = 0.20 + (-0.02) = 0.18 cm². The prediction therefore overestimates the increase in area by 0.02 cm². Here the term ab is a signed algebraic difference, rather than the positive area of an added corner.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the signs and the Jacobian of the initial point.</li><li>Distinguish the predicted change 0.20 cm² from the exact change 0.18 cm².</li><li>Explain the overestimate using the sign of ab.</li></ul></details></article><article class="exercice" id="ex-reduction"><p class="repere">Exercise 3 · Transfer within the same scene</p>
+<h3>Reduce the changes and test an objection</h3><p>Return to the positive changes in the example, but divide each by 2: a becomes 0.10 cm and b becomes 0.05 cm, still starting from the initial sheet. Someone claims: “Everything is divided by 2, even the difference in area.” Predict dA and dP, find the difference, and answer this objection. Check using the exact area.</p>
+<label for="reponse-ex-reduction">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reduction" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reduction" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reduction" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reduction" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The Jacobian stays at the same point: its linear response is divided by 2.</p></details><details class="indice"><summary>Hint 2</summary><p>The difference is ab: each factor is divided by 2. Multiply the two new factors before drawing a conclusion.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Linearity gives dA = 1.40 ÷ 2 = 0.700 cm² and dP = 0.60 ÷ 2 = 0.300 cm. These are the predicted changes, without adding the starting values.</p><p>The omitted term is now 0.10 × 0.05 = 0.005 cm². It has been divided by 4, because both factors have been divided by 2. The claim confuses the linear response with its error.</p><p>Direct check: the new sides are 6.10 cm and 4.05 cm. Their product gives 24.705 cm²; the exact change is 24.705 − 24 = 0.705 cm². We recover 0.700 + 0.005 = 0.705 cm². For this sheet, the errors therefore decrease faster than the changes when a and b are reduced simultaneously in the same proportion.</p><p class="petit-titre">Check your reasoning</p><ul><li>Divide the linear response by 2 while keeping the same starting point.</li><li>Justify the factor 4 for the error using the product of the changes.</li><li>Recover the exact change 0.705 cm² by another method.</li><li>Repeat the procedure without a hint on a new attempt; an assisted answer does not validate any level.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="orientation"><summary><span class="repere">Recall 1</span><span>What do a row and a column of the Jacobian represent? What is its size?</span></summary><p>For n inputs and m outputs, J_F has m rows and n columns. A row collects the sensitivities of one output to all inputs; a column describes the effect of one input on all outputs. The order must match that of the vectors.</p></details><details class="carte" data-carte="plaque"><summary><span class="repere">Recall 2</span><span>Reconstruct the Jacobian of the area and perimeter of the sheet. Why does the first entry contain y?</span></summary><p>With inputs (x, y) and outputs (A, P), J_F(x, y) = [[y, x], [2, 2]]. With y fixed, increasing x adds a strip of height y. The coefficients in row A are in cm and those in row P are dimensionless when x and y are in cm.</p></details><details class="carte" data-carte="variation"><summary><span class="repere">Recall 3</span><span>What does J_F(p)h give, and how do you obtain the predicted final outputs?</span></summary><p>It gives the predicted linear changes: dA = ya + xb and dP = 2a + 2b, with h the column (a, b). Then add F(p) to predict F(p + h). The response has the units of the outputs, row by row.</p></details><details class="carte" data-carte="hypothese"><summary><span class="repere">Recall 4</span><span>What assumption allows the local approximation? Is the existence of partial derivatives enough?</span></summary><p>F must be differentiable at the starting point. Continuous partial derivatives in a neighborhood are sufficient; their mere existence is not enough in general. In our polynomial model, this condition is satisfied.</p></details><details class="carte" data-carte="ecart"><summary><span class="repere">Recall 5</span><span>Which term determines the error in the area prediction? What happens to it if the changes are divided by 2?</span></summary><p>ΔA − dA = ab. Dividing a and b each by 2 divides this product by 4. For the perimeter, ΔP = dP exactly, because its formula is linear. Recalculating the final state lets you check the error.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the matrix, reconstruct this sequence: name and order the inputs and outputs; differentiate each output with respect to each input; evaluate at the starting point; multiply by the changes; add the initial values; check the error. Draw the strips of the sheet to explain the coefficients and the corner ab, then state the assumptions of the approximation. Return without support at least 2 days later: reading or succeeding after help never establishes that a level has been achieved.</p></div><div class="exports"><a class="bouton" download="c057-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTctbTQ6b3JpZW50YXRpb24iLAogICAgICAidW5pdGUiOiAiYzA1Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm9yaWVudGF0aW9uLWphY29iaWVubmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkbyBhIHJvdyBhbmQgYSBjb2x1bW4gb2YgdGhlIEphY29iaWFuIHJlcHJlc2VudD8gV2hhdCBpcyBpdHMgc2l6ZT8iLAogICAgICAicmVwb25zZSI6ICJGb3IgbiBpbnB1dHMgYW5kIG0gb3V0cHV0cywgSl9GIGhhcyBtIHJvd3MgYW5kIG4gY29sdW1ucy4gQSByb3cgY29sbGVjdHMgdGhlIHNlbnNpdGl2aXRpZXMgb2Ygb25lIG91dHB1dCB0byBhbGwgaW5wdXRzOyBhIGNvbHVtbiBkZXNjcmliZXMgdGhlIGVmZmVjdCBvZiBvbmUgaW5wdXQgb24gYWxsIG91dHB1dHMuIFRoZSBvcmRlciBtdXN0IG1hdGNoIHRoYXQgb2YgdGhlIHZlY3RvcnMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTctbTQ6cGxhcXVlIiwKICAgICAgInVuaXRlIjogImMwNTctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb25zdHJ1Y3Rpb24tamFjb2JpZW5uZSIsCiAgICAgICJxdWVzdGlvbiI6ICJSZWNvbnN0cnVjdCB0aGUgSmFjb2JpYW4gb2YgdGhlIGFyZWEgYW5kIHBlcmltZXRlciBvZiB0aGUgc2hlZXQuIFdoeSBkb2VzIHRoZSBmaXJzdCBlbnRyeSBjb250YWluIHk/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCBpbnB1dHMgKHgsIHkpIGFuZCBvdXRwdXRzIChBLCBQKSwgSl9GKHgsIHkpID0gW1t5LCB4XSwgWzIsIDJdXS4gV2l0aCB5IGZpeGVkLCBpbmNyZWFzaW5nIHggYWRkcyBhIHN0cmlwIG9mIGhlaWdodCB5LiBUaGUgY29lZmZpY2llbnRzIGluIHJvdyBBIGFyZSBpbiBjbSBhbmQgdGhvc2UgaW4gcm93IFAgYXJlIGRpbWVuc2lvbmxlc3Mgd2hlbiB4IGFuZCB5IGFyZSBpbiBjbS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1Ny1tNDp2YXJpYXRpb24iLAogICAgICAidW5pdGUiOiAiYzA1Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFjdGlvbi1qYWNvYmllbm5lIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBKX0YocCloIGdpdmUsIGFuZCBob3cgZG8geW91IG9idGFpbiB0aGUgcHJlZGljdGVkIGZpbmFsIG91dHB1dHM/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgZ2l2ZXMgdGhlIHByZWRpY3RlZCBsaW5lYXIgY2hhbmdlczogZEEgPSB5YSArIHhiIGFuZCBkUCA9IDJhICsgMmIsIHdpdGggaCB0aGUgY29sdW1uIChhLCBiKS4gVGhlbiBhZGQgRihwKSB0byBwcmVkaWN0IEYocCArIGgpLiBUaGUgcmVzcG9uc2UgaGFzIHRoZSB1bml0cyBvZiB0aGUgb3V0cHV0cywgcm93IGJ5IHJvdy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1Ny1tNDpoeXBvdGhlc2UiLAogICAgICAidW5pdGUiOiAiYzA1Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFwcHJveGltYXRpb24tamFjb2JpZW5uZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGFzc3VtcHRpb24gYWxsb3dzIHRoZSBsb2NhbCBhcHByb3hpbWF0aW9uPyBJcyB0aGUgZXhpc3RlbmNlIG9mIHBhcnRpYWwgZGVyaXZhdGl2ZXMgZW5vdWdoPyIsCiAgICAgICJyZXBvbnNlIjogIkYgbXVzdCBiZSBkaWZmZXJlbnRpYWJsZSBhdCB0aGUgc3RhcnRpbmcgcG9pbnQuIENvbnRpbnVvdXMgcGFydGlhbCBkZXJpdmF0aXZlcyBpbiBhIG5laWdoYm9yaG9vZCBhcmUgc3VmZmljaWVudDsgdGhlaXIgbWVyZSBleGlzdGVuY2UgaXMgbm90IGVub3VnaCBpbiBnZW5lcmFsLiBJbiBvdXIgcG9seW5vbWlhbCBtb2RlbCwgdGhpcyBjb25kaXRpb24gaXMgc2F0aXNmaWVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDU3LW00OmVjYXJ0IiwKICAgICAgInVuaXRlIjogImMwNTctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1qYWNvYmllbm5lIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIHRlcm0gZGV0ZXJtaW5lcyB0aGUgZXJyb3IgaW4gdGhlIGFyZWEgcHJlZGljdGlvbj8gV2hhdCBoYXBwZW5zIHRvIGl0IGlmIHRoZSBjaGFuZ2VzIGFyZSBkaXZpZGVkIGJ5IDI/IiwKICAgICAgInJlcG9uc2UiOiAizpRBIOKIkiBkQSA9IGFiLiBEaXZpZGluZyBhIGFuZCBiIGVhY2ggYnkgMiBkaXZpZGVzIHRoaXMgcHJvZHVjdCBieSA0LiBGb3IgdGhlIHBlcmltZXRlciwgzpRQID0gZFAgZXhhY3RseSwgYmVjYXVzZSBpdHMgZm9ybXVsYSBpcyBsaW5lYXIuIFJlY2FsY3VsYXRpbmcgdGhlIGZpbmFsIHN0YXRlIGxldHMgeW91IGNoZWNrIHRoZSBlcnJvci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c057-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyBhIHJvdyBhbmQgYSBjb2x1bW4gb2YgdGhlIEphY29iaWFuIHJlcHJlc2VudD8gV2hhdCBpcyBpdHMgc2l6ZT8JRm9yIG4gaW5wdXRzIGFuZCBtIG91dHB1dHMsIEpfRiBoYXMgbSByb3dzIGFuZCBuIGNvbHVtbnMuIEEgcm93IGNvbGxlY3RzIHRoZSBzZW5zaXRpdml0aWVzIG9mIG9uZSBvdXRwdXQgdG8gYWxsIGlucHV0czsgYSBjb2x1bW4gZGVzY3JpYmVzIHRoZSBlZmZlY3Qgb2Ygb25lIGlucHV0IG9uIGFsbCBvdXRwdXRzLiBUaGUgb3JkZXIgbXVzdCBtYXRjaCB0aGF0IG9mIHRoZSB2ZWN0b3JzLgl0b2RhaSBjMDU3LW00IG9yaWVudGF0aW9uLWphY29iaWVubmUKUmVjb25zdHJ1Y3QgdGhlIEphY29iaWFuIG9mIHRoZSBhcmVhIGFuZCBwZXJpbWV0ZXIgb2YgdGhlIHNoZWV0LiBXaHkgZG9lcyB0aGUgZmlyc3QgZW50cnkgY29udGFpbiB5PwlXaXRoIGlucHV0cyAoeCwgeSkgYW5kIG91dHB1dHMgKEEsIFApLCBKX0YoeCwgeSkgPSBbW3ksIHhdLCBbMiwgMl1dLiBXaXRoIHkgZml4ZWQsIGluY3JlYXNpbmcgeCBhZGRzIGEgc3RyaXAgb2YgaGVpZ2h0IHkuIFRoZSBjb2VmZmljaWVudHMgaW4gcm93IEEgYXJlIGluIGNtIGFuZCB0aG9zZSBpbiByb3cgUCBhcmUgZGltZW5zaW9ubGVzcyB3aGVuIHggYW5kIHkgYXJlIGluIGNtLgl0b2RhaSBjMDU3LW00IGNvbnN0cnVjdGlvbi1qYWNvYmllbm5lCldoYXQgZG9lcyBKX0YocCloIGdpdmUsIGFuZCBob3cgZG8geW91IG9idGFpbiB0aGUgcHJlZGljdGVkIGZpbmFsIG91dHB1dHM/CUl0IGdpdmVzIHRoZSBwcmVkaWN0ZWQgbGluZWFyIGNoYW5nZXM6IGRBID0geWEgKyB4YiBhbmQgZFAgPSAyYSArIDJiLCB3aXRoIGggdGhlIGNvbHVtbiAoYSwgYikuIFRoZW4gYWRkIEYocCkgdG8gcHJlZGljdCBGKHAgKyBoKS4gVGhlIHJlc3BvbnNlIGhhcyB0aGUgdW5pdHMgb2YgdGhlIG91dHB1dHMsIHJvdyBieSByb3cuCXRvZGFpIGMwNTctbTQgYWN0aW9uLWphY29iaWVubmUKV2hhdCBhc3N1bXB0aW9uIGFsbG93cyB0aGUgbG9jYWwgYXBwcm94aW1hdGlvbj8gSXMgdGhlIGV4aXN0ZW5jZSBvZiBwYXJ0aWFsIGRlcml2YXRpdmVzIGVub3VnaD8JRiBtdXN0IGJlIGRpZmZlcmVudGlhYmxlIGF0IHRoZSBzdGFydGluZyBwb2ludC4gQ29udGludW91cyBwYXJ0aWFsIGRlcml2YXRpdmVzIGluIGEgbmVpZ2hib3Job29kIGFyZSBzdWZmaWNpZW50OyB0aGVpciBtZXJlIGV4aXN0ZW5jZSBpcyBub3QgZW5vdWdoIGluIGdlbmVyYWwuIEluIG91ciBwb2x5bm9taWFsIG1vZGVsLCB0aGlzIGNvbmRpdGlvbiBpcyBzYXRpc2ZpZWQuCXRvZGFpIGMwNTctbTQgYXBwcm94aW1hdGlvbi1qYWNvYmllbm5lCldoaWNoIHRlcm0gZGV0ZXJtaW5lcyB0aGUgZXJyb3IgaW4gdGhlIGFyZWEgcHJlZGljdGlvbj8gV2hhdCBoYXBwZW5zIHRvIGl0IGlmIHRoZSBjaGFuZ2VzIGFyZSBkaXZpZGVkIGJ5IDI/Cc6UQSDiiJIgZEEgPSBhYi4gRGl2aWRpbmcgYSBhbmQgYiBlYWNoIGJ5IDIgZGl2aWRlcyB0aGlzIHByb2R1Y3QgYnkgNC4gRm9yIHRoZSBwZXJpbWV0ZXIsIM6UUCA9IGRQIGV4YWN0bHksIGJlY2F1c2UgaXRzIGZvcm11bGEgaXMgbGluZWFyLiBSZWNhbGN1bGF0aW5nIHRoZSBmaW5hbCBzdGF0ZSBsZXRzIHlvdSBjaGVjayB0aGUgZXJyb3IuCXRvZGFpIGMwNTctbTQgY29udHJvbGUtamFjb2JpZW5uZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ibtfgu nsziyl gobk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nlutxr ujothj rqudiu vplkvw vjpweh blvnca hshd</span></span></h3><dl><div><dt>What you understand</dt><dd>A Jacobian arranges the derivatives of several outputs with an explicit input order. For a single output, it has only one row: the components of the gradient arranged as a row. The guide below links this idea to a code passage; it does not create an additional canonical milestone.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hglktg yvdbhh mvpfir uqlsfj pnyhhr cgtlko dcibnr wgkhob wdtrfx nnvpew yhxsok ctvxrp wibkpn zxfepk atwpxz uyinxc idqlcw atbywy byscmk iyxowt pgnlli ucskss ijkfiy tjocth</span></span></dd></div><div><dt>Your level</dt><dd>Level 1 to prepare for: reconstruct rows A and P, state the units of the coefficients, and calculate their response to a signed change. Reading and assisted answers do not demonstrate learning; another independent reconstruction after a delay and human validation are still required.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bnpsmq gzbdcr kuswvj rmnftg rctijb rfziwx rxiasy pwksej lnpuut vmzqjd iuaaqg kwaoxq jxieps vbezwl jxnymr auyinw bgksjn nhmcbs xfrdlw wefyss axltef gsckox acfzhp ktxudi</span></span></dd></div><div><dt>To continue</dt><dd>Redo the sheet problem without support after at least 2 days, then explain how the derivatives of distinct outputs would form distinct rows. Before any actual use of the cited passage, its callers, coordinate order, step choice, and error on authorized cases would still need to be checked. The Hessian, the next unit in the chapter, concerns another matrix and requires its own study.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c057-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c057-m3.html">Previous</a> · <a href="c057-m5.html">Next</a></nav>
+<footer><p>Course book · C057·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

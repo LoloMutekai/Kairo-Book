@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct the Kalman recursion, justify its conditional exactness in a linear Gaussian model, and identify information counted twice.">
+<title>C234·M2 · Kalman filter — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gowjgo jsemji edyd</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C234·M2</p><h1>Kalman filter</h1><p class="objectif"><span>Your goal</span>Construct the Kalman recursion, justify its conditional exactness in a linear Gaussian model, and identify information counted twice.</p><p class="prerequis"><strong>Before you start</strong><br>c233-m5 : verification theorem · c066-m5 : standard errors and diagnostics · c227-m5 : Ito-Tanaka · c234-m1 : state space</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small cart moves along a rail marked with a scale. The previous estimate placed it 10 m from the origin. Its control input now specifies a displacement of 2 m, but the wheels may slip. An optical sensor reports 15 m: should we trust it completely or keep the expected position?</p><p>The filter keeps an estimated position and an error variance. It first propagates both using the control input and the noise in the displacement. It then compares the new reading with this prediction and moves through only part of their difference. The more uncertain the prediction is relative to the sensor, the larger this part is.</p><p>A variance describes dispersion under a probabilistic model; it is expressed in square metres, written m². It gives neither the actual error on this pass nor a probability that the sensor is correct. Positions are in metres, written m. All data in this scene are fictional and do not measure any real device.</p><p>The state space unit introduced the hidden and observed variables. Here we choose a linear Gaussian model: it allows us to replace the entire observation history with a mean–variance pair to calculate the distribution of the current position. This compression is exact under the assumptions we will state; it does not amount to guessing the true position.</p><div class="schemas"><figure><svg viewBox="0 0 360 226" xmlns="http://www.w3.org/2000/svg" role="img"><title>The cart between prediction and reading</title><desc>On the same axis, the prediction is at 12 metres, the updated mean at 14 metres, and the reading at 15 metres. The gain 2/3 moves through this fraction of the difference of 3 metres. The actual position remains unknown.</desc><text x="22" y="28" class="prediction">Prediction</text><text x="338" y="28" text-anchor="end" class="mesure">Reading</text><text x="226" y="65" text-anchor="middle" class="resultat">Updated mean</text><line x1="32" y1="102" x2="328" y2="102" class="trait" /><line x1="32" y1="102" x2="229" y2="102" class="chemin-correction" /><circle cx="32" cy="102" r="7" class="point-prediction" /><rect x="218" y="91" width="22" height="22" rx="3" class="cadre-resultat" /><circle cx="328" cy="102" r="7" class="point-mesure" /><text x="32" y="143" text-anchor="middle">12 m</text><text x="229" y="143" text-anchor="middle">14 m</text><text x="328" y="143" text-anchor="middle">15 m</text><text x="180" y="180" text-anchor="middle" class="petite-etiquette">Gain 2/3 · displacement 2 m</text><text x="180" y="210" text-anchor="middle" class="petite-etiquette">Actual position: unknown</text></svg><figcaption>The distances along the rail represent the differences between estimates and the reading. The gold square marks a calculated mean, without any direct observation of the actual position.</figcaption></figure><figure><svg viewBox="0 0 360 306" xmlns="http://www.w3.org/2000/svg" role="img"><title>A distribution is propagated, then updated</title><desc>The previous estimate is 10 metres and 3 square metres. The prediction becomes 12 metres and 4 square metres. After the reading of 15 metres, the update gives 14 metres and 4/3 square metres. The control input shifts the mean and the noise increases the variance here.</desc><rect x="20" y="12" width="320" height="56" rx="7" class="cadre-neutre" /><text x="180" y="35" text-anchor="middle">Previous estimate</text><text x="180" y="57" text-anchor="middle">10 m · 3 m²</text><line x1="180" y1="68" x2="180" y2="112" class="trait" /><text x="180" y="96" text-anchor="middle" class="petite-etiquette">Control input + slip</text><rect x="20" y="112" width="320" height="56" rx="7" class="cadre-prediction" /><text x="180" y="135" text-anchor="middle">Before the reading</text><text x="180" y="157" text-anchor="middle">12 m · 4 m²</text><line x1="180" y1="168" x2="180" y2="212" class="trait" /><text x="180" y="196" text-anchor="middle" class="petite-etiquette">Reading 15 m · noise 2 m²</text><rect x="20" y="212" width="320" height="56" rx="7" class="cadre-resultat" /><text x="180" y="235" text-anchor="middle">After the reading</text><text x="180" y="257" text-anchor="middle">14 m · 4/3 m²</text><text x="180" y="296" text-anchor="middle" class="petite-etiquette">This pair starts the next step.</text></svg><figcaption>The known control input changes the mean. The process noise adds a variance. The reading then provides separate information, with its reliability represented by its own variance.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Predict the distribution of the current state, extract the new information from the reading, then keep the conditional mean and variance after that reading.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Locate the cart after its displacement</h3><p>The previous estimate is a normal distribution with mean 10 m and variance 3 m². The commanded displacement is 2 m; the variance of the slip is Q = 1 m². The reading is z = 15 m and its noise has variance R = 2 m². We calculate a complete update, then check the mean and variance using other forms.</p><ol class="etapes"><li><h3>State the model and the available information</h3><p>k is the dimensionless index of the current step. X<sub>k</sub> is the hidden random position, Z<sub>k</sub> the random reading; x and z denote their possible or observed values. The discrete model is as follows; the index k − 1 denotes the previous step.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>k</mi></msub><mo>=</mo><mi>a</mi><msub><mi>X</mi><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>u</mi><mi>k</mi></msub><mo>+</mo><msub><mi>W</mi><mi>k</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Z</mi><mi>k</mi></msub><mo>=</mo><msub><mi>X</mi><mi>k</mi></msub><mo>+</mo><msub><mi>V</mi><mi>k</mi></msub></mrow></math></div><p>a = 1 is the dimensionless transition factor and u<sub>k</sub> = 2 m is the known displacement. W<sub>k</sub> represents the unpredicted slip, with mean 0 m and variance Q; V<sub>k</sub> represents the optical error, with mean 0 m and variance R. These noises are Gaussian, independent across steps, across noise families, and of the Gaussian initial state. Q is nonnegative and R strictly positive; the control input is known before the reading and the model has no added bias.</p><p>I⁻ denotes the information from previous readings and known control inputs; I⁺ adds the current reading. E[· | I] means the conditional mean given I and Var(· | I) its variance. We write m⁻ = E[X<sub>k</sub> | I⁻], P⁻ = Var(X<sub>k</sub> | I⁻), then m⁺ and P⁺ after adding Z<sub>k</sub>. The superscript signs denote before and after the reading. m is a position in m; P, Q and R are in m². The notation N(m, P) denotes a normal distribution parameterized by its mean and variance, rather than its standard deviation.</p></li><li><h3>Propagate the distribution before looking at the sensor</h3><p>Let m and P denote the estimate from the previous step. The known control input creates no dispersion. The noise with mean 0 does not shift the mean but adds its variance; its independence makes its covariance with the previous error 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>m</mi><mo>−</mo></msup><mo>=</mo><mi>a</mi><mi>m</mi><mo>+</mo><mi>u</mi><mo>;</mo><msup><mi>P</mi><mo>−</mo></msup><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><mi>P</mi><mo>+</mo><mi>Q</mi></mrow></math></div><p>Propagated mean: 1 × 10 = 10 m; with the control input, 10 + 2 = 12 m. For the error, the factor is squared: 1 × 1 = 1, then 1 × 3 = 3 m². Finally, P⁻ = 3 + 1 = 4 m². Thus X<sub>k</sub> given I⁻ follows N(12, 4), with respective units m and m².</p><p>The square of a comes from the squared error in the variance. Q is not a displacement to add to m⁻. Without a new reading, this predicted estimate would be the only estimate available.</p></li><li><h3>Isolate the new information in the reading</h3><p>The random innovation ν is Z<sub>k</sub> − m⁻; its realization is z − m⁻ = 15 − 12 = 3 m. Its conditional variance S adds P⁻ and R because the prediction error and the optical noise are independent. Cov denotes covariance: the mean of the product of deviations from the means.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><msup><mi>P</mi><mo>−</mo></msup><mo>+</mo><mi>R</mi><mo>;</mo><mi>K</mi><mo>=</mo><mfrac><msup><mi>P</mi><mo>−</mo></msup><mi>S</mi></mfrac></mrow></math></div><p>S = 4 + 2 = 6 m² is strictly positive. The gain K is 4/6 = 2/3, or approximately 0.6667, with no unit. The sensor has a smaller variance than the prediction, so it receives the larger weight here. Changing z alone would change the innovation, but not this gain.</p><p>Before seeing the reading, the innovation has a conditional mean of 0 under this model. This does not require its realization to be 0: the current difference is indeed 3 m.</p></li><li><h3>Justify the gain using a Gaussian projection</h3><p>Condition on I⁻ and omit the time index. The prediction error e = X − m⁻ has mean 0 and variance P⁻. Then ν = e + V. For an update with coefficient g, the remaining error is e − gν = (1 − g)e − gV. e and V are independent. The error variance J(g), in m², is therefore:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>g</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>g</mi><mo>)</mo></mrow><mn>2</mn></msup><msup><mi>P</mi><mo>−</mo></msup><mo>+</mo><msup><mi>g</mi><mn>2</mn></msup><mi>R</mi></mrow></math></div><p>Expanding and then completing the square, with S = P⁻ + R and K = P⁻/S, gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>g</mi><mo>)</mo><mo>=</mo><mi>S</mi><msup><mrow><mo>(</mo><mi>g</mi><mo>−</mo><mi>K</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mfrac><mrow><msup><mi>P</mi><mo>−</mo></msup><mi>R</mi></mrow><mi>S</mi></mfrac></mrow></math></div><p>Since S is positive, the unique minimum is g = K. This calculation is enough to choose the best linear update with these second moments. To prove more, write ε = e − Kν. Since Cov(e, ν | I⁻) = P⁻, we have Cov(ε, ν | I⁻) = P⁻ − KS = 0 m². ε and ν are jointly Gaussian: this 0 covariance implies their conditional independence. Thus E[ε | I⁻, ν] = 0 m, and m⁻ + Kν is exactly E[X | I⁺].</p><p>This is Gaussian closure: the conditional distribution remains normal and the recursion keeps only its parameters. Without Gaussianity, orthogonality alone gives neither this independence nor the exact conditional mean; the preceding linear minimization remains justified under its own assumptions.</p></li><li><h3>Calculate the updated position and check it</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>m</mi><mo>+</mo></msup><mo>=</mo><msup><mi>m</mi><mo>−</mo></msup><mo>+</mo><mi>K</mi><mo>(</mo><mi>z</mi><mo>−</mo><msup><mi>m</mi><mo>−</mo></msup><mo>)</mo></mrow></math></div><p>Apply K to the difference, then add this displacement to the prediction: (2/3) × 3 = 2 m; 12 + 2 = 14 m. This is the mean of the distribution after incorporating the sensor, rather than an additional observation of the rail.</p><p>Another approach: m⁺ = (1 − K)m⁻ + Kz. The complement is 1/3; the contributions are (1/3) × 12 = 4 m and (2/3) × 15 = 10 m. Their sum is 14 m, as before. The weights sum to 1 and are positive here; 14 m does lie between 12 m and 15 m.</p></li><li><h3>Calculate the variance and check it in two ways</h3><p>At the optimal gain, J(K) gives the conditional variance after the reading. The short form is P⁺ = (1 − K)P⁻, giving (1/3) × 4 = 4/3 m², or approximately 1.3333 m². The expanded form of J, called the scalar Joseph form here, provides a first check without this simplification.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>P</mi><mo>+</mo></msup><mo>=</mo><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>K</mi><mo>)</mo></mrow><mn>2</mn></msup><msup><mi>P</mi><mo>−</mo></msup><mo>+</mo><msup><mi>K</mi><mn>2</mn></msup><mi>R</mi></mrow></math></div><p>The squared weights are 1/9 and 4/9. Their variance contributions are 4/9 m² and 8/9 m²; the sum gives 4/3 m² again. Squaring the weights distinguishes this calculation from a weighted average of the variances.</p><p>A second check uses precisions: for strictly positive P⁻ and R, precision is the inverse of variance. Independent precisions add. Converting back to variance gives P⁺ = P⁻R/(P⁻ + R): the numerator is 8 m⁴ and the denominator 6 m², giving 4/3 m². This quantity is positive and smaller than each of the variances 4 m² and 2 m².</p><p>The final distribution is N(14, 4/3), with mean in m and variance in m². Its variance is independent of the particular value z in this model; it depends on the covariances and coefficients. Its decrease does not measure the actual error of the cart, whose exact position we do not know.</p></li><li><h3>Read the same recursion in matrix form</h3><p>For several coordinates of the same cart, X becomes a vector of size n and Z an observation of size d. The model is X<sub>k</sub> = F times the previous X + u<sub>k</sub> + W<sub>k</sub>, Z<sub>k</sub> = HX<sub>k</sub> + V<sub>k</sub>. F transforms the state, H describes the sensor, and u is a known control input already expressed as a state displacement. The Gaussian and independence assumptions remain those of the scalar calculation.</p><p>n and d count the components of the state and the reading. m and u are columns of size n; F, P and Q are n × n; H is d × n; R and S are d × d; K is n × d. The transpose T exchanges rows and columns. P and Q are symmetric positive semidefinite covariance matrices: every linear combination of errors has a nonnegative variance. R is positive definite: this variance is strictly positive for every nonzero combination of reading errors, which ensures that S is invertible. A covariance relates the errors of two components, in the product of their units. For coordinates and readings all in metres, P, Q, R and S have entries in m²; F, H and K are dimensionless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>m</mi><mo>−</mo></msup><mo>=</mo><mi>F</mi><mi>m</mi><mo>+</mo><mi>u</mi><mo>;</mo><msup><mi>P</mi><mo>−</mo></msup><mo>=</mo><mi>F</mi><mi>P</mi><msup><mi>F</mi><mi>T</mi></msup><mo>+</mo><mi>Q</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ν</mi><mo>=</mo><mi>Z</mi><mo>−</mo><mi>H</mi><msup><mi>m</mi><mo>−</mo></msup><mo>;</mo><mi>S</mi><mo>=</mo><mi>H</mi><msup><mi>P</mi><mo>−</mo></msup><msup><mi>H</mi><mi>T</mi></msup><mo>+</mo><mi>R</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>K</mi><mo>=</mo><msup><mi>P</mi><mo>−</mo></msup><msup><mi>H</mi><mi>T</mi></msup><msup><mi>S</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>;</mo><msup><mi>m</mi><mo>+</mo></msup><mo>=</mo><msup><mi>m</mi><mo>−</mo></msup><mo>+</mo><mi>K</mi><mi>ν</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>P</mi><mo>+</mo></msup><mo>=</mo><msup><mi>P</mi><mo>−</mo></msup><mo>−</mo><mi>K</mi><mi>S</mi><msup><mi>K</mi><mi>T</mi></msup></mrow></math></div><p>The conditional covariance between the predicted error and ν is P⁻Hᵀ. Choosing K to make the residual covariance 0 therefore reproduces the scalar proof. The inverse of S is a matrix inverse; K is usually calculated by solving the system SKᵀ = HP⁻, rather than by inverting entries separately. The resulting covariance recursion is a Riccati recursion. For our rail, n = d = 1, F = 1 and H = 1: it gives exactly the preceding calculation.</p></li><li><h3>Complete the step without adding fictitious information</h3><p>Pass (14 m; 4/3 m²) to the next step. With the same control input and the same Q, the next predicted estimate will be (16 m; 7/3 m²). It can only be updated after a new reading; the second exercise performs this step.</p><p>The filter uses the readings available up to the current step. Recalculating a past position using future readings would be smoothing and would require a different calculation. Feeding a copy of the current reading back in does not create new information either: the last exercise checks this point.</p><p>Innovations have a conditional mean of 0 under the correct model; their orthogonality to past observations provides a diagnostic to study over a sequence. The single difference of 3 m in our example is not enough to establish a bias, independence, or the validity of Q and R.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the equations. Explain how the control input and the noise act differently, why the gain makes a covariance 0, and where Gaussianity turns an optimal linear update into an exact conditional mean. Then reconstruct the estimate passed to the next step.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I can put a standard deviation in R and add the weights to update P.”</h3><p>R is a variance in m². The error weights are squared to calculate J(g); the short form is obtained only after simplification at the optimal gain. Revisit the contributions 4/9 m² and 8/9 m² in the Joseph check.</p><a href="#exemple">Revisit the variance calculation and its units</a></li><li><h3>“A 0 covariance always proves that the update is the exact conditional mean.”</h3><p>0 covariance expresses orthogonality. Here, the joint Gaussian distribution is what allows us to infer conditional independence of the residual and the innovation. Removing this assumption removes this step of the proof, while the minimization of J(g) remains justified under the stated second moments.</p><a href="#exemple">Revisit the projection and Gaussian closure</a></li><li><h3>“If the same packet arrives again, I update again: the variance decreases, so I am learning.”</h3><p>A copy carries the same noise and the same information. Treating it as an independent reading would count the precision twice. A decrease calculated under this false independence establishes no actual improvement.</p><a href="#exercices">Study the duplicated packet in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-capteur"><p class="repere">Exercise 1 · Application and comparison</p>
+<h3>A noisier sensor</h3><p>Start again from the prediction (12 m; 4 m²), with the reading 15 m. Replace only R with 8 m². Predict the direction of the displacement, then calculate the gain, updated mean, and variance. Compare with the estimate in the example.</p>
+<label for="reponse-ex-capteur">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-capteur" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-capteur" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-capteur" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-capteur" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The innovation does not change. The denominator P⁻ + R increases.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the gain exactly, then apply it to 3 m. The variance uses the complement of the gain.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sensor receives less weight: the mean should stay closer to 12 m. S = 4 + 8 = 12 m²; K = 4/12 = 1/3.</p><p>The displacement is (1/3) × 3 = 1 m; the mean becomes 13 m. The complement of the gain is 2/3, so P⁺ = (2/3) × 4 = 8/3 m², or approximately 2.6667 m².</p><p>This variance is larger than 4/3 m²: the reading provides less information than in the example. It remains smaller than 4 m² under the model assumptions. The reading z is not enough to determine the gain: its noise variance also matters.</p><p class="petit-titre">Check your reasoning</p><ul><li>The direction of the change is stated before the update.</li><li>Only R changes; the innovation and prediction are retained.</li><li>The gain is dimensionless, the mean is in m, and the variance is in m².</li></ul></details></article><article class="exercice" id="ex-recurrence"><p class="repere">Exercise 2 · Exact recursion on paper</p>
+<h3>A new reading at the next step</h3><p>Restore R = 2 m² and start again from the original updated estimate (14 m; 4/3 m²). The control input is again 2 m, a = 1, Q = 1 m², and a new independent reading is 14 m. Calculate the entire step without rounding. Why must the mean move back relative to the new prediction?</p>
+<label for="reponse-ex-recurrence">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-recurrence" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-recurrence" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-recurrence" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-recurrence" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First propagate the updated mean and its variance, then subtract the new prediction from the new reading.</p></details><details class="indice"><summary>Hint 2</summary><p>Keep fractions in the gain and the update; round only the final pair.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The prediction is 14 + 2 = 16 m. Its variance is 4/3 + 1 = 7/3 m². The innovation is 14 − 16 = -2 m: it is negative, so the update moves towards smaller positions.</p><p>The innovation variance is 7/3 + 2 = 13/3 m²; the exact gain is (7/3)/(13/3) = 7/13. The displacement is (7/13) × (-2) = -14/13 m.</p><p>The updated mean is 16 + (-14/13) = 194/13 m, or approximately 14.9231 m. The complement is 6/13; P⁺ = (6/13) × (7/3) = 14/13 m², or approximately 1.0769 m².</p><p>Independent check: combining the prediction and reading using precisions gives the mean (R m⁻ + P⁻z)/(P⁻ + R), and the variance P⁻R/(P⁻ + R). Substituting the data from the new step gives the same pair. The mean stays between 14 m and 16 m; the gain has been recalculated, without automatically reusing 2/3.</p><p class="petit-titre">Check your reasoning</p><ul><li>The new step starts from both updated results, without resetting P.</li><li>The negative innovation leads to a negative displacement.</li><li>Exact results precede decimal approximations for reading.</li><li>A second form checks both final results.</li></ul></details></article><article class="exercice" id="ex-doublon"><p class="repere">Exercise 3 · Proof and model diagnosis</p>
+<h3>Two packets, a single piece of information</h3><p>At the step in the original example, the connection transmits the same optical packet 2 times: Z and its copy Z′ = Z. The packets refer to exactly the same instant, with no new displacement. After obtaining (14 m; 4/3 m²) with the first, should you change the estimate with the second? Justify your answer using the conditioning information, then write the covariance of the two innovations calculated from the same initial prediction.</p>
+<label for="reponse-ex-doublon">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-doublon" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-doublon" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-doublon" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-doublon" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Does knowing (Z, Z) allow you to distinguish more situations than knowing Z?</p></details><details class="indice"><summary>Hint 2</summary><p>The two innovations are identical. Their cross covariance therefore equals their variance S, rather than 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Adding a copy of Z to information that already contains Z does not change that information. The conditional distribution therefore remains N(14, 4/3), with mean in m and variance in m². There is no new prediction over time to perform either.</p><p>Given I⁻, both innovations equal ν. Their covariance matrix is as follows; each entry is S = 6 m².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>[</mo><mtable><mtr><mtd><mn>6</mn></mtd><mtd><mn>6</mn></mtd></mtr><mtr><mtd><mn>6</mn></mtd><mtd><mn>6</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Its determinant is S × S − S × S = 0 m⁴: it is singular. The optical noises also have cross covariance R because the copy contains exactly the same noise V. Assuming a diagonal covariance matrix for independent noises would change the model and create fictitious precision. The correct repair in this situation is to discard the duplicate and keep the first estimate.</p><p>Two numerically equal readings taken independently would be a different experiment: equality of the numbers is not enough to prove duplication. Here, it is the identity of the packet and the noise that justifies the absence of new information.</p><p class="petit-titre">Check your reasoning</p><ul><li>The estimate remains (14 m; 4/3 m²), without adding Q.</li><li>The explanation concerns information already known, rather than just equality of values.</li><li>The cross covariances are S for the innovations and R for the noises.</li><li>Singularity is linked to duplication; no entrywise inversion is attempted.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="carte-prediction"><summary><span class="repere">Recall 1</span><span>What does the cart prediction carry, and why do the control input and Q act differently?</span></summary><p>It carries a mean m⁻ = am + u and a variance obtained by multiplying P by the square of a, then adding Q. The known control input shifts the mean without creating dispersion; the independent noise with mean 0 adds its variance without shifting the mean.</p></details><details class="carte" data-carte="carte-projection"><summary><span class="repere">Recall 2</span><span>Which covariance does the gain make 0, and which assumption makes the updated mean exact?</span></summary><p>With e = X − m⁻ and ν = Z − m⁻, the gain K = P⁻/S makes Cov(e − Kν, ν | I⁻) 0. The joint Gaussian distribution turns this orthogonality into conditional independence; the residual retains mean 0 after observing ν. The updated mean is then exactly the conditional mean.</p></details><details class="carte" data-carte="carte-variance"><summary><span class="repere">Recall 3</span><span>How can you check the updated variance using an approach other than its short form?</span></summary><p>Square the weights (1 − K) and K, multiply them by P⁻ and R respectively, then add; or invert the sum of precisions. With the optimal scalar gain, these calculations give P⁻R/(P⁻ + R) again. A small variance remains a consequence of the model, without proving that the actual error is small.</p></details><details class="carte" data-carte="carte-matrice"><summary><span class="repere">Recall 4</span><span>In the matrix gain, what do H, S, and the dimensions of K represent?</span></summary><p>H transforms a state of size n into an observation of size d. S = HP⁻Hᵀ + R is the innovation covariance of size d × d. K, of size n × d, transforms this innovation into a state update. The inverse is a matrix inverse; the units of the gain connect those of the readings to those of the state.</p></details><details class="carte" data-carte="carte-information"><summary><span class="repere">Recall 5</span><span>Why must a copy of the same packet leave the variance unchanged?</span></summary><p>The copy adds nothing to the information already contained in the original reading and carries the same noise. Treating it as independent amounts to falsely changing the observation model. The conditional distribution must remain unchanged.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without looking: state the model and available information; propagate the mean and covariance; define the innovation and its uncertainty; justify the gain using orthogonality; indicate where Gaussianity enters; update both parameters and check their units; finally explain why a duplicated packet adds no information. After an assisted attempt, repeat this reconstruction without support at least 2 days later. Reading or succeeding with a hint does not establish an acquired level.</p></div><div class="exports"><a class="bouton" download="c234-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTI6Y2FydGUtcHJlZGljdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJlZGljdGlvbi1jb25kaXRpb25uZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGNhcnQgcHJlZGljdGlvbiBjYXJyeSwgYW5kIHdoeSBkbyB0aGUgY29udHJvbCBpbnB1dCBhbmQgUSBhY3QgZGlmZmVyZW50bHk/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgY2FycmllcyBhIG1lYW4gbeKBuyA9IGFtICsgdSBhbmQgYSB2YXJpYW5jZSBvYnRhaW5lZCBieSBtdWx0aXBseWluZyBQIGJ5IHRoZSBzcXVhcmUgb2YgYSwgdGhlbiBhZGRpbmcgUS4gVGhlIGtub3duIGNvbnRyb2wgaW5wdXQgc2hpZnRzIHRoZSBtZWFuIHdpdGhvdXQgY3JlYXRpbmcgZGlzcGVyc2lvbjsgdGhlIGluZGVwZW5kZW50IG5vaXNlIHdpdGggbWVhbiAwIGFkZHMgaXRzIHZhcmlhbmNlIHdpdGhvdXQgc2hpZnRpbmcgdGhlIG1lYW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTI6Y2FydGUtcHJvamVjdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJvamVjdGlvbi1nYXVzc2llbm5lIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIGNvdmFyaWFuY2UgZG9lcyB0aGUgZ2FpbiBtYWtlIDAsIGFuZCB3aGljaCBhc3N1bXB0aW9uIG1ha2VzIHRoZSB1cGRhdGVkIG1lYW4gZXhhY3Q/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCBlID0gWCDiiJIgbeKBuyBhbmQgzr0gPSBaIOKIkiBt4oG7LCB0aGUgZ2FpbiBLID0gUOKBuy9TIG1ha2VzIENvdihlIOKIkiBLzr0sIM69IHwgSeKBuykgMC4gVGhlIGpvaW50IEdhdXNzaWFuIGRpc3RyaWJ1dGlvbiB0dXJucyB0aGlzIG9ydGhvZ29uYWxpdHkgaW50byBjb25kaXRpb25hbCBpbmRlcGVuZGVuY2U7IHRoZSByZXNpZHVhbCByZXRhaW5zIG1lYW4gMCBhZnRlciBvYnNlcnZpbmcgzr0uIFRoZSB1cGRhdGVkIG1lYW4gaXMgdGhlbiBleGFjdGx5IHRoZSBjb25kaXRpb25hbCBtZWFuLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0yOmNhcnRlLXZhcmlhbmNlIiwKICAgICAgInVuaXRlIjogImMyMzQtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YXJpYW5jZS1jb25kaXRpb25uZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSBjaGVjayB0aGUgdXBkYXRlZCB2YXJpYW5jZSB1c2luZyBhbiBhcHByb2FjaCBvdGhlciB0aGFuIGl0cyBzaG9ydCBmb3JtPyIsCiAgICAgICJyZXBvbnNlIjogIlNxdWFyZSB0aGUgd2VpZ2h0cyAoMSDiiJIgSykgYW5kIEssIG11bHRpcGx5IHRoZW0gYnkgUOKBuyBhbmQgUiByZXNwZWN0aXZlbHksIHRoZW4gYWRkOyBvciBpbnZlcnQgdGhlIHN1bSBvZiBwcmVjaXNpb25zLiBXaXRoIHRoZSBvcHRpbWFsIHNjYWxhciBnYWluLCB0aGVzZSBjYWxjdWxhdGlvbnMgZ2l2ZSBQ4oG7Ui8oUOKBuyArIFIpIGFnYWluLiBBIHNtYWxsIHZhcmlhbmNlIHJlbWFpbnMgYSBjb25zZXF1ZW5jZSBvZiB0aGUgbW9kZWwsIHdpdGhvdXQgcHJvdmluZyB0aGF0IHRoZSBhY3R1YWwgZXJyb3IgaXMgc21hbGwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTI6Y2FydGUtbWF0cmljZSIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZ2Fpbi1tYXRyaWNpZWwiLAogICAgICAicXVlc3Rpb24iOiAiSW4gdGhlIG1hdHJpeCBnYWluLCB3aGF0IGRvIEgsIFMsIGFuZCB0aGUgZGltZW5zaW9ucyBvZiBLIHJlcHJlc2VudD8iLAogICAgICAicmVwb25zZSI6ICJIIHRyYW5zZm9ybXMgYSBzdGF0ZSBvZiBzaXplIG4gaW50byBhbiBvYnNlcnZhdGlvbiBvZiBzaXplIGQuIFMgPSBIUOKBu0jhtYAgKyBSIGlzIHRoZSBpbm5vdmF0aW9uIGNvdmFyaWFuY2Ugb2Ygc2l6ZSBkIMOXIGQuIEssIG9mIHNpemUgbiDDlyBkLCB0cmFuc2Zvcm1zIHRoaXMgaW5ub3ZhdGlvbiBpbnRvIGEgc3RhdGUgdXBkYXRlLiBUaGUgaW52ZXJzZSBpcyBhIG1hdHJpeCBpbnZlcnNlOyB0aGUgdW5pdHMgb2YgdGhlIGdhaW4gY29ubmVjdCB0aG9zZSBvZiB0aGUgcmVhZGluZ3MgdG8gdGhvc2Ugb2YgdGhlIHN0YXRlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0yOmNhcnRlLWluZm9ybWF0aW9uIiwKICAgICAgInVuaXRlIjogImMyMzQtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbmZvcm1hdGlvbi1ub3V2ZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgbXVzdCBhIGNvcHkgb2YgdGhlIHNhbWUgcGFja2V0IGxlYXZlIHRoZSB2YXJpYW5jZSB1bmNoYW5nZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNvcHkgYWRkcyBub3RoaW5nIHRvIHRoZSBpbmZvcm1hdGlvbiBhbHJlYWR5IGNvbnRhaW5lZCBpbiB0aGUgb3JpZ2luYWwgcmVhZGluZyBhbmQgY2FycmllcyB0aGUgc2FtZSBub2lzZS4gVHJlYXRpbmcgaXQgYXMgaW5kZXBlbmRlbnQgYW1vdW50cyB0byBmYWxzZWx5IGNoYW5naW5nIHRoZSBvYnNlcnZhdGlvbiBtb2RlbC4gVGhlIGNvbmRpdGlvbmFsIGRpc3RyaWJ1dGlvbiBtdXN0IHJlbWFpbiB1bmNoYW5nZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c234-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBjYXJ0IHByZWRpY3Rpb24gY2FycnksIGFuZCB3aHkgZG8gdGhlIGNvbnRyb2wgaW5wdXQgYW5kIFEgYWN0IGRpZmZlcmVudGx5PwlJdCBjYXJyaWVzIGEgbWVhbiBt4oG7ID0gYW0gKyB1IGFuZCBhIHZhcmlhbmNlIG9idGFpbmVkIGJ5IG11bHRpcGx5aW5nIFAgYnkgdGhlIHNxdWFyZSBvZiBhLCB0aGVuIGFkZGluZyBRLiBUaGUga25vd24gY29udHJvbCBpbnB1dCBzaGlmdHMgdGhlIG1lYW4gd2l0aG91dCBjcmVhdGluZyBkaXNwZXJzaW9uOyB0aGUgaW5kZXBlbmRlbnQgbm9pc2Ugd2l0aCBtZWFuIDAgYWRkcyBpdHMgdmFyaWFuY2Ugd2l0aG91dCBzaGlmdGluZyB0aGUgbWVhbi4JdG9kYWkgYzIzNC1tMiBwcmVkaWN0aW9uLWNvbmRpdGlvbm5lbGxlCldoaWNoIGNvdmFyaWFuY2UgZG9lcyB0aGUgZ2FpbiBtYWtlIDAsIGFuZCB3aGljaCBhc3N1bXB0aW9uIG1ha2VzIHRoZSB1cGRhdGVkIG1lYW4gZXhhY3Q/CVdpdGggZSA9IFgg4oiSIG3igbsgYW5kIM69ID0gWiDiiJIgbeKBuywgdGhlIGdhaW4gSyA9IFDigbsvUyBtYWtlcyBDb3YoZSDiiJIgS869LCDOvSB8IEnigbspIDAuIFRoZSBqb2ludCBHYXVzc2lhbiBkaXN0cmlidXRpb24gdHVybnMgdGhpcyBvcnRob2dvbmFsaXR5IGludG8gY29uZGl0aW9uYWwgaW5kZXBlbmRlbmNlOyB0aGUgcmVzaWR1YWwgcmV0YWlucyBtZWFuIDAgYWZ0ZXIgb2JzZXJ2aW5nIM69LiBUaGUgdXBkYXRlZCBtZWFuIGlzIHRoZW4gZXhhY3RseSB0aGUgY29uZGl0aW9uYWwgbWVhbi4JdG9kYWkgYzIzNC1tMiBwcm9qZWN0aW9uLWdhdXNzaWVubmUKSG93IGNhbiB5b3UgY2hlY2sgdGhlIHVwZGF0ZWQgdmFyaWFuY2UgdXNpbmcgYW4gYXBwcm9hY2ggb3RoZXIgdGhhbiBpdHMgc2hvcnQgZm9ybT8JU3F1YXJlIHRoZSB3ZWlnaHRzICgxIOKIkiBLKSBhbmQgSywgbXVsdGlwbHkgdGhlbSBieSBQ4oG7IGFuZCBSIHJlc3BlY3RpdmVseSwgdGhlbiBhZGQ7IG9yIGludmVydCB0aGUgc3VtIG9mIHByZWNpc2lvbnMuIFdpdGggdGhlIG9wdGltYWwgc2NhbGFyIGdhaW4sIHRoZXNlIGNhbGN1bGF0aW9ucyBnaXZlIFDigbtSLyhQ4oG7ICsgUikgYWdhaW4uIEEgc21hbGwgdmFyaWFuY2UgcmVtYWlucyBhIGNvbnNlcXVlbmNlIG9mIHRoZSBtb2RlbCwgd2l0aG91dCBwcm92aW5nIHRoYXQgdGhlIGFjdHVhbCBlcnJvciBpcyBzbWFsbC4JdG9kYWkgYzIzNC1tMiB2YXJpYW5jZS1jb25kaXRpb25uZWxsZQpJbiB0aGUgbWF0cml4IGdhaW4sIHdoYXQgZG8gSCwgUywgYW5kIHRoZSBkaW1lbnNpb25zIG9mIEsgcmVwcmVzZW50PwlIIHRyYW5zZm9ybXMgYSBzdGF0ZSBvZiBzaXplIG4gaW50byBhbiBvYnNlcnZhdGlvbiBvZiBzaXplIGQuIFMgPSBIUOKBu0jhtYAgKyBSIGlzIHRoZSBpbm5vdmF0aW9uIGNvdmFyaWFuY2Ugb2Ygc2l6ZSBkIMOXIGQuIEssIG9mIHNpemUgbiDDlyBkLCB0cmFuc2Zvcm1zIHRoaXMgaW5ub3ZhdGlvbiBpbnRvIGEgc3RhdGUgdXBkYXRlLiBUaGUgaW52ZXJzZSBpcyBhIG1hdHJpeCBpbnZlcnNlOyB0aGUgdW5pdHMgb2YgdGhlIGdhaW4gY29ubmVjdCB0aG9zZSBvZiB0aGUgcmVhZGluZ3MgdG8gdGhvc2Ugb2YgdGhlIHN0YXRlLgl0b2RhaSBjMjM0LW0yIGdhaW4tbWF0cmljaWVsCldoeSBtdXN0IGEgY29weSBvZiB0aGUgc2FtZSBwYWNrZXQgbGVhdmUgdGhlIHZhcmlhbmNlIHVuY2hhbmdlZD8JVGhlIGNvcHkgYWRkcyBub3RoaW5nIHRvIHRoZSBpbmZvcm1hdGlvbiBhbHJlYWR5IGNvbnRhaW5lZCBpbiB0aGUgb3JpZ2luYWwgcmVhZGluZyBhbmQgY2FycmllcyB0aGUgc2FtZSBub2lzZS4gVHJlYXRpbmcgaXQgYXMgaW5kZXBlbmRlbnQgYW1vdW50cyB0byBmYWxzZWx5IGNoYW5naW5nIHRoZSBvYnNlcnZhdGlvbiBtb2RlbC4gVGhlIGNvbmRpdGlvbmFsIGRpc3RyaWJ1dGlvbiBtdXN0IHJlbWFpbiB1bmNoYW5nZWQuCXRvZGFpIGMyMzQtbTIgaW5mb3JtYXRpb24tbm91dmVsbGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gowjgo jsemji edyd</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iyluhc lgnknt yzrjpt wnjkup xyihoy qpypyh dzgx</span></span></h3><dl><div><dt>You understand</dt><dd>The linear Gaussian filter calculates a conditional distribution from new readings, with a mean and a covariance. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qvgifg vmiipi cxmfxj aahsgj znfwcx emcvzs bxqp</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nzzyxi tgnfxz wwdnlf kkdzeh wqrjvg ncthmq otmqhz pdkzwp vmgbjd begfss byxhva elyzoq zcbsxn krmxfk rapfje ftmthx ixqkxd qypwdo glmeyx vmdmyw rtqphm cydjui vdcdlg lrqynn</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 4 to prepare for: reconstruct the recursion, justify the conditional mean using the Gaussian argument, and explain the singular matrix of a duplicate. Reading, consulting a solution, or giving an assisted answer does not establish acquisition.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ethxzj snbhqd htvosr jedojk iwzdcg jzomua ewiojz byqcid gbwviy ktdvxv ngjzmw pvqawr zmryza vhcqxb hxlgkv lodhgv cirwfk yhpkza rggdkn ygjjre gcrtnz kvkcwm bizpqc fexkwm</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the exercises and proof without support after the stated delay. The next unit covers nonlinear filtering. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">prdnkw kuhoqf xyqfns zhvdnt tbbgpb gbkdwe xgowuc okdbkv ikjcxe ueuzgw adwgfp fgsehx tkqutj zo</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c234-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c234-m1.html">Previous</a> · <a href="c234-m3.html">Next</a></nav>
+<footer><p>Course book · C234·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

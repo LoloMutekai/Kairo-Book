@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Represent a duration with finite precision, track each rounding step in a sum and check the resulting error.">
+<title>C051·M1 · Floating-point numbers — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">axlcxq wtbdsw xpjf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C051·M1</p><h1>Floating-point numbers</h1><p class="objectif"><span>Your goal</span>Represent a duration with finite precision, track each rounding step in a sum and check the resulting error.</p><p class="prerequis"><strong>Before you start</strong><br>c046-m5 : approximation error · c050-m5 : conditioning · c015-m5 : diagnosis · c036-m5 : annotated graphs</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A timer adds a long phase of 1 s, then 2 short phases of 0.125 s each. On paper, their total duration is 1.250 s. Yet a calculator that keeps very few digits can stay at 1.000 s after each addition. Where did the short durations go?</p><p>Imagine a ruler on which only certain marks can be stored. Between 1.000 s and 1.250 s, our ruler has no intermediate mark. The exact sum 1.125 s falls halfway between them; a neighbor must be chosen for storage. Some information has been lost before the next addition.</p><p>A floating-point number, or float, stores significant digits and a scale. The scale moves the decimal point; the number of digits kept remains limited. The marks are therefore farther apart for large values. Rounding means choosing a representable value, rather than just shortening its display.</p><p>The scene, durations and precision are fictional. We will use 3 significant binary digits to work through the rounding by hand. This reduced format is not the usual format of a Python program; the numerical results below belong to our model. The data represent exact durations, with no measurement noise.</p><div class="schemas"><figure><svg viewBox="0 0 360 225" xmlns="http://www.w3.org/2000/svg" role="img"><title>A sum between the marks</title><desc>The neighboring storable numbers are 1.000 s and 1.250 s. The exact sum 1.125 s is equally far from both. The tie-breaking rule chooses 1.000 s.</desc><text x="180" y="26" text-anchor="middle">Sum before rounding</text><text x="180" y="51" text-anchor="middle" class="mesure">1.125 s</text><line x1="180" y1="59" x2="180" y2="86" class="trait" /><line x1="40" y1="95" x2="320" y2="95" class="trait" /><circle cx="40" cy="95" r="6" class="point-prediction" /><circle cx="180" cy="95" r="5" class="point-mesure" /><circle cx="320" cy="95" r="6" class="resultat" /><text x="40" y="126" text-anchor="middle" class="petite-etiquette">1.000 s</text><text x="320" y="126" text-anchor="middle" class="petite-etiquette">1.250 s</text><path d="M180 145H40l8-5m-8 5 8 5" class="trait" /><text x="180" y="174" text-anchor="middle" class="petite-etiquette">Tie: choose a neighbor</text><text x="180" y="204" text-anchor="middle">Stored: 1.000 s</text></svg><figcaption>The central point marks an exact sum, rather than a storable mark on the scale. The spacing between the neighbors is 0.250 s. The round-to-nearest rule, with ties to even, will be defined in the example.</figcaption></figure><figure><svg viewBox="0 0 360 265" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same durations, two calculation orders</title><desc>The data are 1 s, 0.125 s and 0.125 s. Successive additions give 1 s. Grouping the short durations first gives 0.250 s, then 1.250 s.</desc><rect x="20" y="12" width="320" height="63" rx="7" class="cadre-neutre" /><text x="180" y="37" text-anchor="middle">The same durations</text><text x="180" y="61" text-anchor="middle">1.000 + 0.125 + 0.125 s</text><rect x="20" y="101" width="320" height="65" rx="7" class="cadre-prediction" /><text x="180" y="127" text-anchor="middle">Add in sequence</text><text x="180" y="152" text-anchor="middle">1.000 then 1.000 s</text><rect x="20" y="190" width="320" height="65" rx="7" class="cadre-resultat" /><text x="180" y="216" text-anchor="middle">Group the short durations</text><text x="180" y="241" text-anchor="middle">0.250 then 1.250 s</text></svg><figcaption>Each lower panel starts again from the data at the top. The results differ because the rounded intermediate sums differ. The panels do not describe changes to the durations.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Distinguish the exact number, its representation and the result of each rounded operation. A short duration can be representable on its own and disappear when added to a longer duration.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Recover the durations lost by the timer</h3><p>Let a = 1 s be the long phase and b = c = 1/8 s = 0.125 s the short phases. We want to compare successive additions with grouping the short phases. All operations use the same reduced format and the same rounding rule.</p><ol class="etapes"><li><h3>Define the storage rule exactly</h3><p>A binary digit, called a bit, is 0 or 1. The precision p = 3 counts all significant digits, including the first nonzero digit. For a nonzero value, our format stores a sign S, an integer significand M and an integer exponent e. S is 0 for a positive number and 1 for a negative number. M is between 4 and 7 inclusive: these are the integers whose binary representation uses exactly 3 bits.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>v</mi><mo>=</mo><msup><mrow><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mi>S</mi></msup><mo>×</mo><mi>M</mi><mo>×</mo><msup><mn>2</mn><mi>e</mi></msup></mrow></math></div><p>v denotes the numerical value of the duration expressed in seconds; S, M, e and p are dimensionless. The factor 2 is the binary base. 0 is represented separately. The exponent range is assumed to be sufficient for this scene. Real formats also have exponent limits: they can encounter values that are too large or too small, cases we do not use here.</p><p>fl(x) denotes rounding x to the nearest representable number. When the distances are equal, choose the neighbor whose M is even. This is the ties-to-even rule: it concerns the last significant digit, rather than the parity of the duration expressed in seconds. Finally, x ⊕ y means fl(x + y): add exactly, then round once.</p></li><li><h3>Check the inputs and spacings</h3><p>The numerical value of a can be written as 4 × 2^(-2) = 1; that of b as 4 × 2^(-5) = 1/8. The inputs are therefore exactly representable: no conversion error explains the result that follows.</p><p>From 1 s inclusive to 2 s exclusive, e = -2. Increasing M by one adds 1/4 s = 0.250 s: this is the spacing h between neighbors. The neighbor immediately above a is 5 × 2^(-2) s = 1.250 s. Around b, toward larger values, the spacing is only 1/32 s = 0.03125 s.</p><p>This shift of scale explains the word floating. From 2 s onward, the spacing toward larger values becomes 0.500 s. Precision therefore does not mean that the absolute gap between neighbors stays constant.</p></li><li><h3>Keep an exact reference before rounding</h3><p>The phases follow one another without overlap, so their durations add together. Expressing everything in eighths of a second gives a total numerator of 8 + 1 + 1 = 10. The exact duration t is therefore 10/8 s = 5/4 s = 1.250 s. This fraction serves as an independent check; it does not come from the result displayed by the timer.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>t</mi><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>+</mo><mi>c</mi><mo>=</mo><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mn>8</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>8</mn></mfrac><mo>=</mo><mfrac><mn>5</mn><mn>4</mn></mfrac><mtext> s</mtext></mrow></math></div></li><li><h3>Perform the first addition and decide how to round</h3><p>Before rounding, a + b = 1.125 s. The lower neighbor is 1.000 s and the upper neighbor is 1.250 s. The distances are 1.125 − 1.000 = 0.125 s and 1.250 − 1.125 = 0.125 s. There is a tie.</p><p>The neighbors have the same exponent, with M = 4 below and M = 5 above. The first M is even: a ⊕ b = 1.000 s. The short phase has been absorbed by rounding, although it is positive and exactly representable on its own. The stored result no longer contains a hidden remainder of 0.125 s.</p></li><li><h3>Start from the number actually stored</h3><p>The next addition starts from 1.000 s. Its exact sum with c is 1.125 s, the same midpoint as before. The same tie-breaking rule again gives 1.000 s. Let r denote this final result: r = (a ⊕ b) ⊕ c.</p><p>The absolute error E is the distance from the exact total: E = |r − t| = 0.250 s. The relative error R = E/|t| is 1/5 = 0.20, with no unit. It is defined here because t is nonzero. Check by another route: each addition removed 0.125 s; together they removed 2 × 0.125 s = 0.250 s.</p><p>A normal representation keeps a nonzero first significant digit with an exponent in the allowed range, as in our notation using M. For a single rounding step in this range, the relative error can be bounded by u = 2^(−p). Here u = 1/8. The first rounding gives 1/9 ≈ 0.1111, less than u. Yet the final relative error 0.20 exceeds u: a bound for a single rounding step is not an automatic bound for a calculation with several operations.</p></li><li><h3>Change the intermediate values, then check</h3><p>First calculate b ⊕ c. The sum 0.125 + 0.125 = 0.250 s is representable, so it is kept exactly. Adding it to a then gives 1.000 + 0.250 = 1.250 s, which is also representable.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>(</mo><mi>a</mi><mo>⊕</mo><mi>b</mi><mo>)</mo><mo>⊕</mo><mi>c</mi><mo>=</mo><mn>1.000</mn><mtext> s</mtext><mo>≠</mo><mi>a</mi><mo>⊕</mo><mo>(</mo><mi>b</mi><mo>⊕</mo><mi>c</mi><mo>)</mo><mo>=</mo><mn>1.250</mn><mtext> s</mtext></mrow></math></div><p>Floating-point addition is therefore not associative: moving the parentheses can change the result. Here grouping recovers t exactly, with a difference of 0 s. This check relies on the representable intermediate values in this scene. It does not prove that grouping small values always gives an exact result.</p></li><li><h3>Distinguish numerical checks from measurement accuracy</h3><p>Suppose the timer&#x27;s fictional specification allows an absolute difference of τ = 1/16 s = 0.0625 s for this calculation. For a candidate value y, the check passes when |y − t| ≤ τ. y and t are durations in seconds; τ is an absolute tolerance in the same unit.</p><p>The successive calculation fails: 0.2500 s &gt; 0.0625 s. Grouping passes: 0 s ≤ 0.0625 s. A tolerance comes from the required accuracy; widening it to accept a result does not fix the calculation. In a real test, the reference t would also need to be justified. Our checks concern only exact fictional numbers and do not establish a timer&#x27;s physical accuracy.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the results. Draw the neighbors of the first sum and justify the tie-breaking choice. Then work through both groupings again, showing when information disappears. Why would displaying more decimal places at the end fail to bring it back?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Each duration is exact, so their sum will be exact too.”</h3><p>The set of representable values is not closed under exact addition. Here the inputs are representable, but 1.125 s is not. Fix the reasoning by checking each intermediate value before storing it.</p><a href="#exemple">Review the neighbors and the first rounding step</a></li><li><h3>“Parentheses never change an addition.”</h3><p>This property holds for exact addition, but each ⊕ includes rounding. Compare the intermediate values 1.125 s and 0.250 s, then the results 1.000 s and 1.250 s.</p><a href="#intuition">Compare the panels for the two groupings</a></li><li><h3>“I can increase the tolerance until the check passes.”</h3><p>That changes the required accuracy without recovering the lost durations. Keep the justified tolerance, measure the difference from an independent reference and change the calculation method if it fails.</p><a href="#exercices">Audit the timer&#x27;s check</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-echelle"><p class="repere">Exercise 1 · Read a representation</p>
+<h3>A short duration can exist on its own</h3><p>Using the example&#x27;s format, write the numerical value of b = 0.125 s in the form M × 2^e. Give the spacing toward larger values around b, then around 2 s. Explain why b can be stored on its own but disappear in a ⊕ b.</p>
+<label for="reponse-ex-echelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-echelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-echelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-echelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-echelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>M must stay between 4 and 7. For b, find a power of 2 that multiplies 4.</p></details><details class="indice"><summary>Hint 2</summary><p>With a fixed exponent, increasing M by one gives the gap between neighboring values. Then check the position of a + b.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For b, M = 4 and e = -5: 4 × 2^(-5) = 1/8. The upward spacing is 1/32 s = 0.03125 s. Around 2 s, in the upward direction, the scale gives a spacing of 0.500 s.</p><p>Representing b on its own and representing a + b are two different questions. The sum 1.125 s falls between 1.000 s and 1.250 s; the ties-to-even rule rounds it to 1.000 s. Its disappearance therefore does not mean that the duration b has become 0.</p><p class="petit-titre">Check your reasoning</p><ul><li>I give M and e, then check their exact product.</li><li>I distinguish the spacings 0.03125 s and 0.500 s in their respective regions.</li><li>I explain the loss through rounding the sum, without changing b.</li></ul></details></article><article class="exercice" id="ex-entree"><p class="repere">Exercise 2 · Calculate input rounding</p>
+<h3>The short phase changes duration</h3><p>This time, the same timer receives a short phase of exactly d = 0.1 s. Its representable neighbors are 3/32 s and 7/64 s. Calculate the exact distances, choose fl(d), then give the absolute input error. This exercise concerns only the storage of this phase.</p>
+<label for="reponse-ex-entree">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-entree" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-entree" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-entree" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-entree" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The neighbors can be written as 6 × 2^(-6) and 7 × 2^(-6). Compare d with the lower neighbor and the upper neighbor with d.</p></details><details class="indice"><summary>Hint 2</summary><p>Keep exact fractions to compare the distances; there will be no tie to break.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The lower neighbor is 0.09375 s and the upper neighbor is 0.109375 s. Distance downward: 1/10 − 3/32 = 1/160 s = 0.00625 s. Distance upward: 7/64 − 1/10 = 3/320 s = 0.009375 s.</p><p>The downward distance is smaller. Therefore fl(d) = 3/32 s; the absolute input error is 1/160 s. The ties-to-even rule does not come into play. This error exists before any addition to the total.</p><p>A fraction in lowest terms has a finite binary representation only if its denominator is a power of 2. The denominator 10 also contains the factor 5: the value 1/10 has no finite binary representation. Even a finite binary representation must still fit within the p available digits to be exactly representable.</p><p class="petit-titre">Check your reasoning</p><ul><li>I calculate both distances in seconds and compare them without premature rounding.</li><li>I choose 3/32 s and the difference 1/160 s.</li><li>I distinguish this input conversion from the rounding of operations in the original example.</li></ul></details></article><article class="exercice" id="ex-audit"><p class="repere">Exercise 3 · Diagnose and fix</p>
+<h3>Is a green indicator enough?</h3><p>Start again from the original durations. Someone calculates the total in sequence, obtains 1.000 s, then chooses a tolerance of 0.250 s because the check turns green. The specification still requires 0.0625 s. Recover the exact reference, evaluate both tolerances and propose a calculation that meets the specification. State the scope of this fix.</p>
+<label for="reponse-ex-audit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-audit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-audit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-audit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-audit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Reconstruct t using fractions, without starting from the result 1.000 s.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the same error with both thresholds, then check the intermediate values of the grouping.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The reference remains t = 1 + 1/8 + 1/8 = 5/4 s. The difference for the successive result is 0.2500 s. With the chosen threshold of 0.2500 s, the check |y − t| ≤ τ accepts equality at the boundary. With the required threshold of 0.0625 s, it fails. The green indicator therefore does not certify compliance with the specification.</p><p>Grouping the short phases produces 0.250 s, then 1.250 s. The difference becomes 0 s; this method meets the required threshold for the exercise&#x27;s exact data and format. Keep the reference and required threshold to check the fix.</p><p>For other durations, this example alone guarantees nothing. The representation, intermediate values and error budget would need to be checked again. Greater precision or a more careful summation method could also be considered; each needs its own verification. No numerical check on these fictional data proves the accuracy of a real measurement.</p><p class="petit-titre">Check your reasoning</p><ul><li>I reconstruct t and justify each verdict using seconds as the unit.</li><li>I keep the required tolerance rather than adapting it to the result.</li><li>I propose grouping with its exact check and limit my conclusion to this case.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="representation"><summary><span class="repere">Recall 1</span><span>What does a float store, and why does the spacing change with magnitude?</span></summary><p>A sign, a limited number of significant digits and an exponent that sets their scale. The same change in the last digit represents a larger absolute gap when the scale increases. Precision is a number of significant digits, rather than a fixed number of decimal places after the decimal point.</p></details><details class="carte" data-carte="arrondi"><summary><span class="repere">Recall 2</span><span>How do you determine fl(x) in the model, including at the midpoint between two neighbors?</span></summary><p>Compare the exact distances to the representable neighbors. Choose the nearest; if there is a tie, choose the one whose integer significand M is even. This tie-breaking rule does not mean choosing an even whole number of seconds.</p></details><details class="carte" data-carte="absorption"><summary><span class="repere">Recall 3</span><span>Why do our two groupings give different totals when all the inputs are exact?</span></summary><p>Each addition of a short phase to a gives an intermediate sum that is not representable and is rounded to a. Grouping the short phases produces a representable intermediate value, then a representable total. Intermediate rounding makes floating-point addition non-associative.</p></details><details class="carte" data-carte="erreur"><summary><span class="repere">Recall 4</span><span>How do you distinguish absolute error, relative error and a bound for a single rounding step?</span></summary><p>With r calculated and t exact, the absolute error is |r − t| in the unit of the calculation. The relative error is the same difference divided by |t|, with no unit, if t is nonzero. The bound u for a single rounding step does not automatically bound the final error of several operations.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>What must be established for a tolerance check to be useful?</span></summary><p>A justified reference, a tolerance based on the required accuracy and consistent units. Comparing the difference with this threshold checks the stated criterion; it replaces neither the reference nor the validation of a physical measurement.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without looking: describe the storage, draw the neighbors of a sum, explain the tie-breaking rule, then work through both timer groupings again. Finish with the absolute error, relative error and check against the required threshold. Reading or an answer obtained after a hint does not establish that a level has been attained; recall the reasoning without help during a delayed recall session.</p></div><div class="exports"><a class="bouton" download="c051-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTEtbTE6cmVwcmVzZW50YXRpb24iLAogICAgICAidW5pdGUiOiAiYzA1MS1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlcHJlc2VudGF0aW9uLWZsb3R0YW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBmbG9hdCBzdG9yZSwgYW5kIHdoeSBkb2VzIHRoZSBzcGFjaW5nIGNoYW5nZSB3aXRoIG1hZ25pdHVkZT8iLAogICAgICAicmVwb25zZSI6ICJBIHNpZ24sIGEgbGltaXRlZCBudW1iZXIgb2Ygc2lnbmlmaWNhbnQgZGlnaXRzIGFuZCBhbiBleHBvbmVudCB0aGF0IHNldHMgdGhlaXIgc2NhbGUuIFRoZSBzYW1lIGNoYW5nZSBpbiB0aGUgbGFzdCBkaWdpdCByZXByZXNlbnRzIGEgbGFyZ2VyIGFic29sdXRlIGdhcCB3aGVuIHRoZSBzY2FsZSBpbmNyZWFzZXMuIFByZWNpc2lvbiBpcyBhIG51bWJlciBvZiBzaWduaWZpY2FudCBkaWdpdHMsIHJhdGhlciB0aGFuIGEgZml4ZWQgbnVtYmVyIG9mIGRlY2ltYWwgcGxhY2VzIGFmdGVyIHRoZSBkZWNpbWFsIHBvaW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUxLW0xOmFycm9uZGkiLAogICAgICAidW5pdGUiOiAiYzA1MS1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFycm9uZGktYXUtcGx1cy1wcm9jaGUiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBkZXRlcm1pbmUgZmwoeCkgaW4gdGhlIG1vZGVsLCBpbmNsdWRpbmcgYXQgdGhlIG1pZHBvaW50IGJldHdlZW4gdHdvIG5laWdoYm9ycz8iLAogICAgICAicmVwb25zZSI6ICJDb21wYXJlIHRoZSBleGFjdCBkaXN0YW5jZXMgdG8gdGhlIHJlcHJlc2VudGFibGUgbmVpZ2hib3JzLiBDaG9vc2UgdGhlIG5lYXJlc3Q7IGlmIHRoZXJlIGlzIGEgdGllLCBjaG9vc2UgdGhlIG9uZSB3aG9zZSBpbnRlZ2VyIHNpZ25pZmljYW5kIE0gaXMgZXZlbi4gVGhpcyB0aWUtYnJlYWtpbmcgcnVsZSBkb2VzIG5vdCBtZWFuIGNob29zaW5nIGFuIGV2ZW4gd2hvbGUgbnVtYmVyIG9mIHNlY29uZHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTEtbTE6YWJzb3JwdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDUxLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYWJzb3JwdGlvbi1ldC1hc3NvY2lhdGl2aXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkbyBvdXIgdHdvIGdyb3VwaW5ncyBnaXZlIGRpZmZlcmVudCB0b3RhbHMgd2hlbiBhbGwgdGhlIGlucHV0cyBhcmUgZXhhY3Q/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBhZGRpdGlvbiBvZiBhIHNob3J0IHBoYXNlIHRvIGEgZ2l2ZXMgYW4gaW50ZXJtZWRpYXRlIHN1bSB0aGF0IGlzIG5vdCByZXByZXNlbnRhYmxlIGFuZCBpcyByb3VuZGVkIHRvIGEuIEdyb3VwaW5nIHRoZSBzaG9ydCBwaGFzZXMgcHJvZHVjZXMgYSByZXByZXNlbnRhYmxlIGludGVybWVkaWF0ZSB2YWx1ZSwgdGhlbiBhIHJlcHJlc2VudGFibGUgdG90YWwuIEludGVybWVkaWF0ZSByb3VuZGluZyBtYWtlcyBmbG9hdGluZy1wb2ludCBhZGRpdGlvbiBub24tYXNzb2NpYXRpdmUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTEtbTE6ZXJyZXVyIiwKICAgICAgInVuaXRlIjogImMwNTEtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlcnJldXItYWJzb2x1ZS1yZWxhdGl2ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGRpc3Rpbmd1aXNoIGFic29sdXRlIGVycm9yLCByZWxhdGl2ZSBlcnJvciBhbmQgYSBib3VuZCBmb3IgYSBzaW5nbGUgcm91bmRpbmcgc3RlcD8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIHIgY2FsY3VsYXRlZCBhbmQgdCBleGFjdCwgdGhlIGFic29sdXRlIGVycm9yIGlzIHxyIOKIkiB0fCBpbiB0aGUgdW5pdCBvZiB0aGUgY2FsY3VsYXRpb24uIFRoZSByZWxhdGl2ZSBlcnJvciBpcyB0aGUgc2FtZSBkaWZmZXJlbmNlIGRpdmlkZWQgYnkgfHR8LCB3aXRoIG5vIHVuaXQsIGlmIHQgaXMgbm9uemVyby4gVGhlIGJvdW5kIHUgZm9yIGEgc2luZ2xlIHJvdW5kaW5nIHN0ZXAgZG9lcyBub3QgYXV0b21hdGljYWxseSBib3VuZCB0aGUgZmluYWwgZXJyb3Igb2Ygc2V2ZXJhbCBvcGVyYXRpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUxLW0xOmNvbnRyb2xlIiwKICAgICAgInVuaXRlIjogImMwNTEtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0b2xlcmFuY2UtanVzdGlmaWVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgbXVzdCBiZSBlc3RhYmxpc2hlZCBmb3IgYSB0b2xlcmFuY2UgY2hlY2sgdG8gYmUgdXNlZnVsPyIsCiAgICAgICJyZXBvbnNlIjogIkEganVzdGlmaWVkIHJlZmVyZW5jZSwgYSB0b2xlcmFuY2UgYmFzZWQgb24gdGhlIHJlcXVpcmVkIGFjY3VyYWN5IGFuZCBjb25zaXN0ZW50IHVuaXRzLiBDb21wYXJpbmcgdGhlIGRpZmZlcmVuY2Ugd2l0aCB0aGlzIHRocmVzaG9sZCBjaGVja3MgdGhlIHN0YXRlZCBjcml0ZXJpb247IGl0IHJlcGxhY2VzIG5laXRoZXIgdGhlIHJlZmVyZW5jZSBub3IgdGhlIHZhbGlkYXRpb24gb2YgYSBwaHlzaWNhbCBtZWFzdXJlbWVudC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c051-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgZmxvYXQgc3RvcmUsIGFuZCB3aHkgZG9lcyB0aGUgc3BhY2luZyBjaGFuZ2Ugd2l0aCBtYWduaXR1ZGU/CUEgc2lnbiwgYSBsaW1pdGVkIG51bWJlciBvZiBzaWduaWZpY2FudCBkaWdpdHMgYW5kIGFuIGV4cG9uZW50IHRoYXQgc2V0cyB0aGVpciBzY2FsZS4gVGhlIHNhbWUgY2hhbmdlIGluIHRoZSBsYXN0IGRpZ2l0IHJlcHJlc2VudHMgYSBsYXJnZXIgYWJzb2x1dGUgZ2FwIHdoZW4gdGhlIHNjYWxlIGluY3JlYXNlcy4gUHJlY2lzaW9uIGlzIGEgbnVtYmVyIG9mIHNpZ25pZmljYW50IGRpZ2l0cywgcmF0aGVyIHRoYW4gYSBmaXhlZCBudW1iZXIgb2YgZGVjaW1hbCBwbGFjZXMgYWZ0ZXIgdGhlIGRlY2ltYWwgcG9pbnQuCXRvZGFpIGMwNTEtbTEgcmVwcmVzZW50YXRpb24tZmxvdHRhbnRlCkhvdyBkbyB5b3UgZGV0ZXJtaW5lIGZsKHgpIGluIHRoZSBtb2RlbCwgaW5jbHVkaW5nIGF0IHRoZSBtaWRwb2ludCBiZXR3ZWVuIHR3byBuZWlnaGJvcnM/CUNvbXBhcmUgdGhlIGV4YWN0IGRpc3RhbmNlcyB0byB0aGUgcmVwcmVzZW50YWJsZSBuZWlnaGJvcnMuIENob29zZSB0aGUgbmVhcmVzdDsgaWYgdGhlcmUgaXMgYSB0aWUsIGNob29zZSB0aGUgb25lIHdob3NlIGludGVnZXIgc2lnbmlmaWNhbmQgTSBpcyBldmVuLiBUaGlzIHRpZS1icmVha2luZyBydWxlIGRvZXMgbm90IG1lYW4gY2hvb3NpbmcgYW4gZXZlbiB3aG9sZSBudW1iZXIgb2Ygc2Vjb25kcy4JdG9kYWkgYzA1MS1tMSBhcnJvbmRpLWF1LXBsdXMtcHJvY2hlCldoeSBkbyBvdXIgdHdvIGdyb3VwaW5ncyBnaXZlIGRpZmZlcmVudCB0b3RhbHMgd2hlbiBhbGwgdGhlIGlucHV0cyBhcmUgZXhhY3Q/CUVhY2ggYWRkaXRpb24gb2YgYSBzaG9ydCBwaGFzZSB0byBhIGdpdmVzIGFuIGludGVybWVkaWF0ZSBzdW0gdGhhdCBpcyBub3QgcmVwcmVzZW50YWJsZSBhbmQgaXMgcm91bmRlZCB0byBhLiBHcm91cGluZyB0aGUgc2hvcnQgcGhhc2VzIHByb2R1Y2VzIGEgcmVwcmVzZW50YWJsZSBpbnRlcm1lZGlhdGUgdmFsdWUsIHRoZW4gYSByZXByZXNlbnRhYmxlIHRvdGFsLiBJbnRlcm1lZGlhdGUgcm91bmRpbmcgbWFrZXMgZmxvYXRpbmctcG9pbnQgYWRkaXRpb24gbm9uLWFzc29jaWF0aXZlLgl0b2RhaSBjMDUxLW0xIGFic29ycHRpb24tZXQtYXNzb2NpYXRpdml0ZQpIb3cgZG8geW91IGRpc3Rpbmd1aXNoIGFic29sdXRlIGVycm9yLCByZWxhdGl2ZSBlcnJvciBhbmQgYSBib3VuZCBmb3IgYSBzaW5nbGUgcm91bmRpbmcgc3RlcD8JV2l0aCByIGNhbGN1bGF0ZWQgYW5kIHQgZXhhY3QsIHRoZSBhYnNvbHV0ZSBlcnJvciBpcyB8ciDiiJIgdHwgaW4gdGhlIHVuaXQgb2YgdGhlIGNhbGN1bGF0aW9uLiBUaGUgcmVsYXRpdmUgZXJyb3IgaXMgdGhlIHNhbWUgZGlmZmVyZW5jZSBkaXZpZGVkIGJ5IHx0fCwgd2l0aCBubyB1bml0LCBpZiB0IGlzIG5vbnplcm8uIFRoZSBib3VuZCB1IGZvciBhIHNpbmdsZSByb3VuZGluZyBzdGVwIGRvZXMgbm90IGF1dG9tYXRpY2FsbHkgYm91bmQgdGhlIGZpbmFsIGVycm9yIG9mIHNldmVyYWwgb3BlcmF0aW9ucy4JdG9kYWkgYzA1MS1tMSBlcnJldXItYWJzb2x1ZS1yZWxhdGl2ZQpXaGF0IG11c3QgYmUgZXN0YWJsaXNoZWQgZm9yIGEgdG9sZXJhbmNlIGNoZWNrIHRvIGJlIHVzZWZ1bD8JQSBqdXN0aWZpZWQgcmVmZXJlbmNlLCBhIHRvbGVyYW5jZSBiYXNlZCBvbiB0aGUgcmVxdWlyZWQgYWNjdXJhY3kgYW5kIGNvbnNpc3RlbnQgdW5pdHMuIENvbXBhcmluZyB0aGUgZGlmZmVyZW5jZSB3aXRoIHRoaXMgdGhyZXNob2xkIGNoZWNrcyB0aGUgc3RhdGVkIGNyaXRlcmlvbjsgaXQgcmVwbGFjZXMgbmVpdGhlciB0aGUgcmVmZXJlbmNlIG5vciB0aGUgdmFsaWRhdGlvbiBvZiBhIHBoeXNpY2FsIG1lYXN1cmVtZW50Lgl0b2RhaSBjMDUxLW0xIHRvbGVyYW5jZS1qdXN0aWZpZWUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">axlcxq wtbdsw xpjf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Read a choice of summation without treating it as evidence of execution</h3><dl><div><dt>You understand</dt><dd>A sum depends on its representations and intermediate rounding. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ragbeu gxdbqz vyfukd pvrpdy mwjrlu gnncbx wgjftg chhubb uclhaa yxfqpp nxtlwj pmysjl gcmtwe mw</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">epaape yrtnnx qphcyi efyhug qmtlss gxhdwd mafncn zqehqx jtwihb iizxxi harfgf xrroqm pahiaf anxpmn cwbxnq ntlcey sbmnws mdhboa sznfxd qhjfih tutxun tqmpdk xjmiwb yhdtka</span></span></dd></div><div><dt>Your level</dt><dd>Level 2 to prepare for: explain the neighbors, work through the rounding again and distinguish the exact reference from the calculated result. Reading or an assisted answer does not validate this level; reconstruct the calculation without support in a later session.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">maxyuv qejqca wqkfpb veoiqi qksnpc xliopi qaebnn uypsrr ukvnbg zuztfs wxuxwf tivvyk guomqc zlfiht joaaig lymhoy fgdvio cyoyhq ojqwgr bebqto ubshdd axmguk nppxqj cemgom</span></span></dd></div><div><dt>To continue</dt><dd>Work through the timer and its check again without a hint, then move on to root finding in C051·M2. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uuchkf uiudhz ewuaey gbedzq qhcmub wtdcyp rznudc nkvpah fmcswt hyladn bweezl ihdjsw omkhbf uq</span></span> None of these actions has been performed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c051-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c050-m5.html">Previous</a> · <a href="c051-m2.html">Next</a></nav>
+<footer><p>Course book · C051·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

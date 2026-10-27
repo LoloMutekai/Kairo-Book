@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Measure the risk of a false positive when several rules are tested on the same historical data, apply Bonferroni and then Holm, and name the assumptions that these adjustments do not check.">
+<title>C261·M4 · Multiple testing — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rzikdv yacprl xmmt</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C261·M4</p><h1>Multiple testing</h1><p class="objectif"><span>Your goal</span>Measure the risk of a false positive when several rules are tested on the same historical data, apply Bonferroni and then Holm, and name the assumptions that these adjustments do not check.</p><p class="prerequis"><strong>Before you start</strong><br>c257-m5 : frequency selection and MSE · c145-m5 : policy evaluation · c197-m5 : introductory extreme values · c200-m5 : AR-OU correspondence · c073-m5 : interaction and repeated measures · c261-m1 : extreme values · c261-m2 : structural breaks · c261-m3 : long memory</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A team tests 4 daily signal rules on the same historical return data. We call them A, B, C and D. For each rule, the null hypothesis H<sub>0</sub> states that the rule adds no mean return: any apparent benefit would come from sampling chance. The entire lesson uses this fictional scenario: it describes no real rule, return or historical data.</p><p>Each test produces a p-value, a dimensionless number between 0 and 1. Under H<sub>0</sub> and the assumptions of the test model, it is the probability of obtaining a result at least as extreme as the one observed. A rule is selected when its p-value is less than or equal to the threshold α, here 0.05, or 5 %. If H<sub>0</sub> is true, an individual test therefore selects the rule incorrectly, a false positive, with probability at most α.</p><p>The problem arises when we examine several rules and report those that pass. Each test keeps its risk α, but the risk of at least one false positive in the family grows with the number of tests. We call this the family-wise error rate, or FWER: the probability of selecting at least one rule incorrectly. We calculate it when all null hypotheses in the family are true, and we want to bring it back down to α.</p><p>The two adjustments in this unit achieve this. Bonferroni compares each p-value with a stricter threshold, α divided by the number m of tests. Holm sorts the p-values, compares the smallest with α/m and the next with a slightly less strict threshold, and stops at the first failure; it selects at least every rule that Bonferroni selects.</p><p>This unit does not generate p-values. The earlier units in the chapter address extreme values, structural breaks and long memory: these are reasons why a p-value may be poorly calibrated. We assume it is valid here; an adjustment for multiple testing does not repair a poorly constructed test.</p><div class="schemas"><figure><svg viewBox="0 0 360 225" xmlns="http://www.w3.org/2000/svg" role="img"><title>Family-wise error rate grows with the number of tests</title><desc>Four bars show the risk of at least one false positive for 1, 2, 3 and then 4 independent tests at threshold 0.05: 0.050, 0.098, 0.143 and 0.185. A grey line marks the threshold per test.</desc><line x1="40" y1="190" x2="340" y2="190" class="trait" /><line x1="40" y1="170" x2="340" y2="170" class="trait" /><rect x="60" y="170" width="50" height="20" rx="4" class="cadre-neutre" /><rect x="130" y="151" width="50" height="39" rx="4" class="cadre-prediction" /><rect x="200" y="133" width="50" height="57" rx="4" class="cadre-prediction" /><rect x="270" y="116" width="50" height="74" rx="4" class="cadre-resultat" /><text x="85" y="162" text-anchor="middle">0.050</text><text x="155" y="143" text-anchor="middle">0.098</text><text x="225" y="125" text-anchor="middle">0.143</text><text x="295" y="108" text-anchor="middle">0.185</text><text x="85" y="212" text-anchor="middle" class="petite-etiquette">m = 1</text><text x="155" y="212" text-anchor="middle" class="petite-etiquette">m = 2</text><text x="225" y="212" text-anchor="middle" class="petite-etiquette">m = 3</text><text x="295" y="212" text-anchor="middle" class="petite-etiquette">m = 4</text><text x="40" y="24" class="petite-etiquette">Risk of at least one false positive</text></svg><figcaption>With independent tests, all null hypotheses true and a threshold of 0.05 per test, the family-wise error rate rises from 0.050 to 0.185 between a single test and 4 tests. The grey line marks the threshold per test; the values belong to the fictional scenario.</figcaption></figure><figure><svg viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg" role="img"><title>The p-values of A, B and C against the Bonferroni threshold</title><desc>On an axis from 0 to 0.05, the p-values of A, B and C are 0.003, 0.014 and 0.021. The Bonferroni threshold is 0.0125; only A is to its left. The p-value of D, 0.300, is off the scale.</desc><text x="40" y="24" class="petite-etiquette">p-value, from 0 to 0.05</text><text x="115" y="52" text-anchor="middle" class="petite-etiquette">α/m = 0.0125</text><line x1="40" y1="120" x2="340" y2="120" class="trait" /><line x1="115" y1="60" x2="115" y2="140" class="repere-dose" /><line x1="340" y1="60" x2="340" y2="140" class="trait" /><text x="340" y="52" text-anchor="end" class="petite-etiquette">α = 0.05</text><circle cx="58" cy="120" r="7" class="resultat" /><circle cx="124" cy="120" r="7" class="point-prediction" /><circle cx="166" cy="120" r="7" class="point-prediction" /><text x="58" y="102" text-anchor="middle">A</text><text x="135" y="102" text-anchor="middle">B</text><text x="166" y="102" text-anchor="middle">C</text><text x="58" y="150" text-anchor="middle" class="petite-etiquette">0.003</text><text x="124" y="170" text-anchor="middle" class="petite-etiquette">0.014</text><text x="166" y="150" text-anchor="middle" class="petite-etiquette">0.021</text><text x="340" y="192" text-anchor="end" class="petite-etiquette">D: 0.300, off scale</text></svg><figcaption>Without adjustment, A, B and C pass the threshold 0.05. With Bonferroni, the threshold falls to 0.0125 and only A remains selected. The p-values are fictional.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Declare the complete family and m before looking at the results; compare p with α/m (Bonferroni) or, after sorting in ascending order, the j-th p-value with α/(m − j + 1) until the first failure (Holm); state the assumptions.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Four rules on the same fictional historical data</h3><p>Four rules A, B, C and D are tested on the same fictional historical data. Their fictional p-values are 0.003, 0.014, 0.021 and 0.300, and the target level for the family is α = 0.05. What do the unadjusted tests, Bonferroni and Holm report?</p><ol class="etapes"><li><h3>Specify the family, symbols and assumptions</h3><p>m is the number of tests in the family, declared before looking at the results: here m = 4, dimensionless. p is the p-value of a test, dimensionless. α = 0.05 is the target level, a dimensionless probability; as a percentage it is 5 %. FWER is the probability of selecting at least one rule incorrectly.</p><p>Assumptions: each p-value is valid, meaning that under H<sub>0</sub> it falls below a threshold t with probability at most t; the family is complete, with all rules tried counted in m. For the first formula, we also assume independence of the tests, a strong assumption for rules evaluated on the same historical data.</p></li><li><h3>Measure the risk without adjustment</h3><p>If the 4 null hypotheses are true and the tests are independent, each test avoids a false positive with probability 1 − α = 0.95. The probability that all 4 tests avoid one is the product of these probabilities, hence 0.95 to the power m. At least one false positive is the complementary event.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>FWER</mi><mo>=</mo><mn>1</mn><mo>−</mo><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo>)</mo></mrow><mi>m</mi></msup></mrow></math></div><p>Calculation keeping every product: 0.95 × 0.95 = 0.9025, then × 0.95 = 0.8574, then × 0.95 = 0.8145. The risk is 1 − 0.8145 = 0.1855, or 18.5 %. Check: this is 3.7 times α, while the formula returns α when the family has only a single test.</p></li><li><h3>Decide without adjustment, then with Bonferroni</h3><p>Without adjustment, compare each p with α = 0.05: A (0.003), B (0.014) and C (0.021) are selected; D (0.300) is not. This gives 3 selected rules, with a family-wise error rate of 0.1855 if none had any real value. Bonferroni divides the threshold by m.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>B</mi></msub><mo>=</mo><mfrac><mi>α</mi><mi>m</mi></mfrac><mo>=</mo><mfrac><mn>0.05</mn><mn>4</mn></mfrac><mo>=</mo><mn>0.0125</mn></mrow></math></div><p>With this threshold, A (0.003) is selected; B (0.014), C and D are not. This leaves 1 selected rule.</p></li><li><h3>Why the bound holds even without independence</h3><p>The probability of a union of events is at most the sum of their probabilities. If each test makes an error with probability at most α/m, the union of these errors has probability at most m times α/m. Independence is not required.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>FWER</mi><mo>≤</mo><mi>m</mi><mo>×</mo><mfrac><mi>α</mi><mi>m</mi></mfrac><mo>=</mo><mi>α</mi></mrow></math></div><p>Check the calculation: 4 × 0.0125 = 0.05, which is α. When only some null hypotheses are true, the bound can only decrease. It is conservative: with independent tests, the actual risk is slightly below α.</p></li><li><h3>Read the Bonferroni adjusted p-values</h3><p>We can multiply each p by m, cap it at 1, then compare it with α: the decision is the same, because p ≤ α/m is equivalent to m × p ≤ α. The resulting values are transformed thresholds, not the probability that the null hypothesis for the rule is true.</p><p>A: 4 × 0.003 = 0.012, less than or equal to 0.05, selected. B: 4 × 0.014 = 0.056, not selected. C: 4 × 0.021 = 0.084, not selected. D: 4 × 0.300 = 1.2, capped at 1, not selected.</p></li><li><h3>Work step by step with Holm</h3><p>Holm sorts the p-values from smallest to largest. The test at rank j, with j equal to 1 for the smallest, is compared with the threshold below; at the first failure, that test and all subsequent tests are not selected.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>=</mo><mfrac><mi>α</mi><mrow><mi>m</mi><mo>−</mo><mi>j</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow></math></div><p>Rank 1: A, 0.003 ≤ 0.0125, selected. Rank 2: B, 0.014 ≤ 0.0167, selected, although Bonferroni did not select it. Rank 3: C, 0.021 ≤ 0.025, selected. Rank 4: D, 0.300 &gt; 0.05, stop. Holm selects 3 rules.</p><p>Check using adjusted p-values, with multiplier m − j + 1: 4 × 0.003 = 0.012, 3 × 0.014 = 0.042, 2 × 0.021 = 0.042, 1 × 0.300 = 0.300. The sequence never decreases, every term except the last is less than or equal to 0.05, and the decision is the same. That Holm keeps FWER at most α without independence is a standard result accepted here without proof; each Holm threshold is at least α/m, so Holm selects at least every rule that Bonferroni selects.</p></li><li><h3>Check and limit the interpretation</h3><p>The numbers of selected rules are ordered as expected: 3 without adjustment, 3 with Holm, 1 with Bonferroni. Bonferroni made the decision stricter for B and C; Holm keeps them selected here because its thresholds are less strict. A is selected by all three procedures, D by none.</p><p>Selecting A, B and C with Holm does not mean they would yield any return: the p-values are fictional and assumed valid, and the family is assumed complete. If the team had tried other rules without counting them, m would be too small and the thresholds too permissive. Neither adjustment repairs a poorly calibrated p-value or a threshold chosen after the fact.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain without looking why the Bonferroni bound does not require independence while the formula for unadjusted risk does, then why Holm selects at least as many rules as Bonferroni.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Each test keeps its threshold α, so the family also keeps α.”</h3><p>α is the risk for an individual test. For the family, the risk becomes 1 − (…)^m: with m = 4 and α = 0.05, it reaches 0.1855, or 3.7 times α in the example.</p><a href="#exemple">Review the family-wise error rate calculation</a></li><li><h3>“I choose the family after seeing which rules look promising.”</h3><p>The rules tried, all counted, define m. Removing disappointing rules after the fact reduces m and makes the thresholds too permissive. Declare m and the list before looking at the results; the reviewed code also refuses an incomplete family.</p><a href="#jalon"><span class="milestone-label">See the complete declared family in the code</span></a></li><li><h3>“An adjusted p-value is the probability that the null hypothesis for the rule is true.”</h3><p>An adjusted p-value is a transformed threshold: a rule is selected when it is less than or equal to α. In the example, 0.012 for A means only that A passes the threshold, not that the probability of its null hypothesis being true is 0.012.</p><a href="#exercices">Redo the exercise on the cumulative maximum</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-risque"><p class="repere">Exercise 1 · Explained application</p>
+<h3>Family-wise error rate grows with m</h3><p>Keep α = 0.05 and assume independent tests whose null hypotheses are all true; the values are fictional. Calculate the family-wise error rate for m = 2 and then for m = 3, and compare with the risk in the example for m = 4.</p>
+<label for="reponse-ex-risque">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-risque" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-risque" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-risque" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-risque" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the probability of avoiding all false positives, that is (1 − α) to the power m, then subtract it from 1.</p></details><details class="indice"><summary>Hint 2</summary><p>Reuse 0.95: each power follows from the previous one by multiplication.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For m = 2: 0.95 × 0.95 = 0.9025, so the risk is 1 − 0.9025 = 0.0975.</p><p>For m = 3: 0.9025 × 0.95 = 0.8574, so the risk is 1 − 0.8574 = 0.1426.</p><p>Comparison: 0.05 &lt; 0.0975 &lt; 0.1426 &lt; 0.1855. Each added rule increases the family-wise error rate, while each test keeps its threshold. Check: for a single test, the formula returns α.</p><p class="petit-titre">Check your reasoning</p><ul><li>Use the complement of the probability of avoiding all false positives.</li><li>Obtain an increasing sequence and explain what it shows.</li><li>Recall the independence assumption and the fictional nature of the values.</li></ul></details></article><article class="exercice" id="ex-cinquieme-regle"><p class="repere">Exercise 2 · Transfer</p>
+<h3>An additional rule in the family</h3><p>A fifth rule, E, is added to the historical data before anyone looks at the results; its fictional p-value is 0.012. The family therefore has m = 5. The p-values of A to D remain those in the example and α = 0.05. What is the Bonferroni threshold? What happens to the decisions for A, B and E?</p>
+<label for="reponse-ex-cinquieme-regle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cinquieme-regle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cinquieme-regle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cinquieme-regle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cinquieme-regle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The threshold depends on m: recalculate α divided by the new family size.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare either p with this threshold or m × p with α; both methods must agree.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Threshold: 0.05 / 5 = 0.010. A: 0.003 ≤ 0.010, selected; adjusted method: 5 × 0.003 = 0.015 ≤ 0.05.</p><p>B: 0.014 &gt; 0.010, not selected; adjusted value 0.070 &gt; 0.05. E: 0.012 &gt; 0.010, not selected; adjusted value 0.060 &gt; 0.05, although 0.012 would pass the unadjusted threshold 0.05.</p><p>Check: 5 × 0.010 = 0.05, which is α: the family-wise bound is preserved. Adding a rule makes the threshold stricter for all the others; this is the cost of a larger family.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the threshold with the new value of m.</li><li>Check the decision using two methods that agree.</li><li>Relate the stricter threshold to the number of rules tried.</li></ul></details></article><article class="exercice" id="ex-maximum-cumule"><p class="repere">Exercise 3 · Analysis</p>
+<h3>Why Holm keeps a cumulative maximum</h3><p>Another fictional family has m = 3 rules, sorted by increasing p-values: 0.010, 0.012 and 0.400. With α = 0.05, calculate the product (m − j + 1) × p for each rank j. Explain why a value that is too small is replaced by the previous maximum, then state which rules Holm selects.</p>
+<label for="reponse-ex-maximum-cumule">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-maximum-cumule" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-maximum-cumule" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-maximum-cumule" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-maximum-cumule" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The multipliers are 3, 2 and 1, from the lowest rank to the highest.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the first two products: can a larger p-value be more convincing?</p></details><details class="indice"><summary>Hint 3</summary><p>Then compare each adjusted value with α, and check using thresholds α/m, α/2 and α.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Rank 1: 3 × 0.010 = 0.030. Rank 2: 2 × 0.012 = 0.024. Rank 3: 1 × 0.400 = 0.400.</p><p>The second product, 0.024, is less than the first, 0.030, even though its p-value is larger: a less significant rule cannot receive a more convincing adjusted value. The cumulative maximum keeps 0.030 at rank 2. The adjusted values are 0.030, 0.030 and 0.400.</p><p>Compared with α = 0.05, the first two rules are selected and the third is not. Check using thresholds: 0.010 ≤ 0.0167, 0.012 ≤ 0.025, then 0.400 &gt; 0.05. Here the maximum does not change the decision, but it ensures that a larger p-value never receives a smaller adjusted value.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the three products with the correct multipliers.</li><li>Justify the cumulative maximum using the order of the p-values.</li><li>State which rules are selected and check using the threshold method.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="risque-familial"><summary><span class="repere">Recall 1</span><span>What does the family-wise error rate measure?</span></summary><p>The probability of selecting at least one rule incorrectly in the family of tests; the formula studied assumes that all null hypotheses are true and the tests are independent.</p></details><details class="carte" data-carte="bonferroni"><summary><span class="repere">Recall 2</span><span>What threshold does Bonferroni apply, and why does it bound the risk?</span></summary><p>It compares each p-value with α/m. The union bound gives a risk of at most m times α/m, which is α, without assuming independence.</p></details><details class="carte" data-carte="holm"><summary><span class="repere">Recall 3</span><span>How does Holm work through the p-values?</span></summary><p>It sorts them, compares the j-th with α/(m − j + 1) and stops at the first failure; each of its thresholds is at least α/m.</p></details><details class="carte" data-carte="hypotheses"><summary><span class="repere">Recall 4</span><span>What do these adjustments leave unchecked?</span></summary><p>The validity of each p-value and the declaration of the complete family before looking; they establish neither the quality of the model nor the real usefulness of a selected rule.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Declare the complete family and m before looking; measure the family-wise error rate as one minus (one minus α) to the power m under independence; compare p with α/m using Bonferroni, or sort and compare with α/(m − j + 1) until the first failure using Holm; read an adjusted p-value as a transformed threshold; name the remaining assumptions: valid p-values, a complete family, no promise of returns.</p></div><div class="exports"><a class="bouton" download="c261-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjEtbTQ6cmlzcXVlLWZhbWlsaWFsIiwKICAgICAgInVuaXRlIjogImMyNjEtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyaXNxdWUtZmFtaWxpYWwiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBmYW1pbHktd2lzZSBlcnJvciByYXRlIG1lYXN1cmU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHByb2JhYmlsaXR5IG9mIHNlbGVjdGluZyBhdCBsZWFzdCBvbmUgcnVsZSBpbmNvcnJlY3RseSBpbiB0aGUgZmFtaWx5IG9mIHRlc3RzOyB0aGUgZm9ybXVsYSBzdHVkaWVkIGFzc3VtZXMgdGhhdCBhbGwgbnVsbCBoeXBvdGhlc2VzIGFyZSB0cnVlIGFuZCB0aGUgdGVzdHMgYXJlIGluZGVwZW5kZW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjYxLW00OmJvbmZlcnJvbmkiLAogICAgICAidW5pdGUiOiAiYzI2MS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImJvbmZlcnJvbmkiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCB0aHJlc2hvbGQgZG9lcyBCb25mZXJyb25pIGFwcGx5LCBhbmQgd2h5IGRvZXMgaXQgYm91bmQgdGhlIHJpc2s/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgY29tcGFyZXMgZWFjaCBwLXZhbHVlIHdpdGggzrEvbS4gVGhlIHVuaW9uIGJvdW5kIGdpdmVzIGEgcmlzayBvZiBhdCBtb3N0IG0gdGltZXMgzrEvbSwgd2hpY2ggaXMgzrEsIHdpdGhvdXQgYXNzdW1pbmcgaW5kZXBlbmRlbmNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjYxLW00OmhvbG0iLAogICAgICAidW5pdGUiOiAiYzI2MS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImhvbG0iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvZXMgSG9sbSB3b3JrIHRocm91Z2ggdGhlIHAtdmFsdWVzPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IHNvcnRzIHRoZW0sIGNvbXBhcmVzIHRoZSBqLXRoIHdpdGggzrEvKG0g4oiSIGogKyAxKSBhbmQgc3RvcHMgYXQgdGhlIGZpcnN0IGZhaWx1cmU7IGVhY2ggb2YgaXRzIHRocmVzaG9sZHMgaXMgYXQgbGVhc3QgzrEvbS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MS1tNDpoeXBvdGhlc2VzIiwKICAgICAgInVuaXRlIjogImMyNjEtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmYW1pbGxlLWNvbXBsZXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gdGhlc2UgYWRqdXN0bWVudHMgbGVhdmUgdW5jaGVja2VkPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSB2YWxpZGl0eSBvZiBlYWNoIHAtdmFsdWUgYW5kIHRoZSBkZWNsYXJhdGlvbiBvZiB0aGUgY29tcGxldGUgZmFtaWx5IGJlZm9yZSBsb29raW5nOyB0aGV5IGVzdGFibGlzaCBuZWl0aGVyIHRoZSBxdWFsaXR5IG9mIHRoZSBtb2RlbCBub3IgdGhlIHJlYWwgdXNlZnVsbmVzcyBvZiBhIHNlbGVjdGVkIHJ1bGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c261-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBmYW1pbHktd2lzZSBlcnJvciByYXRlIG1lYXN1cmU/CVRoZSBwcm9iYWJpbGl0eSBvZiBzZWxlY3RpbmcgYXQgbGVhc3Qgb25lIHJ1bGUgaW5jb3JyZWN0bHkgaW4gdGhlIGZhbWlseSBvZiB0ZXN0czsgdGhlIGZvcm11bGEgc3R1ZGllZCBhc3N1bWVzIHRoYXQgYWxsIG51bGwgaHlwb3RoZXNlcyBhcmUgdHJ1ZSBhbmQgdGhlIHRlc3RzIGFyZSBpbmRlcGVuZGVudC4JdG9kYWkgYzI2MS1tNCByaXNxdWUtZmFtaWxpYWwKV2hhdCB0aHJlc2hvbGQgZG9lcyBCb25mZXJyb25pIGFwcGx5LCBhbmQgd2h5IGRvZXMgaXQgYm91bmQgdGhlIHJpc2s/CUl0IGNvbXBhcmVzIGVhY2ggcC12YWx1ZSB3aXRoIM6xL20uIFRoZSB1bmlvbiBib3VuZCBnaXZlcyBhIHJpc2sgb2YgYXQgbW9zdCBtIHRpbWVzIM6xL20sIHdoaWNoIGlzIM6xLCB3aXRob3V0IGFzc3VtaW5nIGluZGVwZW5kZW5jZS4JdG9kYWkgYzI2MS1tNCBib25mZXJyb25pCkhvdyBkb2VzIEhvbG0gd29yayB0aHJvdWdoIHRoZSBwLXZhbHVlcz8JSXQgc29ydHMgdGhlbSwgY29tcGFyZXMgdGhlIGotdGggd2l0aCDOsS8obSDiiJIgaiArIDEpIGFuZCBzdG9wcyBhdCB0aGUgZmlyc3QgZmFpbHVyZTsgZWFjaCBvZiBpdHMgdGhyZXNob2xkcyBpcyBhdCBsZWFzdCDOsS9tLgl0b2RhaSBjMjYxLW00IGhvbG0KV2hhdCBkbyB0aGVzZSBhZGp1c3RtZW50cyBsZWF2ZSB1bmNoZWNrZWQ/CVRoZSB2YWxpZGl0eSBvZiBlYWNoIHAtdmFsdWUgYW5kIHRoZSBkZWNsYXJhdGlvbiBvZiB0aGUgY29tcGxldGUgZmFtaWx5IGJlZm9yZSBsb29raW5nOyB0aGV5IGVzdGFibGlzaCBuZWl0aGVyIHRoZSBxdWFsaXR5IG9mIHRoZSBtb2RlbCBub3IgdGhlIHJlYWwgdXNlZnVsbmVzcyBvZiBhIHNlbGVjdGVkIHJ1bGUuCXRvZGFpIGMyNjEtbTQgZmFtaWxsZS1jb21wbGV0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rzikdv yacprl xmmt</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · recognise the Holm adjustment in code</h3><dl><div><dt>What you understand</dt><dd>When several hypotheses are assessed together, the threshold for each depends on the family size. Holm sorts the p-values, multiplies the smallest by the family size, the next by that size minus one, and so on, with a cumulative maximum.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">oazlho ohdcka xfvjbl xrbhki vjxziz sflvsr djfiek wytgsj xjydvr hmwflz tvussj bkmjsv xzuloz ddqnaf chsfpq ykzpum jdkvmx pmsssb cawqhq stdjkg aajuvd kxxhwx dykdhb xerhdv wndkuo hyoprh drtdcv xndhno xgwluk arqbmr xmvrdy xdxmtl tegjwm culwtp ehaehb ppwknq nvodxx kf</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: reproduce the four adjusted p-values in the example without support and justify the cumulative maximum. Reading these passages or comparing your answer with a solution does not establish an achieved level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sruvsa ipvnsg vgpdfn eqnlrf ajjotw dzewbg fvbgus qikoaa jyaqfg lvdvyw luszrg wxehyu qtjbxb swtzbv idjhhg jjiohy usqzij ckezik nxwauf xkiido gmhleb byhfgn neztqu veotjz</span></span></dd></div><div><dt>To continue</dt><dd>Redo the exercise on the cumulative maximum on another day, then read the next unit in the chapter on model uncertainty. Before any real use, the family declaration, the origin of the p-values and the actual integration will need to be checked separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c261-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c261-m3.html">Previous</a> · <a href="c261-m5.html">Next</a></nav>
+<footer><p>Course book · C261·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Identify which information crossed the boundary between training and test data, recalculate its effect and repair the protocol without confusing a favorable score with a valid evaluation.">
+<title>C067·M4 · Data leakage — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fczxmg jveixx ncay</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C067·M4</p><h1>Data leakage</h1><p class="objectif"><span>Your goal</span>Identify which information crossed the boundary between training and test data, recalculate its effect and repair the protocol without confusing a favorable score with a valid evaluation.</p><p class="prerequis"><strong>Before you start</strong><br>c061-m5 : identifiability and uncertainty · c066-m5 : standard errors and diagnostics · c017-m5 : reproducibility protocol · c067-m1 : empirical risk · c067-m2 : training set · c067-m3 : validation</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At 8 on the twenty-four-hour clock, you want to predict the energy a house will consume between 18 and 22. You already know the energy consumed since midnight. You do not yet know the evening consumption. In a historical data file, both appear side by side: their proximity in the file does not make them available at the same time.</p><p>Let x be the morning energy consumption, available at prediction time, and y the evening energy consumption to be predicted. They are expressed in kilowatt-hours, written kWh, a unit of energy. Data leakage occurs when information forbidden by the situation being evaluated enters the preparation, selection or calculation of predictions. It can come from the future, but also from the test set used to tune the method.</p><p>The training set is used to learn the parameters. The validation set lets you compare choices before finalizing them. The test set is used to evaluate the finalized method. Here, we study a rule that has already been chosen: predict as much energy consumption in the evening as in the morning. If x is missing, replace it with the mean of the training mornings. This replacement is called imputation; its mean is therefore also a learned parameter.</p><p>The agreed protocol for this example is precise: freeze the rule and the mean before all the test days, then apply them without learning them again between those days. We are not evaluating a method that adapts continuously. The days and all the values are fictional. The rule is deliberately simple to isolate a case of leakage; it is not a recommended energy forecasting method.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Information available for the morning prediction</title><desc>At 8 h, x is known or marked as missing. The evening consumption y, between 18 and 22 h, is still unknown. It can only be used later to check the prediction.</desc><rect x="18" y="18" width="324" height="78" rx="8" class="cadre-prediction" /><text x="180" y="45" text-anchor="middle">At 8 h: predict</text><text x="180" y="74" text-anchor="middle">x known, or missing</text><path d="M180 96v36m-6-8 6 8 6-8" class="trait" /><rect x="18" y="134" width="324" height="88" rx="8" class="cadre-neutre" /><text x="180" y="161" text-anchor="middle">Evening: 18 h to 22 h</text><text x="180" y="190" text-anchor="middle">y becomes observable later</text><text x="180" y="213" text-anchor="middle" class="petite-etiquette">Compare after making the prediction</text></svg><figcaption>The arrow follows time. Evening energy consumption is used for comparison afterwards; it does not feed back into the variables for the morning prediction.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>Test data can enter through a mean</title><desc>The permitted replacement comes only from A and B: 3 kilowatt-hours. The contaminated replacement adds test morning C and becomes 14/3 kilowatt-hours. The prediction for day D, whose morning value is missing, then depends on another test day.</desc><rect x="16" y="12" width="328" height="116" rx="8" class="cadre-resultat" /><text x="180" y="40" text-anchor="middle">Training: A and B</text><text x="180" y="68" text-anchor="middle">(2 + 4) ÷ 2 = 3 kWh</text><text x="180" y="101" text-anchor="middle">D prediction: 3 kWh</text><text x="180" y="158" text-anchor="middle" class="petite-etiquette">Same test rows C and D</text><rect x="16" y="180" width="328" height="116" rx="8" class="cadre-prediction" /><text x="180" y="208" text-anchor="middle">A and B, plus test day C</text><text x="180" y="236" text-anchor="middle">(2 + 4 + 8) ÷ 3 = 14/3 kWh</text><text x="180" y="269" text-anchor="middle">D prediction: 4.67 kWh</text></svg><figcaption>Day D has a missing morning value in both cases. In the lower diagram, the test set contributed to learning the replacement mean, even though no evening consumption was used to calculate this mean. The colors distinguish the protocols; the labels also name them.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Separating the rows is not enough: every learned parameter must stay on the permitted side, and every variable must be available at prediction time. The test answers are then used to calculate the score.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A missing morning value, two ways to fill it</h3><p>Days A and B form the training set: their x values are 2 and 4 kWh. Test days C and D come later: x is 8 kWh for C and is missing for D; after the evenings, we observe y = 8 kWh for C and y = 8 kWh for D. The rule and the choice of mean imputation were finalized before the test. Let us calculate the predictions and their mean absolute error.</p><ol class="etapes"><li><h3>Set the protocol and define the symbols</h3><p>A, B, C and D name days; they are not quantities. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mrspcz flpxyw qedaqr onvjqb giuxey zxwjfy uvfg</span></span> The hat in ŷ denotes a predicted value. x, y, ŷ and the means are in kWh. n_T = 2 counts the observed training mornings; n_E = 2 counts the days evaluated, with no physical unit.</p><p>The mean m_T is calculated from A and B only. The rule is ŷ = x if x is observed, and ŷ = m_T if x is missing. The implicit coefficient is 1, with no unit. The symbol E will denote the mean absolute error over C and D, in kWh: the bars |…| give the distance between prediction and observation.</p><p>Exercise assumptions: the known morning value is available at 8 h; the missing morning value remains missing at that time; the evening reference values are recorded after the prediction. The sets are fixed, with no further adaptation during the test. We do not assume that these days are enough to represent all future uses of the house.</p></li><li><h3>Learn the mean from the right set</h3><p>Adding the permitted morning values gives 2 + 4 = 6 kWh. Dividing by their count gives the replacement value. No test row contributes to this operation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>T</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>x</mi><mi>A</mi></msub><mo>+</mo><msub><mi>x</mi><mi>B</mi></msub></mrow><msub><mi>n</mi><mi>T</mi></msub></mfrac><mo>=</mo><mfrac><mn>6</mn><mn>2</mn></mfrac><mo>=</mo><mn>3</mn><mtext> kWh</mtext></mrow></math></div><p>This mean is now frozen. Observing the morning value for C allows us to predict C; it does not permit us to learn the replacement for D again under the stated protocol.</p></li><li><h3>Predict before checking evening consumption</h3><p>C has an x value: the rule gives ŷ_C = 8 kWh. D does not: apply the learned replacement, giving ŷ_D = 3 kWh. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">meiewv zxmygu npyzjb vkeaqr jokhkv qxmfnl pslx</span></span></p><p>A day with a missing value is not removed from the score because it is difficult. The agreed protocol here evaluates the 2 days C and D, including the handling of a missing value.</p></li><li><h3>Measure the error using the revealed reference values</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mfrac><mrow><mo>|</mo><msub><mi>y</mi><mi>C</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>C</mi></msub><mo>|</mo><mo>+</mo><mo>|</mo><msub><mi>y</mi><mi>D</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>D</mi></msub><mo>|</mo></mrow><msub><mi>n</mi><mi>E</mi></msub></mfrac></mrow></math></div><p>For C: |8 − 8| = 0 kWh. For D: |8 − 3| = 5 kWh. Taking absolute values prevents differences with opposite signs from canceling out; adding these distances and then dividing by the number of days gives the mean error.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mfrac><mrow><mn>0</mn><mo>+</mo><mn>5</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mn>5/2</mn><mtext> kWh</mtext><mo>=</mo><mn>2.50</mn><mtext> kWh</mtext></mrow></math></div><p>Consulting the test answers at this stage is used to measure a finalized method. Leakage would occur if they then fed back into its selection or tuning to produce a score presented as independent.</p></li><li><h3>Let test data enter through the replacement</h3><p>Now imagine a preparation error: calculating the mean over all present x values before separating the sets. We combine 2, 4 and 8 kWh. The x value for D is missing: it contributes neither to the sum nor to the count of present values. Call this overall mean m_G.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>G</mi></msub><mo>=</mo><mfrac><mrow><mn>2</mn><mo>+</mo><mn>4</mn><mo>+</mo><mn>8</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mn>14/3</mn><mtext> kWh</mtext><mo>≈</mo><mn>4.67</mn><mtext> kWh</mtext></mrow></math></div><p>The training and test rows can then be placed in separate files: the contamination is already in m_G. C keeps the same prediction; D is now predicted at 14/3 kWh, or about 4.67 kWh. Test day C has influenced a parameter that should have been learned only from A and B.</p></li><li><h3>Recalculate the contaminated score and check it</h3><p>The error for C is still 0 kWh. The error for D becomes |8 − 14/3| = 10/3 kWh. Their sum is 10/3 kWh; divided by 2, it gives 5/3 kWh, about 1.67 kWh.</p><p>This score is lower than the previous 2.50 kWh, but it evaluates a different preparation procedure, which used the test set. This fictional decrease proves no real improvement. Leakage can also leave the score unchanged or make it worse: it is defined by the path of information, not by a score that is always better.</p><p>Independent check: C contributes no error, so each mean error must be the error for D divided by 2. Also, the contaminated replacement exceeds the permitted replacement by 5/3 kWh. Both remain below 8 kWh: this shift reduces the error for D by exactly the same amount. These observations cross-check the fractions without rounding during the calculation.</p></li><li><h3>Repair the protocol at the information boundary</h3><p>Keep the raw sets, learn m_T from A and B only, then reuse this same m_T to replace the missing x value for D. Merely moving rows after imputation does not remove information that has already crossed the boundary. Comparisons between preparation choices belong in validation; implementing this sequence in software will be the subject of the next unit.</p><p>If a test result has already guided a change to the method, that set has been used for development. Keep a record of this fact and plan to use a still untouched test set for an independent final evaluation. The scores on this page are a teaching calculation on fictional data, with no implications for performance on future days.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ogmrrg qnmhhd dgmoku fjwrzh uqobzw todssd mrqnrg prcjjq kbqyjp lygmvo gfzcmq bncdrw oqojaw px</span></span> Which operation must be moved to cut the first path?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The test rows are elsewhere, so the separation is safe.”</h3><p>If their information has already been used to calculate a shared mean, it travels in that parameter. Start again from the raw data, learn the mean from the training set and then apply it without recalculating it on the test set.</p><a href="#exemple">Follow the calculation of the overall mean</a></li><li><h3>“I have never looked at y, so leakage is impossible.”</h3><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dszurw zverxh qbxanz fqjyaz luvnwc zkduwv jnuj</span></span> Using it to predict C, however, is permitted. Ask which operation each piece of information is permitted for, and at what time.</p><a href="#intuition">Review the agreed protocol for the frozen test</a></li><li><h3>“The test favors this mean, so I can choose it.”</h3><p>The score has then been used to select the method. This set no longer provides a final evaluation independent of that choice. Use validation to compare methods and an untouched test set for the final assessment.</p><a href="#exercices">Work through the protocol repair</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-disponibilite"><p class="repere">Exercise 1 · Identification</p>
+<h3>An accurate column, available too late</h3><p>In the same house data file, an “evening energy consumption” column is filled in after 22 h. Someone wants to include it among the inputs for the prediction at 8 h because it is complete. Can it be used? Can it still be used to score a prediction recorded in the morning?</p>
+<label for="reponse-ex-disponibilite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-disponibilite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-disponibilite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-disponibilite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-disponibilite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Distinguish when the value is present in the historical file from when it is available during the day.</p></details><details class="indice"><summary>Hint 2</summary><p>The same reference value can be forbidden as an input and necessary for calculating the error afterwards.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>This column gives y, the very quantity that is unknown at 8 h. Using it as an input would feed the future answer back into the prediction. It remains legitimate after 22 h for comparing ŷ and y, provided that the prediction and parameters were finalized beforehand.</p><p>The repair consists of removing this column from the inputs and checking the time of origin of every input retained. A value that is accurate at analysis time may be unavailable at decision time.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name the target y and the time when it becomes available.</li><li>Distinguish its forbidden role in the inputs from its permitted role in the score.</li><li>Propose a repair before calculating the predictions.</li></ul></details></article><article class="exercice" id="ex-dependance"><p class="repere">Exercise 2 · Calculation and diagnosis</p>
+<h3>Should changing C change D?</h3><p>Change neither A, nor B, nor the missing x value for D. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bcszgo ojanpp cfshds bvqzwc wsnurr klqxpy rmtt</span></span> Recalculate the overall mean and the prediction for D that it produces. What is the prediction for D with the replacement learned from A and B? What does the comparison reveal?</p>
+<label for="reponse-ex-dependance">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-dependance" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-dependance" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-dependance" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-dependance" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The overall mean still covers 3 present values; the x value for D remains missing.</p></details><details class="indice"><summary>Hint 2</summary><p>The permitted replacement depends only on the 2 training values. It does not change when C changes.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The overall sum becomes 2 + 4 + 20 = 26 kWh. The mean is 26/3 kWh, about 8.67 kWh. D would be predicted at 26/3 kWh instead of 14/3 kWh with the original contaminated preparation.</p><p>The permitted preparation keeps m_T = 3 kWh and ŷ_D = 3 kWh. Here, the prediction for D must remain unchanged when only another test row changes. The change in D&#x27;s prediction when using the overall mean shows that test data have been used to learn the replacement.</p><p>This check examines a specific dependency in the frozen protocol. On its own, it does not demonstrate the absence of all leakage: duplicates between sets or an evening variable disguised as a morning variable would require other checks of data origin.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the new sum, the correct count and the exact fraction.</li><li>Keep 3 kWh as the prediction for D under the permitted protocol.</li><li>Name the information path being tested and the limited scope of this cross-check.</li></ul></details></article><article class="exercice" id="ex-reparation"><p class="repere">Exercise 3 · Transfer and reasoning</p>
+<h3>What remains of the test after debugging?</h3><p>After seeing the scores on C and D, the team compares several replacements to choose the one that improves those scores. It then removes the overall mean, returns to the mean of A and B and wants to publish the score on C and D as an independent final evaluation. Write a repair procedure and state what can still be learned from this set.</p>
+<label for="reponse-ex-reparation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reparation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reparation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reparation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reparation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The set was used to make decisions, even if its rows were never used in the final fitting.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish recalculation that helps diagnosis from final evidence based on observations never used to make choices.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Reconstruct the preparation from the raw sets; restrict every learned parameter to the training set; compare choices on a separate validation set; then finalize the complete method before consulting a still untouched test set. For predictions of future days, also preserve their chronological order and check when the variables become available.</p><p>C and D can still be used to understand the defect and check the calculations. Returning to the training mean does not restore their status as an independent test set, because their results influenced the decisions. Without an untouched test set, report a diagnosis and state that the final evaluation has not been established.</p><p>A favorable score is not enough to award a level. Restate this procedure without help on another day; an answer produced after a hint remains an assisted answer.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish training, validation and final test by their roles.</li><li>Repair the operation that learns the replacement; changing only the files is insufficient.</li><li>Keep a record of how C and D were used and request an untouched test set without claiming to have already carried out that test.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="carte-fuite"><summary><span class="repere">Recall 1</span><span>How can you recognize leakage without relying on the score?</span></summary><p>Reconstruct the information permitted for each parameter and each prediction. Under the stated protocol, information from the future or reserved for evaluation must not feed back into the preparation or selection of the method. The score does not need to decrease for leakage to occur.</p></details><details class="carte" data-carte="carte-moyenne"><summary><span class="repere">Recall 2</span><span>Why can a mean calculated without y still contaminate our test?</span></summary><p>Because the mean is a learned parameter. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rnrdvg tsjdoo fkppdx dqdmek wsxfgo wbwqbm aczc</span></span> Our protocol requires it to be learned from A and B only, then frozen.</p></details><details class="carte" data-carte="carte-lecture"><summary><span class="repere">Recall 3</span><span>When can evening consumption be used without becoming a forbidden input?</span></summary><p>After the prediction has been finalized, to calculate its error. At the time of the morning prediction, it is still unknown. If its result is then used to select the method, the set becomes a development resource.</p></details><details class="carte" data-carte="carte-preuve"><summary><span class="repere">Recall 4</span><span>What should changing C show in the cross-check on D?</span></summary><p>With the replacement learned from A and B and frozen, changing only C must not change the prediction for D. A change here reveals an improper dependency; the absence of a change does not guarantee that all other leakage paths are closed.</p></details><details class="carte" data-carte="carte-reparer"><summary><span class="repere">Recall 5</span><span>Can a test already used to make choices become untouched again after the program is corrected?</span></summary><p>No: its results have already guided decisions. It remains useful for diagnosis. Choices must be finalized using separate validation, followed by evaluation on a still untouched test set to support a claim of an independent final evaluation.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the page and reconstruct the path: what is available in the morning; the set used to learn the replacement; the frozen rule; the recorded predictions; the reference values revealed for the score. Then draw the forbidden path from C to the mean and then to D. Finally, explain why repairing this path does not make a test already used to make choices untouched again.</p></div><div class="exports"><a class="bouton" download="c067-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjctbTQ6Y2FydGUtZnVpdGUiLAogICAgICAidW5pdGUiOiAiYzA2Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZ1aXRlLWRlLWRvbm5lZXMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB5b3UgcmVjb2duaXplIGxlYWthZ2Ugd2l0aG91dCByZWx5aW5nIG9uIHRoZSBzY29yZT8iLAogICAgICAicmVwb25zZSI6ICJSZWNvbnN0cnVjdCB0aGUgaW5mb3JtYXRpb24gcGVybWl0dGVkIGZvciBlYWNoIHBhcmFtZXRlciBhbmQgZWFjaCBwcmVkaWN0aW9uLiBVbmRlciB0aGUgc3RhdGVkIHByb3RvY29sLCBpbmZvcm1hdGlvbiBmcm9tIHRoZSBmdXR1cmUgb3IgcmVzZXJ2ZWQgZm9yIGV2YWx1YXRpb24gbXVzdCBub3QgZmVlZCBiYWNrIGludG8gdGhlIHByZXBhcmF0aW9uIG9yIHNlbGVjdGlvbiBvZiB0aGUgbWV0aG9kLiBUaGUgc2NvcmUgZG9lcyBub3QgbmVlZCB0byBkZWNyZWFzZSBmb3IgbGVha2FnZSB0byBvY2N1ci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNDpjYXJ0ZS1tb3llbm5lIiwKICAgICAgInVuaXRlIjogImMwNjctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbXB1dGF0aW9uLWV0LXNlcGFyYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiBhIG1lYW4gY2FsY3VsYXRlZCB3aXRob3V0IHkgc3RpbGwgY29udGFtaW5hdGUgb3VyIHRlc3Q/IiwKICAgICAgInJlcG9uc2UiOiAiQmVjYXVzZSB0aGUgbWVhbiBpcyBhIGxlYXJuZWQgcGFyYW1ldGVyLiB6enJlZGFjdGVkNXp6IE91ciBwcm90b2NvbCByZXF1aXJlcyBpdCB0byBiZSBsZWFybmVkIGZyb20gQSBhbmQgQiBvbmx5LCB0aGVuIGZyb3plbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNDpjYXJ0ZS1sZWN0dXJlIiwKICAgICAgInVuaXRlIjogImMwNjctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldmFsdWF0aW9uLWFwcmVzLXByZWRpY3Rpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hlbiBjYW4gZXZlbmluZyBjb25zdW1wdGlvbiBiZSB1c2VkIHdpdGhvdXQgYmVjb21pbmcgYSBmb3JiaWRkZW4gaW5wdXQ/IiwKICAgICAgInJlcG9uc2UiOiAiQWZ0ZXIgdGhlIHByZWRpY3Rpb24gaGFzIGJlZW4gZmluYWxpemVkLCB0byBjYWxjdWxhdGUgaXRzIGVycm9yLiBBdCB0aGUgdGltZSBvZiB0aGUgbW9ybmluZyBwcmVkaWN0aW9uLCBpdCBpcyBzdGlsbCB1bmtub3duLiBJZiBpdHMgcmVzdWx0IGlzIHRoZW4gdXNlZCB0byBzZWxlY3QgdGhlIG1ldGhvZCwgdGhlIHNldCBiZWNvbWVzIGEgZGV2ZWxvcG1lbnQgcmVzb3VyY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjctbTQ6Y2FydGUtcHJldXZlIiwKICAgICAgInVuaXRlIjogImMwNjctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1kZS1kZXBlbmRhbmNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgc2hvdWxkIGNoYW5naW5nIEMgc2hvdyBpbiB0aGUgY3Jvc3MtY2hlY2sgb24gRD8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIHRoZSByZXBsYWNlbWVudCBsZWFybmVkIGZyb20gQSBhbmQgQiBhbmQgZnJvemVuLCBjaGFuZ2luZyBvbmx5IEMgbXVzdCBub3QgY2hhbmdlIHRoZSBwcmVkaWN0aW9uIGZvciBELiBBIGNoYW5nZSBoZXJlIHJldmVhbHMgYW4gaW1wcm9wZXIgZGVwZW5kZW5jeTsgdGhlIGFic2VuY2Ugb2YgYSBjaGFuZ2UgZG9lcyBub3QgZ3VhcmFudGVlIHRoYXQgYWxsIG90aGVyIGxlYWthZ2UgcGF0aHMgYXJlIGNsb3NlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNDpjYXJ0ZS1yZXBhcmVyIiwKICAgICAgInVuaXRlIjogImMwNjctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXBhcmVyLWxlLXByb3RvY29sZSIsCiAgICAgICJxdWVzdGlvbiI6ICJDYW4gYSB0ZXN0IGFscmVhZHkgdXNlZCB0byBtYWtlIGNob2ljZXMgYmVjb21lIHVudG91Y2hlZCBhZ2FpbiBhZnRlciB0aGUgcHJvZ3JhbSBpcyBjb3JyZWN0ZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiTm86IGl0cyByZXN1bHRzIGhhdmUgYWxyZWFkeSBndWlkZWQgZGVjaXNpb25zLiBJdCByZW1haW5zIHVzZWZ1bCBmb3IgZGlhZ25vc2lzLiBDaG9pY2VzIG11c3QgYmUgZmluYWxpemVkIHVzaW5nIHNlcGFyYXRlIHZhbGlkYXRpb24sIGZvbGxvd2VkIGJ5IGV2YWx1YXRpb24gb24gYSBzdGlsbCB1bnRvdWNoZWQgdGVzdCBzZXQgdG8gc3VwcG9ydCBhIGNsYWltIG9mIGFuIGluZGVwZW5kZW50IGZpbmFsIGV2YWx1YXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c067-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGNhbiB5b3UgcmVjb2duaXplIGxlYWthZ2Ugd2l0aG91dCByZWx5aW5nIG9uIHRoZSBzY29yZT8JUmVjb25zdHJ1Y3QgdGhlIGluZm9ybWF0aW9uIHBlcm1pdHRlZCBmb3IgZWFjaCBwYXJhbWV0ZXIgYW5kIGVhY2ggcHJlZGljdGlvbi4gVW5kZXIgdGhlIHN0YXRlZCBwcm90b2NvbCwgaW5mb3JtYXRpb24gZnJvbSB0aGUgZnV0dXJlIG9yIHJlc2VydmVkIGZvciBldmFsdWF0aW9uIG11c3Qgbm90IGZlZWQgYmFjayBpbnRvIHRoZSBwcmVwYXJhdGlvbiBvciBzZWxlY3Rpb24gb2YgdGhlIG1ldGhvZC4gVGhlIHNjb3JlIGRvZXMgbm90IG5lZWQgdG8gZGVjcmVhc2UgZm9yIGxlYWthZ2UgdG8gb2NjdXIuCXRvZGFpIGMwNjctbTQgZnVpdGUtZGUtZG9ubmVlcwpXaHkgY2FuIGEgbWVhbiBjYWxjdWxhdGVkIHdpdGhvdXQgeSBzdGlsbCBjb250YW1pbmF0ZSBvdXIgdGVzdD8JQmVjYXVzZSB0aGUgbWVhbiBpcyBhIGxlYXJuZWQgcGFyYW1ldGVyLiB6enJlZGFjdGVkNXp6IE91ciBwcm90b2NvbCByZXF1aXJlcyBpdCB0byBiZSBsZWFybmVkIGZyb20gQSBhbmQgQiBvbmx5LCB0aGVuIGZyb3plbi4JdG9kYWkgYzA2Ny1tNCBpbXB1dGF0aW9uLWV0LXNlcGFyYXRpb24KV2hlbiBjYW4gZXZlbmluZyBjb25zdW1wdGlvbiBiZSB1c2VkIHdpdGhvdXQgYmVjb21pbmcgYSBmb3JiaWRkZW4gaW5wdXQ/CUFmdGVyIHRoZSBwcmVkaWN0aW9uIGhhcyBiZWVuIGZpbmFsaXplZCwgdG8gY2FsY3VsYXRlIGl0cyBlcnJvci4gQXQgdGhlIHRpbWUgb2YgdGhlIG1vcm5pbmcgcHJlZGljdGlvbiwgaXQgaXMgc3RpbGwgdW5rbm93bi4gSWYgaXRzIHJlc3VsdCBpcyB0aGVuIHVzZWQgdG8gc2VsZWN0IHRoZSBtZXRob2QsIHRoZSBzZXQgYmVjb21lcyBhIGRldmVsb3BtZW50IHJlc291cmNlLgl0b2RhaSBjMDY3LW00IGV2YWx1YXRpb24tYXByZXMtcHJlZGljdGlvbgpXaGF0IHNob3VsZCBjaGFuZ2luZyBDIHNob3cgaW4gdGhlIGNyb3NzLWNoZWNrIG9uIEQ/CVdpdGggdGhlIHJlcGxhY2VtZW50IGxlYXJuZWQgZnJvbSBBIGFuZCBCIGFuZCBmcm96ZW4sIGNoYW5naW5nIG9ubHkgQyBtdXN0IG5vdCBjaGFuZ2UgdGhlIHByZWRpY3Rpb24gZm9yIEQuIEEgY2hhbmdlIGhlcmUgcmV2ZWFscyBhbiBpbXByb3BlciBkZXBlbmRlbmN5OyB0aGUgYWJzZW5jZSBvZiBhIGNoYW5nZSBkb2VzIG5vdCBndWFyYW50ZWUgdGhhdCBhbGwgb3RoZXIgbGVha2FnZSBwYXRocyBhcmUgY2xvc2VkLgl0b2RhaSBjMDY3LW00IGNvbnRyb2xlLWRlLWRlcGVuZGFuY2UKQ2FuIGEgdGVzdCBhbHJlYWR5IHVzZWQgdG8gbWFrZSBjaG9pY2VzIGJlY29tZSB1bnRvdWNoZWQgYWdhaW4gYWZ0ZXIgdGhlIHByb2dyYW0gaXMgY29ycmVjdGVkPwlObzogaXRzIHJlc3VsdHMgaGF2ZSBhbHJlYWR5IGd1aWRlZCBkZWNpc2lvbnMuIEl0IHJlbWFpbnMgdXNlZnVsIGZvciBkaWFnbm9zaXMuIENob2ljZXMgbXVzdCBiZSBmaW5hbGl6ZWQgdXNpbmcgc2VwYXJhdGUgdmFsaWRhdGlvbiwgZm9sbG93ZWQgYnkgZXZhbHVhdGlvbiBvbiBhIHN0aWxsIHVudG91Y2hlZCB0ZXN0IHNldCB0byBzdXBwb3J0IGEgY2xhaW0gb2YgYW4gaW5kZXBlbmRlbnQgZmluYWwgZXZhbHVhdGlvbi4JdG9kYWkgYzA2Ny1tNCByZXBhcmVyLWxlLXByb3RvY29sZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fczxmg jveixx ncay</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Review the split and what precedes it</h3><dl><div><dt>What you understand</dt><dd>An index split can be disjoint while still coming after a parameter learned from the entire set. The house example makes this dependency visible without describing all the project safeguards.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">udfnvr oyfygm zgqcdl kklqpt yjqvju goocmz frjmit jkdzpl vvanuu dhbevv kpkcug nzrbwb amrdyy wxtxrn vgcrox lqharj ktifql sirxia tqdewf brfhni txrgcz rbmdvm vmuqih pnaxao</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Prepare for this unit’s level: recover the exact score, justify the boundary for learning the replacement and explain the cross-check of C on D without support. Reading and an assisted answer never constitute an attained level. No numbered architectural milestone is assigned to this passage.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lxzzlz qossgw gjizio vginjc ssxorl ktyqlo fzkpmt hpzaxs babkhq clayqx oroxmm akaqkp flyzvl wxdyae ysnbob vzjgmc hbmeft vxotuv tshsln tzzuej vchmbj cumyeb yyucvb wkuffo knzftr rmoesq jicmmx gaooqy wjvflf tmyvoz twdiah wjxhfy zxoiij tkcccz newqmv tmlthh bymbps xt</span></span></dd></div><div><dt>Next step</dt><dd>Using authorized code and fictional data, isolate a case with a missing value, trace which records are used to learn each parameter and check that the prediction for D remains invariant when only C changes. The next unit will organize the sequence of preparation and prediction; an actual check of the project will require separate authorization.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c067-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c067-m3.html">Previous</a> · <a href="c067-m5.html">Next</a></nav>
+<footer><p>Course book · C067·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

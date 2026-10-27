@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a quadratic penalty on weights, derive its effect on the gradient, and distinguish the regularized objective from validation error.">
+<title>C103·M5 · Regularization — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pqsuto qnjmzc weun</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C103·M5</p><h1>Regularization</h1><p class="objectif"><span>Your goal</span>Calculate a quadratic penalty on weights, derive its effect on the gradient, and distinguish the regularized objective from validation error.</p><p class="prerequis"><strong>Before you start</strong><br>c102-m5 : finite difference checking · c099-m5 : probability calibration · c067-m5 : pipeline · c103-m1 : initialization · c103-m2 : activations · c103-m3 : optimizers · c103-m4 : normalization</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop wants to predict how long a bicycle delivery will take from the route length. Its training record contains just one route of 1 km, completed in 30 min. This record is fictional: it is enough to follow the calculation, but not to learn a model usable on the road.</p><p>The model multiplies the scaled distance by a weight w. A larger value of w gives a longer duration for the same route. With w = 3, it reproduces the record exactly; with w = 2, it differs from it. If only this record matters, reproducing its duration is the best choice.</p><p>Regularization adds a preference to the training objective. Here, weights with large absolute values incur a penalty, even when the record is reproduced perfectly. The model can therefore accept an error on the record to reduce this penalty. This preference aims to limit overfitting: adapting to the particular details of the records at the expense of future routes. It can also erase a useful relationship. The coefficient λ, read as “lambda”, sets the price of this tradeoff.</p><p>We study the quadratic penalty, often called L2: it uses the square of each penalized weight. This does not establish that the next duration will be predicted better. To find out, we need routes kept out of fitting. The two diagrams separate the calculation of a prediction from the choice of objective.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same record, two candidate weights</title><desc>The fictional training route is 1 kilometer long and takes 30 minutes. After scaling, x is 1 and y is 3. The model predicts w times x: 3 with weight 3, or 2 with weight 2.</desc><rect x="20" y="18" width="320" height="64" rx="7" class="cadre-neutre" /><text x="180" y="44" text-anchor="middle">Record: 1 km; 30 min</text><text x="180" y="68" text-anchor="middle" class="petite-etiquette">After scaling: x = 1; y = 3</text><path d="M180 82v26m-5-5 5 5 5-5" class="trait" /><rect x="20" y="110" width="320" height="49" rx="7" class="cadre-prediction" /><text x="180" y="141" text-anchor="middle">Predict: ŷ = w × x</text><text x="32" y="194">w = 3 → ŷ = 3</text><text x="32" y="225">w = 2 → ŷ = 2</text></svg><figcaption>The prediction formula stays the same when the penalty is introduced. What changes is the objective used to choose the weight. The values x, y and ŷ are dimensionless after division by their respective scales.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Compare costs with a fixed penalty</title><desc>With lambda equal to 1/2, weight 3 gives error 0, penalty 9/2 and cost 9/2. Weight 2 gives error 1, penalty 2 and cost 3. The lengths use the same scale; the second total is smaller.</desc><text x="24" y="30">Same λ = 0.5</text><text x="24" y="59" class="petite-etiquette">w = 3: error 0; penalty 4.5</text><rect x="24" y="72" width="225" height="24" rx="3" class="cadre-prediction" /><text x="273" y="91" class="resultat">4.5</text><text x="24" y="133" class="petite-etiquette">w = 2: error 1; penalty 2</text><rect x="24" y="146" width="50" height="24" rx="3" class="cadre-resultat" /><rect x="74" y="146" width="100" height="24" rx="3" class="cadre-prediction" /><text x="198" y="165" class="resultat">3.0</text><text x="24" y="207" class="petite-etiquette">Gold: error; pink: penalty</text><text x="24" y="233" class="petite-etiquette">Total length: dimensionless cost J</text></svg><figcaption>Each bar adds the error and the penalty, with λ fixed. The weight that reproduces the record exactly does not have the lowest regularized cost. The labels give the same information as the colors.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Minimize training error plus a penalty on the weights; choose the strength of this penalty using validation error measured separately.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Choose a weight for delivery duration</h3><p>The training record gives x = 1 and y = 3 after scaling. Let us compare w = 3 and w = 2 with λ = 1/2 = 0.5, then find the exact minimum of the objective. All observations are fictional.</p><ol class="etapes"><li><h3>Set the units and identify what remains adjustable</h3><p>x is the route length divided by 1 km; y is its duration divided by 10 min. The observed duration of 30 min therefore becomes y = 3. ŷ, read as “y hat”, is the predicted duration on this same scale. To recover the duration in minutes, multiply ŷ by 10 min.</p><p>The model is ŷ = wx: w is a dimensionless real weight. We isolate a linear output neuron in a dense network; the other parameters remain fixed, and its bias, the term added to wx, is fixed at 0. The input to this neuron is simply x here. This restriction makes the penalty calculable by hand; it does not describe the entire training of a deep network.</p><p>A single observation is used for fitting. We assume its values are finite, the scale is fixed before the comparison, and the coefficient λ ≥ 0 is chosen independently of the updates to w. The weight w is the learned parameter; λ is a hyperparameter, meaning a setting for learning.</p></li><li><h3>Build the regularized objective</h3><p>L is the training error: here, the square of the difference between ŷ and y. R is the penalty before weighting, the square of the weight. J is the total objective to minimize; λ determines how much R counts relative to L. These quantities are all dimensionless because the scales are explicit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mi>w</mi><mi>x</mi><mo>−</mo><mi>y</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>;</mo><mi>R</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><msup><mi>w</mi><mn>2</mn></msup></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><mi>L</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>+</mo><mi>λ</mi><mi>R</mi><mo>(</mo><mi>w</mi><mo>)</mo></mrow></math></div><p>For several weights, R adds their squares; the choice of penalized weights must be stated. Here, only w is penalized. In a network, the bias may follow a different convention. A small sum of squares alone does not guarantee a simple function for every architecture and parameterization.</p><p>With several observations, L will be understood here as the mean of the squared errors. Using their sum would change the relative weight of the same penalty. Similarly, some implementations divide the squares by 2: read this convention before transferring a setting.</p></li><li><h3>Evaluate the weight that reproduces the record</h3><p>With w = 3, the prediction is 3 × 1 = 3. Subtract the target to obtain the signed difference: 3 − 3 = 0. Its square is L = 0. Yet the square of the weight is R = 3 × 3 = 9.</p><p>The weighted penalty is λR = (1/2) × 9 = 9/2. Add the two contributions to the objective: J = 0 + 9/2 = 9/2 = 4.5, dimensionless. 0 error on the record therefore does not make J 0.</p></li><li><h3>Accept an error to reduce the total cost</h3><p>With w = 2, the prediction becomes 2. The difference is 2 − 3 = -1; its square is 1. The square of the weight is 4, giving λR = (1/2) × 4 = 2.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>1</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>3</mn><mo>&lt;</mo><mn>4.5</mn></mrow></math></div><p>Training therefore prefers this candidate despite its larger error. We have compared two weights with the same λ and on the same scale; no additional observation was used to produce this result. We still need to check that this candidate really is the best among all possible weights.</p></li><li><h3>Find the minimum over all weights</h3><p>Since x = 1, J is the sum of the square of w − y and λ times the square of w. J′ denotes its derivative with respect to weight w, with y and λ fixed. The derivative of the penalty adds 2λw to the error gradient: subtracting this term during descent pushes toward 0 with an appropriate step size, including when w is negative.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>′</mo><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><mn>2</mn><mo>(</mo><mi>w</mi><mo>−</mo><mi>y</mi><mo>)</mo><mo>+</mo><mn>2</mn><mi>λ</mi><mi>w</mi></mrow></math></div><p>At the stationary point, this derivative is 0. Collect the terms containing w, then divide by the positive coefficient 1 + λ. The symbol w* here denotes the weight that minimizes J.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>(</mo><mn>1</mn><mo>+</mo><mi>λ</mi><mo>)</mo><mi>w</mi><mo>=</mo><mi>y</mi><mo>;</mo><msup><mi>w</mi><mo>*</mo></msup><mo>=</mo><mfrac><mi>y</mi><mrow><mn>1</mn><mo>+</mo><mi>λ</mi></mrow></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>3/2</mn></mfrac><mo>=</mo><mn>2</mn></mrow></math></div><p>This weight matches our second candidate. To prove that it really minimizes J, rather than relying only on a 0 derivative, expand and rewrite the objective in another form:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><mn>3/2</mn><msup><mrow><mo>(</mo><mi>w</mi><mo>−</mo><mn>2</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mn>3</mn></mrow></math></div><p>The square is nonnegative and its coefficient 3/2 is positive. The lowest cost is therefore 3, reached only at w = 2. This proof is specific to our quadratic problem with a single weight; a 0 derivative does not prove a global minimum for an arbitrary dense network.</p></li><li><h3>Check the forces that balance each other</h3><p>At weight w = 2, the gradient of the error alone is 2 × (2 − 3) = -2. It pushes w upward during gradient descent. The penalty gradient is 2 × (1/2) × 2 = 2; it pushes w downward. Their sum is 0. The tradeoff settles while the training error remains 1.</p><p>In plain gradient descent with step size η, the next weight would be w − ηJ′(w). η, read as “eta”, is a positive, dimensionless step size in our scaled variables. Before the error term, the penalty transforms w into (1 − 2ηλ)w. This factor represents a contraction without a change of sign when 0 ≤ 2ηλ ≤ 1; an excessively large step cannot be described simply as “gently reducing the weights”.</p><p>If λ = 0, the penalty disappears and the minimum returns to w = 3, which reproduces the record. For this problem, increasing λ brings the optimal weight closer to 0. This can also lead to underfitting: predictions that are too constrained to represent the intended relationship.</p></li><li><h3>Keep a measurement separate from the choice of weight</h3><p>Cost J is used to fit w; it deliberately adds two objectives. To choose λ, compare predictive error alone on validation data that were not used for the gradient. Adding the penalty to this error would change the question: we would no longer be measuring prediction quality alone.</p><p>Normalization is fitted on the training data, then applied to the other data. After selecting λ through validation, reserve an independent test set for the final evaluation. Validation consulted to choose a setting contributes to that choice; it does not become independent evidence of its future quality.</p><p>The final exercise will use another record from the same workshop. Its result will illustrate the calculation of error on data kept out of fitting; a fictional route will demonstrate neither actual overfitting nor a general benefit of regularization.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without rereading the equations, explain why a larger training error can accompany a lower total cost. Then derive the two gradient terms and say what data would be missing to judge future predictions.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A positive penalty must increase the weight.”</h3><p>The penalty is a cost. It is its gradient that is subtracted from the weight during descent. The term proportional to w pushes toward 0 with an appropriate step size; at the minimum in our calculation, it balances the error gradient.</p><a href="#exemple">Review the check of the two gradients</a></li><li><h3>“Just choose the strongest possible penalty.”</h3><p>A smaller weight can worsen predictions. Calculate the stronger setting in the exercises, then compare the errors on the same validation record. Total costs built with different values of λ do not represent the same objective.</p><a href="#exercices">Compare the strong setting and validation</a></li><li><h3>“My training error is 0, so I generalize.”</h3><p>The model can reproduce the available record without predicting another route well. Keep validation data out of the gradient calculation and a separate test out of the choice of λ. The result of the fictional scene remains an example, not a measurement of actual effectiveness.</p><a href="#exemple">Review the separation of fitting and evaluation</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-critere"><p class="repere">Exercise 1 · Reconstruct the calculation</p>
+<h3>Where does the exact fit lose its advantage?</h3><p>With x = 1, y = 3 and λ = 1/2, reconstruct L, R, λR and J for w = 3, then for w = 2. Which weight wins if you remove the penalty? Which weight wins with it? State the units.</p>
+<label for="reponse-ex-critere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-critere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-critere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-critere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-critere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the difference wx − y, then its square. The square of the weight is a separate calculation.</p></details><details class="indice"><summary>Hint 2</summary><p>The penalty added to the error is λR, rather than R alone.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For w = 3, the difference is 0; L = 0, R = 9, λR = 9/2, J = 9/2 = 4.5. For w = 2, the difference is -1; L = 1, R = 4, λR = 2, J = 3.</p><p>Without a penalty, weight 3 wins, since 0 &lt; 1. With λ fixed as it is here, weight 2 wins, since 3 &lt; 4.5. All these values are dimensionless; the error was calculated on durations divided by 10 min, rather than on the unscaled minutes.</p><p class="petit-titre">Check your reasoning</p><ul><li>Separate the signed difference, its square and the square of the weight.</li><li>Multiply R by λ before adding.</li><li>Justify both rankings and the absence of units.</li></ul></details></article><article class="exercice" id="ex-penalite-forte"><p class="repere">Exercise 2 · Vary a setting</p>
+<h3>Reduce the weight further</h3><p>Keep the same record and replace λ with 2. Derive w* from the equation for a 0 gradient. Calculate L, λR and J at this new minimum. Why is this smaller weight not enough to conclude that the model is better?</p>
+<label for="reponse-ex-penalite-forte">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-penalite-forte" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-penalite-forte" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-penalite-forte" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-penalite-forte" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>With x = 1, the equation for the stationary point is (1 + λ)w = y.</p></details><details class="indice"><summary>Hint 2</summary><p>The optimal weight is y divided by 1 + λ. The training error still needs to be recalculated.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The denominator becomes 1 + 2 = 3. Therefore w* = 3/3 = 1. The coefficient of the square remains positive: this is indeed the minimum of this problem.</p><p>The difference from the target is 1 − 3 = -2; its square is L = 4. The square of the weight is 1; the weighted penalty is 2 × 1 = 2. The cost is J = 4 + 2 = 6, dimensionless.</p><p>The weight has decreased, but the error on the record has increased. The imposed preference is stronger. Directly comparing this J with the previous J does not determine the best λ: the objectives have changed. We need to compare the same predictive error, without a penalty, on the same validation data.</p><p class="petit-titre">Check your reasoning</p><ul><li>Derive the weight from the equation, rather than guessing it.</li><li>Use the new λ in the penalty.</li><li>Distinguish a smaller weight from better predictions.</li></ul></details></article><article class="exercice" id="ex-validation"><p class="repere">Exercise 3 · Evaluation and limits of evidence</p>
+<h3>Another route from the workshop</h3><p>A fictional validation record, kept out of the gradients, gives 2 km and 40 min, meaning x = 2 and y = 4. Compare weights 3, 2 and 1, obtained respectively with no penalty, with setting λ = 1/2 and with setting λ = 2. Calculate the predicted durations in minutes and the squared errors on the model scale. What can you select? What remains to be established?</p>
+<label for="reponse-ex-validation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-validation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-validation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-validation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-validation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiply each weight by x = 2. For the error, subtract y = 4 before squaring.</p></details><details class="indice"><summary>Hint 2</summary><p>To return to minutes, multiply the prediction by 10 min. Do not add any penalty to the validation error.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>With w = 3, ŷ = 6, so the predicted duration is 60 min. The scaled difference is 6 − 4 = 2; its square is 4, dimensionless.</p><p>With w = 2, ŷ = 4, giving 40 min. The difference is 0 and its square is 0. With w = 1, ŷ = 2, giving 20 min; the difference is -2 and its square is 4.</p><p>Among these stated settings, λ = 1/2 minimizes the error on this record. No penalty and the strong penalty give the same validation error here, with predictions on opposite sides of the target. This equality does not mean their models are equivalent.</p><p>The record was used to select λ: it is now part of selection. The choice still needs to be evaluated on a separate test relevant to the intended deliveries. With a single fictional route, we have shown the operations and their limits; no general improvement or actual performance has been established.</p><p class="petit-titre">Check your reasoning</p><ul><li>Give a duration in minutes and a scaled error for each weight.</li><li>Compare the errors without adding λR.</li><li>Name the setting selected from the candidates, without declaring it universally optimal.</li><li>Explain why validation that has been consulted can no longer replace an independent test.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="objectif"><summary><span class="repere">Recall 1</span><span>What does the quadratic penalty change in learning?</span></summary><p>The objective becomes training error plus λ times the sum of the squares of the penalized weights. A larger error may be accepted to reduce this total; the prediction formula stays the same.</p></details><details class="carte" data-carte="gradient"><summary><span class="repere">Recall 2</span><span>What term does the penalty λ times the square of w add to the gradient?</span></summary><p>It adds 2λw. In plain descent, this term multiplied by the step size is subtracted. It pushes toward 0 with an appropriate step size; it does not replace the error gradient.</p></details><details class="carte" data-carte="conventions"><summary><span class="repere">Recall 3</span><span>Why can the same λ act differently in two training runs?</span></summary><p>The variable scales, the penalized weights and the loss convention matter. A sum of errors and a mean do not give the same relative weight to the same penalty. Factors such as division by 2 must also be checked.</p></details><details class="carte" data-carte="validation"><summary><span class="repere">Recall 4</span><span>What quantity should be used to choose λ, and what data should be kept afterward?</span></summary><p>Compare the same predictive error without a penalty on validation data, kept out of the gradients. Keep a separate test out of the choice of λ to evaluate the selected setting.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>Does a smaller weight or 0 validation error prove better generalization?</span></summary><p>No. A smaller weight demonstrates a stronger constraint in this parameterization; validation that has been consulted contributes to the choice. Our fictional route illustrates a calculation without establishing the future quality of the model.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the page and reconstruct the reasoning: define the scales and the penalized weights; write the error, the penalty and their sum; derive the term added to the gradient; explain the tradeoff reached; choose λ using validation and reserve the test. Reading or answering after a hint remains preparation, never an attained level. Then repeat the calculations another day without support.</p></div><div class="exports"><a class="bouton" download="c103-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTU6b2JqZWN0aWYiLAogICAgICAidW5pdGUiOiAiYzEwMy1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlZ3VsYXJpc2F0aW9uLXF1YWRyYXRpcXVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgcXVhZHJhdGljIHBlbmFsdHkgY2hhbmdlIGluIGxlYXJuaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBvYmplY3RpdmUgYmVjb21lcyB0cmFpbmluZyBlcnJvciBwbHVzIM67IHRpbWVzIHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgdGhlIHBlbmFsaXplZCB3ZWlnaHRzLiBBIGxhcmdlciBlcnJvciBtYXkgYmUgYWNjZXB0ZWQgdG8gcmVkdWNlIHRoaXMgdG90YWw7IHRoZSBwcmVkaWN0aW9uIGZvcm11bGEgc3RheXMgdGhlIHNhbWUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTU6Z3JhZGllbnQiLAogICAgICAidW5pdGUiOiAiYzEwMy1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdyYWRpZW50LXBlbmFsaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgdGVybSBkb2VzIHRoZSBwZW5hbHR5IM67IHRpbWVzIHRoZSBzcXVhcmUgb2YgdyBhZGQgdG8gdGhlIGdyYWRpZW50PyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGFkZHMgMs67dy4gSW4gcGxhaW4gZGVzY2VudCwgdGhpcyB0ZXJtIG11bHRpcGxpZWQgYnkgdGhlIHN0ZXAgc2l6ZSBpcyBzdWJ0cmFjdGVkLiBJdCBwdXNoZXMgdG93YXJkIDAgd2l0aCBhbiBhcHByb3ByaWF0ZSBzdGVwIHNpemU7IGl0IGRvZXMgbm90IHJlcGxhY2UgdGhlIGVycm9yIGdyYWRpZW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAzLW01OmNvbnZlbnRpb25zIiwKICAgICAgInVuaXRlIjogImMxMDMtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb252ZW50aW9uLXJlZ3VsYXJpc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gdGhlIHNhbWUgzrsgYWN0IGRpZmZlcmVudGx5IGluIHR3byB0cmFpbmluZyBydW5zPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSB2YXJpYWJsZSBzY2FsZXMsIHRoZSBwZW5hbGl6ZWQgd2VpZ2h0cyBhbmQgdGhlIGxvc3MgY29udmVudGlvbiBtYXR0ZXIuIEEgc3VtIG9mIGVycm9ycyBhbmQgYSBtZWFuIGRvIG5vdCBnaXZlIHRoZSBzYW1lIHJlbGF0aXZlIHdlaWdodCB0byB0aGUgc2FtZSBwZW5hbHR5LiBGYWN0b3JzIHN1Y2ggYXMgZGl2aXNpb24gYnkgMiBtdXN0IGFsc28gYmUgY2hlY2tlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMy1tNTp2YWxpZGF0aW9uIiwKICAgICAgInVuaXRlIjogImMxMDMtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzZWxlY3Rpb24tcGVuYWxpdGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBxdWFudGl0eSBzaG91bGQgYmUgdXNlZCB0byBjaG9vc2UgzrssIGFuZCB3aGF0IGRhdGEgc2hvdWxkIGJlIGtlcHQgYWZ0ZXJ3YXJkPyIsCiAgICAgICJyZXBvbnNlIjogIkNvbXBhcmUgdGhlIHNhbWUgcHJlZGljdGl2ZSBlcnJvciB3aXRob3V0IGEgcGVuYWx0eSBvbiB2YWxpZGF0aW9uIGRhdGEsIGtlcHQgb3V0IG9mIHRoZSBncmFkaWVudHMuIEtlZXAgYSBzZXBhcmF0ZSB0ZXN0IG91dCBvZiB0aGUgY2hvaWNlIG9mIM67IHRvIGV2YWx1YXRlIHRoZSBzZWxlY3RlZCBzZXR0aW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAzLW01OnByZXV2ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlLWdlbmVyYWxpc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgYSBzbWFsbGVyIHdlaWdodCBvciAwIHZhbGlkYXRpb24gZXJyb3IgcHJvdmUgYmV0dGVyIGdlbmVyYWxpemF0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBBIHNtYWxsZXIgd2VpZ2h0IGRlbW9uc3RyYXRlcyBhIHN0cm9uZ2VyIGNvbnN0cmFpbnQgaW4gdGhpcyBwYXJhbWV0ZXJpemF0aW9uOyB2YWxpZGF0aW9uIHRoYXQgaGFzIGJlZW4gY29uc3VsdGVkIGNvbnRyaWJ1dGVzIHRvIHRoZSBjaG9pY2UuIE91ciBmaWN0aW9uYWwgcm91dGUgaWxsdXN0cmF0ZXMgYSBjYWxjdWxhdGlvbiB3aXRob3V0IGVzdGFibGlzaGluZyB0aGUgZnV0dXJlIHF1YWxpdHkgb2YgdGhlIG1vZGVsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c103-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBxdWFkcmF0aWMgcGVuYWx0eSBjaGFuZ2UgaW4gbGVhcm5pbmc/CVRoZSBvYmplY3RpdmUgYmVjb21lcyB0cmFpbmluZyBlcnJvciBwbHVzIM67IHRpbWVzIHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgdGhlIHBlbmFsaXplZCB3ZWlnaHRzLiBBIGxhcmdlciBlcnJvciBtYXkgYmUgYWNjZXB0ZWQgdG8gcmVkdWNlIHRoaXMgdG90YWw7IHRoZSBwcmVkaWN0aW9uIGZvcm11bGEgc3RheXMgdGhlIHNhbWUuCXRvZGFpIGMxMDMtbTUgcmVndWxhcmlzYXRpb24tcXVhZHJhdGlxdWUKV2hhdCB0ZXJtIGRvZXMgdGhlIHBlbmFsdHkgzrsgdGltZXMgdGhlIHNxdWFyZSBvZiB3IGFkZCB0byB0aGUgZ3JhZGllbnQ/CUl0IGFkZHMgMs67dy4gSW4gcGxhaW4gZGVzY2VudCwgdGhpcyB0ZXJtIG11bHRpcGxpZWQgYnkgdGhlIHN0ZXAgc2l6ZSBpcyBzdWJ0cmFjdGVkLiBJdCBwdXNoZXMgdG93YXJkIDAgd2l0aCBhbiBhcHByb3ByaWF0ZSBzdGVwIHNpemU7IGl0IGRvZXMgbm90IHJlcGxhY2UgdGhlIGVycm9yIGdyYWRpZW50Lgl0b2RhaSBjMTAzLW01IGdyYWRpZW50LXBlbmFsaXRlCldoeSBjYW4gdGhlIHNhbWUgzrsgYWN0IGRpZmZlcmVudGx5IGluIHR3byB0cmFpbmluZyBydW5zPwlUaGUgdmFyaWFibGUgc2NhbGVzLCB0aGUgcGVuYWxpemVkIHdlaWdodHMgYW5kIHRoZSBsb3NzIGNvbnZlbnRpb24gbWF0dGVyLiBBIHN1bSBvZiBlcnJvcnMgYW5kIGEgbWVhbiBkbyBub3QgZ2l2ZSB0aGUgc2FtZSByZWxhdGl2ZSB3ZWlnaHQgdG8gdGhlIHNhbWUgcGVuYWx0eS4gRmFjdG9ycyBzdWNoIGFzIGRpdmlzaW9uIGJ5IDIgbXVzdCBhbHNvIGJlIGNoZWNrZWQuCXRvZGFpIGMxMDMtbTUgY29udmVudGlvbi1yZWd1bGFyaXNhdGlvbgpXaGF0IHF1YW50aXR5IHNob3VsZCBiZSB1c2VkIHRvIGNob29zZSDOuywgYW5kIHdoYXQgZGF0YSBzaG91bGQgYmUga2VwdCBhZnRlcndhcmQ/CUNvbXBhcmUgdGhlIHNhbWUgcHJlZGljdGl2ZSBlcnJvciB3aXRob3V0IGEgcGVuYWx0eSBvbiB2YWxpZGF0aW9uIGRhdGEsIGtlcHQgb3V0IG9mIHRoZSBncmFkaWVudHMuIEtlZXAgYSBzZXBhcmF0ZSB0ZXN0IG91dCBvZiB0aGUgY2hvaWNlIG9mIM67IHRvIGV2YWx1YXRlIHRoZSBzZWxlY3RlZCBzZXR0aW5nLgl0b2RhaSBjMTAzLW01IHNlbGVjdGlvbi1wZW5hbGl0ZQpEb2VzIGEgc21hbGxlciB3ZWlnaHQgb3IgMCB2YWxpZGF0aW9uIGVycm9yIHByb3ZlIGJldHRlciBnZW5lcmFsaXphdGlvbj8JTm8uIEEgc21hbGxlciB3ZWlnaHQgZGVtb25zdHJhdGVzIGEgc3Ryb25nZXIgY29uc3RyYWludCBpbiB0aGlzIHBhcmFtZXRlcml6YXRpb247IHZhbGlkYXRpb24gdGhhdCBoYXMgYmVlbiBjb25zdWx0ZWQgY29udHJpYnV0ZXMgdG8gdGhlIGNob2ljZS4gT3VyIGZpY3Rpb25hbCByb3V0ZSBpbGx1c3RyYXRlcyBhIGNhbGN1bGF0aW9uIHdpdGhvdXQgZXN0YWJsaXNoaW5nIHRoZSBmdXR1cmUgcXVhbGl0eSBvZiB0aGUgbW9kZWwuCXRvZGFpIGMxMDMtbTUgbGltaXRlLWdlbmVyYWxpc2F0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pqsuto qnjmzc weun</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize weight reduction in an existing calculation</h3><dl><div><dt>What you understand</dt><dd>The quadratic penalty adds a term proportional to the weight to the gradient. It can be present in a linear model as well as in a dense layer. Our example isolates this mechanism; it teaches neither an actual delivery strategy nor a complete training process.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sguoyc cwkouk bvuzcg fmhhsa iyvseo akvaez bofuos cqkeah xqvcbg rqgwqq hzefbj lgzskl phmvsx obmviy whmmdn cnhlmj ehnhfb pyrymy nepmvj jelsvx ktpmcr aqofae hzkrwx tubzsw</span></span></dd></div><div><dt>Your level</dt><dd>Preparation at the level of this unit: derive the penalty gradient, repeat the tradeoff calculation by hand, and distinguish loss, penalty and validation error. Neither reading this code nor answering after help establishes an attained level; independent reconstruction after a delay remains to be demonstrated.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uqpmvx zbiwen qymgft nzgoyq ecwckh xcrluo crdsqa fjkehw flragd vszfgi qhawfb zddltt lmruex yrpmeo eeaxyy rwaqyg nvqxqo bebwec cyhuaq xsjmxh tsytbf puqetj bxpmbz gaevhz</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the exercises without support, then explain the cited update and its bound term by term. Before any actual use, the caller, the loss convention and the protocol for selecting settings will need to be read separately; this page does not validate them.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c103-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c103-m4.html">Previous</a> · <a href="c104-m1.html">Next</a></nav>
+<footer><p>Course book · C103·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

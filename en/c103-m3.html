@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a weight update, compare descent without memory and momentum, then check what the loss allows us to conclude.">
+<title>C103·M3 · Optimizers — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ooaiom fdwemr rdrq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C103·M3</p><h1>Optimizers</h1><p class="objectif"><span>Your goal</span>Calculate a weight update, compare descent without memory and momentum, then check what the loss allows us to conclude.</p><p class="prerequis"><strong>Before you start</strong><br>c102-m5 : finite difference checking · c099-m5 : probability calibration · c067-m5 : pipeline · c103-m1 : initialization · c103-m2 : activations</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small neural network must estimate the mass of a parcel from the signal of a weighing scale. To isolate the role of the optimizer, we adjust only the final weight: with the signal fixed at 1, the output equals this weight. It reports 6 kg, while the reference mass is 2 kg. These data are fictitious; no real parcel has been weighed.</p><p>The gradient indicates how the loss varies when the weight increases. Here, a positive slope suggests decreasing the weight. The optimizer turns this information into a change in the weight: it chooses how much to subtract and may retain a memory of previous information. Backpropagation supplies the gradient; it does not choose this update rule on its own.</p><p>Without memory, we consider only the current slope. With momentum, we add part of the previous accumulator to this slope. The first change can be identical, then the trajectories diverge. The current weight alone is therefore insufficient to reproduce a sequence with momentum: we also need to know its memory.</p><p>We will compare these rules on the same parcel, without changing the target or the signal. A decrease in loss will show only a better fit to this training example. By itself, it will say nothing about accuracy on other parcels.</p><div class="schemas"><figure><svg viewBox="0 0 360 258" xmlns="http://www.w3.org/2000/svg" role="img"><title>From gradient to updated weight</title><desc>The initial weight is 6 kilograms. The gradient is 4 kilograms. The dimensionless step size 0.25 gives an amount to subtract of 1 kilogram, then the weight is 5 kilograms.</desc><rect x="20" y="15" width="320" height="58" rx="7" class="cadre-prediction" /><text x="180" y="39" text-anchor="middle">Output: 6 kg</text><text x="180" y="61" text-anchor="middle" class="petite-etiquette">Reference: 2 kg</text><path d="M180 73v23m-5-5 5 5 5-5" class="trait" /><rect x="20" y="100" width="320" height="58" rx="7" class="cadre-neutre" /><text x="180" y="124" text-anchor="middle">Gradient: 4 kg</text><text x="180" y="146" text-anchor="middle" class="petite-etiquette">Subtract: 0.25 × 4 = 1 kg</text><path d="M180 158v23m-5-5 5 5 5-5" class="trait" /><rect x="20" y="185" width="320" height="58" rx="7" class="cadre-resultat" /><text x="180" y="209" text-anchor="middle">New weight: 5 kg</text><text x="180" y="231" text-anchor="middle" class="petite-etiquette">Then recalculate the loss</text></svg><figcaption>The gradient is a slope, the step size controls its effect, and the weight is the parameter being changed. The diagram shows the first change, shared by the rules studied here.</figcaption></figure><figure><svg viewBox="0 0 360 252" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same start, different memories</title><desc>Both rules start at 6 kilograms and reach 5 kilograms. At the next change, descent without memory reaches 4.25 kilograms; the rule with momentum reaches 3.75 kilograms. The latter retains the previous accumulator.</desc><rect x="95" y="12" width="170" height="43" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">Start: 6 kg</text><path d="M180 55v20m-5-5 5 5 5-5" class="trait" /><rect x="60" y="80" width="240" height="58" rx="7" class="cadre-neutre" /><text x="180" y="105" text-anchor="middle">Shared weight: 5 kg</text><text x="180" y="127" text-anchor="middle" class="petite-etiquette">Momentum: memory v = 4 kg</text><path d="M180 138v14H85v20m-5-5 5 5 5-5M180 152h95v20m-5-5 5 5 5-5" class="trait" /><rect x="15" y="178" width="140" height="62" rx="7" class="cadre-neutre" /><text x="85" y="201" text-anchor="middle" class="petite-etiquette">No memory</text><text x="85" y="226" text-anchor="middle">4.25 kg</text><rect x="205" y="178" width="140" height="62" rx="7" class="cadre-resultat" /><text x="275" y="201" text-anchor="middle" class="petite-etiquette">With momentum</text><text x="275" y="226" text-anchor="middle">3.75 kg</text></svg><figcaption>The branches compare the same number of changes, the same step size, and the same example. Their positions are schematic; the stated masses give the exact results.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Calculate the gradient at the current weights; apply the rule and its memory; retain the new state; recalculate the loss to check the change in the weights.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Adjusting the final weight of the scale</h3><p>The signal x = 1 is dimensionless, the reference is y = 2 kg, and the initial weight is w = 6 kg. Take a step size α = 0.25, an initial memory v = 0 kg, and a momentum coefficient β = 0.5. Both coefficients are dimensionless in this model. Follow 2 updates on the same fictitious example.</p><ol class="etapes"><li><h3>Define the output, loss, and assumptions</h3><p>The final unit is linear and has no bias: its output ŷ, in kilograms, is w × x. The hat distinguishes the estimate from the reference y. All other parts of the network remain fixed; the signal x and the target y remain constant. Here we impose neither a bound on w nor any additional term in the loss.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ŷ</mi><mo>=</mo><mi>w</mi><mi>x</mi><mo>;</mo><mi>e</mi><mo>=</mo><mi>ŷ</mi><mo>−</mo><mi>y</mi><mo>;</mo><mi>L</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><mfrac><msup><mi>e</mi><mn>2</mn></msup><mn>2</mn></mfrac></mrow></math></div><p>e is the signed error in kg. L is the quadratic loss in kg²; division by 2 simplifies its derivative without changing the weight that minimizes it. Initially, e = 6 − 2 = 4 kg; its square is 16 kg² and L = 16 ÷ 2 = 8 kg².</p></li><li><h3>Calculate the gradient at the current weight</h3><p>In this single coordinate, the gradient g is the derivative of L with respect to w: a slope in kg²/kg, hence in kg. The chain rule multiplies the derivative of the square by that of the output. The factor 2 from the square cancels the divisor 2 in the loss.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g</mi><mo>=</mo><mfrac><mrow><mi>d</mi><mi>L</mi></mrow><mrow><mi>d</mi><mi>w</mi></mrow></mfrac><mo>=</mo><mo>(</mo><mi>w</mi><mi>x</mi><mo>−</mo><mi>y</mi><mo>)</mo><mi>x</mi><mo>=</mo><mi>w</mi><mo>−</mo><mi>y</mi><mtext> lorsque x = </mtext><mn>1</mn></mrow></math></div><p>Initially, g = 4 kg. Since this slope is positive, a small increase in w would increase L. We should therefore try decreasing w. The equality between gradient and error holds here because x = 1; it does not hold for every network.</p></li><li><h3>Turn the slope into a weight change without memory</h3><p>Gradient descent without memory subtracts αg. α is the learning rate, or step size, and is strictly positive. The prime in w′ means “new weight”. The gradient must be calculated using the old w.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>′</mo><mo>=</mo><mi>w</mi><mo>−</mo><mi>α</mi><mi>g</mi></mrow></math></div><p>The product αg has the unit of the weight: kg here, because α is dimensionless. This choice of unit depends on our loss and parameterization; in another problem, this check must be repeated. The minus sign aims for a local decrease with a sufficiently small step; it does not guarantee that an arbitrarily large change will be beneficial.</p><p>When the gradient is estimated using a randomly selected example, this rule is called stochastic gradient descent, often abbreviated SGD. A small random group of examples also provides an estimate. Our calculation deliberately repeats the same example: no randomness is needed to check the arithmetic.</p></li><li><h3>Make the first shared change</h3><p>Without memory, the amount subtracted is αg = 0.25 × 4 = 1 kg. The new weight is therefore 6 − 1 = 5 kg.</p><p>Recalculate the output at the new weight: it is 5 kg. The error becomes 5 − 2 = 3 kg, its square is 9 kg², and the loss is 9 ÷ 2 = 4.5 kg². The loss has indeed decreased from 8 kg². This check concerns the example used for the weight change.</p></li><li><h3>Define the rule with momentum precisely</h3><p>v denotes a gradient accumulator, in kg here, rather than a physical velocity of the scale. β retains a fraction of this accumulator: 0 ≤ β &lt; 1. We choose the following unnormalized convention; there is no additional factor multiplying the new gradient.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>v</mi><mo>′</mo><mo>=</mo><mi>β</mi><mi>v</mi><mo>+</mo><mi>g</mi><mo>;</mo><mi>w</mi><mo>′</mo><mo>=</mo><mi>w</mi><mo>−</mo><mi>α</mi><mi>v</mi><mo>′</mo></mrow></math></div><p>First calculate v′, then use this new value to change w. Initially, βv = 0.5 × 0 = 0 kg. Thus v′ = 0 + 4 = 4 kg: the first update again gives 5 kg. Retain w = 5 kg and v = 4 kg together for what follows.</p><p>Some conventions also weight the new gradient by 1 − β. They produce an accumulator on a different scale. The numerical step size therefore cannot be compared without specifying the convention. With β = 0, our rule exactly recovers descent without memory.</p></li><li><h3>Reuse the memory for the next change</h3><p>At the weight 5 kg, recalculate g = 5 − 2 = 3 kg. Reusing the initial gradient 4 kg would mean measuring the slope at the wrong location.</p><p>The memory contribution is βv = 0.5 × 4 = 2 kg. The new accumulator is v′ = 2 + 3 = 5 kg. The amount subtracted is αv′ = 0.25 × 5 = 1.25 kg.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>′</mo><mo>=</mo><mn>5</mn><mo>−</mo><mn>1.25</mn><mo>=</mo><mn>3.75</mn><mtext> kg</mtext></mrow></math></div><p>The new state to retain is w = 3.75 kg and v = 5 kg. The error is 3.75 − 2 = 1.75 kg; its square is 3.0625 kg². The exact loss is 49/32 kg², or 1.53125 kg². The first exercise will reconstruct the other branch, without memory.</p></li><li><h3>Check another way and limit the conclusion</h3><p>Check the change with momentum: 5 − 3.75 = 1.25 kg; dividing this difference by 0.25 recovers the accumulator 5 kg. Check the loss: the error 1.75 kg is closer to 0 than 3 kg, and its loss is below 4.5 kg².</p><p>For descent without memory alone, our loss allows another check: since g = w − y, the next error e′ follows directly from the previous error e.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>e</mi><mo>′</mo><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo>)</mo><mi>e</mi><mo>;</mo><mi>L</mi><mo>(</mo><mi>w</mi><mo>′</mo><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo>)</mo></mrow><mn>2</mn></msup><mi>L</mi><mo>(</mo><mi>w</mi><mo>)</mo></mrow></math></div><p>With our step size, the error is multiplied by 0.75 and the loss by 0.5625. For a nonzero error, the loss strictly decreases if 0 &lt; α &lt; 2. This bound comes from this parabola and x = 1; it is neither a universal bound for networks nor a criterion for our rule with momentum.</p><p>Momentum gives a smaller loss here after 2 changes. This exact result on a fictitious example demonstrates no general superiority, no convergence on other losses, and no improvement on new parcels.</p></li><li><h3>Remember the order of operations and the role of the state</h3><p>An iteration reads the current weights, calculates the output and loss, obtains the gradient, updates the memory if there is any, then changes the weights. The loss used for checking is recalculated after this change. In an implementation that adds gradients from several calls, we must also specify when this accumulation is reset to 0: it is distinct from our optimizer’s memory v.</p><p>To resume our calculation with momentum exactly, we need the weights, v, α, β, the convention, and the same data. Other optimizers, such as Adam, use averages of gradients and their squares to adjust the scale of changes as well. Their formula and state require a separate study; their name does not let us infer a weight change for our example.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps. Why do the first changes coincide while the next ones differ? Reconstruct the gradient, the memory, and the amount subtracted, then give a check that does more than reread the same calculation.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The gradient tells me in which direction to add to the weight.”</h3><p>A positive slope indicates that the loss increases locally with the weight. Descent subtracts the gradient multiplied by a positive step size. Distinguish the gradient g, the amount αg to subtract, and the signed change −αg.</p><a href="#exemple">Review the sign and units of the weight change</a></li><li><h3>“I start again from the same weight value, so momentum will give the same result.”</h3><p>The update also reads v. Resetting it to 0 at every iteration removes the memory and changes the rule. The exercise with opposing memory even shows how the direction of change can differ at an identical weight.</p><a href="#exercices">Compare the states in the transfer exercise</a></li><li><h3>“A larger step or momentum must give a better result.”</h3><p>The slope describes a neighborhood rather than the whole curve. A large step can go beyond the favorable region; the memory can oppose the current gradient. Recalculate the loss after the change and limit the conclusion to the data checked.</p><a href="#exercices">Test the two cases where the loss increases</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-sans-memoire"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Reconstruct the branch without memory</h3><p>Start again from the shared weight w = 5 kg. With α = 0.25, calculate the gradient, the next weight, and its loss without momentum. Compare with 3.75 kg and the loss 1.53125 kg² obtained with momentum. What does this comparison allow you to conclude?</p>
+<label for="reponse-ex-sans-memoire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-sans-memoire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-sans-memoire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-sans-memoire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-sans-memoire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Recalculate g at the weight 5 kg; do not use the starting gradient.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract αg, then calculate the square of the new error before dividing by 2.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>g = 5 − 2 = 3 kg. The amount to subtract is 0.25 × 3 = 0.75 kg. The weight becomes 5 − 0.75 = 4.25 kg.</p><p>The error is 4.25 − 2 = 2.25 kg. Its square is 5.0625 kg² and the loss is 81/32 kg², or 2.53125 kg². Another route: 0.5625 × 4.5 kg² recovers the same loss.</p><p>After 2 updates from the same starting point, momentum gives a smaller loss here. This compares these fictitious trajectories with these settings. It does not identify a better optimizer for all networks or measure quality on other parcels.</p><p class="petit-titre">Check your reasoning</p><ul><li>The gradient is recalculated at the current weight and each quantity retains its unit.</li><li>The result 4.25 kg is checked using an exact loss and its ratio to the previous loss.</li><li>The conclusion remains limited to these updates on the same example.</li></ul></details></article><article class="exercice" id="ex-grand-pas"><p class="repere">Exercise 2 · Diagnosis through calculation</p>
+<h3>Is the right sign enough?</h3><p>Start again from the initial weight 6 kg, without memory, but replace α with 3. Calculate the resulting weight and loss. Explain why the minus sign is correct even though the result gets worse. This model imposes no bound on the weight.</p>
+<label for="reponse-ex-grand-pas">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-grand-pas" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-grand-pas" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-grand-pas" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-grand-pas" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The initial gradient remains 4 kg; only the step size has changed.</p></details><details class="indice"><summary>Hint 2</summary><p>The check concerns the distance from the target 2 kg, even if the weight becomes negative.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The amount subtracted is 3 × 4 = 12 kg. The resulting weight is 6 − 12 = -6 kg. Its error is -6 − 2 = -8 kg; the square is 64 kg², then the loss is 32 kg².</p><p>The loss is greater than the initial 8 kg²: we have crossed the minimum and ended farther from the target. The negative weight is an algebraic result of our unbounded model, rather than a physical mass claimed to be possible.</p><p>The condition 0 &lt; α &lt; 2 derived for this loss without memory is not met. To fix this calculation: reduce the step size, for example by returning to 0.25, and recalculate the loss. On another network, the threshold must be studied again.</p><p class="petit-titre">Check your reasoning</p><ul><li>Retain the negative weight in the calculation without adding an unstated bound.</li><li>Compare 32 kg² with 8 kg² and explain the overshoot past the minimum.</li><li>Distinguish the local direction of descent from the permissible step size.</li></ul></details></article><article class="exercice" id="ex-memoire-opposee"><p class="repere">Exercise 3 · Transfer to another state with the same settings</p>
+<h3>Same weight, opposing memory</h3><p>Still using the same parcel, consider an alternative state w = 5 kg and v = -8 kg, inherited from fictitious earlier trials. This is not a continuation of our calculated trajectory. With α = 0.25 and β = 0.5, calculate v′, w′, and the loss. Why does the positive slope no longer require the weight to decrease?</p>
+<label for="reponse-ex-memoire-opposee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-memoire-opposee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-memoire-opposee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-memoire-opposee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-memoire-opposee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The gradient is still 3 kg. Add it to βv, retaining the negative sign of the memory.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtracting a negative quantity increases the weight; then calculate the loss to check the effect.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>βv = 0.5 × (-8) = -4 kg. Thus v′ = -4 + 3 = -1 kg. The amount αv′ to subtract is -0.25 kg.</p><p>w′ = 5 − (-0.25) = 5.25 kg. The error becomes 3.25 kg, its square is 10.5625 kg², and the loss is 169/32 kg², or 5.28125 kg². It exceeds 4.5 kg²: the weight has moved farther from the target.</p><p>The change follows the new accumulator, which is negative here despite the positive gradient. The weights alone therefore do not describe the state of an optimizer with momentum. To diagnose a resumed calculation, ask for the memory and the convention as well. Nothing in this counterexample implies that every use of momentum is unfavorable.</p><p class="petit-titre">Check your reasoning</p><ul><li>Write the memory contribution, the new accumulator, and the amount subtracted separately.</li><li>Justify the sign of the increase in weight and check the increase in loss.</li><li>Explain why this alternative state cannot be confused with the state on the main trajectory.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="gradient-et-pas"><summary><span class="repere">Recall 1</span><span>What does the gradient provide, and what does the optimizer decide?</span></summary><p>The gradient measures the local sensitivity of the loss to the weights. The optimizer turns this gradient and any memory into a change in the weights. Without memory: w′ = w − αg, with positive α; the gradient is calculated before the weight changes.</p></details><details class="carte" data-carte="unites"><summary><span class="repere">Recall 2</span><span>Which units must we distinguish in our weighing scale example?</span></summary><p>The weight and error are in kg, and the loss is in kg². Its gradient with respect to the weight is in kg²/kg, hence in kg. α and β are dimensionless in this model; αg or αv′ is an amount in kg to subtract from the weight.</p></details><details class="carte" data-carte="etat-inertie"><summary><span class="repere">Recall 3</span><span>Reconstruct the rule with momentum and the state to retain.</span></summary><p>This page’s convention: v′ = βv + g then w′ = w − αv′. Retain the new weight and the new accumulator, together with α, β, and the convention. Resetting v at every iteration changes the rule; an identical weight can evolve differently if v differs.</p></details><details class="carte" data-carte="limite-pas"><summary><span class="repere">Recall 4</span><span>Why does the minus sign not guarantee a decrease in loss?</span></summary><p>The slope describes a neighborhood. A large step can overshoot the minimum. For our loss without memory, e′ = (1 − α)e; a nonzero error decreases in absolute value for 0 &lt; α &lt; 2. This bound does not automatically carry over to another network or to momentum.</p></details><details class="carte" data-carte="preuve-limitee"><summary><span class="repere">Recall 5</span><span>What does a smaller loss after our updates establish?</span></summary><p>A better fit to the fictitious example checked, with this loss and these settings. It establishes neither better quality on other parcels nor general superiority of the optimizer. Reading or producing an answer after a hint does not constitute mastery of a level.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without looking at the steps: connect output, loss, and gradient; write descent without memory, then the rule with momentum using the chosen convention; recover their first shared state and their divergence; name the units and give a case where the loss increases. Finally, explain why a decrease on this parcel is insufficient to draw conclusions about other parcels.</p></div><div class="exports"><a class="bouton" download="c103-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTM6Z3JhZGllbnQtZXQtcGFzIiwKICAgICAgInVuaXRlIjogImMxMDMtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZWdsZS1kZS1taXNlLWEtam91ciIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGdyYWRpZW50IHByb3ZpZGUsIGFuZCB3aGF0IGRvZXMgdGhlIG9wdGltaXplciBkZWNpZGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGdyYWRpZW50IG1lYXN1cmVzIHRoZSBsb2NhbCBzZW5zaXRpdml0eSBvZiB0aGUgbG9zcyB0byB0aGUgd2VpZ2h0cy4gVGhlIG9wdGltaXplciB0dXJucyB0aGlzIGdyYWRpZW50IGFuZCBhbnkgbWVtb3J5IGludG8gYSBjaGFuZ2UgaW4gdGhlIHdlaWdodHMuIFdpdGhvdXQgbWVtb3J5OiB34oCyID0gdyDiiJIgzrFnLCB3aXRoIHBvc2l0aXZlIM6xOyB0aGUgZ3JhZGllbnQgaXMgY2FsY3VsYXRlZCBiZWZvcmUgdGhlIHdlaWdodCBjaGFuZ2VzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAzLW0zOnVuaXRlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidW5pdGVzLWR1LWdyYWRpZW50IiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIHVuaXRzIG11c3Qgd2UgZGlzdGluZ3Vpc2ggaW4gb3VyIHdlaWdoaW5nIHNjYWxlIGV4YW1wbGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHdlaWdodCBhbmQgZXJyb3IgYXJlIGluIGtnLCBhbmQgdGhlIGxvc3MgaXMgaW4ga2fCsi4gSXRzIGdyYWRpZW50IHdpdGggcmVzcGVjdCB0byB0aGUgd2VpZ2h0IGlzIGluIGtnwrIva2csIGhlbmNlIGluIGtnLiDOsSBhbmQgzrIgYXJlIGRpbWVuc2lvbmxlc3MgaW4gdGhpcyBtb2RlbDsgzrFnIG9yIM6xduKAsiBpcyBhbiBhbW91bnQgaW4ga2cgdG8gc3VidHJhY3QgZnJvbSB0aGUgd2VpZ2h0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAzLW0zOmV0YXQtaW5lcnRpZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWVtb2lyZS1kZS1sLW9wdGltaXNldXIiLAogICAgICAicXVlc3Rpb24iOiAiUmVjb25zdHJ1Y3QgdGhlIHJ1bGUgd2l0aCBtb21lbnR1bSBhbmQgdGhlIHN0YXRlIHRvIHJldGFpbi4iLAogICAgICAicmVwb25zZSI6ICJUaGlzIHBhZ2XigJlzIGNvbnZlbnRpb246IHbigLIgPSDOsnYgKyBnIHRoZW4gd+KAsiA9IHcg4oiSIM6xduKAsi4gUmV0YWluIHRoZSBuZXcgd2VpZ2h0IGFuZCB0aGUgbmV3IGFjY3VtdWxhdG9yLCB0b2dldGhlciB3aXRoIM6xLCDOsiwgYW5kIHRoZSBjb252ZW50aW9uLiBSZXNldHRpbmcgdiBhdCBldmVyeSBpdGVyYXRpb24gY2hhbmdlcyB0aGUgcnVsZTsgYW4gaWRlbnRpY2FsIHdlaWdodCBjYW4gZXZvbHZlIGRpZmZlcmVudGx5IGlmIHYgZGlmZmVycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMy1tMzpsaW1pdGUtcGFzIiwKICAgICAgInVuaXRlIjogImMxMDMtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1kdS1wYXMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgdGhlIG1pbnVzIHNpZ24gbm90IGd1YXJhbnRlZSBhIGRlY3JlYXNlIGluIGxvc3M/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHNsb3BlIGRlc2NyaWJlcyBhIG5laWdoYm9yaG9vZC4gQSBsYXJnZSBzdGVwIGNhbiBvdmVyc2hvb3QgdGhlIG1pbmltdW0uIEZvciBvdXIgbG9zcyB3aXRob3V0IG1lbW9yeSwgZeKAsiA9ICgxIOKIkiDOsSllOyBhIG5vbnplcm8gZXJyb3IgZGVjcmVhc2VzIGluIGFic29sdXRlIHZhbHVlIGZvciAwIDwgzrEgPCAyLiBUaGlzIGJvdW5kIGRvZXMgbm90IGF1dG9tYXRpY2FsbHkgY2Fycnkgb3ZlciB0byBhbm90aGVyIG5ldHdvcmsgb3IgdG8gbW9tZW50dW0uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTM6cHJldXZlLWxpbWl0ZWUiLAogICAgICAidW5pdGUiOiAiYzEwMy1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvcnRlZS1kdS1jb250cm9sZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBzbWFsbGVyIGxvc3MgYWZ0ZXIgb3VyIHVwZGF0ZXMgZXN0YWJsaXNoPyIsCiAgICAgICJyZXBvbnNlIjogIkEgYmV0dGVyIGZpdCB0byB0aGUgZmljdGl0aW91cyBleGFtcGxlIGNoZWNrZWQsIHdpdGggdGhpcyBsb3NzIGFuZCB0aGVzZSBzZXR0aW5ncy4gSXQgZXN0YWJsaXNoZXMgbmVpdGhlciBiZXR0ZXIgcXVhbGl0eSBvbiBvdGhlciBwYXJjZWxzIG5vciBnZW5lcmFsIHN1cGVyaW9yaXR5IG9mIHRoZSBvcHRpbWl6ZXIuIFJlYWRpbmcgb3IgcHJvZHVjaW5nIGFuIGFuc3dlciBhZnRlciBhIGhpbnQgZG9lcyBub3QgY29uc3RpdHV0ZSBtYXN0ZXJ5IG9mIGEgbGV2ZWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c103-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBncmFkaWVudCBwcm92aWRlLCBhbmQgd2hhdCBkb2VzIHRoZSBvcHRpbWl6ZXIgZGVjaWRlPwlUaGUgZ3JhZGllbnQgbWVhc3VyZXMgdGhlIGxvY2FsIHNlbnNpdGl2aXR5IG9mIHRoZSBsb3NzIHRvIHRoZSB3ZWlnaHRzLiBUaGUgb3B0aW1pemVyIHR1cm5zIHRoaXMgZ3JhZGllbnQgYW5kIGFueSBtZW1vcnkgaW50byBhIGNoYW5nZSBpbiB0aGUgd2VpZ2h0cy4gV2l0aG91dCBtZW1vcnk6IHfigLIgPSB3IOKIkiDOsWcsIHdpdGggcG9zaXRpdmUgzrE7IHRoZSBncmFkaWVudCBpcyBjYWxjdWxhdGVkIGJlZm9yZSB0aGUgd2VpZ2h0IGNoYW5nZXMuCXRvZGFpIGMxMDMtbTMgcmVnbGUtZGUtbWlzZS1hLWpvdXIKV2hpY2ggdW5pdHMgbXVzdCB3ZSBkaXN0aW5ndWlzaCBpbiBvdXIgd2VpZ2hpbmcgc2NhbGUgZXhhbXBsZT8JVGhlIHdlaWdodCBhbmQgZXJyb3IgYXJlIGluIGtnLCBhbmQgdGhlIGxvc3MgaXMgaW4ga2fCsi4gSXRzIGdyYWRpZW50IHdpdGggcmVzcGVjdCB0byB0aGUgd2VpZ2h0IGlzIGluIGtnwrIva2csIGhlbmNlIGluIGtnLiDOsSBhbmQgzrIgYXJlIGRpbWVuc2lvbmxlc3MgaW4gdGhpcyBtb2RlbDsgzrFnIG9yIM6xduKAsiBpcyBhbiBhbW91bnQgaW4ga2cgdG8gc3VidHJhY3QgZnJvbSB0aGUgd2VpZ2h0Lgl0b2RhaSBjMTAzLW0zIHVuaXRlcy1kdS1ncmFkaWVudApSZWNvbnN0cnVjdCB0aGUgcnVsZSB3aXRoIG1vbWVudHVtIGFuZCB0aGUgc3RhdGUgdG8gcmV0YWluLglUaGlzIHBhZ2XigJlzIGNvbnZlbnRpb246IHbigLIgPSDOsnYgKyBnIHRoZW4gd+KAsiA9IHcg4oiSIM6xduKAsi4gUmV0YWluIHRoZSBuZXcgd2VpZ2h0IGFuZCB0aGUgbmV3IGFjY3VtdWxhdG9yLCB0b2dldGhlciB3aXRoIM6xLCDOsiwgYW5kIHRoZSBjb252ZW50aW9uLiBSZXNldHRpbmcgdiBhdCBldmVyeSBpdGVyYXRpb24gY2hhbmdlcyB0aGUgcnVsZTsgYW4gaWRlbnRpY2FsIHdlaWdodCBjYW4gZXZvbHZlIGRpZmZlcmVudGx5IGlmIHYgZGlmZmVycy4JdG9kYWkgYzEwMy1tMyBtZW1vaXJlLWRlLWwtb3B0aW1pc2V1cgpXaHkgZG9lcyB0aGUgbWludXMgc2lnbiBub3QgZ3VhcmFudGVlIGEgZGVjcmVhc2UgaW4gbG9zcz8JVGhlIHNsb3BlIGRlc2NyaWJlcyBhIG5laWdoYm9yaG9vZC4gQSBsYXJnZSBzdGVwIGNhbiBvdmVyc2hvb3QgdGhlIG1pbmltdW0uIEZvciBvdXIgbG9zcyB3aXRob3V0IG1lbW9yeSwgZeKAsiA9ICgxIOKIkiDOsSllOyBhIG5vbnplcm8gZXJyb3IgZGVjcmVhc2VzIGluIGFic29sdXRlIHZhbHVlIGZvciAwIDwgzrEgPCAyLiBUaGlzIGJvdW5kIGRvZXMgbm90IGF1dG9tYXRpY2FsbHkgY2Fycnkgb3ZlciB0byBhbm90aGVyIG5ldHdvcmsgb3IgdG8gbW9tZW50dW0uCXRvZGFpIGMxMDMtbTMgY29udHJvbGUtZHUtcGFzCldoYXQgZG9lcyBhIHNtYWxsZXIgbG9zcyBhZnRlciBvdXIgdXBkYXRlcyBlc3RhYmxpc2g/CUEgYmV0dGVyIGZpdCB0byB0aGUgZmljdGl0aW91cyBleGFtcGxlIGNoZWNrZWQsIHdpdGggdGhpcyBsb3NzIGFuZCB0aGVzZSBzZXR0aW5ncy4gSXQgZXN0YWJsaXNoZXMgbmVpdGhlciBiZXR0ZXIgcXVhbGl0eSBvbiBvdGhlciBwYXJjZWxzIG5vciBnZW5lcmFsIHN1cGVyaW9yaXR5IG9mIHRoZSBvcHRpbWl6ZXIuIFJlYWRpbmcgb3IgcHJvZHVjaW5nIGFuIGFuc3dlciBhZnRlciBhIGhpbnQgZG9lcyBub3QgY29uc3RpdHV0ZSBtYXN0ZXJ5IG9mIGEgbGV2ZWwuCXRvZGFpIGMxMDMtbTMgcG9ydGVlLWR1LWNvbnRyb2xlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ooaiom fdwemr rdrq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wnjyab frcrfr hzxust ywwrgh yixnju jmhonx lgkm</span></span></h3><dl><div><dt>You understand</dt><dd>The gradient and the rule for changing the weights have distinct roles. Memory is part of the state of a rule with momentum. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eduucn cpnqvo fhpxpx aybjmd ewnqhu tdvvxx qvip</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xlqond xpgeaa xpplnz mvvnzy zyylxe irkvvc dsgpxw cpdgkh uirutz ysfrcu wvckcx lnmwun zfybhw qshpki bumdrl mcfphv piqabs azncml heehmi uspjgi bmjlvw pvyrnd qhjpsi hpeuhx</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for the canonical level of this unit: derive the example’s gradient, repeat the updates, and check the sign, memory, units, and loss without support. Reading, an expanded solution, or an assisted answer never constitutes mastery of a level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lbdpdw iadrrb kdnzur lbgxwx pbseoh vsmfkp vrgcqp zygxwu pnkoaj fnaszl uqldbs djvkje jruwff spqfqj zocttj wjyfdv oizlit zffajh yudkqi mnsjze hkzclf zwvjsc watkbv gphqac</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the exercises on another day without help and explain the result with opposing memory. Then continue with normalization. Any actual verification of the cited passage would require a separate mandate and evidence of its invocation, state, and effects; this page performs no activation.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c103-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c103-m2.html">Previous</a> · <a href="c103-m4.html">Next</a></nav>
+<footer><p>Course book · C103·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

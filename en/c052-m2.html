@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a classical Runge-Kutta step with 4 slopes, distinguishing trial states, rates of change and the final change.">
+<title>C052·M2 · Runge-Kutta — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wavrpu grhqfk fetq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C052·M2</p><h1>Runge-Kutta</h1><p class="objectif"><span>Your goal</span>Build a classical Runge-Kutta step with 4 slopes, distinguishing trial states, rates of change and the final change.</p><p class="prerequis"><strong>Before you start</strong><br>c049-m5 : series solutions · c051-m5 : error diagnostics · c013-m5 : recursion · c052-m1 : Euler</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You place a cup of warm water in a cooler room. As the water temperature approaches the air temperature, it cools more slowly. Euler, introduced in the previous unit, extends the initial rate of change over the whole step. It therefore ignores how this rate changes during the waiting time.</p><p>Runge-Kutta names a family of methods that evaluate the evolution rule at several trial states. Here we study the classical variant with 4 slopes: 1 at the start, 2 at the midpoint of the step and 1 at its end. These trials are provisional calculations. They are neither measurements of the cup nor successive stops in its evolution.</p><p>In our fictional scene, the air stays at 20 °C and the water starts at 28 °C. We mainly track the difference from the air temperature: 8 °C at the start. A trial closer to the air temperature gives a slower cooling rate. The diagrams show how this dependence of the rate on the state is taken into account.</p><p>Each trial starts again from the initial temperature difference. The slope from the previous trial is used to propose a new difference, and the model is then evaluated there. Only at the end does a weighted average of the slopes provide the change to apply to the initial state.</p><div class="schemas"><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>Track the temperature difference between cup and air</title><desc>Initially, the water is at 28 degrees and the air at 20 degrees: the difference is 8 degrees. After a fictional step of 1 minute, the Runge-Kutta calculation gives a difference of approximately 4.85 degrees. No point is a measurement.</desc><rect x="20" y="14" width="320" height="58" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">Air stays at 20 °C</text><text x="180" y="60" text-anchor="middle" class="petite-etiquette">Difference = water temp. − air temp.</text><rect x="20" y="100" width="140" height="86" rx="7" class="cadre-prediction" /><text x="90" y="125" text-anchor="middle">Start</text><text x="90" y="151" text-anchor="middle">28 °C</text><text x="90" y="174" text-anchor="middle" class="petite-etiquette">Difference: 8 °C</text><path d="M160 143H200m-7-5 7 5-7 5" class="trait" /><rect x="200" y="100" width="140" height="86" rx="7" class="cadre-resultat" /><text x="270" y="125" text-anchor="middle">After 1 min</text><text x="270" y="151" text-anchor="middle">24.85 °C</text><text x="270" y="174" text-anchor="middle" class="petite-etiquette">Difference: 4.85 °C</text><text x="180" y="217" text-anchor="middle" class="petite-etiquette">A prediction from the fictional model</text></svg><figcaption>The temperature difference serves as the state for the calculation. The water temperature is then recovered by adding the air temperature to it. The rounded values in the diagram are not used in subsequent operations.</figcaption></figure><figure><svg viewBox="0 0 360 406" xmlns="http://www.w3.org/2000/svg" role="img"><title>Where the slopes are evaluated</title><desc>At time 0, the slope is calculated from the initial difference of 8 degrees. At the same intermediate time 0.5 minute, trials A and B have different temperature differences: 6 and 6.5 degrees. At time 1 minute, trial C gives 4.75 degrees. Trial C is not the final retained state.</desc><text x="180" y="26" text-anchor="middle">One step, several trials</text><rect x="28" y="45" width="304" height="60" rx="7" class="cadre-prediction" /><text x="180" y="69" text-anchor="middle">Start · t = 0 min</text><text x="180" y="92" text-anchor="middle">Difference 8 °C → slope k₁</text><path d="M180 105V128m-5-7 5 7 5-7" class="trait" /><rect x="28" y="128" width="304" height="60" rx="7" class="cadre-neutre" /><text x="180" y="152" text-anchor="middle">Trial A · t = 0.5 min</text><text x="180" y="175" text-anchor="middle">Difference 6 °C → slope k₂</text><path d="M180 188V211m-5-7 5 7 5-7" class="trait" /><rect x="28" y="211" width="304" height="60" rx="7" class="cadre-neutre" /><text x="180" y="235" text-anchor="middle">Trial B · t = 0.5 min</text><text x="180" y="258" text-anchor="middle">Difference 6.5 °C → slope k₃</text><path d="M180 271V294m-5-7 5 7 5-7" class="trait" /><rect x="28" y="294" width="304" height="60" rx="7" class="cadre-neutre" /><text x="180" y="318" text-anchor="middle">Trial C · t = 1 min</text><text x="180" y="341" text-anchor="middle">Difference 4.75 °C → slope k₄</text><text x="180" y="382" text-anchor="middle" class="petite-etiquette">Arrows: calculation order, not actual path</text></svg><figcaption>Trials A and B refer to the same time with different states. The vertical order is the order of calculation; it does not represent 4 substeps that the cup has gone through.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Propose a trial state, recalculate the slope there, then combine the 4 slopes with weights 1, 2, 2, 1, divided by 6. Multiply this average slope by the duration before adding it to the initial state.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Predict 1 minute of cooling</h3><p>Entirely fictional data: air at 20 °C, water initially at 28 °C, cooling rate λ = 0.5 per minute and step h = 1 min. Let us calculate the final temperature difference, then the temperature. Keep exact fractions until the final rounding.</p><ol class="etapes"><li><h3>Define the state and the evolution rule</h3><p>T denotes the water temperature and T<sub>a</sub> the air temperature, in °C. The state x = T − T<sub>a</sub> is their difference, also in °C. Time t is in minutes. The derivative x′ is the rate of change of this temperature difference, in °C/min. We assume a uniform water temperature, a constant air temperature and a constant positive rate λ throughout the step. No water is added and no heat is supplied.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>x</mi><mo>′</mo><mo>=</mo><mi>f</mi><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo><mo>=</mo><mo>−</mo><mi>λ</mi><mi>x</mi></mrow></math></div><p>The function f gives a slope from a time and a state. Here it does not depend explicitly on t: only the temperature difference matters. λ is 1/2 per minute, so the product λx is in °C/min. For positive x, x′ is negative: the cup approaches the air temperature. We choose t = 0 min at the start, x = 8 °C and h = 1 min.</p><p>In the formulas that follow, n counts the steps already completed; x<sub>n</sub> is the approximation retained at time t<sub>n</sub>. A, B and C denote only provisional temperature differences, in °C. The quantities k<sub>1</sub>, k<sub>2</sub>, k<sub>3</sub> and k<sub>4</sub> will be slopes in °C/min. A slope index identifies its order of evaluation, not a new time step.</p></li><li><h3>Evaluate the initial slope</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>k</mi><mn>1</mn></msub><mo>=</mo><mi>f</mi><mo>(</mo><msub><mi>t</mi><mi>n</mi></msub><mo>,</mo><msub><mi>x</mi><mi>n</mi></msub><mo>)</mo></mrow></math></div><p>We first evaluate the model at the known state: k<sub>1</sub> = −0.5 × 8 = -4 °C/min. Euler would use this slope throughout h. Runge-Kutta first uses it to propose a state at the midpoint of the step.</p></li><li><h3>Propose the first midpoint state, then its slope</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>A</mi><mo>=</mo><msub><mi>x</mi><mi>n</mi></msub><mo>+</mo><mfrac><mi>h</mi><mn>2</mn></mfrac><msub><mi>k</mi><mn>1</mn></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>k</mi><mn>2</mn></msub><mo>=</mo><mi>f</mi><mo>(</mo><msub><mi>t</mi><mi>n</mi></msub><mo>+</mo><mfrac><mi>h</mi><mn>2</mn></mfrac><mo>,</mo><mi>A</mi><mo>)</mo></mrow></math></div><p>The half-step is 1 ÷ 2 = 0.5 min. Over this duration, the initial slope would suggest a change of 0.5 × (-4) = -2 °C. Add it to the initial state: A = 8 + (-2) = 6 °C.</p><p>At t = 0.5 min, we therefore recalculate k<sub>2</sub> = −0.5 × 6 = -3 °C/min. The slope is less negative because this trial is closer to the air temperature. A is an argument supplied to f; we do not retain it as the result of the step.</p></li><li><h3>Revise the midpoint state with the new slope</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>B</mi><mo>=</mo><msub><mi>x</mi><mi>n</mi></msub><mo>+</mo><mfrac><mi>h</mi><mn>2</mn></mfrac><msub><mi>k</mi><mn>2</mn></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>k</mi><mn>3</mn></msub><mo>=</mo><mi>f</mi><mo>(</mo><msub><mi>t</mi><mi>n</mi></msub><mo>+</mo><mfrac><mi>h</mi><mn>2</mn></mfrac><mo>,</mo><mi>B</mi><mo>)</mo></mrow></math></div><p>We start again from x<sub>n</sub>, using k<sub>2</sub>: the proposed change is 0.5 × (-3) = -3/2 °C. Thus B = 8 + (-3/2) = 6.5 °C. Starting from A would add 2 half-step changes together and would no longer describe this midpoint trial.</p><p>The time remains 0.5 min, but the state changes. The slope becomes k<sub>3</sub> = −0.5 × 6.5 = -3.25 °C/min. This shows why the midpoint slopes are not interchangeable: f is evaluated at the same time, with different temperature differences.</p></li><li><h3>Propose an end state to obtain the last slope</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><msub><mi>x</mi><mi>n</mi></msub><mo>+</mo><mi>h</mi><msub><mi>k</mi><mn>3</mn></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>k</mi><mn>4</mn></msub><mo>=</mo><mi>f</mi><mo>(</mo><msub><mi>t</mi><mi>n</mi></msub><mo>+</mo><mi>h</mi><mo>,</mo><mi>C</mi><mo>)</mo></mrow></math></div><p>This time we use the full duration: h × k<sub>3</sub> = 1 × (-3.25) = -3.25 °C. Trial C = 8 + (-3.25) = 4.75 °C is used to evaluate the slope at time 1 min.</p><p>We obtain k<sub>4</sub> = −0.5 × 4.75 = -2.375 °C/min. Even at the end of the step, C remains provisional. The retained value will use all the slopes.</p></li><li><h3>Form the weighted average slope</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>k</mi><mo>¯</mo></mover><mo>=</mo><mfrac><mrow><msub><mi>k</mi><mn>1</mn></msub><mo>+</mo><mn>2</mn><msub><mi>k</mi><mn>2</mn></msub><mo>+</mo><mn>2</mn><msub><mi>k</mi><mn>3</mn></msub><mo>+</mo><msub><mi>k</mi><mn>4</mn></msub></mrow><mn>6</mn></mfrac></mrow></math></div><p>The bar above k denotes the average slope used by the method, in °C/min. The relative weights 1, 2, 2, 1 are part of this Runge-Kutta variant. Their sum is 6: division normalizes the average. They are not probabilities that the trials are reliable.</p><p>Calculate without rounding: 2k<sub>2</sub> = -6 °C/min and 2k<sub>3</sub> = -13/2 °C/min. The successive sums are -4 + (-6) = -10, then -10 + (-13/2) = -33/2, then -33/2 + (-19/8) = -151/8, all in °C/min.</p><p>Finally k̄ = (-151/8) ÷ 6 = -151/48 °C/min, or approximately -3.1458 °C/min. This last expression is a rounded representation; the fraction continues to be used in the following calculations.</p></li><li><h3>Convert the rate to a change, then recover the temperature</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>x</mi><mi>n</mi></msub><mo>+</mo><mi>h</mi><mover><mi>k</mi><mo>¯</mo></mover></mrow></math></div><p>The subscript n + 1 indicates the next retained state. Multiplying the slope by the step converts °C/min × min to °C. Here the change is 1 × (-151/48) = -151/48 °C. The fact that h has the numerical value 1 does not remove the need for this operation or for checking the units.</p><p>The retained temperature difference is 8 + (-151/48) = 233/48 °C, or approximately 4.8542 °C. To recover the water temperature, add the air temperature: 20 + 233/48 = 1193/48 °C, or approximately 24.85 °C. This is not trial C, which gave a temperature difference of 4.75 °C.</p></li><li><h3>Check what the calculation allows us to say</h3><p>The weights are positive and normalized: the average slope -151/48 °C/min must lie between the most negative slope, -4 °C/min, and the least negative slope, -19/8 °C/min. It does. The final temperature difference is positive and less than 8 °C: this step predicts cooling without falling below the air temperature.</p><p>Equilibrium check: if the water were already at the air temperature, x would be 0 °C. Every slope would then be 0, every trial would remain 0 and the temperature would not change. Any other result would indicate a formula or implementation error.</p><p>With the same model and step, Euler would give a temperature difference of 8 + 1 × (-4) = 4 °C. The difference from Runge-Kutta is 41/48 °C, approximately 0.85 °C. This difference between methods is not the error relative to the real cup. Here we have neither a reference measurement nor a study of several steps. Global error control and stability are covered in the following units.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the formulas and reconstruct the order of the trials. Why does B start again from the initial state? Why can A and B give different slopes at the same time? Finally, explain the unit of k̄ and the operation that converts it to a change.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The slope directly tells us how many degrees to subtract.”</h3><p>A slope is in °C/min. The change is in °C and is obtained by multiplying by h. Our step of 1 minute hides this numerical distinction: write the units before adding to the state.</p><a href="#exemple">Review the conversion from slope to change</a></li><li><h3>“Once the first midpoint state is calculated, I start from it for the second.”</h3><p>B still estimates the midpoint of the same step. It starts from xₙ with slope k₂, whereas A started from xₙ with k₁. Adding the new half-step change to A no longer follows the Runge-Kutta construction presented here.</p><a href="#exemple">Review the two trials at the same time</a></li><li><h3>“The trial at the end of the step is the result to retain.”</h3><p>Trial C is used only to obtain k₄. The result combines k₁, k₂, k₃ and k₄ with the prescribed weights, then multiplies by h. For the cup, 4.75 °C and 4.8542 °C are temperature differences with different roles.</p><a href="#intuition">Review the trials and their roles in the diagram</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-milieu"><p class="repere">Exercise 1 · Warm-up · state and rate of change</p>
+<h3>2 trials at the same time</h3><p>For the same cup, start again from xₙ = 8 °C with k₂ = -3 °C/min and h = 1 min. Calculate B and k₃. Give the time of this evaluation, then explain why k₃ differs from k₂.</p>
+<label for="reponse-ex-milieu">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-milieu" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-milieu" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-milieu" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-milieu" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The new midpoint trial equals the initial state plus a half-step multiplied by the latest slope.</p></details><details class="indice"><summary>Hint 2</summary><p>Once you have found B, apply f(t, B) = −λB with λ = 0.5 per minute.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The half-step is 0.5 min. Its product with k<sub>2</sub> is -3/2 °C, giving B = 8 + (-3/2) = 6.5 °C. The model then gives k<sub>3</sub> = −0.5 × 6.5 = -3.25 °C/min.</p><p>The time is still 0.5 min after the start. A and B are respectively 6 and 6.5 °C: the same time, different states. Since the rate depends on the temperature difference, their slopes differ. B is a provisional temperature difference and k<sub>3</sub> is a rate of change; neither is the final state yet.</p><p class="petit-titre">Check your reasoning</p><ul><li>Start again from 8 °C, rather than trial A.</li><li>Obtain B = 6.5 °C and k₃ = -3.25 °C/min, with units.</li><li>Keep the same intermediate time and explain the difference in terms of the states.</li></ul></details></article><article class="exercice" id="ex-combinaison"><p class="repere">Exercise 2 · Application · complete calculation</p>
+<h3>Retain the correct state</h3><p>Hide the example. For the cup, you are given the slopes k₁ = -4, k₂ = -3, k₃ = -13/4 and k₄ = -19/8, in °C/min. Reconstruct the weighted average, the final temperature difference and the water temperature after h = 1 min. Compare the retained difference with C = 19/4 °C.</p>
+<label for="reponse-ex-combinaison">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-combinaison" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-combinaison" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-combinaison" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-combinaison" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the weights 1, 2, 2, 1, then divide the weighted sum of the slopes by 6.</p></details><details class="indice"><summary>Hint 2</summary><p>An average of slopes is still a rate of change. Multiply by the duration, add the initial temperature difference, then the air temperature.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The weighted sum is -151/8 °C/min. Dividing by 6 gives k̄ = -151/48 °C/min. The change h k̄ is -151/48 °C.</p><p>The final temperature difference is 8 + (-151/48) = 233/48 °C. The water temperature is therefore 20 + 233/48 = 1193/48 °C, or approximately 24.85 °C.</p><p>C = 19/4 °C was an evaluation argument for the last slope. The result to retain is a temperature difference of 233/48 °C; it comes from combining all the slopes.</p><p class="petit-titre">Check your reasoning</p><ul><li>Show the weights and the divisor 6, keeping the fractions.</li><li>Distinguish the average slope, change, final temperature difference and final temperature by their roles and units.</li><li>Identify C as a provisional trial and give the rounded final temperature 24.85 °C.</li></ul></details></article><article class="exercice" id="ex-audit"><p class="repere">Exercise 3 · Analysis · repair a plausible calculation</p>
+<h3>Is an almost identical average enough?</h3><p>Someone uses the same slopes for the cup but adds them without weights, then divides by 4. They retain xₙ + h times this average and claim: “I used Runge-Kutta; my result stays between the air temperature and the initial temperature.” Calculate their final temperature difference, compare it with the example and respond to this justification. What can you conclude about the actual temperature?</p>
+<label for="reponse-ex-audit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-audit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-audit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-audit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-audit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First add the slopes without doubling them. A physically plausible result can come from a different rule.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the two temperature differences as fractions. To determine an actual error, ask which independent reference is missing.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The unweighted sum is -101/8 °C/min, and the unweighted average is -101/32 °C/min. The step then gives a temperature difference of 8 + 1 × (-101/32) = 155/32 °C, or approximately 4.8438 °C.</p><p>The variant studied here gives 233/48 °C. The difference between the results is 1/96 °C, or approximately 0.0104 °C. They are close, but the prescribed weights have not been followed. Replace the unweighted average with the weighted sum divided by 6, then recalculate the change.</p><p>Staying between the air temperature and the initial temperature is a consistency check for this step, insufficient to identify the method or prove its accuracy. Without a measurement or a validated reference, we do not know the error for the real cup. Consulting the lesson or an exercise correction leaves this attempt assisted: you will need to reconstruct it without support on another day.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find 155/32 °C for the proposed calculation and a difference of 1/96 °C from the example.</li><li>Correct the weights precisely, keeping the correctly evaluated slopes.</li><li>Distinguish following the method, the plausibility of the result and evidence of accuracy for the cup.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="essais"><summary><span class="repere">Recall 1</span><span>What are states A, B and C used for?</span></summary><p>They are provisional temperature differences where the model is evaluated to obtain the slopes. Each trial starts again from the initial state of the step; only the result of the final combination is retained.</p></details><details class="carte" data-carte="milieux"><summary><span class="repere">Recall 2</span><span>Why recalculate a slope 2 times at the same midpoint of the step?</span></summary><p>The first trial uses the initial slope; the second uses the slope from the first trial. The proposed states differ even though the time is identical, so a rate that depends on the state can change.</p></details><details class="carte" data-carte="unites"><summary><span class="repere">Recall 3</span><span>Which operation converts a slope to a change?</span></summary><p>Multiplication by the step h: °C/min × min gives °C. An average slope cannot be added directly to a state expressed in degrees.</p></details><details class="carte" data-carte="poids"><summary><span class="repere">Recall 4</span><span>How do you reconstruct the final combination for this variant?</span></summary><p>Take the slopes in order with weights 1, 2, 2, 1, divide by 6, multiply by h and add to the initial state. The final trial C does not replace this combination.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does the difference between Euler and Runge-Kutta prove about the cup?</span></summary><p>It shows that these methods give different approximations for the same model and step. It does not measure the actual error of either method; a suitable reference and an examination of the assumptions are missing.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, draw the initial state, the 2 midpoint trials and the end trial. Write the states where the model is evaluated, then reconstruct the weights and units through to the water temperature. Finish with a sentence distinguishing the model result from a measurement of the cup. An answer recalled with a hint is still assisted; reading alone does not establish any attained level.</p></div><div class="exports"><a class="bouton" download="c052-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTItbTI6ZXNzYWlzIiwKICAgICAgInVuaXRlIjogImMwNTItbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldGF0cy1lc3NhaSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGFyZSBzdGF0ZXMgQSwgQiBhbmQgQyB1c2VkIGZvcj8iLAogICAgICAicmVwb25zZSI6ICJUaGV5IGFyZSBwcm92aXNpb25hbCB0ZW1wZXJhdHVyZSBkaWZmZXJlbmNlcyB3aGVyZSB0aGUgbW9kZWwgaXMgZXZhbHVhdGVkIHRvIG9idGFpbiB0aGUgc2xvcGVzLiBFYWNoIHRyaWFsIHN0YXJ0cyBhZ2FpbiBmcm9tIHRoZSBpbml0aWFsIHN0YXRlIG9mIHRoZSBzdGVwOyBvbmx5IHRoZSByZXN1bHQgb2YgdGhlIGZpbmFsIGNvbWJpbmF0aW9uIGlzIHJldGFpbmVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUyLW0yOm1pbGlldXgiLAogICAgICAidW5pdGUiOiAiYzA1Mi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlbnRlcy1taWxpZXUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHJlY2FsY3VsYXRlIGEgc2xvcGUgMiB0aW1lcyBhdCB0aGUgc2FtZSBtaWRwb2ludCBvZiB0aGUgc3RlcD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZmlyc3QgdHJpYWwgdXNlcyB0aGUgaW5pdGlhbCBzbG9wZTsgdGhlIHNlY29uZCB1c2VzIHRoZSBzbG9wZSBmcm9tIHRoZSBmaXJzdCB0cmlhbC4gVGhlIHByb3Bvc2VkIHN0YXRlcyBkaWZmZXIgZXZlbiB0aG91Z2ggdGhlIHRpbWUgaXMgaWRlbnRpY2FsLCBzbyBhIHJhdGUgdGhhdCBkZXBlbmRzIG9uIHRoZSBzdGF0ZSBjYW4gY2hhbmdlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUyLW0yOnVuaXRlcyIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGVudGUtdmFyaWF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIG9wZXJhdGlvbiBjb252ZXJ0cyBhIHNsb3BlIHRvIGEgY2hhbmdlPyIsCiAgICAgICJyZXBvbnNlIjogIk11bHRpcGxpY2F0aW9uIGJ5IHRoZSBzdGVwIGg6IMKwQy9taW4gw5cgbWluIGdpdmVzIMKwQy4gQW4gYXZlcmFnZSBzbG9wZSBjYW5ub3QgYmUgYWRkZWQgZGlyZWN0bHkgdG8gYSBzdGF0ZSBleHByZXNzZWQgaW4gZGVncmVlcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1Mi1tMjpwb2lkcyIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29tYmluYWlzb24tcnVuZ2Uta3V0dGEiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSByZWNvbnN0cnVjdCB0aGUgZmluYWwgY29tYmluYXRpb24gZm9yIHRoaXMgdmFyaWFudD8iLAogICAgICAicmVwb25zZSI6ICJUYWtlIHRoZSBzbG9wZXMgaW4gb3JkZXIgd2l0aCB3ZWlnaHRzIDEsIDIsIDIsIDEsIGRpdmlkZSBieSA2LCBtdWx0aXBseSBieSBoIGFuZCBhZGQgdG8gdGhlIGluaXRpYWwgc3RhdGUuIFRoZSBmaW5hbCB0cmlhbCBDIGRvZXMgbm90IHJlcGxhY2UgdGhpcyBjb21iaW5hdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1Mi1tMjpwb3J0ZWUiLAogICAgICAidW5pdGUiOiAiYzA1Mi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByZXV2ZS1udW1lcmlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gRXVsZXIgYW5kIFJ1bmdlLUt1dHRhIHByb3ZlIGFib3V0IHRoZSBjdXA/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgc2hvd3MgdGhhdCB0aGVzZSBtZXRob2RzIGdpdmUgZGlmZmVyZW50IGFwcHJveGltYXRpb25zIGZvciB0aGUgc2FtZSBtb2RlbCBhbmQgc3RlcC4gSXQgZG9lcyBub3QgbWVhc3VyZSB0aGUgYWN0dWFsIGVycm9yIG9mIGVpdGhlciBtZXRob2Q7IGEgc3VpdGFibGUgcmVmZXJlbmNlIGFuZCBhbiBleGFtaW5hdGlvbiBvZiB0aGUgYXNzdW1wdGlvbnMgYXJlIG1pc3NpbmcuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c052-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBhcmUgc3RhdGVzIEEsIEIgYW5kIEMgdXNlZCBmb3I/CVRoZXkgYXJlIHByb3Zpc2lvbmFsIHRlbXBlcmF0dXJlIGRpZmZlcmVuY2VzIHdoZXJlIHRoZSBtb2RlbCBpcyBldmFsdWF0ZWQgdG8gb2J0YWluIHRoZSBzbG9wZXMuIEVhY2ggdHJpYWwgc3RhcnRzIGFnYWluIGZyb20gdGhlIGluaXRpYWwgc3RhdGUgb2YgdGhlIHN0ZXA7IG9ubHkgdGhlIHJlc3VsdCBvZiB0aGUgZmluYWwgY29tYmluYXRpb24gaXMgcmV0YWluZWQuCXRvZGFpIGMwNTItbTIgZXRhdHMtZXNzYWkKV2h5IHJlY2FsY3VsYXRlIGEgc2xvcGUgMiB0aW1lcyBhdCB0aGUgc2FtZSBtaWRwb2ludCBvZiB0aGUgc3RlcD8JVGhlIGZpcnN0IHRyaWFsIHVzZXMgdGhlIGluaXRpYWwgc2xvcGU7IHRoZSBzZWNvbmQgdXNlcyB0aGUgc2xvcGUgZnJvbSB0aGUgZmlyc3QgdHJpYWwuIFRoZSBwcm9wb3NlZCBzdGF0ZXMgZGlmZmVyIGV2ZW4gdGhvdWdoIHRoZSB0aW1lIGlzIGlkZW50aWNhbCwgc28gYSByYXRlIHRoYXQgZGVwZW5kcyBvbiB0aGUgc3RhdGUgY2FuIGNoYW5nZS4JdG9kYWkgYzA1Mi1tMiBwZW50ZXMtbWlsaWV1CldoaWNoIG9wZXJhdGlvbiBjb252ZXJ0cyBhIHNsb3BlIHRvIGEgY2hhbmdlPwlNdWx0aXBsaWNhdGlvbiBieSB0aGUgc3RlcCBoOiDCsEMvbWluIMOXIG1pbiBnaXZlcyDCsEMuIEFuIGF2ZXJhZ2Ugc2xvcGUgY2Fubm90IGJlIGFkZGVkIGRpcmVjdGx5IHRvIGEgc3RhdGUgZXhwcmVzc2VkIGluIGRlZ3JlZXMuCXRvZGFpIGMwNTItbTIgcGVudGUtdmFyaWF0aW9uCkhvdyBkbyB5b3UgcmVjb25zdHJ1Y3QgdGhlIGZpbmFsIGNvbWJpbmF0aW9uIGZvciB0aGlzIHZhcmlhbnQ/CVRha2UgdGhlIHNsb3BlcyBpbiBvcmRlciB3aXRoIHdlaWdodHMgMSwgMiwgMiwgMSwgZGl2aWRlIGJ5IDYsIG11bHRpcGx5IGJ5IGggYW5kIGFkZCB0byB0aGUgaW5pdGlhbCBzdGF0ZS4gVGhlIGZpbmFsIHRyaWFsIEMgZG9lcyBub3QgcmVwbGFjZSB0aGlzIGNvbWJpbmF0aW9uLgl0b2RhaSBjMDUyLW0yIGNvbWJpbmFpc29uLXJ1bmdlLWt1dHRhCldoYXQgZG9lcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIEV1bGVyIGFuZCBSdW5nZS1LdXR0YSBwcm92ZSBhYm91dCB0aGUgY3VwPwlJdCBzaG93cyB0aGF0IHRoZXNlIG1ldGhvZHMgZ2l2ZSBkaWZmZXJlbnQgYXBwcm94aW1hdGlvbnMgZm9yIHRoZSBzYW1lIG1vZGVsIGFuZCBzdGVwLiBJdCBkb2VzIG5vdCBtZWFzdXJlIHRoZSBhY3R1YWwgZXJyb3Igb2YgZWl0aGVyIG1ldGhvZDsgYSBzdWl0YWJsZSByZWZlcmVuY2UgYW5kIGFuIGV4YW1pbmF0aW9uIG9mIHRoZSBhc3N1bXB0aW9ucyBhcmUgbWlzc2luZy4JdG9kYWkgYzA1Mi1tMiBwcmV1dmUtbnVtZXJpcXVlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wavrpu grhqfk fetq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Towards <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kwawwk ktzjlm vfqi</span></span> · recognize the integration choice</h3><dl><div><dt>What you understand</dt><dd>A model supplies a rate of change; an integrator calculates the state after a duration. Building a Runge-Kutta step uses provisional slopes before retaining a state. The cup serves as an analogy for returning towards a reference, without claiming to describe a real neurochemical quantity.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yxgzbf hqvnic xdlvzd eqqlsv zhsemc ezpenl trcfmp ckpgek byzpya jwdlrg bdalzg uownzt vzaoyg ymhgli jhfsoe pwmapg fcfhsy hglafw epnhkk gdamqx jxroyk ceeyln gwpbjx potzvi</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 2 to prepare for: reconstruct the trials and combination without support, justify the units and explain the provisional status of C. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sxyhsk uleyul cyxeqh lzumpx vkefdj lefhwc xqsj</span></span> An assisted attempt is not an established skill.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gloxcu fbclsj jvzsfw rtoqlx hchtgr kfkpyq rewmlf omswjc pczrko ovkcsl ycpsbh azwqdt ixhtxt gygiwn ddcqkw gmkpez xlxsom ufvczt vkrlnz altkkh hzwbyv wcphez vdjbjs lrwlej</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the cup step on another day without the lesson or hints. Continue with global error, then stability and the convergence protocol. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rsfwfm yleosa jfozxl hmbdks xohchp zolqzd uewylf ksywpt bivvsx owlvow oznkub vmkzrm lfcjpj zp</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c052-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c052-m1.html">Previous</a> · <a href="c052-m3.html">Next</a></nav>
+<footer><p>Course book · C052·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

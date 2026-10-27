@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate what an Euler step does to a deviation, choose a step size that damps it, and distinguish stability, return without oscillation, and accuracy.">
+<title>C052·M4 · Stability — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pvbkvs sdrjtw ndbf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C052·M4</p><h1>Stability</h1><p class="objectif"><span>Your goal</span>Calculate what an Euler step does to a deviation, choose a step size that damps it, and distinguish stability, return without oscillation, and accuracy.</p><p class="prerequis"><strong>Before you start</strong><br>c049-m5 : series solutions · c051-m5 : error diagnostics · c013-m5 : recursion · c052-m1 : Euler · c052-m2 : Runge-Kutta · c052-m3 : global error</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are simulating a cup at 28 °C in a room kept at 20 °C. With no heating or change in the air temperature, your model brings the cup back towards ambient temperature. Yet the calculation can take it below that temperature, then back above it. If these excursions grow, should you blame the cooling model or the way it is calculated?</p><p>Euler extends the slope calculated at the start over an entire step. A step that is too long therefore keeps a slope that has become excessive for too long. The numerical cup can overshoot its target even though the cup in the continuous model never crosses it.</p><p>The diagram follows the deviation from ambient temperature: a negative deviation means “below ambient temperature”, rather than a negative temperature. The same starting point produces a steady return, an alternation that is damped, or an alternation that grows, depending on the step duration. All the numbers are fictitious; they are used to examine a calculation rule, with no measurements from a real cup.</p><p>The stability examined here concerns how a numerical method propagates deviations. It cannot be inferred from the stability of the continuous model. A small difference between two starting values can also be amplified by the calculation. We will derive the factor that determines this behavior.</p><div class="schemas"><figure><svg viewBox="0 0 360 420" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same cup, several Euler step sizes</title><desc>Each small graph shows the deviation from ambient temperature in degrees Celsius. The horizontal line represents 0 deviation. With a step of 1 minute: 8, 4, 2. With a step of 3 minutes: 8, -4, 2. With a step of 5 minutes: 8, -12, 18. The vertical scale is identical. The horizontal axis counts steps and does not represent the same physical duration from one row to another.</desc><text x="180" y="25" text-anchor="middle">1 min step: steady return</text><line x1="46" y1="80" x2="308" y2="80" class="trait" /><text x="30" y="85" text-anchor="middle" class="petite-etiquette">0</text><polyline points="64,64 174,72 284,76" class="chemin-correction" /><circle cx="64" cy="64" r="4" class="resultat" /><circle cx="174" cy="72" r="4" class="resultat" /><circle cx="284" cy="76" r="4" class="resultat" /><text x="180" y="110" text-anchor="middle">8 → 4 → 2 °C</text><text x="180" y="145" text-anchor="middle">3 min step: damped alternation</text><line x1="46" y1="200" x2="308" y2="200" class="trait" /><text x="30" y="205" text-anchor="middle" class="petite-etiquette">0</text><polyline points="64,184 174,208 284,196" class="chemin-correction" /><circle cx="64" cy="184" r="4" class="resultat" /><circle cx="174" cy="208" r="4" class="resultat" /><circle cx="284" cy="196" r="4" class="resultat" /><text x="180" y="235" text-anchor="middle">8 → -4 → 2 °C</text><text x="180" y="270" text-anchor="middle">5 min step: amplification</text><line x1="46" y1="330" x2="308" y2="330" class="trait" /><text x="30" y="335" text-anchor="middle" class="petite-etiquette">0</text><polyline points="64,314 174,354 284,294" class="chemin-correction" /><circle cx="64" cy="314" r="4" class="resultat" /><circle cx="174" cy="354" r="4" class="resultat" /><circle cx="284" cy="294" r="4" class="resultat" /><text x="180" y="383" text-anchor="middle">8 → -12 → 18 °C</text><text x="64" y="409" text-anchor="middle" class="petite-etiquette">Step 0</text><text x="174" y="409" text-anchor="middle" class="petite-etiquette">Step 1</text><text x="284" y="409" text-anchor="middle" class="petite-etiquette">Step 2</text></svg><figcaption>The values are deviations from 20 °C, shown on the same vertical scale. Each point is a calculated state; the segments guide the eye. The columns count steps, whose duration changes between rows: their final points do not correspond to the same time.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For this linear cooling model, calculate the factor remaining after an Euler step. Its absolute value determines damping; its sign determines alternation. Check accuracy separately.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A cup that oscillates in the calculation</h3><p>Take an ambient temperature A = 20 °C, an initial temperature of 28 °C, and a constant rate λ = 0.50 per minute. Focus on the step h = 3 min, then on the durations that separate damping from amplification. We use exact arithmetic to isolate the effect of the step size.</p><ol class="etapes"><li><h3>Define the model, the deviations, and their units</h3><p>T(t) is the temperature in °C at time t, measured in minutes from the start. A is the constant ambient temperature. y(t) = T(t) − A is the deviation in °C; initially, it equals 28 − 20 = 8 °C. The rate λ is strictly positive, in inverse minutes. The slope T′, equal to y′, is in °C/min.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>y</mi><mo>′</mo><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mo>−</mo><mi>λ</mi><mi>y</mi><mo>(</mo><mi>t</mi><mo>)</mo></mrow></math></div><p>Assume a single state, a fixed rate, no heat source, and no change in ambient temperature. Under these assumptions, the continuous solution is an exponential decay:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>y</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><msub><mi>y</mi><mn>0</mn></msub><mi>exp</mi><mo>(</mo><mo>−</mo><mi>λ</mi><mi>t</mi><mo>)</mo></mrow></math></div><p>exp is the exponential function. For a finite positive time, its factor is strictly between 0 and 1. Starting above A, this solution therefore stays above it and approaches it. This property belongs to the model; we need to check how much of it Euler preserves.</p></li><li><h3>Derive the factor for an Euler step</h3><p>h is the positive, constant step duration, in minutes; n is its integer index, starting at 0. The time of point n is t<sub>n</sub> = n × h. T<sub>n</sub> is the numerical temperature at that time and y<sub>n</sub> = T<sub>n</sub> − A is its numerical deviation. Euler adds the initial slope multiplied by the duration to the state:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>y</mi><mi>n</mi></msub><mo>+</mo><mi>h</mi><mo>(</mo><mo>−</mo><mi>λ</mi><msub><mi>y</mi><mi>n</mi></msub><mo>)</mo><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>λ</mi><mi>h</mi><mo>)</mo><msub><mi>y</mi><mi>n</mi></msub></mrow></math></div><p>Write s = λh for the fraction of the deviation removed by Euler, and R = 1 − s for the remaining factor. s and R are dimensionless: the inverse minutes in λ cancel the minutes in h. A negative factor R makes the deviation change sides at each step. This change of side does not yet tell us whether the amplitude decreases.</p></li><li><h3>Connect the factor to stability</h3><p>Compare two calculations using the same h and the same rate, but different starting values. δ<sub>n</sub> denotes their difference in °C. Subtracting their Euler rules gives the same factor R. With no new perturbation between steps:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>δ</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>R</mi><msub><mi>δ</mi><mi>n</mi></msub><mo>,</mo><msub><mi>δ</mi><mi>n</mi></msub><mo>=</mo><msup><mi>R</mi><mi>n</mi></msup><msub><mi>δ</mi><mn>0</mn></msub></mrow></math></div><p>The bars |R| denote its absolute value. If |R| &lt; 1, the powers of |R| tend to 0: every initial deviation is damped as the number of steps increases. If |R| &gt; 1, a nonzero initial difference grows without bound. With |R| = 1, it stays bounded but is not damped. In this real scalar test, we therefore reserve the strict condition for an asymptotic return to equilibrium; absolute stability in the broader sense, |R| ≤ 1, includes the boundary without damping.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>|</mo><mn>1</mn><mo>−</mo><mi>λ</mi><mi>h</mi><mo>|</mo><mo>&lt;</mo><mn>1</mn><mo>⇔</mo><mn>0</mn><mo>&lt;</mo><mi>λ</mi><mi>h</mi><mo>&lt;</mo><mn>2</mn></mrow></math></div><p>For our positive λ, this gives 0 &lt; h &lt; 4 min. Staying on the same side of ambient temperature also requires R ≥ 0, hence λh ≤ 1. Damping therefore allows steps that cause alternation; faithfully reproducing a return without overshoot requires more.</p></li><li><h3>Calculate the first step that crosses ambient temperature</h3><p>With h = 3 min, the fraction removed is s = 0.50 × 3 = 1.50 of the deviation. It exceeds 1: more than the entire initial deviation is removed. The remaining factor is R = 1 − 1.50 = -0.50.</p><p>The deviation becomes -0.50 × 8 = -4 °C. The temperature is therefore 20 + (-4) = 16 °C. The calculation puts the cup below ambient temperature, even though its temperature remains positive.</p><p>Another check: applying Euler directly to T gives 28 + 3 × [−0.50 × (28 − 20)] = 16 °C. This gives the same state without using the recurrence for y.</p></li><li><h3>Continue and track an initial perturbation</h3><p>At the next step, the sign changes again: -0.50 × (-4) = 2 °C of deviation. The temperature is 20 + 2 = 22 °C. The amplitudes are 8, then 4, then 2 °C: they decrease, although the signs alternate.</p><p>Check using the power: R squared equals 0.25. After 2 steps, 0.25 × 8 = 2 °C. This is the same result as the successive updates.</p><p>Now add 1 °C only to the starting value of a second calculation. Its difference from the first goes from 1 °C to -0.50 °C, then 0.25 °C. It is damped by the same factor. This experiment tracks an initial perturbation; errors newly introduced at each step would add to this propagation.</p></li><li><h3>Locate the boundary and the divergent case</h3><p>With h = 4 min, s = 2 and R = -1. The deviations are 8, -8, 8 °C, then the pattern repeats. They stay bounded, but do not return towards 0. Choosing exactly the bound h = 4 min therefore guarantees no damping.</p><p>With h = 5 min, s = 2.50 and R = -1.50. The deviation becomes -12 °C, then 18 °C: its absolute value increases. The first temperature is 8 °C. An initial difference of 1 °C becomes -1.50 °C, then 2.25 °C. The continuous model is still the same; amplification comes from this choice of step size in Euler.</p></li><li><h3>Separate stability and accuracy</h3><p>The step h = 1 min gives R = 0.50: the deviation goes from 8 to 4, then 2 °C, without crossing ambient temperature. This is a damped return on the correct side; its distance from the continuous solution at the same time still needs to be assessed.</p><p>More strikingly, h = 2 min gives s = 1, R = 0, and a deviation of 0 °C from the very first step. The numerical cup is exactly at 20 °C. Yet the continuous exponential factor remains strictly positive at that time: its deviation is nonzero. A calculation with strong damping can therefore have poor fidelity.</p><p>Our step of 3 min also damps deviations, but its first negative deviation has the wrong sign compared with the continuous solution. Stability here controls propagation at a fixed step size; accuracy compares the calculation with a reference. The next unit will organize comparisons at equal physical times and step refinement. The bound obtained applies to Euler on this linear model with a constant rate; another method or different dynamics require their own analysis.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without rereading, explain how the same cup can produce an alternation that is damped or amplified. Derive the factor R, justify the strict bound on h, and construct an objection to “stable means accurate”.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The cooling is stable, so the calculation is stable for any step size.”</h3><p>The continuous model and the recurrence do not have the same factor. Calculate R = 1 − λh. With h = 5 min, its magnitude exceeds 1 and amplifies deviations, whereas the continuous exponential damps them. Reduce the step size and justify the criterion for the method.</p><a href="#exemple">Review the factor and the step size boundary</a></li><li><h3>“If the cup crosses to the other side, the calculation must diverge.”</h3><p>The sign of R explains alternation; its absolute value explains amplitude. With R = -0.50, the alternation is damped. With R = -1.50, it grows. Check the amplitudes before drawing a conclusion, then examine separately the overshoot that is absent from the continuous model.</p><a href="#intuition">Compare the trajectories of the same cup</a></li><li><h3>“My calculation stays at equilibrium: this step size must be good.”</h3><p>Starting exactly at A gives a 0 deviation that stays 0 even with an amplifying factor. This single trial hides the instability. Compare two nearby starting values and track their difference; also check accuracy, because reaching A artificially in a single step is no proof of exactness.</p><a href="#exemple">Review perturbation propagation and the accuracy check</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-retour"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Return without overshooting</h3><p>Keep the cup, ambient temperature, and rate from the example. Take h = 1 min. Calculate s, R, and the temperatures after 1 and then 2 steps. Justify both damping and the absence of a change of side.</p>
+<label for="reponse-ex-retour">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-retour" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-retour" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-retour" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-retour" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with the initial deviation of 8 °C. The factors s and R are dimensionless.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply the deviation by R at each step; add A only to recover the temperature.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>s = 0.50 × 1 = 0.50, then R = 1 − 0.50 = 0.50. The deviation becomes 4 °C, then 2 °C. The temperatures are 24 °C and 22 °C.</p><p>The factor is positive and strictly less than 1: it preserves the sign of the deviation and reduces its amplitude. These properties justify the return on the same side for every step of this model, beyond the few calculated values. By themselves, they do not provide an error bound relative to the exact solution.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the factor without mixing minutes and degrees.</li><li>Obtain 24 °C, then 22 °C, starting from the previous state each time.</li><li>Justify sign preservation and the decrease in amplitude separately.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 2 · Diagnosis and counterexample</p>
+<h3>Is the bound included?</h3><p>Someone claims: “h ≤ 4 min ensures a return to ambient temperature.” Test h = 4 min, then h = 5 min, with the same initial deviation. Correct the claim and explain why a simulation starting exactly at ambient temperature can hide the problem.</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At the boundary, find R and calculate the next 2 deviations. Is being bounded enough to tend towards equilibrium?</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply a 0 deviation by the divergent factor, then ask what happens to a nonzero deviation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At h = 4 min, R = -1: the deviations are 8, -8, 8 °C. They alternate without decreasing. A damped return requires 0 &lt; h &lt; 4 min, with a strict upper bound. Equality remains a bounded case without damping in this test.</p><p>At h = 5 min, R = -1.50: -12 °C, then 18 °C of deviation. The amplitude of every nonzero initial perturbation is multiplied by a factor greater than 1 at each step.</p><p>0 deviation is a special case: R × 0 = 0, even with this step size. Starting at equilibrium therefore does not test stability with respect to perturbations. A nonzero difference must be tracked; this examines numerical sensitivity without attributing a real oscillation to the cup.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish bounded alternation at the boundary from amplification beyond it.</li><li>Write the strict condition for damping, with its unit.</li><li>Explain why a 0 starting deviation hides an unstable factor.</li></ul></details></article><article class="exercice" id="ex-precision"><p class="repere">Exercise 3 · Transfer to an accuracy comparison</p>
+<h3>Two stable calculations at the same time</h3><p>After 1 min, compare a single step of 1 min with 2 steps of 0.50 min for the same cup. Calculate the final temperature for each path. Do the factors damp deviations? Does their agreement or disagreement allow you to declare the result exact?</p>
+<label for="reponse-ex-precision">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-precision" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-precision" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-precision" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-precision" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For the subdivided path, recalculate R with h = 0.50 min and apply it 2 times.</p></details><details class="indice"><summary>Hint 2</summary><p>The total durations must be equal. Then compare the results, keeping their difference distinct from an error measured against the exact solution.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The first path gives 24 °C, because its final deviation is 4 °C. For the subdivided path: s = 0.50 × 0.50 = 0.25, then R = 0.75. The successive deviations are 6 °C then 4.50 °C; the final temperature is 24.50 °C.</p><p>The times are identical: 2 × 0.50 = 1 min. The factors 0.50 and 0.75 are both strictly between 0 and 1: both paths damp deviations without alternation. Yet the temperatures differ by 0.50 °C.</p><p>This difference shows that a stability verdict does not determine accuracy. It is not the exact error of either path: we would need to compare with the continuous solution, or establish a justified error estimate. Even agreement between a few step sizes would not suffice to prove exactness. The convergence protocol in the next unit will set out this approach.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the factor and carry out the 2 updates of the subdivided path.</li><li>Compare at equal physical times and obtain 24 °C versus 24.50 °C.</li><li>Distinguish the 0.50 °C between calculations from an error against an exact reference.</li><li>Justify why two identical stability verdicts do not imply two identical temperatures.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="facteur"><summary><span class="repere">Recall 1</span><span>How can you derive the Euler factor for the deviation from ambient temperature?</span></summary><p>Set y = T − A, write next y = y + h(−λy), then factor: R = 1 − λh. R is dimensionless and also multiplies the difference between two calculations using the same model.</p></details><details class="carte" data-carte="amortissement"><summary><span class="repere">Recall 2</span><span>What condition ensures damping, and what happens at the boundary?</span></summary><p>For constant positive λ and constant positive h: |R| &lt; 1, or 0 &lt; λh &lt; 2. With R = -1, deviations alternate without being damped: they stay bounded. The boundary does not give an asymptotic return to equilibrium.</p></details><details class="carte" data-carte="signe"><summary><span class="repere">Recall 3</span><span>Does a change of sign at each step imply divergence?</span></summary><p>No. A negative R explains alternation; |R| determines amplitude. The factor -0.50 damps deviations, and the factor -1.50 amplifies them. Staying on the same side of ambient temperature also requires R to be positive or 0.</p></details><details class="carte" data-carte="precision"><summary><span class="repere">Recall 4</span><span>Why does a calculation that damps deviations fail to prove accuracy?</span></summary><p>Stability describes the propagation of deviations at a fixed step size. Accuracy compares with the continuous model at the same time. Euler can damp deviations while crossing ambient temperature or artificially reach equilibrium; two stable step sizes can also give different temperatures.</p></details><details class="carte" data-carte="perturbation"><summary><span class="repere">Recall 5</span><span>Why does starting exactly at ambient temperature fail to test the stability of the step size?</span></summary><p>0 deviation stays 0 for any R. A nonzero initial difference must be tracked: it is multiplied by R at each step. A single equilibrium trajectory does not reveal this sensitivity.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the equations, then reconstruct the sequence: cooling model and units; shift to the deviation; Euler factor; propagation of an initial difference; strict damping criterion and boundary case; sign of the alternation; accuracy comparison at the same time. Finally, explain why neither reading nor an answer given after a hint demonstrates independent mastery: redo the reasoning on another day without support.</p></div><div class="exports"><a class="bouton" download="c052-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTItbTQ6ZmFjdGV1ciIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZmFjdGV1ci1hbXBsaWZpY2F0aW9uLWV1bGVyIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4geW91IGRlcml2ZSB0aGUgRXVsZXIgZmFjdG9yIGZvciB0aGUgZGV2aWF0aW9uIGZyb20gYW1iaWVudCB0ZW1wZXJhdHVyZT8iLAogICAgICAicmVwb25zZSI6ICJTZXQgeSA9IFQg4oiSIEEsIHdyaXRlIG5leHQgeSA9IHkgKyBoKOKIks67eSksIHRoZW4gZmFjdG9yOiBSID0gMSDiiJIgzrtoLiBSIGlzIGRpbWVuc2lvbmxlc3MgYW5kIGFsc28gbXVsdGlwbGllcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHR3byBjYWxjdWxhdGlvbnMgdXNpbmcgdGhlIHNhbWUgbW9kZWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTItbTQ6YW1vcnRpc3NlbWVudCIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3RhYmlsaXRlLWV0LWFtb3J0aXNzZW1lbnQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBjb25kaXRpb24gZW5zdXJlcyBkYW1waW5nLCBhbmQgd2hhdCBoYXBwZW5zIGF0IHRoZSBib3VuZGFyeT8iLAogICAgICAicmVwb25zZSI6ICJGb3IgY29uc3RhbnQgcG9zaXRpdmUgzrsgYW5kIGNvbnN0YW50IHBvc2l0aXZlIGg6IHxSfCA8IDEsIG9yIDAgPCDOu2ggPCAyLiBXaXRoIFIgPSAtMSwgZGV2aWF0aW9ucyBhbHRlcm5hdGUgd2l0aG91dCBiZWluZyBkYW1wZWQ6IHRoZXkgc3RheSBib3VuZGVkLiBUaGUgYm91bmRhcnkgZG9lcyBub3QgZ2l2ZSBhbiBhc3ltcHRvdGljIHJldHVybiB0byBlcXVpbGlicml1bS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1Mi1tNDpzaWduZSIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYWx0ZXJuYW5jZS1ldC1hbXBsaXR1ZGUiLAogICAgICAicXVlc3Rpb24iOiAiRG9lcyBhIGNoYW5nZSBvZiBzaWduIGF0IGVhY2ggc3RlcCBpbXBseSBkaXZlcmdlbmNlPyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBBIG5lZ2F0aXZlIFIgZXhwbGFpbnMgYWx0ZXJuYXRpb247IHxSfCBkZXRlcm1pbmVzIGFtcGxpdHVkZS4gVGhlIGZhY3RvciAtMC41MCBkYW1wcyBkZXZpYXRpb25zLCBhbmQgdGhlIGZhY3RvciAtMS41MCBhbXBsaWZpZXMgdGhlbS4gU3RheWluZyBvbiB0aGUgc2FtZSBzaWRlIG9mIGFtYmllbnQgdGVtcGVyYXR1cmUgYWxzbyByZXF1aXJlcyBSIHRvIGJlIHBvc2l0aXZlIG9yIDAuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTItbTQ6cHJlY2lzaW9uIiwKICAgICAgInVuaXRlIjogImMwNTItbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzdGFiaWxpdGUtZXQtcHJlY2lzaW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGEgY2FsY3VsYXRpb24gdGhhdCBkYW1wcyBkZXZpYXRpb25zIGZhaWwgdG8gcHJvdmUgYWNjdXJhY3k/IiwKICAgICAgInJlcG9uc2UiOiAiU3RhYmlsaXR5IGRlc2NyaWJlcyB0aGUgcHJvcGFnYXRpb24gb2YgZGV2aWF0aW9ucyBhdCBhIGZpeGVkIHN0ZXAgc2l6ZS4gQWNjdXJhY3kgY29tcGFyZXMgd2l0aCB0aGUgY29udGludW91cyBtb2RlbCBhdCB0aGUgc2FtZSB0aW1lLiBFdWxlciBjYW4gZGFtcCBkZXZpYXRpb25zIHdoaWxlIGNyb3NzaW5nIGFtYmllbnQgdGVtcGVyYXR1cmUgb3IgYXJ0aWZpY2lhbGx5IHJlYWNoIGVxdWlsaWJyaXVtOyB0d28gc3RhYmxlIHN0ZXAgc2l6ZXMgY2FuIGFsc28gZ2l2ZSBkaWZmZXJlbnQgdGVtcGVyYXR1cmVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUyLW00OnBlcnR1cmJhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDUyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGVzdC1wZXJ0dXJiYXRpb24taW5pdGlhbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgc3RhcnRpbmcgZXhhY3RseSBhdCBhbWJpZW50IHRlbXBlcmF0dXJlIGZhaWwgdG8gdGVzdCB0aGUgc3RhYmlsaXR5IG9mIHRoZSBzdGVwIHNpemU/IiwKICAgICAgInJlcG9uc2UiOiAiMCBkZXZpYXRpb24gc3RheXMgMCBmb3IgYW55IFIuIEEgbm9uemVybyBpbml0aWFsIGRpZmZlcmVuY2UgbXVzdCBiZSB0cmFja2VkOiBpdCBpcyBtdWx0aXBsaWVkIGJ5IFIgYXQgZWFjaCBzdGVwLiBBIHNpbmdsZSBlcXVpbGlicml1bSB0cmFqZWN0b3J5IGRvZXMgbm90IHJldmVhbCB0aGlzIHNlbnNpdGl2aXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c052-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGNhbiB5b3UgZGVyaXZlIHRoZSBFdWxlciBmYWN0b3IgZm9yIHRoZSBkZXZpYXRpb24gZnJvbSBhbWJpZW50IHRlbXBlcmF0dXJlPwlTZXQgeSA9IFQg4oiSIEEsIHdyaXRlIG5leHQgeSA9IHkgKyBoKOKIks67eSksIHRoZW4gZmFjdG9yOiBSID0gMSDiiJIgzrtoLiBSIGlzIGRpbWVuc2lvbmxlc3MgYW5kIGFsc28gbXVsdGlwbGllcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHR3byBjYWxjdWxhdGlvbnMgdXNpbmcgdGhlIHNhbWUgbW9kZWwuCXRvZGFpIGMwNTItbTQgZmFjdGV1ci1hbXBsaWZpY2F0aW9uLWV1bGVyCldoYXQgY29uZGl0aW9uIGVuc3VyZXMgZGFtcGluZywgYW5kIHdoYXQgaGFwcGVucyBhdCB0aGUgYm91bmRhcnk/CUZvciBjb25zdGFudCBwb3NpdGl2ZSDOuyBhbmQgY29uc3RhbnQgcG9zaXRpdmUgaDogfFJ8IDwgMSwgb3IgMCA8IM67aCA8IDIuIFdpdGggUiA9IC0xLCBkZXZpYXRpb25zIGFsdGVybmF0ZSB3aXRob3V0IGJlaW5nIGRhbXBlZDogdGhleSBzdGF5IGJvdW5kZWQuIFRoZSBib3VuZGFyeSBkb2VzIG5vdCBnaXZlIGFuIGFzeW1wdG90aWMgcmV0dXJuIHRvIGVxdWlsaWJyaXVtLgl0b2RhaSBjMDUyLW00IHN0YWJpbGl0ZS1ldC1hbW9ydGlzc2VtZW50CkRvZXMgYSBjaGFuZ2Ugb2Ygc2lnbiBhdCBlYWNoIHN0ZXAgaW1wbHkgZGl2ZXJnZW5jZT8JTm8uIEEgbmVnYXRpdmUgUiBleHBsYWlucyBhbHRlcm5hdGlvbjsgfFJ8IGRldGVybWluZXMgYW1wbGl0dWRlLiBUaGUgZmFjdG9yIC0wLjUwIGRhbXBzIGRldmlhdGlvbnMsIGFuZCB0aGUgZmFjdG9yIC0xLjUwIGFtcGxpZmllcyB0aGVtLiBTdGF5aW5nIG9uIHRoZSBzYW1lIHNpZGUgb2YgYW1iaWVudCB0ZW1wZXJhdHVyZSBhbHNvIHJlcXVpcmVzIFIgdG8gYmUgcG9zaXRpdmUgb3IgMC4JdG9kYWkgYzA1Mi1tNCBhbHRlcm5hbmNlLWV0LWFtcGxpdHVkZQpXaHkgZG9lcyBhIGNhbGN1bGF0aW9uIHRoYXQgZGFtcHMgZGV2aWF0aW9ucyBmYWlsIHRvIHByb3ZlIGFjY3VyYWN5PwlTdGFiaWxpdHkgZGVzY3JpYmVzIHRoZSBwcm9wYWdhdGlvbiBvZiBkZXZpYXRpb25zIGF0IGEgZml4ZWQgc3RlcCBzaXplLiBBY2N1cmFjeSBjb21wYXJlcyB3aXRoIHRoZSBjb250aW51b3VzIG1vZGVsIGF0IHRoZSBzYW1lIHRpbWUuIEV1bGVyIGNhbiBkYW1wIGRldmlhdGlvbnMgd2hpbGUgY3Jvc3NpbmcgYW1iaWVudCB0ZW1wZXJhdHVyZSBvciBhcnRpZmljaWFsbHkgcmVhY2ggZXF1aWxpYnJpdW07IHR3byBzdGFibGUgc3RlcCBzaXplcyBjYW4gYWxzbyBnaXZlIGRpZmZlcmVudCB0ZW1wZXJhdHVyZXMuCXRvZGFpIGMwNTItbTQgc3RhYmlsaXRlLWV0LXByZWNpc2lvbgpXaHkgZG9lcyBzdGFydGluZyBleGFjdGx5IGF0IGFtYmllbnQgdGVtcGVyYXR1cmUgZmFpbCB0byB0ZXN0IHRoZSBzdGFiaWxpdHkgb2YgdGhlIHN0ZXAgc2l6ZT8JMCBkZXZpYXRpb24gc3RheXMgMCBmb3IgYW55IFIuIEEgbm9uemVybyBpbml0aWFsIGRpZmZlcmVuY2UgbXVzdCBiZSB0cmFja2VkOiBpdCBpcyBtdWx0aXBsaWVkIGJ5IFIgYXQgZWFjaCBzdGVwLiBBIHNpbmdsZSBlcXVpbGlicml1bSB0cmFqZWN0b3J5IGRvZXMgbm90IHJldmVhbCB0aGlzIHNlbnNpdGl2aXR5Lgl0b2RhaSBjMDUyLW00IHRlc3QtcGVydHVyYmF0aW9uLWluaXRpYWxlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pvbkvs sdrjtw ndbf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vbrbyn dhnnms vxmx</span></span> after C052·M5: read the return factor</h3><dl><div><dt>What you understand</dt><dd>The factor of an integrator determines how deviations propagate in the model studied. The cup is an analogy for returning to a target; its fictitious temperatures and rate do not describe the internal variables of the project.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hqegkn dpwxsg wsqnco aukttj fbyqrs ugkifb vhkzpa hgoqyr nvweya mjfvrk lvwfug eylzqy mmazxj mzszgz uxfvzf ffsoxo xffuqx dcxtsz guiijd dpdygv cwzejk gmzttg ceyssj cxdofp</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nqmzpe cggmhk zwlril ijsovm auhgkf mmivbd twdm</span></span> Connecting the solution with a frozen rate, stability, and a convergence protocol remains to be done. Neither reading this page nor succeeding with a hint grants this level: you must reconstruct and defend the reasoning without support, after a delay.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fvdbtz zfqhqy xabtov diykwn jmzxru qfeydh ktrjex mndgqx cxcgko qumvjy pruocr tlhgqc bngkav ngbghs buokqb lyhcfe wiwiwy sjwjge jphzkn epmhss kwwult xlmmux pbhwen yjrbwt zytrnn hrgvmm rltiiv bhadhs fbobsb hswnsp sfjqcv fpcduq ejsphf xwsuey rltszr suwyup vjmaij wc</span></span></dd></div><div><dt>Next step</dt><dd>Continue with C052·M5: prepare Euler/reference comparisons on invented values at equal times and document the chosen rates. A study of modulations between calls and any evidence of actual operation remain separate tasks to be accepted within their authorized scope.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c052-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c052-m3.html">Previous</a> · <a href="c052-m5.html">Next</a></nav>
+<footer><p>Course book · C052·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

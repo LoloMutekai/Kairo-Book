@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the convolution of two finite sequences, explain why one of them is read backwards, then check the result using a product evaluated at two points.">
+<title>C166·M3 · Convolution — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eirxax dkqupl grvx</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C166·M3</p><h1>Convolution</h1><p class="objectif"><span>Your goal</span>Calculate the convolution of two finite sequences, explain why one of them is read backwards, then check the result using a product evaluated at two points.</p><p class="prerequis"><strong>Before you start</strong><br>c165-m5 : duality · c046-m5 : approximation error · c027-m5 : complex numbers · c166-m1 : Fourier series · c166-m2 : transform</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At the counter of a fictional snack bar, a screen displays the number of juice orders minute by minute: 2, then 5, then 1. These 3 readings are invented for the lesson. The cook does not want to react to a single minute: the workload is assessed using the current minute and those before it.</p><p>Each reading therefore leaves an echo. An order arriving during minute m contributes to that minute, then to the next, then to the minute after that, with a weight that depends only on the age k of the reading, meaning the number of minutes since it was recorded. We write this weight as h<sub>k</sub> and call h the kernel. For this cook, the weights are 1, 1 and 1: a recent reading and a reading 2 minutes old count equally; an older reading no longer counts.</p><p>Adding all the echoes gives the output y. At each minute n, the output adds the contributions sent by past readings. This operation is called the convolution of the sequence x with the kernel h. It replaces raw readings with a smoother measure of workload, and extends a little beyond the last reading because the echo of that reading continues.</p><p>This explains the phrase “read backwards”. To obtain the output for minute n, we pair the weight h<sub>k</sub> with the reading from k minutes ago, at index n − k, and this index decreases as k increases. The reversal follows from pairing each weight with the reading of the matching age.</p><p>The previous units break a signal down into frequencies. The question here is what this kind of filtering becomes when viewed in terms of frequencies: a simple product. We will check this only at 2 frequencies, using exact calculations, without rebuilding the whole theory.</p><p>Assumptions on this page: finite real sequences, 0 outside their index ranges, and a known kernel that is the same at every minute. Infinite signals and their convergence conditions are not covered here.</p><div class="schemas"><figure><svg viewBox="0 0 520 262" xmlns="http://www.w3.org/2000/svg" role="img"><title>Reading echoes add up to outputs</title><desc>The 3 readings are 2, 5 and 1 orders. Each reading leaves an echo lasting 3 minutes. The 5 output stacks are 2, 7, 8, 6 and 1 orders.</desc><text x="100" y="28" text-anchor="middle" class="petite-etiquette">Readings x</text><text x="350" y="28" text-anchor="middle" class="petite-etiquette">Outputs y</text><line x1="30" y1="200" x2="190" y2="200" class="trait" /><line x1="230" y1="200" x2="500" y2="200" class="trait" /><rect x="40" y="176" width="34" height="24" class="prediction" /><text x="57" y="168" text-anchor="middle">2</text><rect x="84" y="140" width="34" height="60" class="mesure" /><text x="101" y="132" text-anchor="middle">5</text><rect x="128" y="188" width="34" height="12" class="resultat" /><text x="145" y="180" text-anchor="middle">1</text><rect x="240" y="176" width="40" height="24" class="prediction" /><text x="260" y="168" text-anchor="middle">2</text><rect x="290" y="176" width="40" height="24" class="prediction" /><rect x="290" y="116" width="40" height="60" class="mesure" /><text x="310" y="108" text-anchor="middle">7</text><rect x="340" y="176" width="40" height="24" class="prediction" /><rect x="340" y="116" width="40" height="60" class="mesure" /><rect x="340" y="104" width="40" height="12" class="resultat" /><text x="360" y="96" text-anchor="middle">8</text><rect x="390" y="140" width="40" height="60" class="mesure" /><rect x="390" y="128" width="40" height="12" class="resultat" /><text x="410" y="120" text-anchor="middle">6</text><rect x="440" y="188" width="40" height="12" class="resultat" /><text x="460" y="180" text-anchor="middle">1</text><text x="430" y="222" text-anchor="middle" class="petite-etiquette">time in minutes</text><rect x="20" y="236" width="14" height="14" class="prediction" /><text x="40" y="248" class="petite-etiquette">first reading</text><rect x="190" y="236" width="14" height="14" class="mesure" /><text x="210" y="248" class="petite-etiquette">middle reading</text><rect x="360" y="236" width="14" height="14" class="resultat" /><text x="380" y="248" class="petite-etiquette">last reading</text></svg><figcaption>The 3 readings on the left become the 5 outputs on the right. In each stack, the colour identifies the original reading; the total height is the output, in orders over the window. Fictional values.</figcaption></figure><figure><svg viewBox="0 0 520 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Product check at two points</title><desc>At z equal to 1, X is 8, H is 3 and Y is 24. At z equal to minus 1, X is -2, H is 1 and Y is -2. In both cases, X times H equals Y.</desc><text x="20" y="34" class="petite-etiquette">Evaluation at z = 1</text><rect x="20" y="44" width="130" height="48" rx="7" class="cadre-prediction" /><text x="85" y="76" text-anchor="middle">X = 8</text><text x="165" y="76" text-anchor="middle">×</text><rect x="180" y="44" width="130" height="48" rx="7" class="cadre-neutre" /><text x="245" y="76" text-anchor="middle">H = 3</text><text x="330" y="76" text-anchor="middle">=</text><rect x="345" y="44" width="150" height="48" rx="7" class="cadre-resultat" /><text x="420" y="76" text-anchor="middle">Y = 24</text><text x="20" y="136" class="petite-etiquette">Evaluation at z = −1</text><rect x="20" y="146" width="130" height="48" rx="7" class="cadre-prediction" /><text x="85" y="178" text-anchor="middle">X = -2</text><text x="165" y="178" text-anchor="middle">×</text><rect x="180" y="146" width="130" height="48" rx="7" class="cadre-neutre" /><text x="245" y="178" text-anchor="middle">H = 1</text><text x="330" y="178" text-anchor="middle">=</text><rect x="345" y="146" width="150" height="48" rx="7" class="cadre-resultat" /><text x="420" y="178" text-anchor="middle">Y = -2</text><text x="260" y="226" text-anchor="middle" class="petite-etiquette">X × H = Y at both points</text></svg><figcaption>For a given value of z, the sum of the outputs weighted by powers of z is the product of the corresponding sums for the readings and the kernel. The check succeeds at both chosen values.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The output for minute n adds, for each age k, the weight hₖ multiplied by the reading at index n − k; the indices of the two factors add up to n.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>An order display smoothed using a window of 3 minutes</h3><p>Fictional values: the readings are x = (2, 5, 1) orders per minute and the kernel is h = (1, 1, 1), with dimensionless weights. Calculate the sequence y, check it using a product, then compare it with a moving average with window length 3.</p><ol class="etapes"><li><h3>Name the quantities and state the assumptions</h3><p>The reading x<sub>m</sub> is the number of orders in minute m, with the starting index 0. The weight h<sub>k</sub> is dimensionless. The output y<sub>n</sub> is a number of orders over the window of minutes that contribute. The sequences are finite, real and 0 outside their index ranges.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>n</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>k</mi></msub><msub><mi>h</mi><mi>k</mi></msub><msub><mi>x</mi><mrow><mi>n</mi><mo>−</mo><mi>k</mi></mrow></msub></mrow></math></div><p>The sum runs over the k for which h<sub>k</sub> and x<sub>n-k</sub> exist; the other products are 0 by assumption. The kernel does not depend on n: every minute is treated in the same way.</p></li><li><h3>Count the outputs</h3><p>An output exists whenever a reading pairs with a weight. The first pairing puts x<sub>0</sub> with h<sub>0</sub>; the last puts the last reading with the last weight. There are therefore n<sub>x</sub> + n<sub>h</sub> − 1 outputs.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>n</mi><mi>y</mi></msub><mo>=</mo><msub><mi>n</mi><mi>x</mi></msub><mo>+</mo><msub><mi>n</mi><mi>h</mi></msub><mo>−</mo><mn>1</mn><mo>=</mo><mn>3</mn><mo>+</mo><mn>3</mn><mo>−</mo><mn>1</mn><mo>=</mo><mn>5</mn></mrow></math></div><p>Check: the output indices run from 0 to 5 − 1, and 5 exceeds 3 because the kernel has more than one weight.</p></li><li><h3>Calculate the output at index 0</h3><p>For n = 0, only k = 0 is available, because no reading has a negative index. The output contains just one product.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>0</mn></msub><mo>=</mo><msub><mi>h</mi><mn>0</mn></msub><msub><mi>x</mi><mn>0</mn></msub><mo>=</mo><mn>1</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>2</mn></mrow></math></div><p>The first output uses only the first reading: the filter has nothing in memory yet.</p></li><li><h3>Calculate the central output</h3><p>For n = 2, three weights pair with three readings: (k, n − k) is (0, 2), (1, 1) and then (2, 0). In each pair, the indices add up to 2.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>2</mn></msub><mo>=</mo><msub><mi>h</mi><mn>0</mn></msub><msub><mi>x</mi><mn>2</mn></msub><mo>+</mo><msub><mi>h</mi><mn>1</mn></msub><msub><mi>x</mi><mn>1</mn></msub><mo>+</mo><msub><mi>h</mi><mn>2</mn></msub><msub><mi>x</mi><mn>0</mn></msub><mo>=</mo><mn>1</mn><mo>+</mo><mn>5</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>6</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>8</mn></mrow></math></div><p>The kernel is traversed in one direction and the readings in the other: as k increases, the index of x decreases. Here the three products are 1, 5 and 2, because the weights are 1.</p></li><li><h3>Calculate the other three outputs</h3><p>Since each weight is 1, a product reduces to the reading itself. For n = 1: y<sub>1</sub> = h<sub>0</sub>x<sub>1</sub> + h<sub>1</sub>x<sub>0</sub> = 5 + 2 = 7. For the index just after the centre: y<sub>3</sub> = h<sub>1</sub>x<sub>2</sub> + h<sub>2</sub>x<sub>1</sub> = 1 + 5 = 6, because h<sub>0</sub> would need a reading at index 3, which does not exist. For n = 4: y<sub>4</sub> = h<sub>2</sub>x<sub>2</sub> = 1 × 1 = 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>y</mi><mo>=</mo><mo>(</mo><mn>2</mn><mo>,</mo><mn>7</mn><mo>,</mo><mn>8</mn><mo>,</mo><mn>6</mn><mo>,</mo><mn>1</mn><mo>)</mo></mrow></math></div><p>The units are orders over the window. The values 2 and 1 are at the boundaries: the window is only partly filled there.</p></li><li><h3>Check using a product at two points</h3><p>Associate each sequence with a sum of powers of a number z, called a polynomial in z:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><msub><mi>x</mi><mn>0</mn></msub><mo>+</mo><msub><mi>x</mi><mn>1</mn></msub><mi>z</mi><mo>+</mo><msub><mi>x</mi><mn>2</mn></msub><msup><mi>z</mi><mn>2</mn></msup></mrow></math></div><p>H(z) is defined in the same way using h, and Y(z) using y. Multiplying X(z) by H(z) creates, for each pair of reading m and weight k, the term x<sub>m</sub>h<sub>k</sub> multiplied by z to the power m + k. Collecting terms with the same exponent n brings together exactly the pairs such that m + k = n: this is the convolution rule. Therefore, for every number z:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Y</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><msub><mo>∑</mo><mi>n</mi></msub><msub><mi>y</mi><mi>n</mi></msub><msup><mi>z</mi><mi>n</mi></msup><mo>=</mo><mi>X</mi><mo>(</mo><mi>z</mi><mo>)</mo><mi>H</mi><mo>(</mo><mi>z</mi><mo>)</mo></mrow></math></div><p>For z = 1, every power is 1: we compare sums. The readings total 8, the kernel totals 3, and 8 × 3 = 24; the outputs total 24, which agrees.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>8</mn><mo>×</mo><mn>3</mn><mo>=</mo><mn>24</mn><mo>=</mo><mn>24</mn></mrow></math></div><p>For z = −1, the signs alternate. X(−1) = x<sub>0</sub> − x<sub>1</sub> + x<sub>2</sub> = -2, H(−1) = 1, and the product is -2. The outputs give y<sub>0</sub> − y<sub>1</sub> + y<sub>2</sub> − y<sub>3</sub> + y<sub>4</sub> = -2: the second check agrees too.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>-2</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>-2</mn><mo>=</mo><mn>-2</mn></mrow></math></div><p>The connection with frequencies is as follows: for z = e^{iω}, where ω is an angle, these sums are transforms of the sequence at a frequency. z = 1 corresponds to the 0 angle, hence 0 frequency (the sum), and z = −1 to a half turn, hence the fastest alternation. The sign of the exponent is a convention; it does not change these two cases. The check is not a complete proof: swapping two outputs of the same parity, such as y<sub>1</sub> and y<sub>3</sub>, would leave both products unchanged.</p></li><li><h3>Interpret y as a moving average</h3><p>A uniform kernel, divided by the number of minutes in the window, turns the sum into an average in orders per minute. With a full window, y<sub>2</sub> ÷ 3 = 8 ÷ 3 = 2.67 orders per minute.</p><p>A moving average programmed to use only existing values does not always divide by 3: it divides by the number of available readings. It gives 2 ÷ 1 = 2 at index 0, 7 ÷ 2 = 3.50 at index 1, and 2.67 at index 2. These are the first 3 outputs of the convolution, each divided by its own divisor. It is therefore not a convolution with a fixed kernel at the boundary. The outputs after the last reading are not kept.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain in your own words why yₙ contains several products at the centre but just one at the boundary, then say which error the check at z = 1 and z = −1 cannot detect.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Convolution multiplies the two sequences term by term.”</h3><p>A term-by-term product keeps the length and pairs equal indices. Convolution pairs indices whose sum is n and adds all these products; the central output in the example contains three of them.</p><a href="#exemple">Review the calculation of the central output</a></li><li><h3>“The output has the same number of values as the readings.”</h3><p>For finite sequences that are 0 elsewhere, there are nₓ + nₕ − 1 outputs. A moving average implemented in code may keep only the first outputs; this is a boundary choice, not the convolution rule.</p><a href="#exemple">Review the output count</a></li><li><h3>“A moving average is everywhere the convolution with a fixed kernel equal to one divided by the width.”</h3><p>At the boundary, a calculation that averages the available values changes its divisor. Compare the divisor 2 with the divisor 3 at index 1 to see the difference.</p><a href="#exercices">Redo the exercise on the boundary of an average</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="fenetre-courte"><p class="repere">Exercise 1 · Direct application</p>
+<h3>A two-minute window</h3><p>Fictional values: keep the readings x = (2, 5, 1), but let the kernel retain only the current minute and the previous one, with weights (1, 1). How many outputs are there, what are their values, and how can you check their total?</p>
+<label for="reponse-fenetre-courte">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-fenetre-courte" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-fenetre-courte" value="0"> Unsure</label><label><input type="radio" name="confiance-fenetre-courte" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-fenetre-courte" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Apply the counting rule using the length of the new kernel.</p></details><details class="indice"><summary>Hint 2</summary><p>For each n, list the index pairs (reading, weight) whose sum is n; the boundaries have only one pair.</p></details><details class="indice"><summary>Hint 3</summary><p>The total of the outputs must equal the total of the readings multiplied by the total of the weights.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The kernel has 2 weights, so there are 3 + 2 − 1 = 4 outputs. With the weights equal to 1, each output adds the readings present in its window: 2 at index 0, 5 + 2 = 7 at index 1, 1 + 5 = 6 at index 2, then 1 at the next index.</p><p>Check: the expected total is 8 × 2 = 16. Adding 2, 7, 6 and 1 does give 16. The check does not detect two swapped outputs of the same parity; comparing the index pairs avoids this error.</p><p class="petit-titre">Check your reasoning</p><ul><li>The number of outputs is obtained using the counting rule, not by counting visually.</li><li>Each output is justified using its index pairs.</li><li>The total of the outputs is compared with the product of the totals.</li></ul></details></article><article class="exercice" id="noyau-asymetrique"><p class="repere">Exercise 2 · Guided transfer</p>
+<h3>A kernel with unequal weights</h3><p>Fictional values: the same readings x, but an asymmetric kernel g = (3, 1): the weight 3 applies to the reading from the current minute, and the weight 1 to the reading from the previous minute. Calculate the outputs at indices 0 and 1 and the last output, then say what would happen if you forgot to read x backwards.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>n</mi></msub><mo>=</mo><msub><mi>g</mi><mn>0</mn></msub><msub><mi>x</mi><mi>n</mi></msub><mo>+</mo><msub><mi>g</mi><mn>1</mn></msub><msub><mi>x</mi><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></math></div>
+<label for="reponse-noyau-asymetrique">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-noyau-asymetrique" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-noyau-asymetrique" value="0"> Unsure</label><label><input type="radio" name="confiance-noyau-asymetrique" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-noyau-asymetrique" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write yₙ for n = 0, then n = 1, using the formula in the question.</p></details><details class="indice"><summary>Hint 2</summary><p>The last output has only one pair: which reading is last, and which weight still reaches it?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The output at index 0 is 3 × 2 = 6. The output at index 1 is 3 × 5 + 1 × 2 = 15 + 2 = 17. There are 4 outputs, so the last is at index 4 − 1: only g<sub>1</sub> still reaches the last reading, and 1 × 1 = 1.</p><p>Without reading backwards, you would pair the weight 1 with the next reading instead of the previous one. The kernel, which is not symmetric, would then give a number other than 17 at index 1. With the symmetric kernel in the example, this error was not visible.</p><p class="petit-titre">Check your reasoning</p><ul><li>The formula is applied using index n − k for the reading.</li><li>The three requested outputs are exact and their products are written out.</li><li>The consequence of forgetting the reversal is connected to the asymmetry of the kernel.</li></ul></details></article><article class="exercice" id="bord-moyenne"><p class="repere">Exercise 3 · Transfer to code</p>
+<h3>The boundary of a moving average</h3><p>A moving average with window length 3 averages, at each index, the values in the window that exist. Using the readings x from the example, give its values at indices 1 and 2, compare index 1 with convolution by the uniform kernel with weight one divided by 3, then explain the difference.</p>
+<label for="reponse-bord-moyenne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-bord-moyenne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-bord-moyenne" value="0"> Unsure</label><label><input type="radio" name="confiance-bord-moyenne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-bord-moyenne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At index 1, how many readings does the window actually contain?</p></details><details class="indice"><summary>Hint 2</summary><p>Convolution with a fixed kernel always divides by the same width: which one?</p></details><details class="indice"><summary>Hint 3</summary><p>Reuse the outputs y₁ and y₂ from the example.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At index 1, the window contains 2 readings: the average is 7 ÷ 2 = 3.50 orders per minute. The fixed kernel divides 7 by 3 and gives 2.33. At index 2, the window is full and both calculations give 2.67.</p><p>The difference comes from the divisor: the average of the available values divides by the number of readings present, and the fixed kernel by the width. At the start, the latter therefore counts as though the missing minutes were 0. Neither is wrong in itself; they answer two different questions.</p><p class="petit-titre">Check your reasoning</p><ul><li>The divisor changes at the boundary for the average of the available values.</li><li>The fixed kernel is identified as a convolution, and the boundary rule as a departure from it.</li><li>The difference is explained without judging which would be preferable for actual use.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="formule"><summary><span class="repere">Recall 1</span><span>What does yₙ = Σ hₖ xₙ₋ₖ calculate?</span></summary><p>The output at index n: the sum, over the age k, of the weight hₖ multiplied by the reading at index n − k. The two indices add up to n.</p></details><details class="carte" data-carte="longueur"><summary><span class="repere">Recall 2</span><span>How many outputs are there for nₓ readings and a kernel of nₕ weights, with finite sequences that are 0 elsewhere?</span></summary><p>nₓ + nₕ − 1 outputs.</p></details><details class="carte" data-carte="produit"><summary><span class="repere">Recall 3</span><span>Why is Y(z) = X(z)H(z)?</span></summary><p>In the product, the term xₘhₖ includes z raised to the sum m + k. Collecting terms with the same exponent n recovers the convolution.</p></details><details class="carte" data-carte="bord"><summary><span class="repere">Recall 4</span><span>Why is an average of the available values not a convolution with a fixed kernel at the boundary?</span></summary><p>It divides by the number of readings present, which changes at the start; a fixed kernel always divides by the width.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>What does the check at z = 1 and z = −1 detect, and what does it miss?</span></summary><p>It detects errors in the sum and the alternating sum; it misses the swap of two outputs of the same parity.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without looking: a reading sends an echo, a copy of the kernel shifted to that reading’s minute; the output for a minute adds the echoes arriving there, meaning the products hₖ xₘ such that m + k = n; there are nₓ + nₕ − 1 outputs. Multiplying the polynomials X(z) and H(z) gives the same sums, hence the check at z = 1 and z = −1. A moving average of the available values keeps the first outputs and changes its divisor at the boundary. Write these ideas in your own words, then redo the calculation of y₂ and the check without support. Reading or giving an assisted answer does not count as achieving the level.</p></div><div class="exports"><a class="bouton" download="c166-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNjYtbTM6Zm9ybXVsZSIsCiAgICAgICJ1bml0ZSI6ICJjMTY2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udm9sdXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHnigpkgPSDOoyBo4oKWIHjigpnigovigpYgY2FsY3VsYXRlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBvdXRwdXQgYXQgaW5kZXggbjogdGhlIHN1bSwgb3ZlciB0aGUgYWdlIGssIG9mIHRoZSB3ZWlnaHQgaOKCliBtdWx0aXBsaWVkIGJ5IHRoZSByZWFkaW5nIGF0IGluZGV4IG4g4oiSIGsuIFRoZSB0d28gaW5kaWNlcyBhZGQgdXAgdG8gbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE2Ni1tMzpsb25ndWV1ciIsCiAgICAgICJ1bml0ZSI6ICJjMTY2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibG9uZ3VldXIiLAogICAgICAicXVlc3Rpb24iOiAiSG93IG1hbnkgb3V0cHV0cyBhcmUgdGhlcmUgZm9yIG7igpMgcmVhZGluZ3MgYW5kIGEga2VybmVsIG9mIG7igpUgd2VpZ2h0cywgd2l0aCBmaW5pdGUgc2VxdWVuY2VzIHRoYXQgYXJlIDAgZWxzZXdoZXJlPyIsCiAgICAgICJyZXBvbnNlIjogIm7igpMgKyBu4oKVIOKIkiAxIG91dHB1dHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNjYtbTM6cHJvZHVpdCIsCiAgICAgICJ1bml0ZSI6ICJjMTY2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJvZHVpdCBlbiBmcsOpcXVlbmNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBZKHopID0gWCh6KUgoeik/IiwKICAgICAgInJlcG9uc2UiOiAiSW4gdGhlIHByb2R1Y3QsIHRoZSB0ZXJtIHjigpho4oKWIGluY2x1ZGVzIHogcmFpc2VkIHRvIHRoZSBzdW0gbSArIGsuIENvbGxlY3RpbmcgdGVybXMgd2l0aCB0aGUgc2FtZSBleHBvbmVudCBuIHJlY292ZXJzIHRoZSBjb252b2x1dGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE2Ni1tMzpib3JkIiwKICAgICAgInVuaXRlIjogImMxNjYtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb3llbm5lIGdsaXNzYW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgaXMgYW4gYXZlcmFnZSBvZiB0aGUgYXZhaWxhYmxlIHZhbHVlcyBub3QgYSBjb252b2x1dGlvbiB3aXRoIGEgZml4ZWQga2VybmVsIGF0IHRoZSBib3VuZGFyeT8iLAogICAgICAicmVwb25zZSI6ICJJdCBkaXZpZGVzIGJ5IHRoZSBudW1iZXIgb2YgcmVhZGluZ3MgcHJlc2VudCwgd2hpY2ggY2hhbmdlcyBhdCB0aGUgc3RhcnQ7IGEgZml4ZWQga2VybmVsIGFsd2F5cyBkaXZpZGVzIGJ5IHRoZSB3aWR0aC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE2Ni1tMzpjb250cm9sZSIsCiAgICAgICJ1bml0ZSI6ICJjMTY2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHLDtGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgY2hlY2sgYXQgeiA9IDEgYW5kIHogPSDiiJIxIGRldGVjdCwgYW5kIHdoYXQgZG9lcyBpdCBtaXNzPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGRldGVjdHMgZXJyb3JzIGluIHRoZSBzdW0gYW5kIHRoZSBhbHRlcm5hdGluZyBzdW07IGl0IG1pc3NlcyB0aGUgc3dhcCBvZiB0d28gb3V0cHV0cyBvZiB0aGUgc2FtZSBwYXJpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c166-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHnigpkgPSDOoyBo4oKWIHjigpnigovigpYgY2FsY3VsYXRlPwlUaGUgb3V0cHV0IGF0IGluZGV4IG46IHRoZSBzdW0sIG92ZXIgdGhlIGFnZSBrLCBvZiB0aGUgd2VpZ2h0IGjigpYgbXVsdGlwbGllZCBieSB0aGUgcmVhZGluZyBhdCBpbmRleCBuIOKIkiBrLiBUaGUgdHdvIGluZGljZXMgYWRkIHVwIHRvIG4uCXRvZGFpIGMxNjYtbTMgY29udm9sdXRpb24KSG93IG1hbnkgb3V0cHV0cyBhcmUgdGhlcmUgZm9yIG7igpMgcmVhZGluZ3MgYW5kIGEga2VybmVsIG9mIG7igpUgd2VpZ2h0cywgd2l0aCBmaW5pdGUgc2VxdWVuY2VzIHRoYXQgYXJlIDAgZWxzZXdoZXJlPwlu4oKTICsgbuKClSDiiJIgMSBvdXRwdXRzLgl0b2RhaSBjMTY2LW0zIGxvbmd1ZXVyCldoeSBpcyBZKHopID0gWCh6KUgoeik/CUluIHRoZSBwcm9kdWN0LCB0aGUgdGVybSB44oKYaOKCliBpbmNsdWRlcyB6IHJhaXNlZCB0byB0aGUgc3VtIG0gKyBrLiBDb2xsZWN0aW5nIHRlcm1zIHdpdGggdGhlIHNhbWUgZXhwb25lbnQgbiByZWNvdmVycyB0aGUgY29udm9sdXRpb24uCXRvZGFpIGMxNjYtbTMgcHJvZHVpdCBlbiBmcsOpcXVlbmNlCldoeSBpcyBhbiBhdmVyYWdlIG9mIHRoZSBhdmFpbGFibGUgdmFsdWVzIG5vdCBhIGNvbnZvbHV0aW9uIHdpdGggYSBmaXhlZCBrZXJuZWwgYXQgdGhlIGJvdW5kYXJ5PwlJdCBkaXZpZGVzIGJ5IHRoZSBudW1iZXIgb2YgcmVhZGluZ3MgcHJlc2VudCwgd2hpY2ggY2hhbmdlcyBhdCB0aGUgc3RhcnQ7IGEgZml4ZWQga2VybmVsIGFsd2F5cyBkaXZpZGVzIGJ5IHRoZSB3aWR0aC4JdG9kYWkgYzE2Ni1tMyBtb3llbm5lIGdsaXNzYW50ZQpXaGF0IGRvZXMgdGhlIGNoZWNrIGF0IHogPSAxIGFuZCB6ID0g4oiSMSBkZXRlY3QsIGFuZCB3aGF0IGRvZXMgaXQgbWlzcz8JSXQgZGV0ZWN0cyBlcnJvcnMgaW4gdGhlIHN1bSBhbmQgdGhlIGFsdGVybmF0aW5nIHN1bTsgaXQgbWlzc2VzIHRoZSBzd2FwIG9mIHR3byBvdXRwdXRzIG9mIHRoZSBzYW1lIHBhcml0eS4JdG9kYWkgYzE2Ni1tMyBjb250csO0bGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eirxax dkqupl grvx</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognise a moving average in code</h3><dl><div><dt>What you understand</dt><dd>A moving average is a causal convolution with a uniform kernel, apart from the boundary rule. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ijsgrx osoqex xbxpnd mgpxer kbvtvh tylkkj uvwl</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mpoxoo wbmyrf zimogs ytovcq pfgcnr mcxaxk wqrmbv hyqmnw dqpgdw zhszea wmzmds qairks xrspko jeftdt slpzfd kjlnai xrxrxn vtfytu yolbuy mwjotb nqsgvk ryvtpa muhxfh mrhsiz</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: redo the calculation of y and its check without support, then predict the boundary values of a moving average. Reading the lesson or the code, or answering with help, does not award an achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sqqxwl ucuuhi ouhqtt dbxzoz pzmevg qxpimz kexzth tysvou sxptzi kxsyuy iujjxa tlcpgp hkscfz sjsyia kouqja vfusux bgxwro ggoxsf jmdjuq fkjbcl dhfhxd hoxpdv lizcgl ahusoc mygfyw yqojqj jxbtcu fhofjb jyidyf jxszaw ktgdad nyvfkd tdhbyq zwntmn akhlda vfmrbv fpmaeq ly</span></span></dd></div><div><dt>To continue</dt><dd>Read the Parseval unit next, then compare the effect of a moving average on frequencies. Before any actual use, check the connections, the boundary rule and the authorised data separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c166-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c166-m2.html">Previous</a> · <a href="c166-m4.html">Next</a></nav>
+<footer><p>Course book · C166·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

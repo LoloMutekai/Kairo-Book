@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct a Crank-Nicolson step, handle its boundaries and check the resulting prices by substitution.">
+<title>C183·M4 · Crank-Nicolson — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eioipd gfkhgf hdyv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C183·M4</p><h1>Crank-Nicolson</h1><p class="objectif"><span>Your goal</span>Construct a Crank-Nicolson step, handle its boundaries and check the resulting prices by substitution.</p><p class="prerequis"><strong>Before you start</strong><br>c167-m5 : initial-boundary value problem · c051-m5 : error diagnostics · c175-m5 : model limitations · c050-m5 : conditioning · c183-m1 : grid · c183-m2 : explicit scheme · c183-m3 : implicit scheme</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>On graph paper, we have plotted the value of a fictional contract against the price of its underlying asset. At expiry, the curve of values is known. As we work back to an earlier date, diffusion smooths its corners: the local curvature indicates how each value changes.</p><p>The explicit scheme evaluates the curvature at the start of the step; the implicit scheme evaluates it at the end. Crank-Nicolson gives equal weight to these two curvatures. Since the curvature at the end contains prices that are still unknown, we must find them together. We average the predicted changes, rather than the final solutions from the other two methods.</p><p>In the diagram, the endpoints have prescribed values. The two interior boxes become u and v. A new interior value depends on its neighbour at the new time: we cannot fill them in one after another by arbitrarily reusing the last value calculated.</p><p>All values are fictional. We retain only diffusion with a constant coefficient, with no transport or discounting. The boundaries are chosen for the exercise; the result will be a solution of this discrete problem, with no claim to represent a market price.</p><div class="schemas"><figure><svg viewBox="0 0 360 245" xmlns="http://www.w3.org/2000/svg" role="img"><title>A price grid, two time levels</title><desc>The underlying asset prices are 90, 100, 110 and 120 euros. At the start, the values are 0, 0, 10 and 20 euros. At the new time level, the boundaries remain 0 and 20 euros; the interior values u and v must be solved for together.</desc><text x="18" y="24">Underlying asset price, in €</text><text x="36" y="52" text-anchor="middle">90</text><text x="132" y="52" text-anchor="middle">100</text><text x="228" y="52" text-anchor="middle">110</text><text x="324" y="52" text-anchor="middle">120</text><text x="18" y="82" class="petite-etiquette">Start: values in €</text><line x1="36" y1="112" x2="324" y2="112" class="trait" /><rect x="10" y="93" width="52" height="37" rx="5" class="cadre-neutre" /><rect x="106" y="93" width="52" height="37" rx="5" class="cadre-prediction" /><rect x="202" y="93" width="52" height="37" rx="5" class="cadre-prediction" /><rect x="298" y="93" width="52" height="37" rx="5" class="cadre-neutre" /><text x="36" y="118" text-anchor="middle">0</text><text x="132" y="118" text-anchor="middle">0</text><text x="228" y="118" text-anchor="middle">10</text><text x="324" y="118" text-anchor="middle">20</text><text x="18" y="164" class="petite-etiquette">End: solve for u and v</text><line x1="36" y1="198" x2="324" y2="198" class="trait" /><rect x="10" y="179" width="52" height="37" rx="5" class="cadre-neutre" /><rect x="106" y="179" width="52" height="37" rx="5" class="cadre-resultat" /><rect x="202" y="179" width="52" height="37" rx="5" class="cadre-resultat" /><rect x="298" y="179" width="52" height="37" rx="5" class="cadre-neutre" /><text x="36" y="204" text-anchor="middle">0</text><text x="132" y="204" text-anchor="middle">u</text><text x="228" y="204" text-anchor="middle">v</text><text x="324" y="204" text-anchor="middle">20</text><text x="180" y="239" text-anchor="middle" class="petite-etiquette">Fixed boundaries · coupled interior</text></svg><figcaption>The horizontal positions stay the same. Only the time level changes; each row gives contract values in euros.</figcaption></figure><figure><svg viewBox="0 0 360 210" xmlns="http://www.w3.org/2000/svg" role="img"><title>Average the two curvatures</title><desc>The curvatures at the start and end each receive a weight of 1 over 2. Their average determines the change over the step. The curvature at the end contains the unknowns u and v.</desc><rect x="12" y="16" width="156" height="77" rx="7" class="cadre-prediction" /><text x="90" y="42" text-anchor="middle">Start</text><text x="90" y="69" text-anchor="middle" class="petite-etiquette">Known curvature</text><rect x="192" y="16" width="156" height="77" rx="7" class="cadre-resultat" /><text x="270" y="42" text-anchor="middle">End</text><text x="270" y="69" text-anchor="middle" class="petite-etiquette">Unknown curvature</text><path d="M90 93v30h180V93M180 123v27" class="trait" /><text x="180" y="176" text-anchor="middle">Equal weight: 1/2</text><text x="180" y="201" text-anchor="middle" class="petite-etiquette">A single step equation</text></svg><figcaption>The average applies to the side of the equation that describes the evolution. Solving the system afterwards is part of the method.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Average the curvatures at the start and end, move the known boundary terms to the right-hand side, then solve for all unknowns at the new time level together.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A step backwards from expiry</h3><p>The strike price is K = 100 €. The grid runs from 90 € to 120 €, with h = 10 €. At expiry, the contract pays the greater of x − K and 0 €. We will calculate the values at positions 100 € and 110 € after a step Δτ = 1 year.</p><ol class="etapes"><li><h3>Define the problem before choosing the scheme</h3><p>x is the price of the underlying asset and V(x, τ) the contract value, both in euros. τ is the time remaining until expiry, in years: τ = 0 at expiry; increasing τ means moving backwards through calendar time. Our simplified model imposes the equation below. ∂ denotes a partial derivative, with the other variables held fixed.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>V</mi></mrow><mrow><mo>∂</mo><mi>τ</mi></mrow></mfrac><mo>=</mo><mi>a</mi><mfrac><mrow><msup><mo>∂</mo><mn>2</mn></msup><mi>V</mi></mrow><mrow><mo>∂</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac></mrow></math></div><p>a = 50 square euros per year is constant and positive. The second spatial derivative measures curvature, in inverse euros; multiplying it by a gives euros per year, as for the time derivative. We are not applying the full Black-Scholes-Merton PDE here.</p><p>At the initial time level, the values are (0, 0, 10, 20) €. At both times of the step, we impose V(90, τ) = 0 € and V(120, τ) = 20 €. These boundary conditions are choices for the truncated problem. They do not follow from the payoff at expiry alone.</p></li><li><h3>Put the average in the right place</h3><p>Uᵢⁿ approximates V at node i and time level n. i and n are dimensionless indices; i ± 1 denotes a neighbour, n + 1 the next time level. h is the spatial spacing in euros, Δτ the duration of a step in years. Define Dᵢⁿ as the curvature approximated by a centred difference, in inverse euros.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>D</mi><mi>i</mi><mi>n</mi></msubsup><mo>=</mo><mfrac><mrow><msubsup><mi>U</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mo>−</mo><mn>2</mn><msubsup><mi>U</mi><mi>i</mi><mi>n</mi></msubsup><mo>+</mo><msubsup><mi>U</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow><mi>n</mi></msubsup></mrow><msup><mi>h</mi><mn>2</mn></msup></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><msubsup><mi>U</mi><mi>i</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msubsup><mo>−</mo><msubsup><mi>U</mi><mi>i</mi><mi>n</mi></msubsup></mrow><mrow><mi>Δτ</mi></mrow></mfrac><mo>=</mo><mfrac><mi>a</mi><mn>2</mn></mfrac><mo>(</mo><msubsup><mi>D</mi><mi>i</mi><mi>n</mi></msubsup><mo>+</mo><msubsup><mi>D</mi><mi>i</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msubsup><mo>)</mo></mrow></math></div><p>The trapezoidal rule in time approximates the evolution over the step using the average of the slopes at its endpoints. Here these slopes are aD. The new D depends on the new U: the step remains implicit.</p></li><li><h3>Gather the unknowns on the left</h3><p>Define μ, a dimensionless number, by dividing aΔτ by 2 times the square of h:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>μ</mi><mo>=</mo><mfrac><mrow><mi>a</mi><mi>Δτ</mi></mrow><mrow><mn>2</mn><msup><mi>h</mi><mn>2</mn></msup></mrow></mfrac><mo>=</mo><mfrac><mn>50</mn><mn>200</mn></mfrac><mo>=</mo><mn>1/4</mn></mrow></math></div><p>Using the data: h squared = 100 square euros and aΔτ = 50 square euros; the units cancel in μ. Collecting the terms at the new time level gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>−</mo><mi>μ</mi><msubsup><mi>U</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msubsup><mo>+</mo><mo>(</mo><mn>1</mn><mo>+</mo><mn>2</mn><mi>μ</mi><mo>)</mo><msubsup><mi>U</mi><mi>i</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msubsup><mo>−</mo><mi>μ</mi><msubsup><mi>U</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msubsup><mo>=</mo><mi>μ</mi><msubsup><mi>U</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>2</mn><mi>μ</mi><mo>)</mo><msubsup><mi>U</mi><mi>i</mi><mi>n</mi></msubsup><mo>+</mo><mi>μ</mi><msubsup><mi>U</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow><mi>n</mi></msubsup></mrow></math></div><p>On the left, the diagonal entry is 1 + 1/2 = 3/2; the neighbours have coefficients −1/4. On the right, the central weight is 1 − 1/2 = 1/2. Each row involves only the node and its neighbours: on a large grid, the matrix is tridiagonal.</p></li><li><h3>Include the boundaries at both times</h3><p>Call the new value at x = 100 € u and the one at x = 110 € v. For the row for u, only the old neighbour on the right contributes a nonzero value: 1/4 × 10 = 5/2 €. The old and new left boundary values are both 0 €.</p><p>For the row for v, the old central value contributes 1/2 × 10 = 5 €. The old boundary contributes μ × 20 €. The new boundary initially appears on the left with a minus sign; moving it to the right adds another μ × 20 €. Together: μ × (20 + 20) = 1/4 × 40 = 10 €.</p><p>The right-hand side for the right interior node is therefore 5 + 10 = 15 €. Even when the boundary is constant, its contributions at both times are needed.</p></li><li><h3>Read and solve the coupled system</h3><p>The column on the right is in euros, the matrix is dimensionless and the column of unknowns contains u and v in euros. The two rows represent the two simultaneous equations:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>[</mo><mtable><mtr><mtd><mn>3/2</mn></mtd><mtd><mo>−</mo><mn>1/4</mn></mtd></mtr><mtr><mtd><mo>−</mo><mn>1/4</mn></mtd><mtd><mn>3/2</mn></mtd></mtr></mtable><mo>]</mo><mo>[</mo><mtable><mtr><mtd><mi>u</mi></mtd></mtr><mtr><mtd><mi>v</mi></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>5/2</mn></mtd></mtr><mtr><mtd><mn>15</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Multiply both equations by 4 to clear the denominators: 6u − v = 10 € and −u + 6v = 60 €. The first gives v = 6u − 10 €. Substitute this expression into the second:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>−</mo><mi>u</mi><mo>+</mo><mn>6</mn><mo>(</mo><mn>6</mn><mi>u</mi><mo>−</mo><mn>10</mn><mtext> €</mtext><mo>)</mo><mo>=</mo><mn>60</mn><mtext> €</mtext></mrow></math></div></li><li><h3>Finish with exact fractions</h3><p>Expanding gives: (36 − 1)u − 60 € = 60 €, so 35u = 120 €. Dividing by 35 gives u = 120/35 € = 24/7 €, approximately 3.4286 €.</p><p>Return to the first equation: v = 6 × (24/7 €) − 10 € = 144/7 € − 10 € = 74/7 €, approximately 10.5714 €. Fractions are retained throughout the calculation; decimals are used only to display the result.</p><p>For a large grid, we solve the tridiagonal system with a suitable solver; there is no need to form the inverse of its matrix. Elimination in our small system shows the mechanism without introducing the general algorithm.</p></li><li><h3>Check what has actually been obtained</h3><p>Substituting into the scaled equations: 6 × (24/7) − (74/7) = 10 and −(24/7) + 6 × (74/7) = 60. The residuals, obtained by subtracting each right-hand side, are therefore exactly 0 €. Here both new values stay between the boundaries 0 € and 20 €.</p><p>We can also check the equation before collecting terms: for u, u − 0 € must equal μ times the sum of the spatial differences (0 − 2 × 0 + 10) € and (0 € − 2u + v). For v, use (0 − 2 × 10 + 20) € and (u − 2v + 20 €). This check recovers the average of the two curvatures, as well as checking the rearranged system.</p><p>For a sufficiently smooth solution, the scheme has order 2 in time and space: the discretization error is of the order of the sum of Δτ squared and h squared, with fixed scales. Here the payoff has a corner at K; this smoothness is not assured at the start. A correctly solved step does not demonstrate convergence to an exact price. The next unit will examine convergence tests.</p><p>For this linear diffusion problem with prescribed boundaries, time stability requires no bound on the step size. It guarantees neither freedom from oscillations nor accuracy with a large step. The final exercise separates these properties on the same grid.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking at the formulas, explain why a future curvature requires a system, why the right boundary contributes at both times and what a 0 residual lets you check.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I calculate an explicit step and an implicit step, then average their results.”</h3><p>The average applies to the two curvatures in a single step equation. The value at the end enters the curvature at the end. Write this equation before solving; averaging two separate solutions generally defines a different method.</p><a href="#exemple">Review the average of the curvatures and the collection of terms</a></li><li><h3>“The boundary is constant, so I add it only once.”</h3><p>A constant boundary enters each of the two curvatures. The new boundary moves from the left-hand side to the right-hand side; the old boundary was already there. Reconstruct the contribution of μ times their sum.</p><a href="#exemple">Recover the boundary contributions at both times</a></li><li><h3>“Stable means the price can no longer oscillate.”</h3><p>A perturbation can decrease in amplitude while changing sign at each step. Calculate the factor in the transfer exercise, then distinguish its sign from its absolute value.</p><a href="#exercices">Test the alternating perturbation on the same grid</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-bords"><p class="repere">Exercise 1 · Local assembly</p>
+<h3>Recover the right-hand side for the right node</h3><p>Return to the initial step, with μ = 1/4. Without looking at the solved system, recover the right-hand side of the row for v. Identify the old central value, the old boundary and the new boundary separately.</p>
+<label for="reponse-ex-bords">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bords" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bords" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bords" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bords" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The old central value has weight 1 − 2μ. The old interior neighbour is 0 €.</p></details><details class="indice"><summary>Hint 2</summary><p>Move the new boundary term to the right before adding it to the old boundary contribution.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The central value contributes (1 − 2 × 1/4) × 10 € = 5 €. Together, the two boundary values contribute 1/4 × (20 + 20) € = 10 €. The old interior neighbour adds nothing.</p><p>The sum gives 15 €. The equation is −1/4u + 3/2v = 15 €. The new boundary has changed sides and signs; it has not disappeared.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify the boundary at both times, even when its values are equal.</li><li>Justify the positive sign of their contribution on the right.</li><li>Obtain 15 €, with units.</li></ul></details></article><article class="exercice" id="ex-resolution"><p class="repere">Exercise 2 · Solution and diagnosis</p>
+<h3>Reconstruct both prices without rounding</h3><p>Start only from 6u − v = 10 € and −u + 6v = 60 €. Solve the system by elimination, then check both rows. A classmate instead proposes keeping u = 0 € and v = 10 €: explain why this pair fails without appealing to the authority of the course.</p>
+<label for="reponse-ex-resolution">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-resolution" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-resolution" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-resolution" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-resolution" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Isolate v in the first equation, then substitute it into the second.</p></details><details class="indice"><summary>Hint 2</summary><p>To reject a candidate pair, one violated equation is enough; to accept the solution, check both.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>v = 6u − 10 €. After substitution: (36 − 1)u = (60 + 60) €, so u = 24/7 €. Then v = 74/7 €. The decimal values for display are 3.4286 € and 10.5714 €.</p><p>For this solution, the two left-hand sides equal 10 € and 60 € respectively. For the proposed pair, the first row gives 6 × 0 € − 10 € = −10 €, whereas its right-hand side is 10 €. Keeping the old values does not solve the new step.</p><p>These substitutions prove the algebraic consistency of the step. They do not check the choice of PDE or the difference between its continuous solution and the grid solution.</p><p class="petit-titre">Check your reasoning</p><ul><li>Retain fractions through to the check.</li><li>Check both rows for the solution found.</li><li>Reject the proposed pair using a false numerical equality and state the limits of the check.</li></ul></details></article><article class="exercice" id="ex-oscillation"><p class="repere">Exercise 3 · Transfer to the same grid</p>
+<h3>Decay while changing sign</h3><p>Compare two calculations with the same boundaries. Their difference is 0 at the boundaries; suppose it is (ε, −ε) at the interior nodes, where ε is a small amplitude in euros. Only the step changes to Δτ = 4 years for this fictional test. The spatial operator multiplies this perturbation by λ = −3a/(h squared), in inverse years. With q = −λΔτ, the Crank-Nicolson amplitude factor is g = (1 − q/2)/(1 + q/2). Calculate q and g. Deduce whether the difference grows and whether its sign is preserved.</p>
+<label for="reponse-ex-oscillation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-oscillation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-oscillation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-oscillation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-oscillation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At the first node, the centred difference gives 0 − 2ε − ε = −3ε. At the second, it gives the opposite sign: the alternating profile keeps its shape.</p></details><details class="indice"><summary>Hint 2</summary><p>First calculate q = 3 × 50 × 4/100. Then compare the absolute value of g with 1, and examine its sign.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The positive rate −λ is 150/100 = 3/2 per year. Thus q = 3/2 × 4 = 6, dimensionless. q/2 = 3, giving g = (1 − 3)/(1 + 3) = -2/4 = -1/2.</p><p>To recover the supplied formula, call the next amplitude ε′ and apply the time average: (ε′ − ε)/Δτ = λ(ε + ε′)/2. Collecting the terms in ε′ gives (1 + q/2)ε′ = (1 − q/2)ε. Thus ε′ = gε.</p><p>The absolute value of the factor is 1/2: the amplitude is divided by 2 at each step, but the sign reverses. The difference decays while oscillating. This is a perturbation between calculations, rather than a claim that the total prices become negative.</p><p>For positive q, the absolute value of the numerator does not exceed the denominator: the factor stays bounded. However, when q exceeds 2, it becomes negative. This illustrates precisely why stability and freedom from oscillations are separate requirements.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover the factor −3 for the alternating profile with 0 boundaries.</li><li>Obtain q = 6 and g = -1/2, both dimensionless.</li><li>Explain the decay in amplitude and the alternation of sign separately.</li><li>Distinguish the difference between solutions from the total contract price.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="moyenne"><summary><span class="repere">Recall 1</span><span>What exactly does Crank-Nicolson average?</span></summary><p>The slopes of the evolution at the endpoints of the step, here the two curvatures multiplied by a, each with a weight of 1/2. The future curvature depends on the new values; we solve a single implicit equation.</p></details><details class="carte" data-carte="couplage"><summary><span class="repere">Recall 2</span><span>Why must we solve a system rather than fill in the new nodes separately?</span></summary><p>The curvature at a node at the end also uses its neighbours’ values at the end. The unknowns therefore share equations. On our grid, u and v must satisfy both rows simultaneously.</p></details><details class="carte" data-carte="frontieres"><summary><span class="repere">Recall 3</span><span>How does a prescribed boundary enter the right-hand side?</span></summary><p>The old boundary is already on the known side; the new boundary leaves the side containing the unknowns and changes sign. Here their contribution is μ times the sum of the two boundary values.</p></details><details class="carte" data-carte="residu"><summary><span class="repere">Recall 4</span><span>What does a 0 residual in the step equations prove?</span></summary><p>The calculated pair satisfies these discrete equations. This demonstrates neither the validity of the continuous model nor the accuracy of the grid, and it does not establish that convergence has been checked.</p></details><details class="carte" data-carte="stabilite"><summary><span class="repere">Recall 5</span><span>Why is a negative amplitude factor with absolute value less than 1 compatible with stability?</span></summary><p>The perturbation decreases in size but changes sign at each step. Stability bounds its growth; it does not guarantee evolution without oscillations.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the course, then reconstruct this sequence: problem and units → centred curvature → time average → unknowns collected → boundaries at both times → solution → substitution. Finally, explain why a 0 residual and stability are not enough to establish accuracy. Reading or an assisted answer does not establish that a level has been achieved.</p></div><div class="exports"><a class="bouton" download="c183-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxODMtbTQ6bW95ZW5uZSIsCiAgICAgICJ1bml0ZSI6ICJjMTgzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibW95ZW5uZS10ZW1wb3JlbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZXhhY3RseSBkb2VzIENyYW5rLU5pY29sc29uIGF2ZXJhZ2U/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHNsb3BlcyBvZiB0aGUgZXZvbHV0aW9uIGF0IHRoZSBlbmRwb2ludHMgb2YgdGhlIHN0ZXAsIGhlcmUgdGhlIHR3byBjdXJ2YXR1cmVzIG11bHRpcGxpZWQgYnkgYSwgZWFjaCB3aXRoIGEgd2VpZ2h0IG9mIDEvMi4gVGhlIGZ1dHVyZSBjdXJ2YXR1cmUgZGVwZW5kcyBvbiB0aGUgbmV3IHZhbHVlczsgd2Ugc29sdmUgYSBzaW5nbGUgaW1wbGljaXQgZXF1YXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxODMtbTQ6Y291cGxhZ2UiLAogICAgICAidW5pdGUiOiAiYzE4My1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInN5c3RlbWUtY291cGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBtdXN0IHdlIHNvbHZlIGEgc3lzdGVtIHJhdGhlciB0aGFuIGZpbGwgaW4gdGhlIG5ldyBub2RlcyBzZXBhcmF0ZWx5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjdXJ2YXR1cmUgYXQgYSBub2RlIGF0IHRoZSBlbmQgYWxzbyB1c2VzIGl0cyBuZWlnaGJvdXJz4oCZIHZhbHVlcyBhdCB0aGUgZW5kLiBUaGUgdW5rbm93bnMgdGhlcmVmb3JlIHNoYXJlIGVxdWF0aW9ucy4gT24gb3VyIGdyaWQsIHUgYW5kIHYgbXVzdCBzYXRpc2Z5IGJvdGggcm93cyBzaW11bHRhbmVvdXNseS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE4My1tNDpmcm9udGllcmVzIiwKICAgICAgInVuaXRlIjogImMxODMtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJib3Jkcy10ZW1wb3JlbHMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvZXMgYSBwcmVzY3JpYmVkIGJvdW5kYXJ5IGVudGVyIHRoZSByaWdodC1oYW5kIHNpZGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIG9sZCBib3VuZGFyeSBpcyBhbHJlYWR5IG9uIHRoZSBrbm93biBzaWRlOyB0aGUgbmV3IGJvdW5kYXJ5IGxlYXZlcyB0aGUgc2lkZSBjb250YWluaW5nIHRoZSB1bmtub3ducyBhbmQgY2hhbmdlcyBzaWduLiBIZXJlIHRoZWlyIGNvbnRyaWJ1dGlvbiBpcyDOvCB0aW1lcyB0aGUgc3VtIG9mIHRoZSB0d28gYm91bmRhcnkgdmFsdWVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTgzLW00OnJlc2lkdSIsCiAgICAgICJ1bml0ZSI6ICJjMTgzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9ydGVlLWR1LXJlc2lkdSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSAwIHJlc2lkdWFsIGluIHRoZSBzdGVwIGVxdWF0aW9ucyBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgY2FsY3VsYXRlZCBwYWlyIHNhdGlzZmllcyB0aGVzZSBkaXNjcmV0ZSBlcXVhdGlvbnMuIFRoaXMgZGVtb25zdHJhdGVzIG5laXRoZXIgdGhlIHZhbGlkaXR5IG9mIHRoZSBjb250aW51b3VzIG1vZGVsIG5vciB0aGUgYWNjdXJhY3kgb2YgdGhlIGdyaWQsIGFuZCBpdCBkb2VzIG5vdCBlc3RhYmxpc2ggdGhhdCBjb252ZXJnZW5jZSBoYXMgYmVlbiBjaGVja2VkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTgzLW00OnN0YWJpbGl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTgzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3RhYmlsaXRlLWV0LW9zY2lsbGF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBhIG5lZ2F0aXZlIGFtcGxpdHVkZSBmYWN0b3Igd2l0aCBhYnNvbHV0ZSB2YWx1ZSBsZXNzIHRoYW4gMSBjb21wYXRpYmxlIHdpdGggc3RhYmlsaXR5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBwZXJ0dXJiYXRpb24gZGVjcmVhc2VzIGluIHNpemUgYnV0IGNoYW5nZXMgc2lnbiBhdCBlYWNoIHN0ZXAuIFN0YWJpbGl0eSBib3VuZHMgaXRzIGdyb3d0aDsgaXQgZG9lcyBub3QgZ3VhcmFudGVlIGV2b2x1dGlvbiB3aXRob3V0IG9zY2lsbGF0aW9ucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c183-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBleGFjdGx5IGRvZXMgQ3JhbmstTmljb2xzb24gYXZlcmFnZT8JVGhlIHNsb3BlcyBvZiB0aGUgZXZvbHV0aW9uIGF0IHRoZSBlbmRwb2ludHMgb2YgdGhlIHN0ZXAsIGhlcmUgdGhlIHR3byBjdXJ2YXR1cmVzIG11bHRpcGxpZWQgYnkgYSwgZWFjaCB3aXRoIGEgd2VpZ2h0IG9mIDEvMi4gVGhlIGZ1dHVyZSBjdXJ2YXR1cmUgZGVwZW5kcyBvbiB0aGUgbmV3IHZhbHVlczsgd2Ugc29sdmUgYSBzaW5nbGUgaW1wbGljaXQgZXF1YXRpb24uCXRvZGFpIGMxODMtbTQgbW95ZW5uZS10ZW1wb3JlbGxlCldoeSBtdXN0IHdlIHNvbHZlIGEgc3lzdGVtIHJhdGhlciB0aGFuIGZpbGwgaW4gdGhlIG5ldyBub2RlcyBzZXBhcmF0ZWx5PwlUaGUgY3VydmF0dXJlIGF0IGEgbm9kZSBhdCB0aGUgZW5kIGFsc28gdXNlcyBpdHMgbmVpZ2hib3Vyc+KAmSB2YWx1ZXMgYXQgdGhlIGVuZC4gVGhlIHVua25vd25zIHRoZXJlZm9yZSBzaGFyZSBlcXVhdGlvbnMuIE9uIG91ciBncmlkLCB1IGFuZCB2IG11c3Qgc2F0aXNmeSBib3RoIHJvd3Mgc2ltdWx0YW5lb3VzbHkuCXRvZGFpIGMxODMtbTQgc3lzdGVtZS1jb3VwbGUKSG93IGRvZXMgYSBwcmVzY3JpYmVkIGJvdW5kYXJ5IGVudGVyIHRoZSByaWdodC1oYW5kIHNpZGU/CVRoZSBvbGQgYm91bmRhcnkgaXMgYWxyZWFkeSBvbiB0aGUga25vd24gc2lkZTsgdGhlIG5ldyBib3VuZGFyeSBsZWF2ZXMgdGhlIHNpZGUgY29udGFpbmluZyB0aGUgdW5rbm93bnMgYW5kIGNoYW5nZXMgc2lnbi4gSGVyZSB0aGVpciBjb250cmlidXRpb24gaXMgzrwgdGltZXMgdGhlIHN1bSBvZiB0aGUgdHdvIGJvdW5kYXJ5IHZhbHVlcy4JdG9kYWkgYzE4My1tNCBib3Jkcy10ZW1wb3JlbHMKV2hhdCBkb2VzIGEgMCByZXNpZHVhbCBpbiB0aGUgc3RlcCBlcXVhdGlvbnMgcHJvdmU/CVRoZSBjYWxjdWxhdGVkIHBhaXIgc2F0aXNmaWVzIHRoZXNlIGRpc2NyZXRlIGVxdWF0aW9ucy4gVGhpcyBkZW1vbnN0cmF0ZXMgbmVpdGhlciB0aGUgdmFsaWRpdHkgb2YgdGhlIGNvbnRpbnVvdXMgbW9kZWwgbm9yIHRoZSBhY2N1cmFjeSBvZiB0aGUgZ3JpZCwgYW5kIGl0IGRvZXMgbm90IGVzdGFibGlzaCB0aGF0IGNvbnZlcmdlbmNlIGhhcyBiZWVuIGNoZWNrZWQuCXRvZGFpIGMxODMtbTQgcG9ydGVlLWR1LXJlc2lkdQpXaHkgaXMgYSBuZWdhdGl2ZSBhbXBsaXR1ZGUgZmFjdG9yIHdpdGggYWJzb2x1dGUgdmFsdWUgbGVzcyB0aGFuIDEgY29tcGF0aWJsZSB3aXRoIHN0YWJpbGl0eT8JVGhlIHBlcnR1cmJhdGlvbiBkZWNyZWFzZXMgaW4gc2l6ZSBidXQgY2hhbmdlcyBzaWduIGF0IGVhY2ggc3RlcC4gU3RhYmlsaXR5IGJvdW5kcyBpdHMgZ3Jvd3RoOyBpdCBkb2VzIG5vdCBndWFyYW50ZWUgZXZvbHV0aW9uIHdpdGhvdXQgb3NjaWxsYXRpb25zLgl0b2RhaSBjMTgzLW00IHN0YWJpbGl0ZS1ldC1vc2NpbGxhdGlvbgo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eioipd gfkhgf hdyv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Code-reading milestone: identify the method actually present</h3><dl><div><dt>You understand</dt><dd>A numerical calculation is identified by its operations and assumptions. Crank-Nicolson connects two time levels through a time average and a coupled solution; the word “simulation” alone is not enough to identify it.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hkzrpx ynufhy ujhmoc iwvngd pzgpyr pknpfs ahxunb cbrsrn ezkuhg zyeerk vmbzwl fnzfrt mfwnrr izvyan vdafqh fsdgax sqhizf ifknng ltiqcn cfvrrd gddjrf pbnily guymne yphfgm</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 3 to prepare for: reconstruct the step equation without support, justify the boundaries and solve the system. Then distinguish a method seen in an excerpt from one merely mentioned. Reading and an assisted answer do not validate any learning achievement.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">otozgl cwwmbl zginkk llijsa wuhktr zleiwh jgrzjk pntckm qwxdgx yfennr sbwzsg xdptpk cccpyi ypexwx hkkmas xqsrsx tzgnvs swgivk pspzls jcrfff pfswlz bxpogy ksgucg igbqey</span></span></dd></div><div><dt>Next step</dt><dd>Redo the step and explain the oscillating case on another day without help. Continue with c183-m5 for convergence tests. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qhibrn pkxyda hjfgqr mwlwpt szhwwj dlbhsj hebxdy sniyac xqpkqz tymscx mjvcwb kgzddb zkvyfp sp</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c183-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c183-m3.html">Previous</a> · <a href="c183-m5.html">Next</a></nav>
+<footer><p>Course book · C183·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

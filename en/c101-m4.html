@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the mean and autocorrelation of residuals, then distinguish a signal to investigate from evidence that the model is suitable.">
+<title>C101·M4 · Residual diagnostics — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">havwzk bjyxka yjmg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C101·M4</p><h1>Residual diagnostics</h1><p class="objectif"><span>Your goal</span>Calculate the mean and autocorrelation of residuals, then distinguish a signal to investigate from evidence that the model is suitable.</p><p class="prerequis"><strong>Before you start</strong><br>c090-m5 : stationarity · c061-m5 : identifiability and uncertainty · c101-m1 : AR and MA · c101-m2 : ARIMA · c101-m3 : identification</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A meter records the volume of water used each day in a small workshop. The model gives a fitted value of 100 L for each day. Yet the meter reads 102 L for the first 3 days, then 98 L for the next 3. All the data are fictitious; we are not trying to explain actual water consumption.</p><p>The residual is what remains after subtracting the fitted value from the observed volume. A positive residual indicates that the model underestimated the volume; a negative residual indicates an overestimate. Here, the excesses at the beginning exactly offset the shortfalls at the end. Does this cancellation make the problem disappear?</p><p>The diagram keeps the days in order: errors with the same sign remain grouped together. Their mean can be 0 while a pattern over time remains. Examining residuals helps us look for what the fit has left unexplained before trusting it to make forecasts.</p><p>We have a small block of fitted values for a step ahead, supplied after fitting the parameters. The observations needed for lags and the initialisation steps have already been excluded. We are working with daily volumes in litres, at regular intervals and with no missing values. This block serves to diagnose the fit; it does not measure performance on future days.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>Residuals in day order</title><desc>Days 1, 2 and 3 each have a residual of 2 litres; days 4, 5 and 6 each have a residual of -2 litres. The mean is 0 litres, but the signs follow in blocks.</desc><text x="180" y="26" text-anchor="middle">Meter residuals</text><rect x="18" y="46" width="324" height="151" rx="7" class="cadre-neutre" /><line x1="48" y1="66" x2="48" y2="182" class="trait" /><line x1="48" y1="125" x2="325" y2="125" class="trait" /><text x="39" y="90" text-anchor="end" class="petite-etiquette">2</text><text x="39" y="131" text-anchor="end" class="petite-etiquette">0</text><text x="39" y="170" text-anchor="end" class="petite-etiquette">-2</text><text x="27" y="65" class="petite-etiquette">L</text><polyline points="75,85 121,85 167,85 213,165 259,165 305,165" class="trait" /><circle cx="75" cy="85" r="5" class="point-prediction" /><circle cx="121" cy="85" r="5" class="point-prediction" /><circle cx="167" cy="85" r="5" class="point-prediction" /><circle cx="213" cy="165" r="5" class="point-mesure" /><circle cx="259" cy="165" r="5" class="point-mesure" /><circle cx="305" cy="165" r="5" class="point-mesure" /><text x="75" y="220" text-anchor="middle">1</text><text x="121" y="220" text-anchor="middle">2</text><text x="167" y="220" text-anchor="middle">3</text><text x="213" y="220" text-anchor="middle">4</text><text x="259" y="220" text-anchor="middle">5</text><text x="305" y="220" text-anchor="middle">6</text><text x="180" y="249" text-anchor="middle" class="petite-etiquette">Observed day</text></svg><figcaption>The horizontal line marks a residual of 0. Position and sign are enough to read the diagram without its colours: the model first underestimates, then overestimates. The line segments guide the reading in chronological order.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Count neighbouring pairs</title><desc>Of the 5 consecutive pairs, 4 keep the same sign and each contribute 4 square litres. Only one changes sign and contributes -4 square litres. The sum is 12 square litres.</desc><text x="180" y="27" text-anchor="middle">Keep neighbouring pairs</text><text x="180" y="65" text-anchor="middle" class="petite-etiquette">4 pairs with the same sign</text><rect x="30" y="79" width="300" height="47" rx="7" class="cadre-prediction" /><text x="180" y="109" text-anchor="middle">4 × 4 = 16</text><text x="180" y="160" text-anchor="middle" class="petite-etiquette">1 pair changes sign</text><rect x="30" y="174" width="300" height="47" rx="7" class="cadre-neutre" /><text x="180" y="204" text-anchor="middle">2 × (-2) = -4</text><text x="180" y="260" text-anchor="middle" class="resultat">Sum: 12 square litres</text></svg><figcaption>Since the mean is 0 here, the centred deviations are the residuals themselves. The 5 products use only neighbouring days; we do not join the end of the log to its beginning.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep the dates, check the mean, then look for relationships between neighbouring residuals and changes in spread. A sum of 0 is not enough to make the errors unpredictable.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>What the model leaves in the water log</h3><p>The successive volumes are 102, 102, 102, 98, 98, 98 L. Each fitted value is 100 L. Let us calculate the mean of the residuals and their autocorrelation at lag 1, that is, between consecutive days.</p><ol class="etapes"><li><h3>Define the residual and its scale</h3><p>t is the index of the day, from 1 to n; n = 6 counts the usable days. y<sub>t</sub> is the observed volume and ŷ<sub>t</sub> is its fitted value for a step ahead, based on previous observations and the fitted parameters. e<sub>t</sub> is the residual. These quantities are in litres; t and n have no units. We do not re-estimate ARMA or ARIMA in this unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>e</mi><mi>t</mi></msub><mo>=</mo><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mover><mi>y</mi><mo>^</mo></mover><mi>t</mi></msub></mrow></math></div><p>A fitted value for a step ahead is not necessarily a forecast evaluated outside the sample: its parameters may have been estimated using the whole block. If the model works with a transformed or differenced series, the scale of its residuals must be stated; here it remains directly in litres.</p></li><li><h3>Subtract in the correct order</h3><p>At the beginning: 102 − 100 = 2 L. At the end: 98 − 100 = -2 L. The complete sequence is therefore (2, 2, 2, -2, -2, -2) L.</p><p>Check the sign: fitted value + residual must give back the observation. Thus 100 + (-2) = 98 L. The negative error does correspond to an overestimate.</p></li><li><h3>Check the sum without hiding the size of the errors</h3><p>The bar in ē denotes the arithmetic mean of the residuals. Add the deviations to look for a mean offset, then divide by the number of days.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>e</mi><mo>¯</mo></mover><mo>=</mo><mfrac><mrow><msubsup><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>e</mi><mi>t</mi></msub></mrow><mi>n</mi></mfrac><mo>=</mo><mfrac><mrow><mn>6</mn><mo>+</mo><mo>(</mo><mn>-6</mn><mo>)</mo></mrow><mn>6</mn></mfrac><mo>=</mo><mn>0</mn><mtext> L</mtext></mrow></math></div><p>The symbol ∑ means to add the terms at the indicated indices. The sum is 0 L. Yet each residual has an absolute value of 2 L: its distance from 0. The mean absolute error is therefore 12 ÷ 6 = 2 L. A signed mean of 0 does not mean that every fitted value is exact; it can even result from the estimation method.</p></li><li><h3>Define an autocorrelation we can calculate</h3><p>Let u<sub>t</sub> = e<sub>t</sub> − ē be the centred residual, in litres. D sums the squares of all the u<sub>t</sub> values; N sums the products of neighbouring values. D and N are in square litres. r at lag 1 is the ratio N/D, with no units; here it describes the linear tendency of neighbouring deviations to have the same sign or opposite signs.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><msub><mi>u</mi><mi>t</mi></msub><mn>2</mn></msup><mo>;</mo><mi>N</mi><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>2</mn></mrow><mi>n</mi></msubsup><msub><mi>u</mi><mi>t</mi></msub><msub><mi>u</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>r</mi><mn>1</mn></msub><mo>=</mo><mfrac><mi>N</mi><mi>D</mi></mfrac></mrow></math></div><p>We use this standard convention: the denominator uses all the days, and the numerator uses only the available pairs, with the same mean ē. This is not the correlation of two truncated lists centred separately. The calculation requires D to be strictly positive; residuals that are all equal give D = 0 and an undefined autocorrelation.</p></li><li><h3>Calculate the denominator over all the days</h3><p>Since ē = 0 L, the centred deviations remain 2 L and -2 L. Each square is 4 square litres, including for the negative deviation: (-2) × (-2) = 4.</p><p>D = 3 × 4 + 3 × 4 = 12 + 12 = 24 square litres. Independent check: 6 deviations of the same magnitude also give 6 × 4 = 24.</p></li><li><h3>Calculate the numerator without missing a pair</h3><p>The pairs are days (1, 2), (2, 3), (3, 4), (4, 5), (5, 6). There are n − 1 = 5 of them. The successive products are 4, 4, -4, 4, 4 square litres.</p><p>There are 4 positive products and 1 negative product. N = 4 × 4 + (-4) = 16 + (-4) = 12 square litres. Do not add a pair between the last day and the first: the log is not a circle.</p></li><li><h3>Divide, then check</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>r</mi><mn>1</mn></msub><mo>=</mo><mfrac><mn>12</mn><mn>24</mn></mfrac><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>=</mo><mn>0.50</mn></mrow></math></div><p>The square litres cancel. Check: 1/2 × 24 = 12, and the positive sign agrees with most neighbours having the same sign. The fraction is exact; 0.50 is its decimal form using the French decimal separator. We assign no success threshold to this value.</p></li><li><h3>State a diagnosis within its proper scope</h3><p>Findings: no mean offset on this block, but grouped signs and a positive r at lag 1. This structure calls for examining the fit and the chronology; it does not automatically select a new ARIMA order. With only 6 residuals, this descriptive calculation does not establish dependence in the population and is not a significance test.</p><p>Weak white noise is a process with 0 mean, constant finite variance and 0 covariance between distinct dates. Covariance is the theoretical mean of a product of centred deviations; its observed counterpart appears in N. This definition alone does not require independence, which is stronger. A low autocorrelation at a single lag would therefore prove neither white noise nor independence.</p><p>In the diagram, also look for the magnitude widening, narrowing or showing an isolated deviation. Here it remains constant, but this small block does not prove that variance will stay stable in the future. With a sufficiently long series, we would need to examine other lags and the assumptions specific to the model. A bell shape concerns an additional normality assumption, not the definition of white noise. Evaluation on future observations will be covered in the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Explain how a 0 mean and a nonzero absolute error can coexist, then reconstruct the products of neighbours. Finally, state what your diagnosis gives you reason to suspect and what it does not prove.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The mean of the residuals is 0, so my model is good.”</h3><p>The mean lets signs cancel and ignores their order. In the log, the errors remain grouped despite their sum being 0. Compare the signed mean, the absolute size and the products of neighbours before drawing a conclusion.</p><a href="#exemple">Revisit the sum and the pairs in chronological order</a></li><li><h3>“I calculate the correlation of the two shifted lists; it must be the same number.”</h3><p>A correlation that centres each truncated list uses different means and different denominators. Apply the stated convention: a mean over the whole block, all the squares in D and only the available neighbours in N. If D is 0, report the result as undefined.</p><a href="#exemple">Reread the definitions of D, N and r</a></li><li><h3>“An autocorrelation close to 0 proves independence and guarantees the forecasts.”</h3><p>This number examines only a single lag and a linear relationship. Check other lags and the spread; also distinguish diagnosis of the fit from future evaluation. Reading the cited code does not provide that evaluation.</p><a href="#jalon"><span class="milestone-label">Reread the evidence and its limits</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-signes"><p class="repere">Exercise 1 · Warm-up</p>
+<h3>Reconstruct the deviations</h3><p>For the original water log, find the residuals for the first and last days. Then calculate the signed mean and the mean absolute error over the 6 days. Was the model exact every day?</p>
+<label for="reponse-ex-signes">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-signes" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-signes" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-signes" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-signes" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Always subtract the fitted value of 100 L from the observed volume.</p></details><details class="indice"><summary>Hint 2</summary><p>For the absolute mean, replace each negative deviation with its distance from 0 before adding.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>First day: 102 − 100 = 2 L. Last day: 98 − 100 = -2 L. The signed sum is 6 + (-6) = 0 L; the mean is 0 L.</p><p>The absolute value of -2 is 2. The absolute sum is 6 + 6 = 12 L; divided by 6, it gives 2 L. No day has a 0 residual: cancellations are not exact fits.</p><p class="petit-titre">Check your reasoning</p><ul><li>The signs correspond to underestimation and overestimation.</li><li>The means are 0 L and 2 L, with their separate calculations.</li><li>You explain the cancellation without confusing the mean with daily accuracy.</li></ul></details></article><article class="exercice" id="ex-decalage"><p class="repere">Exercise 2 · Application on paper</p>
+<h3>An offset that centring can hide</h3><p>For the same observations and the same dates, lower all fitted values by 3 L: they are now 97 L. Calculate the new residuals, their mean and their centred deviations. Does the autocorrelation at lag 1 change? What additional flaw must be reported?</p>
+<label for="reponse-ex-decalage">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-decalage" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-decalage" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-decalage" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-decalage" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Lowering the fitted value increases each residual by the same offset.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the residuals after subtracting their new mean; do not replace the mean check with the autocorrelation check.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new residuals are 5 L at the beginning and 1 L at the end. Their sum is 15 + 3 = 18 L. Their mean is 18 ÷ 6 = 3 L: the model underestimates on average over this block.</p><p>Centring: 5 − 3 = 2 L and 1 − 3 = -2 L. The centred deviations and their order are exactly the same as at the start. D and N therefore remain 24 and 12 square litres; r is still 1/2. Centred autocorrelation does not detect this added mean offset.</p><p class="petit-titre">Check your reasoning</p><ul><li>You find the two new residuals and the mean 3 L.</li><li>You justify the invariance of r using the centred deviations, not a visual resemblance.</li><li>You report the mean offset and the persistent structure over time separately.</li></ul></details></article><article class="exercice" id="ex-ordre"><p class="repere">Exercise 3 · Critical transfer</p>
+<h3>A copy of the log has lost its dates</h3><p>A copy of the same log reorders the residuals as follows: (2, -2, 2, -2, 2, -2) L. Find the mean, D, N and the autocorrelation at lag 1 of this copy. Someone claims that order does not matter because the mean and the mean absolute error are preserved. Respond, then state which log to use for the actual diagnosis.</p>
+<label for="reponse-ex-ordre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ordre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ordre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ordre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ordre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The copy contains exactly the same values; the sums and squares do not change.</p></details><details class="indice"><summary>Hint 2</summary><p>In this copy, all consecutive pairs have opposite signs. Count them without closing the sequence into a circle.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mean remains 0 L, D remains 24 square litres and the mean absolute error remains 2 L. Each pair now contributes -4 square litres. N = 5 × (-4) = -20 square litres.</p><p>The autocorrelation becomes -20/24 = -5/6 ≈ -0.83, with no units. The signs alternate: the negative result describes a different order, while the initial positive result described blocks. The same collection of values can therefore give different diagnoses of patterns over time.</p><p>Return to the original dates, without sorting or reordering to get a desired number. This copy demonstrates the loss of information; it does not fix the model. Neither result, on such a short block, validates a noise distribution or future performance.</p><p class="petit-titre">Check your reasoning</p><ul><li>You keep the values but change the products of neighbours.</li><li>You obtain exactly -5/6 and explain its sign.</li><li>You restore the actual dates and reject using the permutation to validate the model.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="residu"><summary><span class="repere">Recall 1</span><span>How do you define and check the sign of a residual from the meter?</span></summary><p>Residual = observed volume − fitted value, in litres. Positive: underestimation; negative: overestimation. Fitted value + residual must give back the observation.</p></details><details class="carte" data-carte="bilan"><summary><span class="repere">Recall 2</span><span>Why is a 0 residual mean not enough?</span></summary><p>It may result from cancellations, or even from the estimation method. It checks neither the size of the errors nor their order. The log keeps blocks of the same sign despite its 0 mean.</p></details><details class="carte" data-carte="autocorrelation"><summary><span class="repere">Recall 3</span><span>How do you reconstruct the autocorrelation at lag 1 using our convention?</span></summary><p>Subtract the mean from all the residuals; sum the products of neighbours in N and all the squares in D; calculate N/D if D is positive. The units cancel. Do not centre two truncated lists separately.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>What would a low autocorrelation at a single lag fail to prove?</span></summary><p>It would prove neither the absence of relationships at other lags, nor constant variance, nor independence. Weak white noise requires 0 mean, constant finite variance and 0 covariances at nonzero lags. Future performance requires a separate evaluation.</p></details><details class="carte" data-carte="centrage"><summary><span class="repere">Recall 5</span><span>Why check the mean before the centred autocorrelation?</span></summary><p>A common offset in the residuals shifts their mean, but disappears on centring. Centred autocorrelation can remain identical even though a mean offset has appeared. The checks answer different questions.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without rereading: define the residual with its sign and unit; explain what its mean checks; reconstruct N and D while keeping the dates; interpret the sign of their ratio; name the checks and evidence still missing. Reading, an open solution or an assisted answer does not establish that any level has been attained.</p></div><div class="exports"><a class="bouton" download="c101-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDEtbTQ6cmVzaWR1IiwKICAgICAgInVuaXRlIjogImMxMDEtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXNpZHUtYWp1c3RlbWVudCIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGRlZmluZSBhbmQgY2hlY2sgdGhlIHNpZ24gb2YgYSByZXNpZHVhbCBmcm9tIHRoZSBtZXRlcj8iLAogICAgICAicmVwb25zZSI6ICJSZXNpZHVhbCA9IG9ic2VydmVkIHZvbHVtZSDiiJIgZml0dGVkIHZhbHVlLCBpbiBsaXRyZXMuIFBvc2l0aXZlOiB1bmRlcmVzdGltYXRpb247IG5lZ2F0aXZlOiBvdmVyZXN0aW1hdGlvbi4gRml0dGVkIHZhbHVlICsgcmVzaWR1YWwgbXVzdCBnaXZlIGJhY2sgdGhlIG9ic2VydmF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAxLW00OmJpbGFuIiwKICAgICAgInVuaXRlIjogImMxMDEtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb3llbm5lLWV0LW9yZHJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBhIDAgcmVzaWR1YWwgbWVhbiBub3QgZW5vdWdoPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IG1heSByZXN1bHQgZnJvbSBjYW5jZWxsYXRpb25zLCBvciBldmVuIGZyb20gdGhlIGVzdGltYXRpb24gbWV0aG9kLiBJdCBjaGVja3MgbmVpdGhlciB0aGUgc2l6ZSBvZiB0aGUgZXJyb3JzIG5vciB0aGVpciBvcmRlci4gVGhlIGxvZyBrZWVwcyBibG9ja3Mgb2YgdGhlIHNhbWUgc2lnbiBkZXNwaXRlIGl0cyAwIG1lYW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDEtbTQ6YXV0b2NvcnJlbGF0aW9uIiwKICAgICAgInVuaXRlIjogImMxMDEtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhdXRvY29ycmVsYXRpb24tcmVzaWR1ZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IHJlY29uc3RydWN0IHRoZSBhdXRvY29ycmVsYXRpb24gYXQgbGFnIDEgdXNpbmcgb3VyIGNvbnZlbnRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiU3VidHJhY3QgdGhlIG1lYW4gZnJvbSBhbGwgdGhlIHJlc2lkdWFsczsgc3VtIHRoZSBwcm9kdWN0cyBvZiBuZWlnaGJvdXJzIGluIE4gYW5kIGFsbCB0aGUgc3F1YXJlcyBpbiBEOyBjYWxjdWxhdGUgTi9EIGlmIEQgaXMgcG9zaXRpdmUuIFRoZSB1bml0cyBjYW5jZWwuIERvIG5vdCBjZW50cmUgdHdvIHRydW5jYXRlZCBsaXN0cyBzZXBhcmF0ZWx5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAxLW00OmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAxLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlLWRpYWdub3N0aWMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCB3b3VsZCBhIGxvdyBhdXRvY29ycmVsYXRpb24gYXQgYSBzaW5nbGUgbGFnIGZhaWwgdG8gcHJvdmU/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgd291bGQgcHJvdmUgbmVpdGhlciB0aGUgYWJzZW5jZSBvZiByZWxhdGlvbnNoaXBzIGF0IG90aGVyIGxhZ3MsIG5vciBjb25zdGFudCB2YXJpYW5jZSwgbm9yIGluZGVwZW5kZW5jZS4gV2VhayB3aGl0ZSBub2lzZSByZXF1aXJlcyAwIG1lYW4sIGNvbnN0YW50IGZpbml0ZSB2YXJpYW5jZSBhbmQgMCBjb3ZhcmlhbmNlcyBhdCBub256ZXJvIGxhZ3MuIEZ1dHVyZSBwZXJmb3JtYW5jZSByZXF1aXJlcyBhIHNlcGFyYXRlIGV2YWx1YXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDEtbTQ6Y2VudHJhZ2UiLAogICAgICAidW5pdGUiOiAiYzEwMS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRpYWdub3N0aWNzLWNvbXBsZW1lbnRhaXJlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2hlY2sgdGhlIG1lYW4gYmVmb3JlIHRoZSBjZW50cmVkIGF1dG9jb3JyZWxhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJBIGNvbW1vbiBvZmZzZXQgaW4gdGhlIHJlc2lkdWFscyBzaGlmdHMgdGhlaXIgbWVhbiwgYnV0IGRpc2FwcGVhcnMgb24gY2VudHJpbmcuIENlbnRyZWQgYXV0b2NvcnJlbGF0aW9uIGNhbiByZW1haW4gaWRlbnRpY2FsIGV2ZW4gdGhvdWdoIGEgbWVhbiBvZmZzZXQgaGFzIGFwcGVhcmVkLiBUaGUgY2hlY2tzIGFuc3dlciBkaWZmZXJlbnQgcXVlc3Rpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c101-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHlvdSBkZWZpbmUgYW5kIGNoZWNrIHRoZSBzaWduIG9mIGEgcmVzaWR1YWwgZnJvbSB0aGUgbWV0ZXI/CVJlc2lkdWFsID0gb2JzZXJ2ZWQgdm9sdW1lIOKIkiBmaXR0ZWQgdmFsdWUsIGluIGxpdHJlcy4gUG9zaXRpdmU6IHVuZGVyZXN0aW1hdGlvbjsgbmVnYXRpdmU6IG92ZXJlc3RpbWF0aW9uLiBGaXR0ZWQgdmFsdWUgKyByZXNpZHVhbCBtdXN0IGdpdmUgYmFjayB0aGUgb2JzZXJ2YXRpb24uCXRvZGFpIGMxMDEtbTQgcmVzaWR1LWFqdXN0ZW1lbnQKV2h5IGlzIGEgMCByZXNpZHVhbCBtZWFuIG5vdCBlbm91Z2g/CUl0IG1heSByZXN1bHQgZnJvbSBjYW5jZWxsYXRpb25zLCBvciBldmVuIGZyb20gdGhlIGVzdGltYXRpb24gbWV0aG9kLiBJdCBjaGVja3MgbmVpdGhlciB0aGUgc2l6ZSBvZiB0aGUgZXJyb3JzIG5vciB0aGVpciBvcmRlci4gVGhlIGxvZyBrZWVwcyBibG9ja3Mgb2YgdGhlIHNhbWUgc2lnbiBkZXNwaXRlIGl0cyAwIG1lYW4uCXRvZGFpIGMxMDEtbTQgbW95ZW5uZS1ldC1vcmRyZQpIb3cgZG8geW91IHJlY29uc3RydWN0IHRoZSBhdXRvY29ycmVsYXRpb24gYXQgbGFnIDEgdXNpbmcgb3VyIGNvbnZlbnRpb24/CVN1YnRyYWN0IHRoZSBtZWFuIGZyb20gYWxsIHRoZSByZXNpZHVhbHM7IHN1bSB0aGUgcHJvZHVjdHMgb2YgbmVpZ2hib3VycyBpbiBOIGFuZCBhbGwgdGhlIHNxdWFyZXMgaW4gRDsgY2FsY3VsYXRlIE4vRCBpZiBEIGlzIHBvc2l0aXZlLiBUaGUgdW5pdHMgY2FuY2VsLiBEbyBub3QgY2VudHJlIHR3byB0cnVuY2F0ZWQgbGlzdHMgc2VwYXJhdGVseS4JdG9kYWkgYzEwMS1tNCBhdXRvY29ycmVsYXRpb24tcmVzaWR1ZWxsZQpXaGF0IHdvdWxkIGEgbG93IGF1dG9jb3JyZWxhdGlvbiBhdCBhIHNpbmdsZSBsYWcgZmFpbCB0byBwcm92ZT8JSXQgd291bGQgcHJvdmUgbmVpdGhlciB0aGUgYWJzZW5jZSBvZiByZWxhdGlvbnNoaXBzIGF0IG90aGVyIGxhZ3MsIG5vciBjb25zdGFudCB2YXJpYW5jZSwgbm9yIGluZGVwZW5kZW5jZS4gV2VhayB3aGl0ZSBub2lzZSByZXF1aXJlcyAwIG1lYW4sIGNvbnN0YW50IGZpbml0ZSB2YXJpYW5jZSBhbmQgMCBjb3ZhcmlhbmNlcyBhdCBub256ZXJvIGxhZ3MuIEZ1dHVyZSBwZXJmb3JtYW5jZSByZXF1aXJlcyBhIHNlcGFyYXRlIGV2YWx1YXRpb24uCXRvZGFpIGMxMDEtbTQgbGltaXRlLWRpYWdub3N0aWMKV2h5IGNoZWNrIHRoZSBtZWFuIGJlZm9yZSB0aGUgY2VudHJlZCBhdXRvY29ycmVsYXRpb24/CUEgY29tbW9uIG9mZnNldCBpbiB0aGUgcmVzaWR1YWxzIHNoaWZ0cyB0aGVpciBtZWFuLCBidXQgZGlzYXBwZWFycyBvbiBjZW50cmluZy4gQ2VudHJlZCBhdXRvY29ycmVsYXRpb24gY2FuIHJlbWFpbiBpZGVudGljYWwgZXZlbiB0aG91Z2ggYSBtZWFuIG9mZnNldCBoYXMgYXBwZWFyZWQuIFRoZSBjaGVja3MgYW5zd2VyIGRpZmZlcmVudCBxdWVzdGlvbnMuCXRvZGFpIGMxMDEtbTQgZGlhZ25vc3RpY3MtY29tcGxlbWVudGFpcmVzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">havwzk bjyxka yjmg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>From the residual to a verifiable diagnosis</h3><dl><div><dt>What you understand</dt><dd>Residuals that are centred overall can retain a chronological structure. The mean, the size of the errors, relationships between dates and the spread require complementary checks.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sbbmlq gcfxbv gpkhag ydcxfe ciiyqc inwgan gqyvvk pejcyk bkphsw vpgfeg rhcrfj kogzoj cdarpx hvuclk rujhgs fagnmn xnhwmv evsbnc csxnuq sazvne tzccmw pgvbel xrzcvh berzdb</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2: repeat the calculation from the log, define each quantity and answer the objection about the 0 mean. An assisted answer remains assisted; it does not count as unaided recall. Reading alone does not validate any level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qfnojj dootqe pdfkyg lahrjl gupxkt xsmcbn bqifue pkyimu skaksr vwyhtm cgvmgc aayftp cfyytk hokaap ijiixj akqpfo woiujx lvxjcw ihydaq rhzoec zkxtkf obwbzf wxdpif qynqvq</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the calculations and the objection without support after a delay. The next unit will cover rolling-origin forecasting. To then connect this course to actual operation, a consumer and an authorised evaluation will still need to be traced; no activation is part of this page.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c101-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c101-m3.html">Previous</a> · <a href="c101-m5.html">Next</a></nav>
+<footer><p>Course book · C101·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

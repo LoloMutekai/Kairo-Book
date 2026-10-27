@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Reconstruct a jump process by separating drift, large jumps and compensated small jumps, then check that changing the threshold leaves the path unchanged.">
+<title>C228·M3 · Jump decomposition — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kpgccf socsxy rimb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C228·M3</p><h1>Jump decomposition</h1><p class="objectif"><span>Your goal</span>Reconstruct a jump process by separating drift, large jumps and compensated small jumps, then check that changing the threshold leaves the path unchanged.</p><p class="prerequis"><strong>Before you start</strong><br>c227-m5 : Ito-Tanaka · c166-m5 : spectral truncation · c173-m5 : completeness · c228-m1 : characteristic function · c228-m2 : Levy-Khintchine</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Imagine a fictional market quote whose cumulative change we track in points. Between events, it rises steadily. Small announcements make it rise in steps of 0.25 points; major announcements make it fall in steps of -2 points. We want to account for these movements without calculating a contract price.</p><p>To read the path, we can separate the steps using a size threshold. “Large” means large in absolute value, so our negative jump is large. The threshold classifies events; it does not remove their effect.</p><p>The small steps can contribute an average increase. To isolate their fluctuation around that mean, we subtract the expected contribution. This is compensation. The mean removed must then be added to the deterministic part; otherwise, we would no longer be describing the same quote.</p><p>All parameters, counts and paths on this page are fictional. The chosen model has a finite number of jumps on every bounded interval. It lets us calculate exactly what the general Levy-Ito decomposition also does when there are infinitely many small jumps.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Sort jumps by absolute size</title><desc>Over 2 hours, the fictional path contains 6 small jumps of 0.25 points and 1 large jump of -2 points. The threshold is 1 point. Sign and size are separate pieces of information.</desc><text x="180" y="29" text-anchor="middle">Threshold c = 1 point</text><rect x="16" y="51" width="154" height="151" rx="7" class="cadre-prediction" /><rect x="190" y="51" width="154" height="151" rx="7" class="cadre-resultat" /><text x="93" y="80" text-anchor="middle">Small: |x| ≤ c</text><text x="267" y="80" text-anchor="middle">Large: |x| &gt; c</text><text x="93" y="117" text-anchor="middle">+0.25 points</text><text x="267" y="117" text-anchor="middle">-2 points</text><text x="93" y="151" text-anchor="middle">6 events</text><text x="267" y="151" text-anchor="middle">1 event</text><text x="93" y="184" text-anchor="middle">+1.50 points</text><text x="267" y="184" text-anchor="middle">-2 points</text><text x="180" y="241" text-anchor="middle">Same duration: 2 h</text></svg><figcaption>The boxes show the observed sums before compensation. The threshold applies to absolute size; 0 jumps are not events. Here, a jump exactly at the threshold counts as small.</figcaption></figure><figure><svg viewBox="0 0 360 294" xmlns="http://www.w3.org/2000/svg" role="img"><title>Remove the mean and preserve the total</title><desc>The small jumps sum to 1.50 points; their expected sum is 2 points. The compensated remainder is -0.50 points. With the adjusted drift of 4 points and large jumps of -2 points, the total remains 1.50 points.</desc><rect x="20" y="14" width="320" height="62" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">Small: observed − expected</text><text x="180" y="64" text-anchor="middle">1.50 − 2 = -0.50 points</text><line x1="180" y1="76" x2="180" y2="102" class="trait" /><rect x="20" y="102" width="320" height="62" rx="7" class="cadre-neutre" /><text x="180" y="129" text-anchor="middle">Adjusted drift: 4 points</text><text x="180" y="152" text-anchor="middle">Large jumps: -2 points</text><line x1="180" y1="164" x2="180" y2="190" class="trait" /><rect x="20" y="190" width="320" height="82" rx="7" class="cadre-resultat" /><text x="180" y="221" text-anchor="middle">Reconstructed change</text><text x="180" y="252" text-anchor="middle">4 + (-0.50) + (-2) = 1.50 points</text></svg><figcaption>The mean of the small jumps is transferred to the drift, then subtracted from the small steps. These operations cancel exactly. The diagram is an accounting of contributions, with no time axis or simulated path.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Set the threshold, compensate the small jumps and adjust the drift together. A centered fluctuation can be negative even when all its steps are positive.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Accounting for a quote over 2 hours</h3><p>The raw continuous slope is d = 1 point/h. Small jumps have size a = 0.25 points and intensity λₚ = 4 h⁻¹; large jumps have size b = -2 points and intensity λ_g = 1 h⁻¹. Over T = 2 h, the observed counts are Nₚ(T) = 6 and N_g(T) = 1. Set c = 1 point. No Brownian term is added in this example.</p><ol class="etapes"><li><h3>From the Levy triplet to a path</h3><p>X<sub>t</sub> denotes the cumulative change in points, with X initially equal to 0. Time t is in hours. A Levy process has independent increments whose distribution depends only on the duration; it is continuous in probability. We use its version with paths that are right continuous and have left limits. A jump at time s is ΔX<sub>s</sub> = X<sub>s</sub> − X<sub>s-</sub>, where X<sub>s-</sub> is the limit just before s.</p><p>The Levy-Ito decomposition gives a path interpretation of the triplet from the previous unit. For the positive threshold c, γ_c is the drift under this convention, in points/h. W<sub>t</sub> is a standard Brownian motion with mean 0 and variance t; its unit is the square root of an hour. The coefficient σ is nonnegative, is measured in points per square root of an hour, and measures its continuous contribution. Jᶜ collects jumps with absolute size greater than c; Mᶜ collects compensated small jumps. The time subscript indicates the time; the superscript c on J and M indicates the threshold. All terms below are in points.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><msub><mi>γ</mi><mi>c</mi></msub><mi>t</mi><mo>+</mo><mi>σ</mi><msub><mi>W</mi><mi>t</mi></msub><mo>+</mo><msubsup><mi>J</mi><mi>t</mi><mi>c</mi></msubsup><mo>+</mo><msubsup><mi>M</mi><mi>t</mi><mi>c</mi></msubsup></mrow></math></div><p>The Brownian motion and the jump measure are independent. Our quote model will use σ = 0. This separation describes the sources of movement; it does not yet establish anything about financial replication.</p></li><li><h3>Define what is counted and what is subtracted</h3><p>For a set A of sizes bounded away from 0, N((0, t] × A) counts the times s up to t at which ΔX<sub>s</sub> belongs to A. N is the Poisson random measure of jumps. The Levy measure ν gives their intensity: ν(A) is the mean number of events per hour, and tν(A) is the expected count. ν does not give the probability of an individual size; its total mass can be infinite.</p><p>The size x is in points; s is a time in hours, and ds is an element of duration. The lower cutoff ε is in points. The notation N(ds, dx) sums events at time s with size x. The compensator ds ν(dx) gives their infinitesimal mean; the compensated measure is Ñ(ds, dx) = N(ds, dx) − ds ν(dx). Here, the symbol ∫ denotes a sum weighted by the sizes, or its limit. For large jumps:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>J</mi><mi>t</mi><mi>c</mi></msubsup><mo>=</mo><msub><mo>∫</mo><mrow><mo>(</mo><mn>0</mn><mo>,</mo><mi>t</mi><mo>]</mo><mo>×</mo><mo>{</mo><mo>|</mo><mi>x</mi><mo>|</mo><mo>&gt;</mo><mi>c</mi><mo>}</mo></mrow></msub><mi>x</mi><mi>N</mi><mo>(</mo><mi>ds</mi><mo>,</mo><mi>dx</mi><mo>)</mo></mrow></math></div><p>There are almost surely finitely many large jumps over any bounded time interval. For small jumps, first introduce a positive lower cutoff ε:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>M</mi><mi>t</mi><mrow><mi>ε</mi><mo>,</mo><mi>c</mi></mrow></msubsup><mo>=</mo><msub><mo>∫</mo><mrow><mo>(</mo><mn>0</mn><mo>,</mo><mi>t</mi><mo>]</mo><mo>×</mo><mo>{</mo><mi>ε</mi><mo>&lt;</mo><mo>|</mo><mi>x</mi><mo>|</mo><mo>≤</mo><mi>c</mi><mo>}</mo></mrow></msub><mi>x</mi><mo>[</mo><mi>N</mi><mo>(</mo><mi>ds</mi><mo>,</mo><mi>dx</mi><mo>)</mo><mo>−</mo><mi>ds</mi><mi>ν</mi><mo>(</mo><mi>dx</mi><mo>)</mo><mo>]</mo></mrow></math></div><p>For fixed ε, this is exactly the observed sum of the selected sizes minus t times their mean contribution per hour. The words “small” and “large” refer to this threshold convention, rather than two universal distributions.</p></li><li><h3>Understand why compensation makes the limit possible</h3><p>The Levy measure has no mass at 0 and satisfies the following integrability condition over all real sizes. This notation normalizes the sizes by c to compare dimensionless quantities. It implies that the integral of squared sizes over the small sizes is finite, but the integral of |x| need not be.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>∫</mo><mtext>min</mtext><mo>(</mo><mn>1</mn><mo>,</mo><msup><mrow><mo>(</mo><mfrac><mi>x</mi><mi>c</mi></mfrac><mo>)</mo></mrow><mn>2</mn></msup><mo>)</mo><mi>ν</mi><mo>(</mo><mi>dx</mi><mo>)</mo><mo>&lt;</mo><mo>∞</mo></mrow></math></div><p>For 0 &lt; η &lt; ε ≤ c, η is a second lower cutoff, in points. The isometry for compensated Poisson sums gives the mean square of their difference. E denotes expectation, the mean under the model:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><msup><mrow><mo>(</mo><msubsup><mi>M</mi><mi>t</mi><mrow><mi>η</mi><mo>,</mo><mi>c</mi></mrow></msubsup><mo>−</mo><msubsup><mi>M</mi><mi>t</mi><mrow><mi>ε</mi><mo>,</mo><mi>c</mi></mrow></msubsup><mo>)</mo></mrow><mn>2</mn></msup><mo>]</mo><mo>=</mo><mi>t</mi><msub><mo>∫</mo><mrow><mi>η</mi><mo>&lt;</mo><mo>|</mo><mi>x</mi><mo>|</mo><mo>≤</mo><mi>ε</mi></mrow></msub><msup><mi>x</mi><mn>2</mn></msup><mi>ν</mi><mo>(</mo><mi>dx</mi><mo>)</mo></mrow></math></div><p>On a bounded band of sizes bounded away from 0, the number of jumps has a Poisson distribution. The variance of their sum is the mean number of jumps multiplied by the mean squared size. Subtracting the compensator centers the sum without changing this variance, giving the preceding identity.</p><p>The right side tends to 0 as the cutoffs decrease to 0. The compensated sums therefore have a mean square limit, called Mᶜ. This term is a centered martingale: its future increment has conditional mean 0 given the past. It can nevertheless be nonzero on a path.</p><p>The existence of this limit does not justify a raw sum of all small jumps. That sum is absolutely summable when the integral of |x| over these sizes is finite; this stronger condition is not automatic. The Brownian component σW remains a separate term in the decomposition. Our finite model needs no delicate limiting argument.</p></li><li><h3>Specify the finite model completely</h3><p>N<sub>p</sub>(t) and N_g(t), where p labels small jumps and g labels large jumps, are independent homogeneous Poisson processes with respective intensities λ<sub>p</sub> and λ_g. The counts are dimensionless; λ denotes the intensity of the count considered, in h⁻¹. Each count over a duration t has expectation and variance λt. The intensities are constant; the sizes a and b are deterministic. Our raw model is therefore:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><mi>d</mi><mi>t</mi><mo>+</mo><mi>a</mi><msub><mi>N</mi><mi>p</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>+</mo><mi>b</mi><msub><mi>N</mi><mi>g</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo></mrow></math></div><p>The Levy measure is ν = λ<sub>p</sub> δ<sub>a</sub> + λ_g δᵦ. δ<sub>a</sub> assigns unit mass to size a and no mass to any other size; δᵦ does the same for b. Its total mass is 5 h⁻¹, so the activity is finite. The expected counts over T are 8 small jumps and 2 large jumps, giving 10 events on average; these do not determine the observed counts.</p><p>Since 0 &lt; |a| ≤ c &lt; |b|, only family a is compensated. Adding and subtracting aλ<sub>p</sub>t in the raw formula requires γ_c = d + aλ<sub>p</sub>. The mean rate of the small steps is 0.25 × 4 = 1 point/h. The drift in the compensated form is therefore 1 + 1 = 2 points/h. It differs from the raw slope d between events.</p></li><li><h3>Calculate the fluctuation of the small steps</h3><p>The expected count is λ<sub>p</sub>T = 4 × 2 = 8. The path has only 6 such events. The raw sum is aN<sub>p</sub>(T) = 0.25 × 6 = 1.50 points. Its theoretical mean is aλ<sub>p</sub>T = 1 × 2 = 2 points.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>M</mi><mi>T</mi><mi>c</mi></msubsup><mo>=</mo><mi>a</mi><mo>(</mo><msub><mi>N</mi><mi>p</mi></msub><mo>(</mo><mi>T</mi><mo>)</mo><mo>−</mo><msub><mi>λ</mi><mi>p</mi></msub><mi>T</mi><mo>)</mo><mo>=</mo><mn>1.50</mn><mo>−</mo><mn>2</mn><mo>=</mo><mn>-0.50</mn><mtext> point</mtext></mrow></math></div><p>The negative result means there were fewer increases than expected. It does not turn any positive small step into a negative jump: compensation adds a downward slope between events without changing their sizes.</p></li><li><h3>Assemble the terms and check against the raw sum</h3><p>The large jump is not compensated: Jᶜ at T is bN_g(T) = (-2) × 1 = -2 points. The deterministic part is γ_cT = 2 × 2 = 4 points. The Brownian term is 0 points in this model.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>T</mi></msub><mo>=</mo><mn>4</mn><mo>+</mo><mo>(</mo><mn>-0.50</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>-2</mn><mo>)</mo><mo>=</mo><mn>1.50</mn><mtext> point</mtext></mrow></math></div><p>Independent check: in the raw model, dT = 2 points; add 1.50 points, then -2 points. This gives 2 + 1.50 + (-2) = 1.50 points. The results agree because the added drift and the subtracted mean cancel, rather than because the observed counts equal their means.</p></li><li><h3>Distinguish path, mean and variance</h3><p>In this example with bounded sizes, all the moments used exist. E[Mᶜ at T] = 0, but E[Jᶜ at T] = bλ_gT = -4 points. The total mean rate is γ_c + bλ_g = 2 + (-2) = 0 points/h. Thus E[X at T] = 0 points; the observed path nevertheless ends at 1.50 points.</p><p>Var denotes variance, in squared points. Compensation does not change the variance of a sum. Independence of the counts allows their variances to be added:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>Var</mtext><mo>(</mo><msub><mi>X</mi><mi>T</mi></msub><mo>)</mo><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><msub><mi>λ</mi><mi>p</mi></msub><mi>T</mi><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup><msub><mi>λ</mi><mi>g</mi></msub><mi>T</mi></mrow></math></div><p>The small jump term gives 1/16 × 8 = 0.50 points²; the large jump term gives 4 × 2 = 8 points². Total: 8.50 points². A negative jump contributes positively to the variance. For a general Levy process, having finitely many large jumps does not guarantee their integrability: a finite total mean or variance cannot always be written down.</p></li><li><h3>Prepare to change the threshold</h3><p>If a threshold c′ greater than c brings new sizes into the compensated term, their sum loses its mean. The same mean per hour must be added to γ_c. For fixed positive thresholds, the band between them is bounded away from 0 and bounded above, so the following integral is finite:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>γ</mi><mrow><mi>c</mi><mo>′</mo></mrow></msub><mo>=</mo><msub><mi>γ</mi><mi>c</mi></msub><mo>+</mo><msub><mo>∫</mo><mrow><mi>c</mi><mo>&lt;</mo><mo>|</mo><mi>x</mi><mo>|</mo><mo>≤</mo><mi>c</mi><mo>′</mo></mrow></msub><mi>x</mi><mi>ν</mi><mo>(</mo><mi>dx</mi><mo>)</mo></mrow></math></div><p>The prime marks the new convention, rather than a derivative. The integral is signed: compensating an additional negative family reduces the drift. In the final exercise, c′ = 3 points will include our family b. The decomposition will change while every value of X remains identical.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Cover the calculations. Explain why γ_c differs from d, why the compensated small jump term is negative, and where its removed mean reappears. Then reconstruct the two ways of accounting for the same path, with their units.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Compensation makes the small steps disappear.”</h3><p>The jump sizes stay the same. A continuous mean trend is subtracted. Even without any small event, the compensated term can be negative: it measures the difference from what was expected.</p><a href="#exercices">Test a period with no small announcement</a></li><li><h3>“The drift γ_c must be the mean of X per hour.”</h3><p>Large jumps remain uncompensated under this convention and can have a nonzero mean. In our example, their mean is added to γ_c to obtain the total mean rate. The existence of this mean must also be checked.</p><a href="#exemple">Review mean, path and variance</a></li><li><h3>“I move the threshold while keeping the same drift.”</h3><p>A newly compensated family loses its mean in the jump term. The drift must gain that same signed mean. Compare the complete sums before and after; the small and large components alone are not invariant.</p><a href="#exercices">Recalculate the contributions with the larger threshold</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-sans-annonce"><p class="repere">Exercise 1 · Direct application</p>
+<h3>No small announcement</h3><p>Keep T = 2 h, the intensities and c = 1 point, but suppose Nₚ(T) = 0. Calculate only Mᶜ at T. Why is it nonzero even though no small jump occurred?</p>
+<label for="reponse-ex-sans-annonce">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-sans-annonce" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-sans-annonce" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-sans-annonce" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-sans-annonce" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The expected count remains λₚT; it does not become 0 when the observed count is 0.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract the mean contribution of 2 points from the raw sum of 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The observed sum is 0 points. The model mean remains aλ<sub>p</sub>T = 2 points. The compensated term is therefore 0 − 2 = -2 points.</p><p>Between small announcements, the compensation decreases at the rate aλ<sub>p</sub> = 1 point/h. This continuous movement reflects the shortfall in announcements relative to the mean. A centered martingale does not have an identically 0 path.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain -2 points without changing the intensity.</li><li>Distinguish a model mean from an observed count.</li><li>Explain the slope between events without inventing a negative jump.</li></ul></details></article><article class="exercice" id="ex-double-moyenne"><p class="repere">Exercise 2 · Calculation diagnosis</p>
+<h3>A mean counted twice</h3><p>Return to the initial counts. Someone calculates γ_cT + aNₚ(T) + bN_g(T), using γ_c = 2 points/h. Calculate their result, find its difference from the correct result, and give two equivalent ways to fix the calculation.</p>
+<label for="reponse-ex-double-moyenne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-double-moyenne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-double-moyenne" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-double-moyenne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-double-moyenne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>γ_c already includes the mean of the small steps.</p></details><details class="indice"><summary>Hint 2</summary><p>You can keep γ_c and compensate the small jumps, or keep the small jumps uncompensated and return to d.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Their sum gives 4 + 1.50 + (-2) = 3.50 points. The correct result is 1.50 points. The excess is 3.50 − 1.50 = 2 points, exactly aλ<sub>p</sub>T.</p><p>First fix: subtract 2 points from the small jump term while keeping γ_cT. Second fix: use dT = 2 points with both raw sums. Either way, the result is 1.50 points. Changing just one term without stating the convention causes the double counting.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find the excess of 2 points and relate it to the compensator.</li><li>Give both corrected accounts of the contributions and their units.</li><li>Explain why the same path cannot have two totals.</li></ul></details></article><article class="exercice" id="ex-seuil-elargi"><p class="repere">Exercise 3 · Change of convention</p>
+<h3>The large jump becomes small at the new threshold</h3><p>On the original path, replace c = 1 point with c′ = 3 points. Calculate γ at the new threshold, the compensated contribution of family b, and the total X at T. What happens to the uncompensated sum of large jumps? Justify the sign of the drift change before calculating.</p>
+<label for="reponse-ex-seuil-elargi">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-seuil-elargi" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-seuil-elargi" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-seuil-elargi" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-seuil-elargi" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The new threshold includes b, whose absolute size is 2 points. The mean of this family is negative.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate b(N_g(T) − λ_gT) and add bλ_g to the old drift. Do not alter any event.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Family b enters the compensation. Its mean rate is bλ_g = -2 points/h, so γ at the new threshold is 2 + (-2) = 0 points/h. It decreases because the newly transferred mean is negative.</p><p>The expected large jump count was 2. Its raw sum is -2 points, and its mean is -4 points. The new compensated contribution is -2 − (-4) = 2 points: there were fewer decreases than expected.</p><p>This model has no sizes greater than c′, so J at the new threshold is 0 points. The combined small jump terms give -0.50 + 2 = 1.50 points; the cumulative drift is 0 points. Total: 1.50 points, identical to 1.50 points. The equality holds for every path by adding and subtracting the same mean, rather than only for our counts.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict a decrease in the drift and obtain 0 points/h.</li><li>Compensate family b as well, without changing its jumps.</li><li>Justify the disappearance of the large jump term using the sizes in the model.</li><li>Recover the total and explain its algebraic invariance.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="mesure-sauts"><summary><span class="repere">Recall 1</span><span>What is the difference between N((0, t] × A) and tν(A)?</span></summary><p>The first is the realized count of jumps whose size belongs to A; the second is its expectation when A is bounded away from 0. ν(A) is an intensity, in events per hour, rather than a size probability.</p></details><details class="carte" data-carte="compensateur"><summary><span class="repere">Recall 2</span><span>What does compensation subtract for a family with size a and intensity λ?</span></summary><p>It replaces aN(t) with a(N(t) − λt). The compensator aλt is a mean contribution in points. The centered term keeps the same jumps and can be negative on a path.</p></details><details class="carte" data-carte="limite-petits"><summary><span class="repere">Recall 3</span><span>Why compensate before letting the lower cutoff tend to 0?</span></summary><p>The integral of squared sizes near 0 is finite for a Levy measure. It controls the mean square of the differences between compensated sums, and hence their mean square convergence. Absolute summability of the raw sum requires integrability of the absolute sizes, which is not guaranteed.</p></details><details class="carte" data-carte="convention-derive"><summary><span class="repere">Recall 4</span><span>What must change when the threshold brings new jumps into the compensation?</span></summary><p>Add their signed mean per hour to the drift: the integral of xν(dx) over the newly included band. The components change together and their sum remains the same process.</p></details><details class="carte" data-carte="moyenne-processus"><summary><span class="repere">Recall 5</span><span>Is a drift γ_c enough to give E[Xₜ]/t?</span></summary><p>The mean per hour of the uncompensated large jumps must also be added, if it exists. The compensated small jump term and the Brownian motion are centered. A total mean is neither the observed slope between events nor the value of a path.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>On a blank sheet, define the jump count and its intensity measure, then reconstruct the separation by threshold. Explain compensation and the mean square control of its limit. Recalculate the fictional contributions using raw and compensated sums, change the threshold and check the total. Finish by distinguishing the model mean from the observed path. An answer produced after a hint remains an assisted answer; repeat these tasks without support on another day before assessing your independence.</p></div><div class="exports"><a class="bouton" download="c228-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMjgtbTM6bWVzdXJlLXNhdXRzIiwKICAgICAgInVuaXRlIjogImMyMjgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtZXN1cmUtZGVzLXNhdXRzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiBOKCgwLCB0XSDDlyBBKSBhbmQgdM69KEEpPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBmaXJzdCBpcyB0aGUgcmVhbGl6ZWQgY291bnQgb2YganVtcHMgd2hvc2Ugc2l6ZSBiZWxvbmdzIHRvIEE7IHRoZSBzZWNvbmQgaXMgaXRzIGV4cGVjdGF0aW9uIHdoZW4gQSBpcyBib3VuZGVkIGF3YXkgZnJvbSAwLiDOvShBKSBpcyBhbiBpbnRlbnNpdHksIGluIGV2ZW50cyBwZXIgaG91ciwgcmF0aGVyIHRoYW4gYSBzaXplIHByb2JhYmlsaXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjI4LW0zOmNvbXBlbnNhdGV1ciIsCiAgICAgICJ1bml0ZSI6ICJjMjI4LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29tcGVuc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBjb21wZW5zYXRpb24gc3VidHJhY3QgZm9yIGEgZmFtaWx5IHdpdGggc2l6ZSBhIGFuZCBpbnRlbnNpdHkgzrs/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgcmVwbGFjZXMgYU4odCkgd2l0aCBhKE4odCkg4oiSIM67dCkuIFRoZSBjb21wZW5zYXRvciBhzrt0IGlzIGEgbWVhbiBjb250cmlidXRpb24gaW4gcG9pbnRzLiBUaGUgY2VudGVyZWQgdGVybSBrZWVwcyB0aGUgc2FtZSBqdW1wcyBhbmQgY2FuIGJlIG5lZ2F0aXZlIG9uIGEgcGF0aC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIyOC1tMzpsaW1pdGUtcGV0aXRzIiwKICAgICAgInVuaXRlIjogImMyMjgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUtZGVzLXBldGl0cy1zYXV0cyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY29tcGVuc2F0ZSBiZWZvcmUgbGV0dGluZyB0aGUgbG93ZXIgY3V0b2ZmIHRlbmQgdG8gMD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgaW50ZWdyYWwgb2Ygc3F1YXJlZCBzaXplcyBuZWFyIDAgaXMgZmluaXRlIGZvciBhIExldnkgbWVhc3VyZS4gSXQgY29udHJvbHMgdGhlIG1lYW4gc3F1YXJlIG9mIHRoZSBkaWZmZXJlbmNlcyBiZXR3ZWVuIGNvbXBlbnNhdGVkIHN1bXMsIGFuZCBoZW5jZSB0aGVpciBtZWFuIHNxdWFyZSBjb252ZXJnZW5jZS4gQWJzb2x1dGUgc3VtbWFiaWxpdHkgb2YgdGhlIHJhdyBzdW0gcmVxdWlyZXMgaW50ZWdyYWJpbGl0eSBvZiB0aGUgYWJzb2x1dGUgc2l6ZXMsIHdoaWNoIGlzIG5vdCBndWFyYW50ZWVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjI4LW0zOmNvbnZlbnRpb24tZGVyaXZlIiwKICAgICAgInVuaXRlIjogImMyMjgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJkZXJpdmUtZXQtdHJvbmNhdHVyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgY2hhbmdlIHdoZW4gdGhlIHRocmVzaG9sZCBicmluZ3MgbmV3IGp1bXBzIGludG8gdGhlIGNvbXBlbnNhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJBZGQgdGhlaXIgc2lnbmVkIG1lYW4gcGVyIGhvdXIgdG8gdGhlIGRyaWZ0OiB0aGUgaW50ZWdyYWwgb2YgeM69KGR4KSBvdmVyIHRoZSBuZXdseSBpbmNsdWRlZCBiYW5kLiBUaGUgY29tcG9uZW50cyBjaGFuZ2UgdG9nZXRoZXIgYW5kIHRoZWlyIHN1bSByZW1haW5zIHRoZSBzYW1lIHByb2Nlc3MuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMjgtbTM6bW95ZW5uZS1wcm9jZXNzdXMiLAogICAgICAidW5pdGUiOiAiYzIyOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1veWVubmUtZXQtdHJhamVjdG9pcmUiLAogICAgICAicXVlc3Rpb24iOiAiSXMgYSBkcmlmdCDOs19jIGVub3VnaCB0byBnaXZlIEVbWOKCnF0vdD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiBwZXIgaG91ciBvZiB0aGUgdW5jb21wZW5zYXRlZCBsYXJnZSBqdW1wcyBtdXN0IGFsc28gYmUgYWRkZWQsIGlmIGl0IGV4aXN0cy4gVGhlIGNvbXBlbnNhdGVkIHNtYWxsIGp1bXAgdGVybSBhbmQgdGhlIEJyb3duaWFuIG1vdGlvbiBhcmUgY2VudGVyZWQuIEEgdG90YWwgbWVhbiBpcyBuZWl0aGVyIHRoZSBvYnNlcnZlZCBzbG9wZSBiZXR3ZWVuIGV2ZW50cyBub3IgdGhlIHZhbHVlIG9mIGEgcGF0aC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c228-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIE4oKDAsIHRdIMOXIEEpIGFuZCB0zr0oQSk/CVRoZSBmaXJzdCBpcyB0aGUgcmVhbGl6ZWQgY291bnQgb2YganVtcHMgd2hvc2Ugc2l6ZSBiZWxvbmdzIHRvIEE7IHRoZSBzZWNvbmQgaXMgaXRzIGV4cGVjdGF0aW9uIHdoZW4gQSBpcyBib3VuZGVkIGF3YXkgZnJvbSAwLiDOvShBKSBpcyBhbiBpbnRlbnNpdHksIGluIGV2ZW50cyBwZXIgaG91ciwgcmF0aGVyIHRoYW4gYSBzaXplIHByb2JhYmlsaXR5Lgl0b2RhaSBjMjI4LW0zIG1lc3VyZS1kZXMtc2F1dHMKV2hhdCBkb2VzIGNvbXBlbnNhdGlvbiBzdWJ0cmFjdCBmb3IgYSBmYW1pbHkgd2l0aCBzaXplIGEgYW5kIGludGVuc2l0eSDOuz8JSXQgcmVwbGFjZXMgYU4odCkgd2l0aCBhKE4odCkg4oiSIM67dCkuIFRoZSBjb21wZW5zYXRvciBhzrt0IGlzIGEgbWVhbiBjb250cmlidXRpb24gaW4gcG9pbnRzLiBUaGUgY2VudGVyZWQgdGVybSBrZWVwcyB0aGUgc2FtZSBqdW1wcyBhbmQgY2FuIGJlIG5lZ2F0aXZlIG9uIGEgcGF0aC4JdG9kYWkgYzIyOC1tMyBjb21wZW5zYXRpb24KV2h5IGNvbXBlbnNhdGUgYmVmb3JlIGxldHRpbmcgdGhlIGxvd2VyIGN1dG9mZiB0ZW5kIHRvIDA/CVRoZSBpbnRlZ3JhbCBvZiBzcXVhcmVkIHNpemVzIG5lYXIgMCBpcyBmaW5pdGUgZm9yIGEgTGV2eSBtZWFzdXJlLiBJdCBjb250cm9scyB0aGUgbWVhbiBzcXVhcmUgb2YgdGhlIGRpZmZlcmVuY2VzIGJldHdlZW4gY29tcGVuc2F0ZWQgc3VtcywgYW5kIGhlbmNlIHRoZWlyIG1lYW4gc3F1YXJlIGNvbnZlcmdlbmNlLiBBYnNvbHV0ZSBzdW1tYWJpbGl0eSBvZiB0aGUgcmF3IHN1bSByZXF1aXJlcyBpbnRlZ3JhYmlsaXR5IG9mIHRoZSBhYnNvbHV0ZSBzaXplcywgd2hpY2ggaXMgbm90IGd1YXJhbnRlZWQuCXRvZGFpIGMyMjgtbTMgbGltaXRlLWRlcy1wZXRpdHMtc2F1dHMKV2hhdCBtdXN0IGNoYW5nZSB3aGVuIHRoZSB0aHJlc2hvbGQgYnJpbmdzIG5ldyBqdW1wcyBpbnRvIHRoZSBjb21wZW5zYXRpb24/CUFkZCB0aGVpciBzaWduZWQgbWVhbiBwZXIgaG91ciB0byB0aGUgZHJpZnQ6IHRoZSBpbnRlZ3JhbCBvZiB4zr0oZHgpIG92ZXIgdGhlIG5ld2x5IGluY2x1ZGVkIGJhbmQuIFRoZSBjb21wb25lbnRzIGNoYW5nZSB0b2dldGhlciBhbmQgdGhlaXIgc3VtIHJlbWFpbnMgdGhlIHNhbWUgcHJvY2Vzcy4JdG9kYWkgYzIyOC1tMyBkZXJpdmUtZXQtdHJvbmNhdHVyZQpJcyBhIGRyaWZ0IM6zX2MgZW5vdWdoIHRvIGdpdmUgRVtY4oKcXS90PwlUaGUgbWVhbiBwZXIgaG91ciBvZiB0aGUgdW5jb21wZW5zYXRlZCBsYXJnZSBqdW1wcyBtdXN0IGFsc28gYmUgYWRkZWQsIGlmIGl0IGV4aXN0cy4gVGhlIGNvbXBlbnNhdGVkIHNtYWxsIGp1bXAgdGVybSBhbmQgdGhlIEJyb3duaWFuIG1vdGlvbiBhcmUgY2VudGVyZWQuIEEgdG90YWwgbWVhbiBpcyBuZWl0aGVyIHRoZSBvYnNlcnZlZCBzbG9wZSBiZXR3ZWVuIGV2ZW50cyBub3IgdGhlIHZhbHVlIG9mIGEgcGF0aC4JdG9kYWkgYzIyOC1tMyBtb3llbm5lLWV0LXRyYWplY3RvaXJlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kpgccf socsxy rimb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize the scope of a reviewed model</h3><dl><div><dt>What you understand</dt><dd>A jump decomposition must keep the threshold convention, compensator and drift together. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eqogjl kfpfzm nfjobn rubxuv jxdqyh krysxl hlof</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ldxpzb xsbxwd podnvf clxtii mvgcxh pijlwa esfxod cikubk efdqdb bnwyox rwvizx bkjwgk woczel ugxecv xhxowu iuriyu rtxiyx ergnxq kmfyqx cvpfnt aotqnj cepjhl kxbfvo cbekww</span></span></dd></div><div><dt>Level to prepare for</dt><dd>At level 4, be able to reconstruct both accounts of the contributions, explain the limit of compensated small jumps and justify the drift change when the threshold changes. Reading, recognizing a worked answer or producing an assisted answer never establishes that a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fmsnwe qfxleb bvgjmc vmhzga enhgir ohprxb pwvhkb exbgdz jlkzmy zdafni xgizsh snhedk ntnglf lrzbql duyogx jyeljp gqiwmk ruysfy uydinx qgomxl auehkh xuxuri yzcmoj mcshok</span></span></dd></div><div><dt>Next step</dt><dd>After a delay, recalculate the contributions and the threshold change without support. The next unit will introduce Ito calculus with jumps. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">daozoh ebvjhi ugtohz zxzwxt kncblp qthcqr yzbcej ganptd fyrppy hvdebv uzkdjz mgfnnv bfqoyj jp</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c228-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c228-m2.html">Previous</a> · <a href="c228-m4.html">Next</a></nav>
+<footer><p>Course book · C228·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

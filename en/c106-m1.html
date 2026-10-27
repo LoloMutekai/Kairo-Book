@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a one-dimensional discrete convolution by hand: slide a kernel of weights over a signal, add the products, count the outputs, and distinguish correlation from strict convolution.">
+<title>C106·M1 · Discrete convolution — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xujsqd crmawd qbsg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C106·M1</p><h1>Discrete convolution</h1><p class="objectif"><span>Your goal</span>Calculate a one-dimensional discrete convolution by hand: slide a kernel of weights over a signal, add the products, count the outputs, and distinguish correlation from strict convolution.</p><p class="prerequis"><strong>Before you start</strong><br>c103-m5 : regularization · c036-m5 : annotated graphs</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A lamp lights a room, and a fictional sensor records the illuminance in lux every minute. A brief reflection produces a single very high reading among otherwise steady readings. To smooth it while keeping the general level, we replace each reading with a weighted average of itself and its two neighbours.</p><p>The window is a small template placed over three consecutive readings. The kernel is the list of weights assigned to its cells, one weight per cell. At each position, we multiply the corresponding entries cell by cell, add the products, then move the window one cell to the right. Each position produces a single output value.</p><p>The kernel is identical at every position. Repeating the same local rule along the signal distinguishes a convolution from a different calculation at each minute. The effect appears in the diagram: an isolated reading is spread across several neighbouring outputs, with its peak reduced.</p><p>The values are fictional: they are used for calculations and do not describe a real reading. This unit stays in one dimension, with a single sequence of numbers and a single kernel, without padding at the boundaries. Channels and pooling of outputs belong to later units in the chapter.</p><div class="schemas"><figure><svg viewBox="0 0 380 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>A window over three readings produces one output</title><desc>Seven illuminance readings: 2, 2, 10, 2, 6, 6 and 6 lux. The window covers 2, 10 and 2. Its weights 1, 2 and 1 give a sum of 24, divided by 4: the output is 6 lux.</desc><text x="10" y="18" class="petite-etiquette">Fictional signal in lux, one reading per minute</text><rect x="10" y="30" width="44" height="40" rx="6" class="cadre-neutre" /><text x="32" y="56" text-anchor="middle">2</text><rect x="62" y="30" width="44" height="40" rx="6" class="cadre-prediction" /><text x="84" y="56" text-anchor="middle">2</text><rect x="114" y="30" width="44" height="40" rx="6" class="cadre-prediction" /><text x="136" y="56" text-anchor="middle">10</text><rect x="166" y="30" width="44" height="40" rx="6" class="cadre-prediction" /><text x="188" y="56" text-anchor="middle">2</text><rect x="218" y="30" width="44" height="40" rx="6" class="cadre-neutre" /><text x="240" y="56" text-anchor="middle">6</text><rect x="270" y="30" width="44" height="40" rx="6" class="cadre-neutre" /><text x="292" y="56" text-anchor="middle">6</text><rect x="322" y="30" width="44" height="40" rx="6" class="cadre-neutre" /><text x="344" y="56" text-anchor="middle">6</text><text x="84" y="96" text-anchor="middle">× 1</text><text x="136" y="96" text-anchor="middle">× 2</text><text x="188" y="96" text-anchor="middle">× 1</text><line x1="84" y1="104" x2="136" y2="132" class="trait" /><line x1="136" y1="104" x2="136" y2="132" class="trait" /><line x1="188" y1="104" x2="136" y2="132" class="trait" /><rect x="100" y="132" width="72" height="40" rx="6" class="cadre-resultat" /><text x="136" y="158" text-anchor="middle">6</text><text x="10" y="196" class="petite-etiquette">Sum of products: 24, divided by 4.</text><text x="10" y="220" class="petite-etiquette">The same kernel is used at every position.</text></svg><figcaption>The pink window covers three readings, each multiplied by its weight. The three products are added, then divided by the sum of the weights: a single output, placed at the centre of the window.</figcaption></figure><figure><svg viewBox="0 0 380 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The input signal and the smoothed outputs</title><desc>The reflection of 10 lux becomes 6 lux; its neighbours rise from 2 to 4 lux and from 2 to 5 lux. The seven readings give only 5 outputs: the first and last have no full window around them.</desc><text x="10" y="20" class="petite-etiquette">Input, in lux</text><rect x="10" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="32" y="58" text-anchor="middle">2</text><rect x="62" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="84" y="58" text-anchor="middle">2</text><rect x="114" y="34" width="44" height="38" rx="6" class="cadre-prediction" /><text x="136" y="58" text-anchor="middle">10</text><rect x="166" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="188" y="58" text-anchor="middle">2</text><rect x="218" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="240" y="58" text-anchor="middle">6</text><rect x="270" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="292" y="58" text-anchor="middle">6</text><rect x="322" y="34" width="44" height="38" rx="6" class="cadre-neutre" /><text x="344" y="58" text-anchor="middle">6</text><line x1="136" y1="74" x2="136" y2="118" class="trait" /><text x="10" y="106" class="petite-etiquette">The reflection is spread out</text><text x="10" y="184" class="petite-etiquette">Smoothed output, in lux</text><rect x="62" y="120" width="44" height="38" rx="6" class="cadre-resultat" /><text x="84" y="144" text-anchor="middle">4</text><rect x="114" y="120" width="44" height="38" rx="6" class="cadre-resultat" /><text x="136" y="144" text-anchor="middle">6</text><rect x="166" y="120" width="44" height="38" rx="6" class="cadre-resultat" /><text x="188" y="144" text-anchor="middle">5</text><rect x="218" y="120" width="44" height="38" rx="6" class="cadre-resultat" /><text x="240" y="144" text-anchor="middle">5</text><rect x="270" y="120" width="44" height="38" rx="6" class="cadre-resultat" /><text x="292" y="144" text-anchor="middle">6</text><text x="32" y="144" text-anchor="middle" class="petite-etiquette">none</text><text x="344" y="144" text-anchor="middle" class="petite-etiquette">none</text><text x="10" y="226" class="petite-etiquette">7 − 3 + 1 = 5 outputs</text></svg><figcaption>The isolated reflection in the central reading is reduced and shares its height with its neighbours. The two readings at the ends have no output because a full window is unavailable.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>An output is a weighted sum over a window of the signal; the same kernel is used at every position; without boundary padding, the number of usable positions is the length minus the size plus one.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Smoothing a lamp reflection</h3><p>A fictional signal of 7 illuminance readings, in lux: 2, 2, 10, 2, 6, 6, 6. The kernel has 3 weights: 1, 2, 1. Let us calculate the smoothed signal, then check it in two ways.</p><ol class="etapes"><li><h3>Name the quantities and state the assumptions</h3><p>The signal x is a sequence of n readings, in lux; here n is 7. The reading at position i has index i in the formula below. The kernel w is a sequence of k dimensionless weights; k is its size, here 3, and the weight in cell j has index j. The output y at position i, in lux, comes from the window starting at the reading at position i.</p><p>Assumptions: the readings are evenly spaced; the kernel does not change from one position to another; the window must fit entirely within the signal; the weights are fixed in advance. Here the kernel is symmetric and its weights are positive.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></msubsup><msub><mi>w</mi><mi>j</mi></msub><msub><mi>x</mi><mrow><mi>i</mi><mo>+</mo><mi>j</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></math></div><p>Each output is therefore the sum of the products of weight times reading, from cell one to cell k. To preserve the scale of the signal, we divide by the sum of the weights, denoted Z; here Z = 1 + 2 + 1 = 4.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><mfrac><mrow><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></msubsup><msub><mi>w</mi><mi>j</mi></msub><msub><mi>x</mi><mrow><mi>i</mi><mo>+</mo><mi>j</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow><mrow><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></msubsup><msub><mi>w</mi><mi>j</mi></msub></mrow></mfrac></mrow></math></div></li><li><h3>The first window, product by product</h3><p>Place the window over the first three readings. Multiplication gives more weight to the central reading: 1 × 2 = 2 lux, 2 × 2 = 4 lux, 1 × 10 = 10 lux.</p><p>Then add: 2 + 4 + 10 = 16. This sum is a weighted number, not yet an illuminance. Divide it by the sum of the weights: 16 ÷ 4 = 4 lux. A weight equal to 1 leaves the reading unchanged, as the two products at the ends show.</p></li><li><h3>Slide one cell: the window over the reflection</h3><p>Move one cell to the right. The window now covers 2, 10 and 2; the reflection is in the centre, so it is multiplied by 2: 2 × 10 = 20.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>2</mn></msub><mo>=</mo><mfrac><mrow><mn>2</mn><mo>+</mo><mn>20</mn><mo>+</mo><mn>2</mn></mrow><mn>4</mn></mfrac><mo>=</mo><mfrac><mn>24</mn><mn>4</mn></mfrac><mo>=</mo><mn>6</mn></mrow></math></div><p>The reflection has gone from 10 to 6 lux: it is reduced, but not removed. The next three windows give sums of 20, 20 and 24, giving outputs of 5, 5 and 6 lux. A single rule produced the 5 values.</p></li><li><h3>Count the outputs</h3><p>The window starts at reading one and cannot extend past the last reading. The number of possible positions is therefore n − k + 1:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>n</mi><mo>−</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>=</mo><mn>7</mn><mo>−</mo><mn>3</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>5</mn></mrow></math></div><p>The first and last readings have no output of their own because no full window is centred on them. The smoothed sequence is 4, 6, 5, 5, 6 lux: it is shorter than the input by 2 cells, or 3 − 1, the kernel size minus one.</p></li><li><h3>Check using other methods</h3><p>First method: the constant region. The last three readings are 6 lux; the last output is 6 lux. A weighted average of equal values returns that value, thanks to division by 4.</p><p>Second method: bounds. Each output stays between the smallest and largest reading in its window: 6 is between 2 and 10. An output outside this interval would indicate a negative weight, an addition error, or a missing division.</p><p>Third method: the kernel 1, 2, 1 is equivalent to averaging two averages of neighbouring pairs. For the window (2, 10, 2), each pair has an average of 6 lux, so their average is also 6 lux: the same result by a different method.</p></li><li><h3>A kernel that is not symmetric</h3><p>Take the kernel -1, 0, 1, which compares the ends of a window. Used without reversal, it gives the following for the first window:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>1</mn></msub><mo>=</mo><mrow><mn>-1</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>0</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>1</mn><mo>×</mo><mn>10</mn></mrow><mo>=</mo><mn>8</mn></mrow></math></div><p>Strict convolution first reverses the kernel, which is equivalent to reading its weights from right to left. In general, at cell j it uses the weight at position k − j + 1:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></msubsup><msub><mi>w</mi><mrow><mi>k</mi><mo>−</mo><mi>j</mi><mo>+</mo><mn>1</mn></mrow></msub><msub><mi>x</mi><mrow><mi>i</mi><mo>+</mo><mi>j</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></math></div><p>For the first window with the previous kernel, this gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>1</mn></msub><mo>=</mo><mn>1</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>0</mn><mo>×</mo><mn>2</mn><mo>+</mo><mo>(</mo><mn>-1</mn><mo>)</mo><mo>×</mo><mn>10</mn><mo>=</mo><mn>-8</mn></mrow></math></div><p>The two conventions differ by a sign for this kernel. For the symmetric kernel in the example, they coincide. Unless stated otherwise, this course calculates without reversing the kernel and states whenever the other convention is used.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain aloud why the isolated reflection is reduced without disappearing, then why the first and last readings have no output.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The kernel is a filter that removes values from the signal.”</h3><p>The kernel is a list of weights; each output is a weighted sum over a window. Nothing is removed: the reflection of 10 lux becomes 6 lux, and its neighbours rise from 2 to 4 lux.</p><a href="#exemple">Return to the reflection step in the example</a></li><li><h3>“There are as many outputs as readings.”</h3><p>Without boundary padding, only positions where the window fits entirely count: n − k + 1 = 7 − 3 + 1 = 5. Count the possible positions again from the first to the last reading before concluding.</p><a href="#intuition">Review the second diagram</a></li><li><h3>“Correlation and strict convolution always give the same outputs.”</h3><p>They coincide only for a symmetric kernel. With -1, 0, 1, the first window gives 8 without reversal and -8 with reversal. Always state the convention used.</p><a href="#exercices">Redo the impulse exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-deux-fenetres"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Two windows, one division</h3><p>Another fictional signal has 4 readings, in lux: 6, 10, 2, 6. Using the kernel 1, 2, 1 and division by the sum of the weights, calculate the outputs.</p>
+<label for="reponse-ex-deux-fenetres">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-deux-fenetres" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-deux-fenetres" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-deux-fenetres" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-deux-fenetres" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>How many positions can the window take on this signal? Apply n − k + 1.</p></details><details class="indice"><summary>Hint 2</summary><p>For each window, multiply only the central reading by 2, then add the two end readings before dividing.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Number of outputs: 4 − 3 + 1 = 2.</p><p>First window (6, 10, 2): 2 × 10 = 20; adding the end readings, whose sum is 8, gives a sum of 28; 28 ÷ 4 = 7 lux.</p><p>Second window (10, 2, 6): 2 × 2 = 4; adding the end readings, whose sum is 16, gives a sum of 20; 20 ÷ 4 = 5 lux.</p><p>Check: each output is between the smallest and largest reading in its window, between 2 and 10 for both.</p><p class="petit-titre">Check your reasoning</p><ul><li>The number of outputs is justified.</li><li>Each window is written with its three readings.</li><li>The division by the sum of the weights is carried out.</li><li>A check against the bounds is included.</li></ul></details></article><article class="exercice" id="ex-detecter-variation"><p class="repere">Exercise 2 · Guided application</p>
+<h3>A kernel that compares the ends</h3><p>Apply the kernel -1, 0, 1 to the signal in the example without reversing it and without dividing. Give the 5 outputs. Where is the output 0 despite the reflection, and why?</p>
+<label for="reponse-ex-detecter-variation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-detecter-variation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-detecter-variation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-detecter-variation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-detecter-variation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>With a 0 weight in the centre, only the difference between the right and left ends matters.</p></details><details class="indice"><summary>Hint 2</summary><p>Look at the window where the reflection is exactly in the centre: what are its two end readings?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For each window, the output is the right reading minus the left reading: 8, 0, -4, 4, 0.</p><p>The output 0 corresponds to the window (2, 10, 2): the reflection is in the centre, whose weight is 0, and the two end readings are equal. This kernel therefore cannot detect a centred reflection.</p><p>Interpret the signs as follows: a positive value indicates a rise between the ends, as in 8 and 4; a negative value indicates a fall, as in -4. The last window (6, 6, 6) is constant and gives 0.</p><p class="petit-titre">Check your reasoning</p><ul><li>The five outputs are given in order.</li><li>The 0 weight in the centre is used to explain the 0 output.</li><li>The sign of each output is related to a rise or a fall.</li></ul></details></article><article class="exercice" id="ex-impulsion"><p class="repere">Exercise 3 · Reasoning and transfer</p>
+<h3>What the kernel produces from an impulse</h3><p>A fictional signal of 5 readings is 0, 0, 1, 0, 0: a single nonzero reading. Calculate the outputs of the kernel -1, 0, 1 without reversal, then with reversal. What do you notice in relation to the kernel itself?</p>
+<label for="reponse-ex-impulsion">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-impulsion" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-impulsion" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-impulsion" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-impulsion" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Slide the window: how many positions are there, and where is the only nonzero reading in each?</p></details><details class="indice"><summary>Hint 2</summary><p>When the nonzero reading is in the right cell, the output is the right weight.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Number of positions: 5 − 3 + 1 = 3.</p><p>Without reversal, the windows (0, 0, 1), (0, 1, 0), (1, 0, 0) give 1, 0, -1: the kernel is reproduced in reverse order.</p><p>With reversal, the kernel used is 1, 0, -1 and the outputs become -1, 0, 1: the kernel is reproduced as it is. The response to an isolated impulse therefore reveals the kernel, in reverse or original order depending on the convention.</p><p class="petit-titre">Check your reasoning</p><ul><li>The three windows are written out.</li><li>Both output sequences are obtained and compared with the kernel.</li><li>The difference between the conventions is related to kernel reversal.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="sortie"><summary><span class="repere">Recall 1</span><span>What does one output of a discrete convolution calculate?</span></summary><p>A weighted sum over a window of the signal: multiply by the kernel cell by cell and add. The same kernel is used at every position.</p></details><details class="carte" data-carte="compte"><summary><span class="repere">Recall 2</span><span>How many outputs are there for 7 readings and a kernel of 3 cells, without boundary padding?</span></summary><p>7 − 3 + 1 = 5 outputs: only full windows count.</p></details><details class="carte" data-carte="division"><summary><span class="repere">Recall 3</span><span>Why divide by the sum of the weights, 4 in the example?</span></summary><p>To preserve the scale of the signal: a constant region stays constant, as when 6 lux gives 6 lux.</p></details><details class="carte" data-carte="retournement"><summary><span class="repere">Recall 4</span><span>When do correlation and strict convolution give the same outputs?</span></summary><p>When the kernel is symmetric. Otherwise, reversal changes the outputs: 8 versus -8 for the first window of the kernel -1, 0, 1.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>A discrete convolution slides a kernel of weights over a signal. At each position, it multiplies cell by cell, adds, then divides by the sum of the weights if the scale is to be preserved. Without boundary padding, a signal of n readings and a kernel of k cells give n − k + 1 outputs. Correlation and strict convolution differ only in kernel reversal.</p></div><div class="exports"><a class="bouton" download="c106-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTE6c29ydGllIiwKICAgICAgInVuaXRlIjogImMxMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzb3J0aWUgZGUgY29udm9sdXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIG9uZSBvdXRwdXQgb2YgYSBkaXNjcmV0ZSBjb252b2x1dGlvbiBjYWxjdWxhdGU/IiwKICAgICAgInJlcG9uc2UiOiAiQSB3ZWlnaHRlZCBzdW0gb3ZlciBhIHdpbmRvdyBvZiB0aGUgc2lnbmFsOiBtdWx0aXBseSBieSB0aGUga2VybmVsIGNlbGwgYnkgY2VsbCBhbmQgYWRkLiBUaGUgc2FtZSBrZXJuZWwgaXMgdXNlZCBhdCBldmVyeSBwb3NpdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNi1tMTpjb21wdGUiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5vbWJyZSBkZSBzb3J0aWVzIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBtYW55IG91dHB1dHMgYXJlIHRoZXJlIGZvciA3IHJlYWRpbmdzIGFuZCBhIGtlcm5lbCBvZiAzIGNlbGxzLCB3aXRob3V0IGJvdW5kYXJ5IHBhZGRpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiNyDiiJIgMyArIDEgPSA1IG91dHB1dHM6IG9ubHkgZnVsbCB3aW5kb3dzIGNvdW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA2LW0xOmRpdmlzaW9uIiwKICAgICAgInVuaXRlIjogImMxMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJub3JtYWxpc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkaXZpZGUgYnkgdGhlIHN1bSBvZiB0aGUgd2VpZ2h0cywgNCBpbiB0aGUgZXhhbXBsZT8iLAogICAgICAicmVwb25zZSI6ICJUbyBwcmVzZXJ2ZSB0aGUgc2NhbGUgb2YgdGhlIHNpZ25hbDogYSBjb25zdGFudCByZWdpb24gc3RheXMgY29uc3RhbnQsIGFzIHdoZW4gNiBsdXggZ2l2ZXMgNiBsdXguIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTE6cmV0b3VybmVtZW50IiwKICAgICAgInVuaXRlIjogImMxMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb3Jyw6lsYXRpb24gZXQgY29udm9sdXRpb24gc3RyaWN0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGVuIGRvIGNvcnJlbGF0aW9uIGFuZCBzdHJpY3QgY29udm9sdXRpb24gZ2l2ZSB0aGUgc2FtZSBvdXRwdXRzPyIsCiAgICAgICJyZXBvbnNlIjogIldoZW4gdGhlIGtlcm5lbCBpcyBzeW1tZXRyaWMuIE90aGVyd2lzZSwgcmV2ZXJzYWwgY2hhbmdlcyB0aGUgb3V0cHV0czogOCB2ZXJzdXMgLTggZm9yIHRoZSBmaXJzdCB3aW5kb3cgb2YgdGhlIGtlcm5lbCAtMSwgMCwgMS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c106-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIG9uZSBvdXRwdXQgb2YgYSBkaXNjcmV0ZSBjb252b2x1dGlvbiBjYWxjdWxhdGU/CUEgd2VpZ2h0ZWQgc3VtIG92ZXIgYSB3aW5kb3cgb2YgdGhlIHNpZ25hbDogbXVsdGlwbHkgYnkgdGhlIGtlcm5lbCBjZWxsIGJ5IGNlbGwgYW5kIGFkZC4gVGhlIHNhbWUga2VybmVsIGlzIHVzZWQgYXQgZXZlcnkgcG9zaXRpb24uCXRvZGFpIGMxMDYtbTEgc29ydGllIGRlIGNvbnZvbHV0aW9uCkhvdyBtYW55IG91dHB1dHMgYXJlIHRoZXJlIGZvciA3IHJlYWRpbmdzIGFuZCBhIGtlcm5lbCBvZiAzIGNlbGxzLCB3aXRob3V0IGJvdW5kYXJ5IHBhZGRpbmc/CTcg4oiSIDMgKyAxID0gNSBvdXRwdXRzOiBvbmx5IGZ1bGwgd2luZG93cyBjb3VudC4JdG9kYWkgYzEwNi1tMSBub21icmUgZGUgc29ydGllcwpXaHkgZGl2aWRlIGJ5IHRoZSBzdW0gb2YgdGhlIHdlaWdodHMsIDQgaW4gdGhlIGV4YW1wbGU/CVRvIHByZXNlcnZlIHRoZSBzY2FsZSBvZiB0aGUgc2lnbmFsOiBhIGNvbnN0YW50IHJlZ2lvbiBzdGF5cyBjb25zdGFudCwgYXMgd2hlbiA2IGx1eCBnaXZlcyA2IGx1eC4JdG9kYWkgYzEwNi1tMSBub3JtYWxpc2F0aW9uCldoZW4gZG8gY29ycmVsYXRpb24gYW5kIHN0cmljdCBjb252b2x1dGlvbiBnaXZlIHRoZSBzYW1lIG91dHB1dHM/CVdoZW4gdGhlIGtlcm5lbCBpcyBzeW1tZXRyaWMuIE90aGVyd2lzZSwgcmV2ZXJzYWwgY2hhbmdlcyB0aGUgb3V0cHV0czogOCB2ZXJzdXMgLTggZm9yIHRoZSBmaXJzdCB3aW5kb3cgb2YgdGhlIGtlcm5lbCAtMSwgMCwgMS4JdG9kYWkgYzEwNi1tMSBjb3Jyw6lsYXRpb24gZXQgY29udm9sdXRpb24gc3RyaWN0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xujsqd crmawd qbsg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Sliding window and kernel: what the code reads</h3><dl><div><dt>What you understand</dt><dd>A window slides over a sequence and produces one value per position. For a convolution, this value is a sum weighted by a fixed kernel. If the window simply summarizes its values in another way, for example with a median, it is no longer a convolution.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mxawvx qmazsk rucoao ialybs kfvxzt csfkex rqyymc uobumw pegokm fwkveo xttnhs qdjryj ovekbu hwahro xgollq rxfpew dgxfht xovdrb ssrhrq mmdkeb vzqvti cyusud zyqbbq wfcykr</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: calculate a convolution output again from a kernel and a window without help, then explain why the median of that window is not a convolution. Reading the page does not award any level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ggbjot uzjxjl plbbsy csgkei iiwazq xdfokm jzlzqy zsvvtn glhdvq qpzvhv dvaoou jdocwm khkduv hyuprz yqfmaw pxmqdv gycbmd ebgxnq pkcjda rnymzf gzmdpo qrenwk suornz yudbgn</span></span></dd></div><div><dt>To continue</dt><dd>Write this module’s window on paper, then replace it with a weighted average using a chosen kernel, and compare the results for an isolated reading. Channels, pooling, and deep architectures will come in later units in the chapter.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c106-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c105-m5.html">Previous</a> · <a href="c106-m2.html">Next</a></nav>
+<footer><p>Course book · C106·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Follow a WebSocket channel and explain how a received message does, or does not, become an update to the order board.">
+<title>C021·M3 · WebSocket and events — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hvtuuk gwjwhc goby</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C021·M3</p><h1>WebSocket and events</h1><p class="objectif"><span>Your goal</span>Follow a WebSocket channel and explain how a received message does, or does not, become an update to the order board.</p><p class="prerequis"><strong>Before you start</strong><br>c019-m5 : clocks and persistence · c018-m5 : contract tests and test doubles · c021-m1 : client, server and port · c021-m2 : HTTP request (query) and JSON schema</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At a juice counter, a tablet displays 4 pending orders. The kitchen prepares the drinks behind a partition. How can it announce a change without the tablet constantly asking, “What about now?” Imagine a phone line left open: when the queue changes, the kitchen can speak over that same line.</p><p>The tablet acts as the client; the kitchen program acts as the server. WebSocket is a protocol that establishes a persistent communication channel between them. Once it opens, either side can send messages while the channel remains available, without a new HTTP request (query) for each message. In the standard mechanism, an HTTP handshake first requests a switch to the WebSocket protocol; here we follow what happens after the channel opens.</p><p>An event is a notification that the program receives: for example, “the channel is open” or “a message has arrived”. A handler is the part of the program called in response. The message handler still has to read the content, recognize its meaning and decide what to change. An open channel does not fill in the board by itself.</p><p>The scene and all its quantities are fictional. On this page, the server sends the full number of orders still pending, never a number to add. The first diagram shows the channel; the second follows the work needed after reception. No response time or actual benefit is measured.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>A connection that stays open</title><desc>The kitchen has a count of 6 pending orders. Over the open channel, the tablet can send a request and the server can send this count without waiting for a new request. The tablet still has to process the message.</desc><rect x="25" y="12" width="310" height="58" rx="8" class="cadre-prediction" /><text x="180" y="36" text-anchor="middle">Tablet · client</text><text x="180" y="57" text-anchor="middle" class="petite-etiquette">Display needs updating</text><line x1="57" y1="82" x2="57" y2="205" class="trait" /><path d="M51 197l6 8 6-8" class="trait" /><line x1="303" y1="205" x2="303" y2="82" class="trait" /><path d="M297 90l6-8 6 8" class="trait" /><text x="180" y="111" text-anchor="middle">Open channel</text><text x="180" y="145" text-anchor="middle" class="petite-etiquette">↓ client request</text><text x="180" y="179" text-anchor="middle" class="petite-etiquette">↑ state sent: 6</text><rect x="25" y="221" width="310" height="60" rx="8" class="cadre-resultat" /><text x="180" y="245" text-anchor="middle">Kitchen · server</text><text x="180" y="267" text-anchor="middle" class="petite-etiquette">6 pending orders</text></svg><figcaption>The arrows show the possible directions over the same channel. The request goes down; a state comes back up. The server can send a state on its own initiative during the connection.</figcaption></figure><figure><svg viewBox="0 0 360 316" xmlns="http://www.w3.org/2000/svg" role="img"><title>Receiving is not enough to display</title><desc>The message carries JSON text with the count 6. After the reception event, a handler decodes it, then checks the type and count. If the contract is satisfied, the display changes from 4 to 6 orders; otherwise the last count stays on display and the problem is reported.</desc><rect x="25" y="10" width="310" height="50" rx="7" class="cadre-neutre" /><text x="180" y="31" text-anchor="middle">Message received</text><text x="180" y="50" text-anchor="middle" class="petite-etiquette">JSON text · count 6</text><path d="M180 64v20m-5-6 5 6 5-6" class="trait" /><rect x="25" y="90" width="310" height="50" rx="7" class="cadre-prediction" /><text x="180" y="113" text-anchor="middle">Handler called</text><text x="180" y="132" text-anchor="middle" class="petite-etiquette">Decode · check the contract</text><path d="M180 145v20m-5-6 5 6 5-6" class="trait" /><rect x="25" y="172" width="310" height="52" rx="7" class="cadre-resultat" /><text x="180" y="194" text-anchor="middle">Contract recognized</text><text x="180" y="215" text-anchor="middle" class="petite-etiquette">Replace 4 with 6 orders</text><text x="180" y="264" text-anchor="middle" class="petite-etiquette">Invalid content: report it,</text><text x="180" y="286" text-anchor="middle" class="petite-etiquette">keep the last known count</text></svg><figcaption>The diagram expands the branch for the recognized message. Reception triggers the work; only accepted content allows the count to be replaced. Another recognized type may have a different handler.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The channel carries data; the event notifies the program; the handler interprets the message contract and updates the local state.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The same queue, from the kitchen to the tablet</h3><p>The board and the kitchen start with 4 pending orders. The kitchen then accepts 2 new orders and serves 3 orders. It sends a complete state after each of these changes. Between these states, a message of type “presence”, defined by the application, arrives without any count. Let us follow the connection, the content and the displayed result.</p><ol class="etapes"><li><h3>Separate channel activity from order activity</h3><p>In the browser’s WebSocket programming interface, open signals opening; message signals the arrival of a message; error signals a communication error; close signals closure. These English names are the technical event identifiers. A handler is associated with each one. Opening allows data to be exchanged; it does not say that an order has been served.</p><p>The message handler receives data. In our contract, these are text messages representing JSON; WebSocket also supports binary messages. The protocol does not require JSON. The application type “file” will be a field in this content: it is distinct from the event name message.</p></li><li><h3>State the contract and assumptions</h3><p>Let A be the number of orders pending at the start, E the number of incoming orders and S the number of orders served during the period. All these quantities are counts, measured in orders. There are no other additions, servings or cancellations; the orders served belong to the queue. N denotes the final count in the kitchen. D denotes the count displayed on the tablet; C denotes the count carried by an accepted message.</p><p>The expected content is a JSON object: the type field has the value “file” and the en_attente field has the value 6 here. The type field selects the action; en_attente carries C, an integer greater than or equal to 0, measured in orders. The handler decodes the JSON text, checks these fields and replaces D with C. The arrow ← is read as “receives the value”: it assigns a value to the display. The handler does not turn invalid content into a count of 0. The type “presence” is recognized but does not change D.</p><p>In this worked example, the channel stays open, and states sent over this same connection are received in the order they were sent. Each handler then finishes processing before the next one. We assume that the content is checked and the display actually updated. We do not assume that a message sent during a disconnection is recovered.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><mi>A</mi><mo>+</mo><mi>E</mi><mo>−</mo><mi>S</mi><mo>;</mo><mi>D</mi><mo>←</mo><mi>C</mi></mrow></math></div></li><li><h3>Calculate the first state to send</h3><p>The kitchen has A = 4 orders and accepts E = 2. We add because these orders join the same queue: 4 + 2 = 6 pending orders. The server sends content of type “file” with en_attente equal to 6.</p><p>The message event triggers the tablet’s handler. The text is decoded, the type and integer are checked, and D then takes the value C = 6 orders. Adding this count to the old count would give 10 orders: that would count the orders already present a second time.</p></li><li><h3>Receive another type without changing the count</h3><p>The next message carries the type field with the value “presence”. This is still a browser message event. But its content calls for a different response: in this scene, recording that the server has sent a presence notification. D stays at 6 orders.</p><p>This message promises neither the current state of the queue nor that an order has been served. An application that only displayed “message received” without reading type could not distinguish these meanings.</p></li><li><h3>Calculate and apply the new complete state</h3><p>The kitchen serves S = 3 orders. We subtract the orders leaving the queue: 6 − 3 = 3 pending orders. The server sends a JSON object whose type is “file” and whose en_attente is 3. This content announces the new complete state, not an additional quantity to serve.</p><p>The handler applies the same contract: D takes the value 3 orders. It calculates neither 6 + 3 nor a difference between messages. The kitchen calculates its queue; here the client copies the accepted count. Other applications choose change messages whose values must be added: their contract must then specify this.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><mn>4</mn><mo>+</mo><mn>2</mn><mo>−</mo><mn>3</mn><mo>=</mo><mn>3</mn><mtext> commandes</mtext></mrow></math></div></li><li><h3>Check the counts and the scope of the evidence</h3><p>Check by conservation: the 3 remaining orders and the 3 served orders represent 6 orders. This is indeed the total of the 4 initial orders and the 2 incoming orders. We recover the result without simply repeating the same subtraction.</p><p>Check the handler: 3 message events were received; 2 carry queue states and cause 2 replacements. The presence notification does not change this count. The expected trace of D is 4, then 6, then 6 again, then 3 orders.</p><p>To verify the display in a real application, we would need to observe reception, the accepted content and the resulting board. Our fictional trace explains what would need checking; it does not demonstrate any real communication. Finally, a count sent by the server does not by itself prove that the drinks were physically handed over.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking at the text, draw the channel, then describe the chain event → decoding → contract → replacement. Why does the presence message leave the count unchanged? Then justify the final count by conservation and name the evidence that opening a channel does not provide.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The channel is open: the board must be up to date.”</h3><p>Opening establishes the possibility of communication. Next, look for a message containing the expected state, its handler, the result of the check and the display produced. Without these steps, you know the state of the channel, not the state of the board.</p><a href="#intuition">Review the diagram of reception and processing</a></li><li><h3>“All message events mean the same thing.”</h3><p>message names the arrival of data. The type field in the content carries its meaning for the application. The “presence” notification and the “file” state arrive through the same event but do not trigger the same change.</p><a href="#exemple">Revisit the passage about the presence message</a></li><li><h3>“Every number received is added to the displayed number.”</h3><p>Read the contract again: the number is a complete state. Adding the states to the old count would produce 10, then 13 orders, instead of 3. The last calculation exercise asks you to identify these 10 orders counted in excess.</p><a href="#exercices">Compare replacement and addition in the exercises</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-evenement"><p class="repere">Exercise 1 · Recognize and explain</p>
+<h3>The event name is not enough</h3><p>The tablet displays 4 orders. It receives open, then message with an object whose type is “presence”, then message with an object whose type is “file” and whose en_attente is 6. All content satisfies the contract. Give the count after each event and the number of replacements. Explain what the type field does.</p>
+<label for="reponse-ex-evenement">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-evenement" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-evenement" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-evenement" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-evenement" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Opening changes the state of the channel. It does not contain an order count.</p></details><details class="indice"><summary>Hint 2</summary><p>Among the received contents, look for the one that carries a queue state.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>After open: 4 orders, the initial count is kept. After the “presence” message: still 4 orders. After the “file” message: 6 orders. There is 1 replacement, requested by the only content of type “file”.</p><p>The browser announces arrival through message. The handler then reads type to choose the intended response. The same reception event can therefore lead to different processing depending on the content.</p><p class="petit-titre">Check your reasoning</p><ul><li>I distinguish the channel state from the displayed count.</li><li>I give 1 replacement and link it to the “file” content.</li><li>I distinguish the name message from the type field.</li></ul></details></article><article class="exercice" id="ex-remplacement"><p class="repere">Exercise 2 · Calculation and diagnosis on paper</p>
+<h3>Why the incorrect board count grows</h3><p>Start again with 4 displayed orders and the full sequence from the example. A faulty handler ignores “presence” but adds each “file” count to the previous count. Calculate its result, compare it with the correct result and check the conservation of orders. Finally, if the server sends the complete state 3 again without any change to the queue, what should the correct handler display?</p>
+<label for="reponse-ex-remplacement">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-remplacement" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-remplacement" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-remplacement" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-remplacement" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The faulty handler starts with 4 + 6. The correct handler replaces the count.</p></details><details class="indice"><summary>Hint 2</summary><p>To check the kitchen, add the remaining and served orders; compare this with the total of initial and incoming orders.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The faulty processing gives 4 + 6 = 10, then 10 + 3 = 13 orders. The correct result is 3 orders; the difference is 13 − 3 = 10 orders. The error comes from the meaning assigned to the content, even though the messages arrive correctly.</p><p>Conservation requires 3 + 3 = 6 orders, just as 4 + 2. The faulty count does not match this history of the queue. Transport and the application rule must therefore be checked separately.</p><p>Receiving C = 3 orders again still calls for D ← C. The display stays at 3 orders. Repeating a complete state does not mean adding a new quantity. This check uses only the stated contract; it does not assume that WebSocket eliminates repeated messages.</p><p class="petit-titre">Check your reasoning</p><ul><li>I work through both faulty additions to 13 orders.</li><li>I justify 3 by conservation, using orders as the unit.</li><li>I keep 3 orders after the new identical state and explain why.</li></ul></details></article><article class="exercice" id="ex-fermeture"><p class="repere">Exercise 3 · Transfer and limits of evidence</p>
+<h3>What do we know after closure?</h3><p>After the last valid state 3, the browser signals close. The kitchen keeps working behind the partition. Later, another channel opens, but no queue state has been received yet. One person wants to display 0 orders; another wants to present 3 as the confirmed current count. What information can be displayed honestly, and what observation is missing?</p>
+<label for="reponse-ex-fermeture">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fermeture" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fermeture" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fermeture" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fermeture" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Closure does not describe any operation on the order queue.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate the last value received from what is known now. Opening still does not contain any count.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The last known value is 3 orders. The current count is unknown, because the kitchen may have accepted or served orders since then. We can keep 3 with the label “last state received, freshness unconfirmed”; neither close nor the new opening justifies 0 orders or a confirmed current count.</p><p>What is missing is a new valid queue state and a check that it has been applied to the board. The new connection does not prove that changes made during the interruption have been recovered. Choosing timeouts and the recovery method belongs to the next unit; here we determine what can be concluded from the observed events.</p><p class="petit-titre">Check your reasoning</p><ul><li>I keep 3 as the last value received, with an explicit qualification about its freshness.</li><li>I do not turn closure into an empty queue.</li><li>I ask for a valid state and its application, without attributing a history to the new opening.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="canal"><summary><span class="repere">Recall 1</span><span>What does a WebSocket channel provide after it opens?</span></summary><p>A persistent channel over which the client and server can each send messages during the connection, without a new HTTP request for each message. The server can send an update without waiting for a new request.</p></details><details class="carte" data-carte="evenement"><summary><span class="repere">Recall 2</span><span>What is the difference between the message event and the type field in our JSON?</span></summary><p>message notifies the program that data has arrived. The type field describes what the content means for the application; the handler reads it to choose the processing. WebSocket does not require this content to be JSON.</p></details><details class="carte" data-carte="gestionnaire"><summary><span class="repere">Recall 3</span><span>What steps connect reception to the displayed count?</span></summary><p>The handler is called, decodes the JSON text, checks the type and the nonnegative integer count, then replaces the displayed state if the contract is satisfied. Invalid content must be reported without inventing a count of 0.</p></details><details class="carte" data-carte="etat"><summary><span class="repere">Recall 4</span><span>Why does receiving 3 orders again not increase the displayed queue?</span></summary><p>The contract carries the full current count: the display is replaced with 3 orders. Addition would only be appropriate for a different contract defining a change to apply.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>What does opening a channel prove, and what is still needed to announce an up-to-date board?</span></summary><p>Opening establishes the possibility of exchanging data at that moment. A valid state still has to be received, and its processing and the resulting display checked. Opening proves neither the recovery of a history nor the physical serving of a drink.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the lesson and reconstruct a route from the kitchen to the tablet, naming the channel, event, content and handler. Then recover the counts 4 → 6 → 3 orders, explain why “presence” changes nothing and repeat the conservation check. Finish with a sentence about what opening or closing a channel allows you to know.</p></div><div class="exports"><a class="bouton" download="c021-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTM6Y2FuYWwiLAogICAgICAidW5pdGUiOiAiYzAyMS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNhbmFsLXdlYnNvY2tldCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBXZWJTb2NrZXQgY2hhbm5lbCBwcm92aWRlIGFmdGVyIGl0IG9wZW5zPyIsCiAgICAgICJyZXBvbnNlIjogIkEgcGVyc2lzdGVudCBjaGFubmVsIG92ZXIgd2hpY2ggdGhlIGNsaWVudCBhbmQgc2VydmVyIGNhbiBlYWNoIHNlbmQgbWVzc2FnZXMgZHVyaW5nIHRoZSBjb25uZWN0aW9uLCB3aXRob3V0IGEgbmV3IEhUVFAgcmVxdWVzdCBmb3IgZWFjaCBtZXNzYWdlLiBUaGUgc2VydmVyIGNhbiBzZW5kIGFuIHVwZGF0ZSB3aXRob3V0IHdhaXRpbmcgZm9yIGEgbmV3IHJlcXVlc3QuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTM6ZXZlbmVtZW50IiwKICAgICAgInVuaXRlIjogImMwMjEtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldmVuZW1lbnQtZXQtY29udGVudSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gdGhlIG1lc3NhZ2UgZXZlbnQgYW5kIHRoZSB0eXBlIGZpZWxkIGluIG91ciBKU09OPyIsCiAgICAgICJyZXBvbnNlIjogIm1lc3NhZ2Ugbm90aWZpZXMgdGhlIHByb2dyYW0gdGhhdCBkYXRhIGhhcyBhcnJpdmVkLiBUaGUgdHlwZSBmaWVsZCBkZXNjcmliZXMgd2hhdCB0aGUgY29udGVudCBtZWFucyBmb3IgdGhlIGFwcGxpY2F0aW9uOyB0aGUgaGFuZGxlciByZWFkcyBpdCB0byBjaG9vc2UgdGhlIHByb2Nlc3NpbmcuIFdlYlNvY2tldCBkb2VzIG5vdCByZXF1aXJlIHRoaXMgY29udGVudCB0byBiZSBKU09OLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDIxLW0zOmdlc3Rpb25uYWlyZSIsCiAgICAgICJ1bml0ZSI6ICJjMDIxLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZ2VzdGlvbm5haXJlLWRlLW1lc3NhZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBzdGVwcyBjb25uZWN0IHJlY2VwdGlvbiB0byB0aGUgZGlzcGxheWVkIGNvdW50PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBoYW5kbGVyIGlzIGNhbGxlZCwgZGVjb2RlcyB0aGUgSlNPTiB0ZXh0LCBjaGVja3MgdGhlIHR5cGUgYW5kIHRoZSBub25uZWdhdGl2ZSBpbnRlZ2VyIGNvdW50LCB0aGVuIHJlcGxhY2VzIHRoZSBkaXNwbGF5ZWQgc3RhdGUgaWYgdGhlIGNvbnRyYWN0IGlzIHNhdGlzZmllZC4gSW52YWxpZCBjb250ZW50IG11c3QgYmUgcmVwb3J0ZWQgd2l0aG91dCBpbnZlbnRpbmcgYSBjb3VudCBvZiAwLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDIxLW0zOmV0YXQiLAogICAgICAidW5pdGUiOiAiYzAyMS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV0YXQtY29tcGxldCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyByZWNlaXZpbmcgMyBvcmRlcnMgYWdhaW4gbm90IGluY3JlYXNlIHRoZSBkaXNwbGF5ZWQgcXVldWU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNvbnRyYWN0IGNhcnJpZXMgdGhlIGZ1bGwgY3VycmVudCBjb3VudDogdGhlIGRpc3BsYXkgaXMgcmVwbGFjZWQgd2l0aCAzIG9yZGVycy4gQWRkaXRpb24gd291bGQgb25seSBiZSBhcHByb3ByaWF0ZSBmb3IgYSBkaWZmZXJlbnQgY29udHJhY3QgZGVmaW5pbmcgYSBjaGFuZ2UgdG8gYXBwbHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTM6bGltaXRlIiwKICAgICAgInVuaXRlIjogImMwMjEtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldGF0LWR1LWNhbmFsIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBvcGVuaW5nIGEgY2hhbm5lbCBwcm92ZSwgYW5kIHdoYXQgaXMgc3RpbGwgbmVlZGVkIHRvIGFubm91bmNlIGFuIHVwLXRvLWRhdGUgYm9hcmQ/IiwKICAgICAgInJlcG9uc2UiOiAiT3BlbmluZyBlc3RhYmxpc2hlcyB0aGUgcG9zc2liaWxpdHkgb2YgZXhjaGFuZ2luZyBkYXRhIGF0IHRoYXQgbW9tZW50LiBBIHZhbGlkIHN0YXRlIHN0aWxsIGhhcyB0byBiZSByZWNlaXZlZCwgYW5kIGl0cyBwcm9jZXNzaW5nIGFuZCB0aGUgcmVzdWx0aW5nIGRpc3BsYXkgY2hlY2tlZC4gT3BlbmluZyBwcm92ZXMgbmVpdGhlciB0aGUgcmVjb3Zlcnkgb2YgYSBoaXN0b3J5IG5vciB0aGUgcGh5c2ljYWwgc2VydmluZyBvZiBhIGRyaW5rLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c021-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgV2ViU29ja2V0IGNoYW5uZWwgcHJvdmlkZSBhZnRlciBpdCBvcGVucz8JQSBwZXJzaXN0ZW50IGNoYW5uZWwgb3ZlciB3aGljaCB0aGUgY2xpZW50IGFuZCBzZXJ2ZXIgY2FuIGVhY2ggc2VuZCBtZXNzYWdlcyBkdXJpbmcgdGhlIGNvbm5lY3Rpb24sIHdpdGhvdXQgYSBuZXcgSFRUUCByZXF1ZXN0IGZvciBlYWNoIG1lc3NhZ2UuIFRoZSBzZXJ2ZXIgY2FuIHNlbmQgYW4gdXBkYXRlIHdpdGhvdXQgd2FpdGluZyBmb3IgYSBuZXcgcmVxdWVzdC4JdG9kYWkgYzAyMS1tMyBjYW5hbC13ZWJzb2NrZXQKV2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBtZXNzYWdlIGV2ZW50IGFuZCB0aGUgdHlwZSBmaWVsZCBpbiBvdXIgSlNPTj8JbWVzc2FnZSBub3RpZmllcyB0aGUgcHJvZ3JhbSB0aGF0IGRhdGEgaGFzIGFycml2ZWQuIFRoZSB0eXBlIGZpZWxkIGRlc2NyaWJlcyB3aGF0IHRoZSBjb250ZW50IG1lYW5zIGZvciB0aGUgYXBwbGljYXRpb247IHRoZSBoYW5kbGVyIHJlYWRzIGl0IHRvIGNob29zZSB0aGUgcHJvY2Vzc2luZy4gV2ViU29ja2V0IGRvZXMgbm90IHJlcXVpcmUgdGhpcyBjb250ZW50IHRvIGJlIEpTT04uCXRvZGFpIGMwMjEtbTMgZXZlbmVtZW50LWV0LWNvbnRlbnUKV2hhdCBzdGVwcyBjb25uZWN0IHJlY2VwdGlvbiB0byB0aGUgZGlzcGxheWVkIGNvdW50PwlUaGUgaGFuZGxlciBpcyBjYWxsZWQsIGRlY29kZXMgdGhlIEpTT04gdGV4dCwgY2hlY2tzIHRoZSB0eXBlIGFuZCB0aGUgbm9ubmVnYXRpdmUgaW50ZWdlciBjb3VudCwgdGhlbiByZXBsYWNlcyB0aGUgZGlzcGxheWVkIHN0YXRlIGlmIHRoZSBjb250cmFjdCBpcyBzYXRpc2ZpZWQuIEludmFsaWQgY29udGVudCBtdXN0IGJlIHJlcG9ydGVkIHdpdGhvdXQgaW52ZW50aW5nIGEgY291bnQgb2YgMC4JdG9kYWkgYzAyMS1tMyBnZXN0aW9ubmFpcmUtZGUtbWVzc2FnZQpXaHkgZG9lcyByZWNlaXZpbmcgMyBvcmRlcnMgYWdhaW4gbm90IGluY3JlYXNlIHRoZSBkaXNwbGF5ZWQgcXVldWU/CVRoZSBjb250cmFjdCBjYXJyaWVzIHRoZSBmdWxsIGN1cnJlbnQgY291bnQ6IHRoZSBkaXNwbGF5IGlzIHJlcGxhY2VkIHdpdGggMyBvcmRlcnMuIEFkZGl0aW9uIHdvdWxkIG9ubHkgYmUgYXBwcm9wcmlhdGUgZm9yIGEgZGlmZmVyZW50IGNvbnRyYWN0IGRlZmluaW5nIGEgY2hhbmdlIHRvIGFwcGx5Lgl0b2RhaSBjMDIxLW0zIGV0YXQtY29tcGxldApXaGF0IGRvZXMgb3BlbmluZyBhIGNoYW5uZWwgcHJvdmUsIGFuZCB3aGF0IGlzIHN0aWxsIG5lZWRlZCB0byBhbm5vdW5jZSBhbiB1cC10by1kYXRlIGJvYXJkPwlPcGVuaW5nIGVzdGFibGlzaGVzIHRoZSBwb3NzaWJpbGl0eSBvZiBleGNoYW5naW5nIGRhdGEgYXQgdGhhdCBtb21lbnQuIEEgdmFsaWQgc3RhdGUgc3RpbGwgaGFzIHRvIGJlIHJlY2VpdmVkLCBhbmQgaXRzIHByb2Nlc3NpbmcgYW5kIHRoZSByZXN1bHRpbmcgZGlzcGxheSBjaGVja2VkLiBPcGVuaW5nIHByb3ZlcyBuZWl0aGVyIHRoZSByZWNvdmVyeSBvZiBhIGhpc3Rvcnkgbm9yIHRoZSBwaHlzaWNhbCBzZXJ2aW5nIG9mIGEgZHJpbmsuCXRvZGFpIGMwMjEtbTMgZXRhdC1kdS1jYW5hbAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hvtuuk gwjwhc goby</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wiluyz jtdhfy oqyf</span></span> · recognize the channel and its events</h3><dl><div><dt>What you understand</dt><dd>The fictional queue separates an open channel, a received notification, recognized content and a changed display. This breakdown helps you read a real transport implementation, whose types and processing differ from those at the counter.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sqkddb rzvtrn cpfuwv lksimn veakvi qfgpem wehvqm gscmxq evpqnb zyrguq mhqpno wzniez rcoabl gdixfe cgqrwo aaesbw nvcaky ccxxdl qbcsip srrqef xvsfdr zcbfgt mwthys xrkaor</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Prepare for Level 1 of this unit: reconstruct a message route without support and explain the handler’s role. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">twbfjh tmtasq rzpevt ejejhc yicrji hswjnp egudqo qhbldt jtivud ltnlbi yojkwz kdstfp ypqtrz sp</span></span> This page alone does not validate that milestone. Reading or an assisted answer never constitutes an acquired level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jnnltp hldyxo mektiv mzdacn hojdez hshhqb whkzmy fstgkj hptklm gdhmrh zzkzyi yvqool xicfwn drnmha gbaapc jbhoqy fdfjaq tlyqpk upcddn nekgtw lqktau kwnjod kddokl sjzhsu aktvgq necgvz xxqojb ttfcbu quhclf pvrkeg vikrgk lzokhl xnwhzk wnwmvc rlazvk krgdxo hifjve oq</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the exercises and the route on another day, without hints. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qpnjsb mceehn gikifb gighuv vqmjag hfpsbb szlw</span></span> For later authorized real evidence, the producer, the consumer of the receipt or refresh, and the displayed state will still need to be followed within the same observed exchange.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c021-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c021-m2.html">Previous</a> · <a href="c021-m4.html">Next</a></nav>
+<footer><p>Course book · C021·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

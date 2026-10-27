@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the outputs of several heads from the same input, concatenate them, then apply their output projection, checking the dimensions.">
+<title>C105·M2 · Multi-head attention — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wdaekc hymtpz rbvb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C105·M2</p><h1>Multi-head attention</h1><p class="objectif"><span>Your goal</span>Calculate the outputs of several heads from the same input, concatenate them, then apply their output projection, checking the dimensions.</p><p class="prerequis"><strong>Before you start</strong><br>c104-m5 : temporal validation · c102-m5 : finite difference checking · c050-m5 : conditioning · c105-m1 : queries-keys-values</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Consider the fictional phrase “cat sleeps”. When building the new representation of “sleeps”, one head may give more weight to “cat”, another to “sleeps”. They work on the same input, with their own settings. The second head does not receive the output of the first.</p><p>Each head produces a mixture of values. These values are themselves transformations of the input representations: heads differ in more than where they look. We will keep their results separate, then combine them.</p><p>Concatenating means placing coordinates end to end, in a fixed order. The output projection then multiplies this long row by a matrix: it can add, subtract or otherwise combine the heads’ coordinates. Concatenation alone does not calculate an average.</p><p>All numbers in this scene are fictional and have no physical unit; they are coordinates and coefficients. They were not learned from texts. The word labels help us keep track of rows; they do not establish a grammatical function for the heads. A diversity of learned relationships is possible, but the number of heads does not guarantee it.</p><div class="schemas"><figure><svg viewBox="0 0 360 284" xmlns="http://www.w3.org/2000/svg" role="img"><title>Shared input, separate mixtures</title><desc>The rows cat (4 ; 0) and sleeps (0 ; 8) feed both heads. For the sleeps row, head a uses weights 3/4 and 1/4 and returns 3. Head b uses 1/4 and 3/4 and returns 6. Neither head feeds the other.</desc><rect x="20" y="12" width="320" height="70" rx="7" class="cadre-neutre" /><text x="180" y="39" text-anchor="middle">cat (4 ; 0)</text><text x="180" y="65" text-anchor="middle">sleeps (0 ; 8)</text><path d="M180 82V101H92V124M180 101H268V124" class="trait" /><rect x="16" y="124" width="152" height="116" rx="7" class="cadre-prediction" /><rect x="192" y="124" width="152" height="116" rx="7" class="cadre-resultat" /><text x="92" y="151" text-anchor="middle">Head a</text><text x="268" y="151" text-anchor="middle">Head b</text><text x="92" y="179" text-anchor="middle" class="petite-etiquette">weights (3/4 ; 1/4)</text><text x="268" y="179" text-anchor="middle" class="petite-etiquette">weights (1/4 ; 3/4)</text><text x="92" y="215" text-anchor="middle">result: 3</text><text x="268" y="215" text-anchor="middle">result: 6</text><text x="180" y="269" text-anchor="middle" class="petite-etiquette">Outputs for “sleeps” only</text></svg><figcaption>The branches start from the shared input. Within each head, the weights apply to the words in the order cat, sleeps. The value projections, detailed in the calculation, also differ.</figcaption></figure><figure><svg viewBox="0 0 360 284" xmlns="http://www.w3.org/2000/svg" role="img"><title>Keep then combine coordinates</title><desc>Concatenation preserves the row (3 ; 6). The output projection calculates its sum 9 and difference -3. An average would give 4.5 and lose the separation between coordinates.</desc><rect x="24" y="12" width="312" height="60" rx="7" class="cadre-neutre" /><text x="180" y="37" text-anchor="middle">Concatenate: (3 ; 6)</text><text x="180" y="59" text-anchor="middle" class="petite-etiquette">2 coordinates kept</text><line x1="180" y1="72" x2="180" y2="109" class="trait" /><rect x="24" y="109" width="312" height="63" rx="7" class="cadre-prediction" /><text x="180" y="136" text-anchor="middle">Output projection</text><text x="180" y="159" text-anchor="middle" class="petite-etiquette">sum ; difference</text><line x1="180" y1="172" x2="180" y2="209" class="trait" /><rect x="24" y="209" width="312" height="54" rx="7" class="cadre-resultat" /><text x="180" y="242" text-anchor="middle">Output: (9 ; -3)</text></svg><figcaption>The matrix in our example produces a sum and a difference. This is a fictional choice: a learned projection does not have to follow this rule.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Same input, projections specific to each head; separate mixtures; coordinates concatenated in a fixed order; output projection.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The new row for “sleeps”</h3><p>We calculate only the output associated with “sleeps”, using 2 heads with 1 coordinate each. The attention weights are supplied after normalization, as input data for the calculation. We will calculate the value projections, mixtures and their recombination in full; we do not claim to recalculate numerical queries and keys that have not been provided.</p><ol class="etapes"><li><h3>Define the objects and dimensions</h3><p>X is the matrix of representations for the phrase: n rows, one per word, and d coordinates per row. Here n = 2 and d = 2. The rows are row vectors, in the order cat, sleeps. h = 2 is the number of heads; i denotes a head, named a or b in the example. The letters d_k and d_v denote the width of queries and keys, and the width of values, respectively; here they equal 1 and 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>8</mn></mtd></mtr></mtable><mo>)</mo></mrow></math></div><p>The matrix W_i^Q transforms an input row into a query, W_i^K into a key and W_i^V into a value. The query and key matrices have shape d × d_k; the value matrix has shape d × d_v. They are specific to the head and are normally adjusted during training. We treat them as fixed during this calculation. All numerical quantities have no physical unit.</p><p>Assumptions: self-attention over the whole phrase, with no visibility mask, no bias added to the projections and no random dropping of coordinates. We study only the multi-head operation, with no addition of the input to the output and no other sublayer. Positions will be covered in the next unit.</p></li><li><h3>Reconstruct the mechanism shared by the heads</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Q</mi><mi>i</mi></msub><mo>=</mo><mi>X</mi><msubsup><mi>W</mi><mi>i</mi><mi>Q</mi></msubsup><mo>;</mo><msub><mi>K</mi><mi>i</mi></msub><mo>=</mo><mi>X</mi><msubsup><mi>W</mi><mi>i</mi><mi>K</mi></msubsup><mo>;</mo><msub><mi>V</mi><mi>i</mi></msub><mo>=</mo><mi>X</mi><msubsup><mi>W</mi><mi>i</mi><mi>V</mi></msubsup></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>P</mi><mi>i</mi></msub><mo>=</mo><mi>softmax</mi><mo>(</mo><mfrac><mrow><msub><mi>Q</mi><mi>i</mi></msub><msubsup><mi>K</mi><mi>i</mi><mi>T</mi></msubsup></mrow><msqrt><msub><mi>d</mi><mi>k</mi></msub></msqrt></mfrac><mo>)</mo><mo>;</mo><msub><mi>H</mi><mi>i</mi></msub><mo>=</mo><msub><mi>P</mi><mi>i</mi></msub><msub><mi>V</mi><mi>i</mi></msub></mrow></math></div><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hympkx snuegg wyditz zqzful szmjcw punbqh yvvh</span></span> T means transpose: rows and columns are exchanged. The product Q_iK_iᵀ compares each query with each key. The square root of d_k is the scaling factor for the scores. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hsggzm jdwgqw mnibyz vnmoov jihxkr kdraxx gqay</span></span></p><p>The softmax function acts separately on each row of scores: for a score s_j, it gives exp(s_j) divided by the sum of exp(s_l) over visible words. exp is the exponential function; j and l index words. Each weight is positive and the row sums to 1. This reminder of C105·M1 explains where the weights come from; below they are supplied, without inventing values for Q_i and K_i.</p><p>For the “sleeps” row, the weights are (3/4 ; 1/4) in a and (1/4 ; 3/4) in b, always in the order cat, sleeps. Check: 3/4 + 1/4 = 1, and 1/4 + 3/4 = 1. This check is needed in each head; adding the weights of all heads is not the normalization used here.</p></li><li><h3>Project the values before mixing them</h3><p>Choose the following projection columns. Head a extracts the left coordinate of each word; b extracts the right coordinate. These are particularly simple linear projections, not grammatical functions.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>W</mi><mi>a</mi><mi>V</mi></msubsup><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd></mtr></mtable><mo>)</mo><mo>;</mo><msubsup><mi>W</mi><mi>b</mi><mi>V</mi></msubsup><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>)</mo></mrow></math></div><p>In a, the value for cat is 4 × 1 + 0 × 0 = 4. The value for sleeps is 0 × 1 + 8 × 0 = 0. The column V_a is therefore (4 ; 0), with one row per word.</p><p>In b, the value for cat is 4 × 0 + 0 × 1 = 0. The value for sleeps is 0 × 0 + 8 × 1 = 8. The column V_b is (0 ; 8). Check: multiplying a 2 × 2 matrix by a 2 × 1 column does give a 2 × 1 column.</p></li><li><h3>Calculate each mixture for “sleeps”</h3><p>Call the output rows of heads a and b at the “sleeps” position u_a and u_b. Since d_v = 1, each contains a single number. The weight for cat multiplies the value for cat in that same head; the weight for sleeps multiplies the value for sleeps.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>u</mi><mi>a</mi></msub><mo>=</mo><mn>3/4</mn><mo>×</mo><mn>4</mn><mo>+</mo><mn>1/4</mn><mo>×</mo><mn>0</mn><mo>=</mo><mn>3</mn><mo>+</mo><mn>0</mn><mo>=</mo><mn>3</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>u</mi><mi>b</mi></msub><mo>=</mo><mn>1/4</mn><mo>×</mo><mn>0</mn><mo>+</mo><mn>3/4</mn><mo>×</mo><mn>8</mn><mo>=</mo><mn>0</mn><mo>+</mo><mn>6</mn><mo>=</mo><mn>6</mn></mrow></math></div><p>Check the bounds: 3 lies between 0 and 4, and 6 between 0 and 8. Positive weights summing to 1 produce a mixture between the extreme values of each head. This checks the mixtures before the output projection.</p></li><li><h3>Concatenate while keeping the results separate</h3><p>The concatenation c = (u_a ; u_b) is the row vector (3 ; 6). The semicolon here separates coordinates in the same row; it does not mean vertical stacking. We keep the order a then b. The width is h × d_v = 2 × 1 = 2.</p><p>Taking the average would give (3 + 6)/2 = 4.5, a single number. This would be a different operation: we could no longer take the sum and difference of the original results separately.</p><p>For all positions at once, C = concat(H_a, H_b) is a matrix with shape n × (h d_v), built by placing the heads’ columns side by side. c is its row corresponding to sleeps.</p></li><li><h3>Apply the output projection</h3><p>W^O is the output projection matrix, with shape (h d_v) × d. The superscript O denotes output, not a power. For the whole phrase, Y = CW^O has shape n × d; here we calculate only its row y = cW^O for sleeps.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>W</mi><mi>O</mi></msup><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>-1</mn></mtd></mtr></mtable><mo>)</mo></mrow></math></div><p>Multiplying a row by a matrix uses each column of the matrix. First coordinate of y: 3 × 1 + 6 × 1 = 9. Second coordinate: 3 × 1 + 6 × (-1) = -3. Thus y = (9 ; -3), with no physical unit.</p><p>The first column specifies a sum; the second, a difference. This projection could be learned with other coefficients. It is not another normalization of the attention weights.</p></li><li><h3>Check by working backwards</h3><p>The dimensions are consistent: (1 × 2) multiplied by (2 × 2) gives a 1 × 2 row. The output does have the same width as the input; no general equality between h d_v and d was needed to allow the projection.</p><p>Our particular choice of W^O is reversible: half the sum of the output coordinates recovers u_a, and half their difference recovers u_b. Indeed, (9 + (-3))/2 = 3, and (9 − (-3))/2 = 6. This check uses the final results in reverse; an arbitrary projection would not necessarily be reversible.</p><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cwlwcn imlihp twxmmn mgyojp xcmaqv ppbxap ungn</span></span> W^O may contain negative coefficients. A multi-head output is therefore neither a probability nor necessarily a number between the input values.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the final values. Explain why the heads start from the same matrix, then reconstruct the value columns, the mixtures, the concatenated row and its product with W^O. At what point would taking an average lose information?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Head b continues the work of head a.”</h3><p>In this layer, each head projects the same input X. Draw the branches from X, with no line between the heads. Software may execute the calculations sequentially; this does not turn their mathematical dependency into a chain.</p><a href="#intuition">Find the shared input in the diagram</a></li><li><h3>“Concatenating outputs means calculating their average.”</h3><p>Write the row (3 ; 6), then count its 2 coordinates. The average 4.5 would keep only one. The matrix W^O needs the separate coordinates to calculate the difference.</p><a href="#exemple">Review the concatenation and final product</a></li><li><h3>“Since attention uses positive weights, its output cannot be negative.”</h3><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hyxboy zueegm cdtpvg mfltet zjiqtn ggtxje ykcg</span></span> The bounds on mixtures apply coordinate by coordinate within each head. The final projection in our example does give -3 in its second coordinate.</p><a href="#exemple">Compare the checks on mixtures with the final check</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-valeurs"><p class="repere">Exercise 1 · Warm-up · focused calculation</p>
+<h3>What value does head b mix?</h3><p>Start again from X and the column W_b^V in the example. Find the value of each word in b, then its output for sleeps with weights (1/4 ; 3/4). Give bounds that would detect an impossible result before W^O.</p>
+<label for="reponse-ex-valeurs">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-valeurs" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-valeurs" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-valeurs" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-valeurs" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiplication by the column (0 ; 1) keeps the right coordinate of each row.</p></details><details class="indice"><summary>Hint 2</summary><p>Each weight multiplies the value of the same word; the weights are positive and sum to 1.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Cat gives 4 × 0 + 0 × 1 = 0; sleeps gives 0 × 0 + 8 × 1 = 8. These are projected values, not comparison scores.</p><p>The output of b for sleeps is 1/4 × 0 + 3/4 × 8 = 0 + 6 = 6. It lies between 0 and 8, because the weights define a weighted average. These bounds apply to this mixture, before the output projection.</p><p class="petit-titre">Check your reasoning</p><ul><li>You calculate the projected values before applying the weights.</li><li>You obtain 6 and justify its bounds using the positivity and sum of the weights.</li><li>You distinguish attention weights from value coordinates.</li></ul></details></article><article class="exercice" id="ex-variante"><p class="repere">Exercise 2 · Application · propagating a change</p>
+<h3>An input coordinate changes</h3><p>In the same fictional phrase, the row for sleeps becomes (0 ; 12). Keep the attention weights and all projection matrices fixed as in the example. Calculate the new head outputs and the final row. Explain why this instruction does not automatically describe a full recalculation of self-attention.</p>
+<label for="reponse-ex-variante">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-variante" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-variante" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-variante" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-variante" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>W_a^V does not read the modified coordinate; W_b^V keeps it.</p></details><details class="indice"><summary>Hint 2</summary><p>After the mixtures, reuse the sum and difference defined by W^O. To explain the limitation, return to Q_i = XW_i^Q and K_i = XW_i^K.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The column for a remains (4 ; 0), so u_a remains 3. In b, it becomes (0 ; 12). The new mixture is 1/4 × 0 + 3/4 × 12 = 0 + 9 = 9.</p><p>The concatenated row is (3 ; 9). The projection gives (3 + 9 ; 3 − 9) = (12 ; -6). The values still have no physical unit.</p><p>This calculation isolates the effect of changing values while holding the attention weights fixed. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qqysnj hppdwc vuadox ncvlfh hffdrz kqskku tdxhvb fmqqcg cwqltu zaioln ixubgk rnbjuk olxofl dk</span></span> We cannot quantify this second effect without their matrices. Claiming the same output for the full recalculation would go beyond the supplied data.</p><p class="petit-titre">Check your reasoning</p><ul><li>You locate the modification in the values of b, without changing a.</li><li>You find (12 ; -6), respecting the direction of multiplication by W^O.</li><li>You explicitly state the assumption of fixed weights and the limitation of the calculation.</li></ul></details></article><article class="exercice" id="ex-permutation"><p class="repere">Exercise 3 · Transfer · resolving an objection</p>
+<h3>Can the heads be swapped without changing anything?</h3><p>Return to the original data. Someone concatenates b then a, keeping W^O as it is, and claims that the names of the heads make no difference. Calculate the resulting output. What change to W^O recovers exactly the original output? Justify it for arbitrary head outputs.</p>
+<label for="reponse-ex-permutation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-permutation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-permutation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-permutation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-permutation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The row becomes (6 ; 3). The second output coordinate is still the first input minus the second.</p></details><details class="indice"><summary>Hint 2</summary><p>Each row of W^O specifies the contribution of a concatenated coordinate. If that coordinate changes position, also move its corresponding row.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>With W^O unchanged, the new output is (6 + 3 ; 6 − 3) = (9 ; 3). The sum is preserved, but the difference has changed sign: this is not the original output (9 ; -3).</p><p>The rows of W^O must be swapped to associate each head result with its coefficients again. The corrected matrix is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>W</mi><mi>O</mi></msup><mo>′</mo><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>-1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable><mo>)</mo></mrow></math></div><p>For arbitrary outputs u_a and u_b, (u_b ; u_a) multiplied by this matrix gives (u_b + u_a ; −u_b + u_a), which recovers the original sum and difference. Numerically, we recover (9 ; -3). The prime simply marks the modified matrix. What matters is the correspondence between a head’s result and the rows of the projection, rather than the head’s name.</p><p class="petit-titre">Check your reasoning</p><ul><li>You detect the sign change and give (9 ; 3).</li><li>You swap the rows of W^O, linking each row to a concatenated coordinate.</li><li>You justify the repair using u_a and u_b, beyond the numerical example alone.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="entree"><summary><span class="repere">Recall 1</span><span>What do the heads in the same layer receive, and what can they transform differently?</span></summary><p>They receive the same input X. Each head has its own query, key and value projections, so it can produce its own weights and values. The heads do not form a chain.</p></details><details class="carte" data-carte="normalisation"><summary><span class="repere">Recall 2</span><span>What does the sum of weights equal to 1 apply to?</span></summary><p>For a given query position and head, it applies to the visible words. The weights of all heads are not normalized together. The output matrix W^O is not subject to this constraint.</p></details><details class="carte" data-carte="concatener"><summary><span class="repere">Recall 3</span><span>What does concatenation preserve, and what is its width?</span></summary><p>It preserves the coordinates of the head outputs in a fixed order by placing their columns side by side. Its width is h × d_v; averaging across heads would perform a different operation and lose their separation.</p></details><details class="carte" data-carte="projection"><summary><span class="repere">Recall 4</span><span>How does the concatenated row become an output of width d?</span></summary><p>It is multiplied on the right by W^O, with shape (h d_v) × d. Its coefficients combine the heads’ coordinates; they are not necessarily positive or normalized.</p></details><details class="carte" data-carte="diversite"><summary><span class="repere">Recall 5</span><span>What does simply having several heads fail to demonstrate?</span></summary><p>It demonstrates neither distinct grammatical functions nor a measured improvement. Heads can be redundant. Their number describes an architecture; their role and usefulness require separate evidence.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, draw the phrase and the branches to the heads. Reconstruct the query, key and value projections, then the mixture specific to each head. Explain what concatenation preserves, state the shape of W^O and reconstruct the calculation for sleeps. Finish by naming the assumptions: the numerical weights are supplied, the coordinates are fictional and the number of heads does not prove their specialization.</p></div><div class="exports"><a class="bouton" download="c105-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTI6ZW50cmVlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlbnRyZWUtY29tbXVuZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIHRoZSBoZWFkcyBpbiB0aGUgc2FtZSBsYXllciByZWNlaXZlLCBhbmQgd2hhdCBjYW4gdGhleSB0cmFuc2Zvcm0gZGlmZmVyZW50bHk/IiwKICAgICAgInJlcG9uc2UiOiAiVGhleSByZWNlaXZlIHRoZSBzYW1lIGlucHV0IFguIEVhY2ggaGVhZCBoYXMgaXRzIG93biBxdWVyeSwga2V5IGFuZCB2YWx1ZSBwcm9qZWN0aW9ucywgc28gaXQgY2FuIHByb2R1Y2UgaXRzIG93biB3ZWlnaHRzIGFuZCB2YWx1ZXMuIFRoZSBoZWFkcyBkbyBub3QgZm9ybSBhIGNoYWluLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW0yOm5vcm1hbGlzYXRpb24iLAogICAgICAidW5pdGUiOiAiYzEwNS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5vcm1hbGlzYXRpb24tcGFyLXRldGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBzdW0gb2Ygd2VpZ2h0cyBlcXVhbCB0byAxIGFwcGx5IHRvPyIsCiAgICAgICJyZXBvbnNlIjogIkZvciBhIGdpdmVuIHF1ZXJ5IHBvc2l0aW9uIGFuZCBoZWFkLCBpdCBhcHBsaWVzIHRvIHRoZSB2aXNpYmxlIHdvcmRzLiBUaGUgd2VpZ2h0cyBvZiBhbGwgaGVhZHMgYXJlIG5vdCBub3JtYWxpemVkIHRvZ2V0aGVyLiBUaGUgb3V0cHV0IG1hdHJpeCBXXk8gaXMgbm90IHN1YmplY3QgdG8gdGhpcyBjb25zdHJhaW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW0yOmNvbmNhdGVuZXIiLAogICAgICAidW5pdGUiOiAiYzEwNS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbmNhdGVuYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGNvbmNhdGVuYXRpb24gcHJlc2VydmUsIGFuZCB3aGF0IGlzIGl0cyB3aWR0aD8iLAogICAgICAicmVwb25zZSI6ICJJdCBwcmVzZXJ2ZXMgdGhlIGNvb3JkaW5hdGVzIG9mIHRoZSBoZWFkIG91dHB1dHMgaW4gYSBmaXhlZCBvcmRlciBieSBwbGFjaW5nIHRoZWlyIGNvbHVtbnMgc2lkZSBieSBzaWRlLiBJdHMgd2lkdGggaXMgaCDDlyBkX3Y7IGF2ZXJhZ2luZyBhY3Jvc3MgaGVhZHMgd291bGQgcGVyZm9ybSBhIGRpZmZlcmVudCBvcGVyYXRpb24gYW5kIGxvc2UgdGhlaXIgc2VwYXJhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNS1tMjpwcm9qZWN0aW9uIiwKICAgICAgInVuaXRlIjogImMxMDUtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwcm9qZWN0aW9uLXNvcnRpZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG9lcyB0aGUgY29uY2F0ZW5hdGVkIHJvdyBiZWNvbWUgYW4gb3V0cHV0IG9mIHdpZHRoIGQ/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgaXMgbXVsdGlwbGllZCBvbiB0aGUgcmlnaHQgYnkgV15PLCB3aXRoIHNoYXBlIChoIGRfdikgw5cgZC4gSXRzIGNvZWZmaWNpZW50cyBjb21iaW5lIHRoZSBoZWFkc+KAmSBjb29yZGluYXRlczsgdGhleSBhcmUgbm90IG5lY2Vzc2FyaWx5IHBvc2l0aXZlIG9yIG5vcm1hbGl6ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTI6ZGl2ZXJzaXRlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUtZGl2ZXJzaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBzaW1wbHkgaGF2aW5nIHNldmVyYWwgaGVhZHMgZmFpbCB0byBkZW1vbnN0cmF0ZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBkZW1vbnN0cmF0ZXMgbmVpdGhlciBkaXN0aW5jdCBncmFtbWF0aWNhbCBmdW5jdGlvbnMgbm9yIGEgbWVhc3VyZWQgaW1wcm92ZW1lbnQuIEhlYWRzIGNhbiBiZSByZWR1bmRhbnQuIFRoZWlyIG51bWJlciBkZXNjcmliZXMgYW4gYXJjaGl0ZWN0dXJlOyB0aGVpciByb2xlIGFuZCB1c2VmdWxuZXNzIHJlcXVpcmUgc2VwYXJhdGUgZXZpZGVuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c105-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB0aGUgaGVhZHMgaW4gdGhlIHNhbWUgbGF5ZXIgcmVjZWl2ZSwgYW5kIHdoYXQgY2FuIHRoZXkgdHJhbnNmb3JtIGRpZmZlcmVudGx5PwlUaGV5IHJlY2VpdmUgdGhlIHNhbWUgaW5wdXQgWC4gRWFjaCBoZWFkIGhhcyBpdHMgb3duIHF1ZXJ5LCBrZXkgYW5kIHZhbHVlIHByb2plY3Rpb25zLCBzbyBpdCBjYW4gcHJvZHVjZSBpdHMgb3duIHdlaWdodHMgYW5kIHZhbHVlcy4gVGhlIGhlYWRzIGRvIG5vdCBmb3JtIGEgY2hhaW4uCXRvZGFpIGMxMDUtbTIgZW50cmVlLWNvbW11bmUKV2hhdCBkb2VzIHRoZSBzdW0gb2Ygd2VpZ2h0cyBlcXVhbCB0byAxIGFwcGx5IHRvPwlGb3IgYSBnaXZlbiBxdWVyeSBwb3NpdGlvbiBhbmQgaGVhZCwgaXQgYXBwbGllcyB0byB0aGUgdmlzaWJsZSB3b3Jkcy4gVGhlIHdlaWdodHMgb2YgYWxsIGhlYWRzIGFyZSBub3Qgbm9ybWFsaXplZCB0b2dldGhlci4gVGhlIG91dHB1dCBtYXRyaXggV15PIGlzIG5vdCBzdWJqZWN0IHRvIHRoaXMgY29uc3RyYWludC4JdG9kYWkgYzEwNS1tMiBub3JtYWxpc2F0aW9uLXBhci10ZXRlCldoYXQgZG9lcyBjb25jYXRlbmF0aW9uIHByZXNlcnZlLCBhbmQgd2hhdCBpcyBpdHMgd2lkdGg/CUl0IHByZXNlcnZlcyB0aGUgY29vcmRpbmF0ZXMgb2YgdGhlIGhlYWQgb3V0cHV0cyBpbiBhIGZpeGVkIG9yZGVyIGJ5IHBsYWNpbmcgdGhlaXIgY29sdW1ucyBzaWRlIGJ5IHNpZGUuIEl0cyB3aWR0aCBpcyBoIMOXIGRfdjsgYXZlcmFnaW5nIGFjcm9zcyBoZWFkcyB3b3VsZCBwZXJmb3JtIGEgZGlmZmVyZW50IG9wZXJhdGlvbiBhbmQgbG9zZSB0aGVpciBzZXBhcmF0aW9uLgl0b2RhaSBjMTA1LW0yIGNvbmNhdGVuYXRpb24KSG93IGRvZXMgdGhlIGNvbmNhdGVuYXRlZCByb3cgYmVjb21lIGFuIG91dHB1dCBvZiB3aWR0aCBkPwlJdCBpcyBtdWx0aXBsaWVkIG9uIHRoZSByaWdodCBieSBXXk8sIHdpdGggc2hhcGUgKGggZF92KSDDlyBkLiBJdHMgY29lZmZpY2llbnRzIGNvbWJpbmUgdGhlIGhlYWRz4oCZIGNvb3JkaW5hdGVzOyB0aGV5IGFyZSBub3QgbmVjZXNzYXJpbHkgcG9zaXRpdmUgb3Igbm9ybWFsaXplZC4JdG9kYWkgYzEwNS1tMiBwcm9qZWN0aW9uLXNvcnRpZQpXaGF0IGRvZXMgc2ltcGx5IGhhdmluZyBzZXZlcmFsIGhlYWRzIGZhaWwgdG8gZGVtb25zdHJhdGU/CUl0IGRlbW9uc3RyYXRlcyBuZWl0aGVyIGRpc3RpbmN0IGdyYW1tYXRpY2FsIGZ1bmN0aW9ucyBub3IgYSBtZWFzdXJlZCBpbXByb3ZlbWVudC4gSGVhZHMgY2FuIGJlIHJlZHVuZGFudC4gVGhlaXIgbnVtYmVyIGRlc2NyaWJlcyBhbiBhcmNoaXRlY3R1cmU7IHRoZWlyIHJvbGUgYW5kIHVzZWZ1bG5lc3MgcmVxdWlyZSBzZXBhcmF0ZSBldmlkZW5jZS4JdG9kYWkgYzEwNS1tMiBsaW1pdGUtZGl2ZXJzaXRlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wdaekc hymtpz rbvb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Preparatory checkpoint · locating attention in the model pipeline</h3><dl><div><dt>What you understand</dt><dd>A multi-head operation transforms the representations already present in the input. Preparing or reducing context beforehand and calculating attention weights inside the model are distinct operations. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ucvouy qoamyv tpmkov gddgkg hqpcmd xtzfqp jpjk</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bwbdib awawld agybgp wdgown xdblgt efzyvz vitcxl xjmecn lazcoe mazvao xeajqh mavgqz fxtaaq ikvbrj rdgxcw npsytd jcirxp hqgqwy zibyvc hrtahn weeozj ehruac uffott sokzxj</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: reconstruct the dimensions, mixtures, concatenation and projection without help, then repair the head permutation. This checkpoint prepares for later discussions of context; it does not validate any canonical milestone in advance. Reading or an assisted answer never constitutes an acquired level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">piybte eylsfn okgadh hlrerw mfztfp clyuxv uabczs qjovrs mxkhod jpsgjq spvlzq dqcaqo zvtjut zwebwu ylylti qtvhbx irmqef yoysrs txvflw jdmbuc rfkcsj hxjpen zwkuwq ulryvj</span></span></dd></div><div><dt>To continue</dt><dd>Redo the calculation on another day without support, then study positions in C105·M3. To connect this concept to the real system afterwards, a verified source describing the architecture of the model actually used will be needed, followed by separate evidence of its authorized use; no service call or test is performed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c105-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c105-m1.html">Previous</a> · <a href="c105-m3.html">Next</a></nav>
+<footer><p>Course book · C105·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

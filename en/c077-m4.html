@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Follow an instruction from text to sound, calculate its duration, and explain what can be concluded when an asynchronous playback call returns.">
+<title>C077·M4 · Synthesis as a service and asynchronous playback — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hmzedh xlfzcf uttw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C077·M4</p><h1>Synthesis as a service and asynchronous playback</h1><p class="objectif"><span>Your goal</span>Follow an instruction from text to sound, calculate its duration, and explain what can be concluded when an asynchronous playback call returns.</p><p class="prerequis"><strong>Before you start</strong><br>c027-m5 : complex numbers · c011-m5 : binomial · c036-m5 : annotated graphs · c021-m5 : origin, authentication and authorization · c077-m1 : sample, frequency and PCM · c077-m2 : window and time measurement · c077-m3 : transcription as a service</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At the reception desk of a hall, an interface must say, “The hall is closing soon.” It already has the text. It still needs to produce audio, then ask the audio player to play it. While the sentence is being played, the person at the desk wants to keep using the interface.</p><p>Speech synthesis transforms text into an audio signal. A synthesis model calculates the samples; an adapter prepares the request, calls this model, and returns a result in a form the rest of the program understands. The service is this input and output contract. It can run locally: the word service does not require a network connection.</p><p>Playback is a separate step: it sends the available audio to the audio output. Asynchronous playback returns control to the calling program without waiting for the audio to finish. The caller can then handle another task. This return alone does not say whether the player has started, finished, or encountered a problem.</p><p>The whole scene is fictional: the sentence, samples, times, and events are exercise data. No real audio is produced here. We follow a complete synthesis operation, then uninterrupted playback; we study neither model training nor audio generation in chunks.</p><div class="schemas"><figure><svg viewBox="0 0 360 340" xmlns="http://www.w3.org/2000/svg" role="img"><title>From text to audio output</title><desc>The text and voice enter the adapter. It calls the synthesis model, retrieves ready audio, then passes it to the audio player. Producing audio and playing it are separate steps.</desc><rect x="30" y="12" width="300" height="42" rx="7" class="cadre-neutre" /><text x="180" y="39" text-anchor="middle">Text + voice</text><path d="M180 54v18m-5-5 5 5 5-5" class="trait" /><rect x="30" y="72" width="300" height="42" rx="7" class="cadre-prediction" /><text x="180" y="99" text-anchor="middle">Adapter: prepare the call</text><path d="M180 114v18m-5-5 5 5 5-5" class="trait" /><rect x="30" y="132" width="300" height="42" rx="7" class="cadre-neutre" /><text x="180" y="159" text-anchor="middle">Model: produce the signal</text><path d="M180 174v18m-5-5 5 5 5-5" class="trait" /><rect x="30" y="192" width="300" height="42" rx="7" class="cadre-resultat" /><text x="180" y="219" text-anchor="middle">Result: audio ready or error</text><path d="M180 234v18m-5-5 5 5 5-5" class="trait" /><rect x="30" y="252" width="300" height="42" rx="7" class="cadre-neutre" /><text x="180" y="279" text-anchor="middle">If audio ready: audio player</text><text x="180" y="325" text-anchor="middle" class="petite-etiquette">Audio available ≠ audio heard</text></svg><figcaption>The model provides the synthesis capability; the adapter organizes its use. The final step requires a result that actually contains usable audio.</figcaption></figure><figure><svg viewBox="0 0 360 285" xmlns="http://www.w3.org/2000/svg" role="img"><title>The times within the same call</title><desc>In the fictional trace, the audio is ready at 600 milliseconds, the playback call returns at 620 milliseconds, playback starts at 650 milliseconds and ends at 3650 milliseconds. The caller resumes before playback actually starts. The gaps drawn do not represent durations.</desc><line x1="24" y1="32" x2="24" y2="218" class="trait" /><circle cx="24" cy="38" r="5" class="point-prediction" /><text x="43" y="44">Audio ready</text><text x="337" y="44" text-anchor="end">600 ms</text><circle cx="24" cy="96" r="5" class="point-prediction" /><text x="43" y="102">Call returns</text><text x="337" y="102" text-anchor="end">620 ms</text><circle cx="24" cy="154" r="5" class="point-mesure" /><text x="43" y="160">Playback starts</text><text x="337" y="160" text-anchor="end">650 ms</text><circle cx="24" cy="212" r="5" class="resultat" /><text x="43" y="218">Playback ends</text><text x="337" y="218" text-anchor="end">3650 ms</text><text x="180" y="263" text-anchor="middle" class="petite-etiquette">Event order; times not to scale</text></svg><figcaption>All times are measured from the same starting point. Between the return and the end, the caller can continue its work; this does not shorten the sentence.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Request the audio, check the synthesis result, start playback, then look for separate evidence that it has finished. Also state what happens to a new request if the player is busy.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The same instruction, from the result to the last sample</h3><p>At time 0 ms, the interface requests “The hall is closing soon.” Synthesis finishes at 600 ms and returns mono audio with 72000 samples at 24000 Hz. The playback call returns at 620 ms; the player actually starts at 650 ms. Let us calculate the duration and expected end, then check an observation at 1000 ms.</p><ol class="etapes"><li><h3>Set out the contract and assumptions</h3><p>The service input contains the text to speak and the selected voice. The output distinguishes available audio from a failure with an explanation. The result must include the audio and its actual sampling frequency; any stated duration still needs to be checked. A simple success indicator does not establish pronunciation quality.</p><p>We assume that the model is available, the entire text is accepted, and all the audio is produced before playback. Mono means that the signal uses 1 channel. N is the number of samples in this channel, with no physical unit; f<sub>s</sub> is the frequency in hertz, or samples per second; D will be the duration in seconds. Here N = 72000 and f<sub>s</sub> = 24000 Hz.</p><p>The player plays at the declared frequency, without pauses, speed changes, or interruptions. The times use the same clock, with an origin of 0 ms. t<sub>p</sub> denotes the time when the audio is ready, tᵣ the return of the playback call, tᵈ the actual start of playback, and tᶠ its expected end, all in milliseconds. The letters p, r, d and f label these times.</p></li><li><h3>Calculate how long the audio should last</h3><p>The frequency tells us how many samples occupy each second. Dividing the total number of samples by this number per second therefore gives a duration. The number of characters in the text does not give this duration: the voice, pace, and pauses of the model affect the signal produced.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><mfrac><mi>N</mi><msub><mi>f</mi><mi>s</mi></msub></mfrac><mo>=</mo><mfrac><mn>72000</mn><mn>24000</mn></mfrac><mo>=</mo><mn>3</mn><mtext> s</mtext></mrow></math></div><p>Reverse check: 3 s × 24000 samples/s = 72000 samples. We recover the sample count of the audio. The time needed to produce it, 0.60 s here, describes a different duration.</p></li><li><h3>Separate the synthesis wait from the playback return</h3><p>In our mechanism, the synthesis call waits for the result from the model: the calling program stays in this call until 600 ms. The word asynchronous applies here to the playback launch that follows. Keeping the whole interface available during synthesis would also require moving this wait out of its main execution path.</p><p>Launching playback passes the audio to a thread: a sequence of instructions whose progress is scheduled separately from that of the caller. The caller resumes at 620 ms, or 0.62 s after the origin. The player starts at 650 ms, or 0.65 s. This order is an assumption in our fictional trace; another execution could start the player before the call returns.</p><p>From the audio being ready to the actual start, 650 − 600 = 50 ms elapse. Preparing the player and scheduling tasks can take up this interval. Starting a thread does not guarantee an immediate start.</p></li><li><h3>Place the end on the correct clock</h3><p>A second is 1000 ms. We must therefore convert D before adding it to a time in milliseconds: 3 s × 1000 ms/s = 3000 ms. We then add this duration to the actual start, because that is when playback begins consuming the samples.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>t</mi><mi>f</mi></msup><mo>=</mo><msup><mi>t</mi><mi>d</mi></msup><mo>+</mo><mn>1000</mn><mi>D</mi><mo>=</mo><mn>650</mn><mo>+</mo><mn>3000</mn><mo>=</mo><mn>3650</mn><mtext> ms</mtext></mrow></math></div><p>In this formula, the numerical values of the times are in ms and that of D is in s; the factor 1000 has the unit ms/s. The expected end is 3.65 s after the origin. When the call returns, 3650 − 620 = 3030 ms remain until this end. This interval still includes the wait for playback to start: it exceeds the duration of the audio.</p><p>This end is calculated under our assumptions. On a real player, a stop, pause, or failure would mean that this time could no longer confirm completion. A clock reaching the expected time does not, by itself, provide evidence that playback has finished.</p></li><li><h3>Check a time during playback</h3><p>At 1000 ms, the start has passed and the end has not been reached. The duration already played is 1000 − 650 = 350 ms. The duration still to play is 3650 − 1000 = 2650 ms.</p><p>Check by splitting the duration: 350 + 2650 = 3000 ms, recovering the 3000 ms of the signal. Check the boundaries: start, observation, and end occur in that order. These checks compare the audio content with the timeline; they do not check the loudspeaker volume.</p><p>The interface can already accept input during this interval. In a design that waited for playback to finish on the same execution path, it would stay in this call longer. Here we establish distinct times in a chosen trace, without measuring a real improvement in responsiveness.</p></li><li><h3>Choose what happens to a new request</h3><p>The reception desk requests playback of the same ready audio again at 1200 ms. At that point, 2450 ms of playback remain in our trace. A lock grants temporary exclusive use of a resource. Suppose the player holds it throughout playback and immediately rejects a new request when busy.</p><p>Under this policy, the new request is dropped: it does not automatically enter a queue. Of 2 playback requests, 1 is accepted and 1 is rejected. An additional thread therefore does not mean an additional playback. Playing the audio later would require a new request, or a queue explicitly designed for that purpose.</p><p>After the expected end, at 3700 ms, the margin is 50 ms. A new request could be accepted if the lock has actually been released and the player is available. The earlier rejected request remains rejected: the passage of time does not recreate it.</p></li><li><h3>State the evidence needed at each boundary</h3><p>The synthesis result establishes that the adapter has returned audio according to its contract. The return from the launch establishes only that this call has returned control. A task status tied to an identifier and updated by the worker could then distinguish accepted, playing, finished, and failed; this tracking must be built and checked if the product needs it.</p><p>Even an end confirmed by the playback program does not prove that someone heard the instruction: the output could be muted, the wrong device could be selected, or nobody could be present. For our calculation, we assumed successful playback through to the last sample. Establishing that an instruction was actually heard would require an observation suited to that requirement.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps and redraw the path of the sentence. Explain why synthesis time, audio duration, the call returning, and playback ending require different information. Then repeat the check by splitting the duration.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Synthesis succeeded, so the instruction was heard.”</h3><p>The result provides available audio. You still need to establish that playback was accepted and went all the way to the end, then choose suitable evidence if the requirement is that someone heard it.</p><a href="#exemple">Review the boundaries and their evidence</a></li><li><h3>“The call is asynchronous, so everything is instantaneous.”</h3><p>Identify which call returns control. Here synthesis still waits for the model; only the playback launch returns before the end. The 3 s of audio are still needed to play it at the declared rate.</p><a href="#intuition">Review the path and the distinct times</a></li><li><h3>“The lock keeps my request for later.”</h3><p>A lock controls who can use a resource; the policy decides what happens to the request. Our policy rejects it immediately if the player is busy. Without an explicit queue, nothing guarantees another attempt after the lock is released.</p><a href="#exercices">Reconstruct what happens to the concurrent request</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-contrat"><p class="repere">Exercise 1 · Identification and direct calculation</p>
+<h3>The audio is ready at the reception desk</h3><p>At 600 ms, synthesis has returned 72000 mono samples at 24000 Hz. What is the duration of the audio? Can we already display “instruction played through to the end”? Justify both answers.</p>
+<label for="reponse-ex-contrat">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-contrat" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-contrat" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-contrat" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-contrat" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A second contains fₛ samples. How many groups of this size does the audio contain?</p></details><details class="indice"><summary>Hint 2</summary><p>The synthesis result and the end of playback belong to different boundaries.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>N/f<sub>s</sub> = 72000/24000 = 3 s. The quotient compares a number of samples with a number of samples per second; the result is a duration.</p><p>We can report that the audio is ready in this trace. Playback has not yet started: it begins at 650 ms. Displaying a confirmed end at 600 ms would confuse producing the audio with using it.</p><p class="petit-titre">Check your reasoning</p><ul><li>I give 3 s with the division and the units.</li><li>I distinguish audio ready, playback starting, and playback ending.</li><li>I do not use the number of characters to calculate the duration.</li></ul></details></article><article class="exercice" id="ex-horloge"><p class="repere">Exercise 2 · Timeline on paper</p>
+<h3>The return that precedes the end</h3><p>Use the audio duration again. The return occurs at 620 ms and the actual start at 650 ms. Calculate the expected end and the time between the return and that end. At 1000 ms, check the split between elapsed and remaining duration. State the necessary assumptions.</p>
+<label for="reponse-ex-horloge">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-horloge" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-horloge" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-horloge" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-horloge" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Convert the signal duration to ms, then add it to the actual start.</p></details><details class="indice"><summary>Hint 2</summary><p>The time until the end is measured from the return; the audio duration is measured from the start. These origins differ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Conversion: 3 × 1000 = 3000 ms. Expected end: 650 + 3000 = 3650 ms, or 3.65 s after the origin. From return to end: 3650 − 620 = 3030 ms.</p><p>At the observation, 1000 − 650 = 350 ms have elapsed; 3650 − 1000 = 2650 ms remain. The sum is 3000 ms and recovers the signal duration. The time between the return and the start explains why 3030 ms exceeds this duration.</p><p>The calculation assumes a shared clock, the correct playback frequency, and no interruption. Evidence of completion from the player is still needed in a real situation; the calculation alone gives a prediction.</p><p class="petit-titre">Check your reasoning</p><ul><li>I convert seconds before adding them to milliseconds.</li><li>I place the end relative to the actual start, rather than the return of the call.</li><li>I check 350 + 2650 = 3000 ms and state the assumptions.</li></ul></details></article><article class="exercice" id="ex-concurrence"><p class="repere">Exercise 3 · Applying the reasoning to the mechanism</p>
+<h3>Can a dropped request come back?</h3><p>The initial playback holds the lock until it ends. At 1200 ms, the reception desk again requests playback of the same audio that is already ready. The rule rejects a request immediately if the lock is held and keeps no requests. How many playbacks are accepted from these 2 requests? At 3700 ms, can we expect the second to start automatically? Suggest what useful tracking should distinguish.</p>
+<label for="reponse-ex-concurrence">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-concurrence" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-concurrence" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-concurrence" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-concurrence" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare the time of the new request with the start and end of the initial playback.</p></details><details class="indice"><summary>Hint 2</summary><p>A lock can prevent use of a resource without storing the request. Look for the event that would trigger another playback.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At 1200 ms, the initial playback is in progress: 3650 − 1200 = 2450 ms remain. The lock is therefore held. We count 1 accepted playback and 2 − 1 = 1 rejected request.</p><p>At 3700 ms, we are 50 ms past the expected end. Even if the lock is released, the rejected request does not restart: nothing stored it. A new explicit request could try again. A queue would be another mechanism, with its own rules to define.</p><p>Tracking should distinguish the synthesis result, playback acceptance or rejection, then completion or failure of an accepted playback. Each status should refer to the correct request. Simply displaying “finished” when the call returns would erase these distinctions.</p><p class="petit-titre">Check your reasoning</p><ul><li>I place the new request within the playback interval.</li><li>I distinguish 2 requests from 1 accepted playback.</li><li>I explain why releasing the lock does not recreate the dropped request.</li><li>I suggest statuses linked to the request without presenting them as already implemented.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="service"><summary><span class="repere">Recall 1</span><span>What do the synthesis model and adapter each do?</span></summary><p>The model transforms text into an audio signal. The adapter prepares the call, checks the inputs, and returns a usable result or a failure with an explanation. The presence of the adapter does not prove that the model is available.</p></details><details class="carte" data-carte="duree"><summary><span class="repere">Recall 2</span><span>How can you find and check the duration of the mono audio for the instruction?</span></summary><p>D = N/fₛ, with N samples and fₛ in samples per second. Here 72000/24000 = 3 s. Multiplying the duration by fₛ should recover 72000 samples. Playback must use the declared frequency.</p></details><details class="carte" data-carte="retour"><summary><span class="repere">Recall 3</span><span>What does the return of an asynchronous playback call establish?</span></summary><p>The call has returned control to its caller without waiting for the audio to finish. It does not, by itself, confirm that playback has started, finished, or been heard. In our mechanism, the preceding synthesis still waits for the model.</p></details><details class="carte" data-carte="verrou"><summary><span class="repere">Recall 4</span><span>Why is a lock not enough to guarantee that the second request will be played?</span></summary><p>It protects exclusive use of a resource. Under our policy, a request that finds the player busy is dropped. A queue or an explicit retry would be needed to play it later.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>Why does reaching the calculated end not prove that the instruction was heard?</span></summary><p>The time assumes playback without incidents. Tracking the player is needed to confirm completion; even this does not guarantee that a person heard the audio through the correct audio output.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the course and reconstruct the path of the instruction: synthesis contract, role of the model, duration calculation, actual start, return, and end. Then explain what happens to the concurrent request and the evidence needed at each boundary. Reopen the course only to check missing elements. An answer obtained after a hint remains an assisted answer; reading and immediate success do not establish any attained level.</p></div><div class="exports"><a class="bouton" download="c077-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTQ6c2VydmljZSIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3ludGhlc2UtY29tbWUtc2VydmljZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIHRoZSBzeW50aGVzaXMgbW9kZWwgYW5kIGFkYXB0ZXIgZWFjaCBkbz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbW9kZWwgdHJhbnNmb3JtcyB0ZXh0IGludG8gYW4gYXVkaW8gc2lnbmFsLiBUaGUgYWRhcHRlciBwcmVwYXJlcyB0aGUgY2FsbCwgY2hlY2tzIHRoZSBpbnB1dHMsIGFuZCByZXR1cm5zIGEgdXNhYmxlIHJlc3VsdCBvciBhIGZhaWx1cmUgd2l0aCBhbiBleHBsYW5hdGlvbi4gVGhlIHByZXNlbmNlIG9mIHRoZSBhZGFwdGVyIGRvZXMgbm90IHByb3ZlIHRoYXQgdGhlIG1vZGVsIGlzIGF2YWlsYWJsZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ny1tNDpkdXJlZSIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZHVyZWUtZHUtc29uIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4geW91IGZpbmQgYW5kIGNoZWNrIHRoZSBkdXJhdGlvbiBvZiB0aGUgbW9ubyBhdWRpbyBmb3IgdGhlIGluc3RydWN0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIkQgPSBOL2bigpssIHdpdGggTiBzYW1wbGVzIGFuZCBm4oKbIGluIHNhbXBsZXMgcGVyIHNlY29uZC4gSGVyZSA3MjAwMC8yNDAwMCA9IDMgcy4gTXVsdGlwbHlpbmcgdGhlIGR1cmF0aW9uIGJ5IGbigpsgc2hvdWxkIHJlY292ZXIgNzIwMDAgc2FtcGxlcy4gUGxheWJhY2sgbXVzdCB1c2UgdGhlIGRlY2xhcmVkIGZyZXF1ZW5jeS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ny1tNDpyZXRvdXIiLAogICAgICAidW5pdGUiOiAiYzA3Ny1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxlY3R1cmUtYXN5bmNocm9uZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIHJldHVybiBvZiBhbiBhc3luY2hyb25vdXMgcGxheWJhY2sgY2FsbCBlc3RhYmxpc2g/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNhbGwgaGFzIHJldHVybmVkIGNvbnRyb2wgdG8gaXRzIGNhbGxlciB3aXRob3V0IHdhaXRpbmcgZm9yIHRoZSBhdWRpbyB0byBmaW5pc2guIEl0IGRvZXMgbm90LCBieSBpdHNlbGYsIGNvbmZpcm0gdGhhdCBwbGF5YmFjayBoYXMgc3RhcnRlZCwgZmluaXNoZWQsIG9yIGJlZW4gaGVhcmQuIEluIG91ciBtZWNoYW5pc20sIHRoZSBwcmVjZWRpbmcgc3ludGhlc2lzIHN0aWxsIHdhaXRzIGZvciB0aGUgbW9kZWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTQ6dmVycm91IiwKICAgICAgInVuaXRlIjogImMwNzctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhZG1pc3Npb24tZGUtbGVjdHVyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgaXMgYSBsb2NrIG5vdCBlbm91Z2ggdG8gZ3VhcmFudGVlIHRoYXQgdGhlIHNlY29uZCByZXF1ZXN0IHdpbGwgYmUgcGxheWVkPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IHByb3RlY3RzIGV4Y2x1c2l2ZSB1c2Ugb2YgYSByZXNvdXJjZS4gVW5kZXIgb3VyIHBvbGljeSwgYSByZXF1ZXN0IHRoYXQgZmluZHMgdGhlIHBsYXllciBidXN5IGlzIGRyb3BwZWQuIEEgcXVldWUgb3IgYW4gZXhwbGljaXQgcmV0cnkgd291bGQgYmUgbmVlZGVkIHRvIHBsYXkgaXQgbGF0ZXIuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTQ6cHJldXZlIiwKICAgICAgInVuaXRlIjogImMwNzctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwcmV1dmUtZGUtbGVjdHVyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyByZWFjaGluZyB0aGUgY2FsY3VsYXRlZCBlbmQgbm90IHByb3ZlIHRoYXQgdGhlIGluc3RydWN0aW9uIHdhcyBoZWFyZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdGltZSBhc3N1bWVzIHBsYXliYWNrIHdpdGhvdXQgaW5jaWRlbnRzLiBUcmFja2luZyB0aGUgcGxheWVyIGlzIG5lZWRlZCB0byBjb25maXJtIGNvbXBsZXRpb247IGV2ZW4gdGhpcyBkb2VzIG5vdCBndWFyYW50ZWUgdGhhdCBhIHBlcnNvbiBoZWFyZCB0aGUgYXVkaW8gdGhyb3VnaCB0aGUgY29ycmVjdCBhdWRpbyBvdXRwdXQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c077-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB0aGUgc3ludGhlc2lzIG1vZGVsIGFuZCBhZGFwdGVyIGVhY2ggZG8/CVRoZSBtb2RlbCB0cmFuc2Zvcm1zIHRleHQgaW50byBhbiBhdWRpbyBzaWduYWwuIFRoZSBhZGFwdGVyIHByZXBhcmVzIHRoZSBjYWxsLCBjaGVja3MgdGhlIGlucHV0cywgYW5kIHJldHVybnMgYSB1c2FibGUgcmVzdWx0IG9yIGEgZmFpbHVyZSB3aXRoIGFuIGV4cGxhbmF0aW9uLiBUaGUgcHJlc2VuY2Ugb2YgdGhlIGFkYXB0ZXIgZG9lcyBub3QgcHJvdmUgdGhhdCB0aGUgbW9kZWwgaXMgYXZhaWxhYmxlLgl0b2RhaSBjMDc3LW00IHN5bnRoZXNlLWNvbW1lLXNlcnZpY2UKSG93IGNhbiB5b3UgZmluZCBhbmQgY2hlY2sgdGhlIGR1cmF0aW9uIG9mIHRoZSBtb25vIGF1ZGlvIGZvciB0aGUgaW5zdHJ1Y3Rpb24/CUQgPSBOL2bigpssIHdpdGggTiBzYW1wbGVzIGFuZCBm4oKbIGluIHNhbXBsZXMgcGVyIHNlY29uZC4gSGVyZSA3MjAwMC8yNDAwMCA9IDMgcy4gTXVsdGlwbHlpbmcgdGhlIGR1cmF0aW9uIGJ5IGbigpsgc2hvdWxkIHJlY292ZXIgNzIwMDAgc2FtcGxlcy4gUGxheWJhY2sgbXVzdCB1c2UgdGhlIGRlY2xhcmVkIGZyZXF1ZW5jeS4JdG9kYWkgYzA3Ny1tNCBkdXJlZS1kdS1zb24KV2hhdCBkb2VzIHRoZSByZXR1cm4gb2YgYW4gYXN5bmNocm9ub3VzIHBsYXliYWNrIGNhbGwgZXN0YWJsaXNoPwlUaGUgY2FsbCBoYXMgcmV0dXJuZWQgY29udHJvbCB0byBpdHMgY2FsbGVyIHdpdGhvdXQgd2FpdGluZyBmb3IgdGhlIGF1ZGlvIHRvIGZpbmlzaC4gSXQgZG9lcyBub3QsIGJ5IGl0c2VsZiwgY29uZmlybSB0aGF0IHBsYXliYWNrIGhhcyBzdGFydGVkLCBmaW5pc2hlZCwgb3IgYmVlbiBoZWFyZC4gSW4gb3VyIG1lY2hhbmlzbSwgdGhlIHByZWNlZGluZyBzeW50aGVzaXMgc3RpbGwgd2FpdHMgZm9yIHRoZSBtb2RlbC4JdG9kYWkgYzA3Ny1tNCBsZWN0dXJlLWFzeW5jaHJvbmUKV2h5IGlzIGEgbG9jayBub3QgZW5vdWdoIHRvIGd1YXJhbnRlZSB0aGF0IHRoZSBzZWNvbmQgcmVxdWVzdCB3aWxsIGJlIHBsYXllZD8JSXQgcHJvdGVjdHMgZXhjbHVzaXZlIHVzZSBvZiBhIHJlc291cmNlLiBVbmRlciBvdXIgcG9saWN5LCBhIHJlcXVlc3QgdGhhdCBmaW5kcyB0aGUgcGxheWVyIGJ1c3kgaXMgZHJvcHBlZC4gQSBxdWV1ZSBvciBhbiBleHBsaWNpdCByZXRyeSB3b3VsZCBiZSBuZWVkZWQgdG8gcGxheSBpdCBsYXRlci4JdG9kYWkgYzA3Ny1tNCBhZG1pc3Npb24tZGUtbGVjdHVyZQpXaHkgZG9lcyByZWFjaGluZyB0aGUgY2FsY3VsYXRlZCBlbmQgbm90IHByb3ZlIHRoYXQgdGhlIGluc3RydWN0aW9uIHdhcyBoZWFyZD8JVGhlIHRpbWUgYXNzdW1lcyBwbGF5YmFjayB3aXRob3V0IGluY2lkZW50cy4gVHJhY2tpbmcgdGhlIHBsYXllciBpcyBuZWVkZWQgdG8gY29uZmlybSBjb21wbGV0aW9uOyBldmVuIHRoaXMgZG9lcyBub3QgZ3VhcmFudGVlIHRoYXQgYSBwZXJzb24gaGVhcmQgdGhlIGF1ZGlvIHRocm91Z2ggdGhlIGNvcnJlY3QgYXVkaW8gb3V0cHV0Lgl0b2RhaSBjMDc3LW00IHByZXV2ZS1kZS1sZWN0dXJlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hmzedh xlfzcf uttw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">adcxwz qemuxs mbpb</span></span> · the synthesis and playback part</h3><dl><div><dt>What you understand</dt><dd>You can distinguish the model that produces the audio, the adapter that organizes its call, and the player that uses the result. You know why an audio duration and an asynchronous return are not evidence that the audio was heard.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zofypp lzpncm vhewzs pcnbrc xqrtxl vfymie mxhbxq kyjxiu adjyub zgcpbq bhprtj qdgkot fzmqxb gzrezi mxqxqm hafgsq kedxna sjlyko xrgidv lzpubf ruxqjv rycfik oixypb ofhryr</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2 of the course prepares you to read the mechanism. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zemfhv ubkymx jniovv mhikdv gvetpg ugkppp wamvsa wgxhzy oxlwdz ndezlx ftkiwa tujdwj ojbtqe va</span></span> Redo the calculations and justify what happens to the concurrent request without help before any human validation.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uxjwia axaknl jukmmy tfynnr rrlplk ouvywu qzltyx mrhshj vfbjhu tvuhyu cwtlhm uqmnxk cdovfq vkzvyx viydbq oyzcov qusrzk lkuntq kczstt goxgbz qkasao vboznb hunyvd tavggv opxbwa tzdezq ajupom rphoej tgfbcz crioxk adyhir xjbmbu wgxbux ttbtsb fuhwmd fqcznj ajzmbb xc</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the mechanism without support on another day, then move on to C077·M5 to evaluate error, latency, and unavailability. A separate real acceptance test should check the caller’s execution path, playback acceptance, and playback completion with authorized inputs. It remains to be done; reading this page and giving an assisted answer do not validate any level.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c077-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c077-m3.html">Previous</a> · <a href="c077-m5.html">Next</a></nav>
+<footer><p>Course book · C077·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

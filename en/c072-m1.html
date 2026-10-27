@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct the canonical bytes of a record, then explain what comparing their digests actually allows us to conclude.">
+<title>C072·M1 · Digest and canonical encoding — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">abxiol tzrurx clmr</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C072·M1</p><h1>Digest and canonical encoding</h1><p class="objectif"><span>Your goal</span>Construct the canonical bytes of a record, then explain what comparing their digests actually allows us to conclude.</p><p class="prerequis"><strong>Before you start</strong><br>c022-m5 : untrusted inputs and injection · c070-m5 : minimum spanning tree · c017-m5 : reproduction protocol · c041-m5 : transactions and windows</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are archiving a storage record: cabinet a = 1, box b = 2. One person writes the box first; another starts with the cabinet. The information is the same, but the recorded characters are in a different order. The scene and its values are fictional.</p><p>A digest is a summary calculated from a sequence of bytes, the small units that make up a file. Hashing is the operation that produces this summary. It examines the bytes supplied: it cannot infer either the meaning of the record or the differences in presentation that we want to ignore.</p><p>We therefore need to choose what “the same record” means. Here, we allow variations in field order and in spacing around punctuation. A canonical encoding imposes a unique representation for these equivalent presentations. Changing the box, however, changes the data and must remain visible in the bytes.</p><p>The first diagram separates this formatting from hashing. The second shows a poor way to summarize bytes: simply adding them. We will calculate this sum by hand to understand its weakness, without treating it as a cryptographic digest.</p><div class="schemas"><figure><svg viewBox="0 0 360 320" xmlns="http://www.w3.org/2000/svg" role="img"><title>Specify the bytes before calculating the digest</title><desc>Two presentations of the same record, with fields in a different order, converge on a single canonical representation of 13 bytes. Hashing these same bytes gives the same digest h.</desc><rect x="18" y="14" width="148" height="62" rx="7" class="cadre-neutre" /><text x="92" y="39" text-anchor="middle">Copy A</text><text x="92" y="62" text-anchor="middle" class="petite-etiquette">b then a; one space</text><rect x="194" y="14" width="148" height="62" rx="7" class="cadre-neutre" /><text x="268" y="39" text-anchor="middle">Copy B</text><text x="268" y="62" text-anchor="middle" class="petite-etiquette">a then b; no space</text><path d="M92 76v24h88v22m88-46v24h-88" class="trait" /><rect x="35" y="122" width="290" height="68" rx="7" class="cadre-prediction" /><text x="180" y="149" text-anchor="middle">Same record → C → same bytes</text><text x="180" y="174" text-anchor="middle">a = 1 ; b = 2 ; 13 bytes</text><path d="M180 190v42m-5-5 5 5 5-5" class="trait" /><text x="196" y="216" class="petite-etiquette">H</text><rect x="35" y="244" width="290" height="58" rx="7" class="cadre-resultat" /><text x="180" y="268" text-anchor="middle">Same digest h</text><text x="180" y="289" text-anchor="middle" class="petite-etiquette">H deterministic; 256 bits of output</text></svg><figcaption>C denotes our canonical encoding; H, the chosen hashing algorithm; h, its result. The lines converge because the copies contain the same values and follow the same contract.</figcaption></figure><figure><svg viewBox="0 0 360 228" xmlns="http://www.w3.org/2000/svg" role="img"><title>An equal sum can hide a different record</title><desc>The record with a equal to 1, b equal to 2, and the record with a equal to 2, b equal to 1 have different bytes. Yet the sum of their bytes is 838 in both cases. This diagram concerns only the teaching sum S, not SHA.</desc><rect x="18" y="16" width="324" height="56" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">a = 1 ; b = 2</text><text x="180" y="61" text-anchor="middle" class="petite-etiquette">S = 838 sum units</text><rect x="18" y="94" width="324" height="56" rx="7" class="cadre-neutre" /><text x="180" y="118" text-anchor="middle">a = 2 ; b = 1</text><text x="180" y="139" text-anchor="middle" class="petite-etiquette">S = 838 sum units</text><path d="M180 150v24m-5-5 5 5 5-5" class="trait" /><text x="180" y="198" text-anchor="middle">Same sum; different data</text><text x="180" y="220" text-anchor="middle" class="petite-etiquette">An explicit collision for S</text></svg><figcaption>The numbers identify the cabinet and the box. Swapping their values changes the storage location. The sum S loses this association and does not detect the swap.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Define which data are equivalent, specify their canonical bytes, then always apply the same hashing algorithm. A digest does not choose what “identical” means.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Archive the storage record while distinguishing content from presentation</h3><p>Copy A writes b before a and leaves a space after the comma; copy B writes a before b and leaves no spaces. Both specify cabinet 1 and box 2. Let us produce the same sequence of bytes, count them and calculate a checksum for which we can check every term.</p><ol class="etapes"><li><h3>Define exactly which records are accepted</h3><p>The record d is an association between field names and their values. Field a identifies the cabinet, field b the box; these identifiers have no physical unit. In this small contract, the fields are exactly a and b, each appearing once, with an integer between 1 and 3. Every other case is rejected before encoding.</p><p>Here, JSON is a way of writing this association: braces surround the record, quotation marks delimit the names, colons separate each name from its value, and the comma separates the fields. Field order has no meaning for this record. The strings below reproduce the characters in the copies exactly. Copy A leaves a space after its comma:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>{"b":2, "a":1}</mtext></mrow></math></div><p>Copy B contains no spaces:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>{"a":1,"b":2}</mtext></mrow></math></div></li><li><h3>Write the canonical contract, then apply it</h3><p>C converts d to bytes: it writes a then b, keeps the names in double quotation marks, writes the integers in decimal digits with no leading 0 and adds no spaces. It encodes this text in UTF‑8, with no initial byte order mark or final newline. UTF‑8 is a rule for converting characters to bytes; every character in our domain occupies 1 byte here.</p><p>Let us read the values in A and B again, then rewrite them according to this contract. In both cases, the text to encode is exactly:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>{"a":1,"b":2}</mtext></mrow></math></div><p>This contract is limited to our record. Sorting the keys alone does not handle every case involving decimal numbers, accented text or repeated field names. We do not accept these cases here and do not claim to define a universal canonical format.</p></li><li><h3>Convert characters to bytes</h3><p>Here is the table we need, in decimal values: opening brace → 123, closing brace → 125, quotation mark → 34, comma → 44, colon → 58, letter a → 97, letter b → 98, digit 1 → 49, digit 2 → 50. A space, if present, has the value 32.</p><p>Follow the characters from left to right. Each number below is the value of a byte; the semicolons only make the list easier to read and are not bytes added to the record.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>123 ; 34 ; 97 ; 34 ; 58 ; 49 ; 44</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>34 ; 98 ; 34 ; 58 ; 50 ; 125</mtext></mrow></math></div><p>The numeric value 1 therefore becomes the character “1”, encoded by the byte with value 49. We must not directly put a byte with value 1 in this position. The choice of written representation is part of the contract.</p></li><li><h3>Count what the hashing algorithm will receive</h3><p>A name in quotation marks occupies 2 + 1 = 3 bytes. The colon and the digit of its value add 1 + 1 = 2 bytes. Each field therefore occupies 3 + 2 = 5 bytes, and the fields together occupy 2 × 5 = 10 bytes.</p><p>The braces and the comma occupy 2 + 1 = 3 bytes. The length n of C(d) is therefore:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>n</mi><mo>=</mo><mn>10</mn><mo>+</mo><mn>3</mn><mo>=</mo><mn>13</mn><mtext> octets</mtext></mrow></math></div><p>A byte contains 8 bits, each bit being 0 or 1. The input therefore represents 13 × 8 = 104 bits. Before canonicalization, A contains 13 + 1 = 14 bytes because of its space. Hashing A and B directly does not mean hashing the same bytes.</p></li><li><h3>Calculate a small sum, then understand its significance</h3><p>To work through a whole calculation with a pencil, define S as the sum of the byte values of C(d). S is an integer with no physical unit, expressed here in “sum units”. This checksum is used for teaching; it is not SHA and offers no cryptographic resistance.</p><p>Start with the outer punctuation: 123 + 125 = 248, then 248 + 44 = 292 sum units.</p><p>The names contain 4 quotation marks: 4 × 34 = 136. The letters give 97 + 98 = 195. Together: 136 + 195 = 331 sum units.</p><p>The colons give 2 × 58 = 116; the digits give 49 + 50 = 99. Together: 116 + 99 = 215 sum units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><mn>292</mn><mo>+</mo><mn>331</mn><mo>+</mo><mn>215</mn><mo>=</mo><mn>623</mn><mo>+</mo><mn>215</mn><mo>=</mo><mn>838</mn></mrow></math></div><p>We can check the result by directly adding the list of bytes from the previous step. For A before canonicalization, changing the order does not change the sum; the single additional space would raise it to 838 + 32 = 870 units.</p></li><li><h3>Explain the role of the cryptographic digest</h3><p>For a cryptographic digest, choose H = SHA‑256. H is a deterministic function: the same bytes always give the same result h. Here it summarizes the input of 104 bits with an output of 256 bits. It is neither compression that allows us to recover the record nor encryption that would keep it secret.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>=</mo><mi>H</mi><mo>(</mo><mi>C</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>)</mo></mrow></math></div><p>The output contains 256 ÷ 8 = 32 bytes. In hexadecimal, a notation that represents 4 bits per character, it occupies 256 ÷ 4 = 64 characters. These lengths are properties of the output format, not a measure of reliability.</p><p>We do not work through the internal operations of SHA: h remains its symbolic result, without inventing a value. The preceding numerical calculation is entirely that of S. One aim of a cryptographic function is to make it difficult to construct distinct inputs with the same digest; it does not make collisions mathematically impossible. A collision is precisely this equality of outputs for different inputs.</p></li><li><h3>Check the encoding and limit the conclusion</h3><p>Count the list again in another way: 2 braces + 4 quotation marks + 2 letters + 2 colons + 2 digits + 1 comma = 13 bytes. Reading the fields of this text again does give a = 1, b = 2. This check distinguishes a counting error from a loss of content.</p><p>A and B produce exactly C(d), so their canonical digests are equal. If we change only the box to 3, its digit is encoded by 51: the difference is 51 − 50 = 1. The sum becomes 838 + 1 = 839 units, but the length remains 13 bytes. Identical length therefore does not guarantee identical content.</p><p>With H fixed and the calculations correct, different digests imply different inputs. Equal digests are not absolute proof of equality, because collisions exist. To use a digest to check for changes, we also need a reference kept through a trusted channel: replacing the record and its reference together would fool the comparison. The digest alone proves neither who wrote the record nor whether the storage information is true.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the lists. Reconstruct the canonical text from the record, justify every character and distinguish n, S and h. Why is changing the field order allowed, whereas swapping their values changes the data?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The text looks identical, so its bytes and digest must be identical too.”</h3><p>Start again from the characters actually encoded: the space in A adds 1 byte. First state which variations have no effect on the record, then apply C to both copies before H. The chosen equality of meaning comes from the contract.</p><a href="#exemple">Review the contract and the byte count</a></li><li><h3>“Sorting the keys is enough to obtain a canonical encoding everywhere.”</h3><p>The contract also specifies the domain, the form of integers, spaces, character encoding and the final newline. The rules for our record reject cases they do not define. Another application must state its own rules instead of adopting only the sorting rule.</p><a href="#exemple">Reread the domain and all the rules of C</a></li><li><h3>“The sum is the same: nobody could have changed the record.”</h3><p>Swap the values of a and b: the bytes change position but their sum remains 838. This example disproves the guarantee for S; it does not provide a collision for SHA. Even a cryptographic digest must be compared with a trustworthy reference.</p><a href="#exercices">Construct the collision and discuss the reference</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-canon"><p class="repere">Exercise 1 · Warm-up · write and count</p>
+<h3>Recover the common form</h3><p>Start again from copy A, with b = 2 before a = 1 and a space after the comma. Write the text produced by C, count its bytes and explain why copy B must produce the same h. Do not calculate SHA.</p>
+<label for="reponse-ex-canon">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-canon" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-canon" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-canon" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-canon" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write field a first, then field b. Remove only the presentation spaces allowed by the contract.</p></details><details class="indice"><summary>Hint 2</summary><p>Count the names with their quotation marks, the colons, the digits and the outer punctuation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>{"a":1,"b":2}</mtext></mrow></math></div><p>Each field occupies 5 bytes. With 2 fields and 3 outer bytes, we obtain 10 + 3 = 13 bytes. The copies give these same bytes: the determinism of H is enough to conclude that they have the same canonical digest.</p><p>We have not claimed that the original files were equal byte for byte: A retains 14 bytes until it is canonicalized.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the values associated with the correct fields and write a before b, with no spaces or final newline.</li><li>Obtain 13 bytes by also counting quotation marks and punctuation.</li><li>Justify the equality of the digests by the identity of the canonical bytes.</li></ul></details></article><article class="exercice" id="ex-modification"><p class="repere">Exercise 2 · Application · modify and check</p>
+<h3>The box changes, the length stays the same</h3><p>The record now specifies a = 1, b = 3. The digit 3 is encoded by the byte 51. Write its canonical form, calculate the new sum S and its length in bytes. What can you say about the digest H without calculating it?</p>
+<label for="reponse-ex-modification">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-modification" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-modification" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-modification" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-modification" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Only the byte for the box digit changes. How many characters replace it?</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract 50 from the old sum and add 51. Then separate this result from any claim about H.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>{"a":1,"b":3}</mtext></mrow></math></div><p>The length remains 13 bytes: one digit replaces another. S increases by 51 − 50 = 1, so it reaches 839 sum units. Size alone misses this change; the sum detects it in this specific case.</p><p>The canonical bytes have changed. That is not enough to prove that the digests H are unequal: we must calculate and compare the outputs. A difference between them would establish a difference between the inputs; equality would not be absolute proof of identity. The sum S provides no calculation of H.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 839 sum units and 13 bytes, with separate justifications for each.</li><li>Do not turn the result of S into a result of SHA.</li><li>State the guaranteed direction of the implication between different digests and different inputs.</li></ul></details></article><article class="exercice" id="ex-collision"><p class="repere">Exercise 3 · Critical transfer · defend a conclusion</p>
+<h3>Same checksum, different storage location</h3><p>Compare the initial record a = 1, b = 2 with the record a = 2, b = 1. Show that they have the same S without adding everything again. A colleague then proposes replacing S with H and storing the record and its digest in the same editable folder. Can they conclude that the record is authentic and protected against any substitution?</p>
+<label for="reponse-ex-collision">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-collision" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-collision" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-collision" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-collision" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>List the bytes removed and then added when the values swap places.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish the collision you have just constructed for S from a collision for H. Also ask who can replace the reference digest.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The digits swap positions. The punctuation and letters stay the same, and 49 + 50 = 99 in both cases. The sum therefore remains 838 units even though the storage location has changed: this is an explicit collision for S.</p><p>This collision proves nothing similar for H, which processes byte order according to its own algorithm. A cryptographic digest meets requirements that S does not, but it does not identify the author on its own. If someone can replace the record and recalculate the reference stored alongside it, their agreement does not reveal this substitution.</p><p>The remedy is to specify the intended property, keep a trusted reference beyond the reach of this replacement and state the encoding contract as well as H. The mechanism for authenticating the author requires separate proof; we do not construct it in this unit.</p><p class="petit-titre">Check your reasoning</p><ul><li>Show why the sum 838 survives the swap even though the data and the bytes differ.</li><li>Identify a collision for S without claiming to have found one for H.</li><li>Describe how the record and its reference can be replaced together, then explain the limitation on identifying the author.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="entree"><summary><span class="repere">Recall 1</span><span>What does H receive, and what does its determinism guarantee?</span></summary><p>H receives a sequence of bytes. With the same algorithm and the same bytes, it gives the same digest; it does not interpret the meaning of the record.</p></details><details class="carte" data-carte="contrat"><summary><span class="repere">Recall 2</span><span>How can you reconstruct C for our record without looking at the example?</span></summary><p>Accept exactly a and b, with no repeats, and integers from 1 to 3; write a then b, names in quotation marks, integers with no leading 0, no spaces and no final newline; encode in UTF‑8 with no initial byte order mark. These rules are specific to this domain.</p></details><details class="carte" data-carte="taille"><summary><span class="repere">Recall 3</span><span>Why is n = 13 bytes not enough to identify the record?</span></summary><p>Replacing box 2 with 3 replaces one digit with another: the length remains 13 bytes while the content changes. Size checks length; it is not proof of identity.</p></details><details class="carte" data-carte="collision"><summary><span class="repere">Recall 4</span><span>Which collision can you construct here, and what does it fail to prove?</span></summary><p>Swapping a = 1, b = 2 to a = 2, b = 1 leaves S = 838 despite the different bytes. This is a collision for the sum S, not a collision calculated for SHA.</p></details><details class="carte" data-carte="reference"><summary><span class="repere">Recall 5</span><span>What can you conclude from two different digests? And why does equality not identify the author?</span></summary><p>With the same H correctly calculated, different digests imply different inputs. Equality remains compatible with a collision or with substitution of the data and its reference. Hashing alone does not attest to who produced the record.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path record → equivalence rules → canonical text → bytes → digest. Then explain why length, the sum S and the digest H do not provide the same evidence. Finish with the condition that the reference must be trusted, then give the counterexample with swapped values yourself.</p></div><div class="exports"><a class="bouton" download="c072-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzItbTE6ZW50cmVlIiwKICAgICAgInVuaXRlIjogImMwNzItbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlbXByZWludGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIEggcmVjZWl2ZSwgYW5kIHdoYXQgZG9lcyBpdHMgZGV0ZXJtaW5pc20gZ3VhcmFudGVlPyIsCiAgICAgICJyZXBvbnNlIjogIkggcmVjZWl2ZXMgYSBzZXF1ZW5jZSBvZiBieXRlcy4gV2l0aCB0aGUgc2FtZSBhbGdvcml0aG0gYW5kIHRoZSBzYW1lIGJ5dGVzLCBpdCBnaXZlcyB0aGUgc2FtZSBkaWdlc3Q7IGl0IGRvZXMgbm90IGludGVycHJldCB0aGUgbWVhbmluZyBvZiB0aGUgcmVjb3JkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDcyLW0xOmNvbnRyYXQiLAogICAgICAidW5pdGUiOiAiYzA3Mi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVuY29kYWdlLWNhbm9uaXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSByZWNvbnN0cnVjdCBDIGZvciBvdXIgcmVjb3JkIHdpdGhvdXQgbG9va2luZyBhdCB0aGUgZXhhbXBsZT8iLAogICAgICAicmVwb25zZSI6ICJBY2NlcHQgZXhhY3RseSBhIGFuZCBiLCB3aXRoIG5vIHJlcGVhdHMsIGFuZCBpbnRlZ2VycyBmcm9tIDEgdG8gMzsgd3JpdGUgYSB0aGVuIGIsIG5hbWVzIGluIHF1b3RhdGlvbiBtYXJrcywgaW50ZWdlcnMgd2l0aCBubyBsZWFkaW5nIDAsIG5vIHNwYWNlcyBhbmQgbm8gZmluYWwgbmV3bGluZTsgZW5jb2RlIGluIFVURuKAkTggd2l0aCBubyBpbml0aWFsIGJ5dGUgb3JkZXIgbWFyay4gVGhlc2UgcnVsZXMgYXJlIHNwZWNpZmljIHRvIHRoaXMgZG9tYWluLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDcyLW0xOnRhaWxsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDcyLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGFpbGxlLWV0LWNvbnRlbnUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGlzIG4gPSAxMyBieXRlcyBub3QgZW5vdWdoIHRvIGlkZW50aWZ5IHRoZSByZWNvcmQ/IiwKICAgICAgInJlcG9uc2UiOiAiUmVwbGFjaW5nIGJveCAyIHdpdGggMyByZXBsYWNlcyBvbmUgZGlnaXQgd2l0aCBhbm90aGVyOiB0aGUgbGVuZ3RoIHJlbWFpbnMgMTMgYnl0ZXMgd2hpbGUgdGhlIGNvbnRlbnQgY2hhbmdlcy4gU2l6ZSBjaGVja3MgbGVuZ3RoOyBpdCBpcyBub3QgcHJvb2Ygb2YgaWRlbnRpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzItbTE6Y29sbGlzaW9uIiwKICAgICAgInVuaXRlIjogImMwNzItbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb2xsaXNpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggY29sbGlzaW9uIGNhbiB5b3UgY29uc3RydWN0IGhlcmUsIGFuZCB3aGF0IGRvZXMgaXQgZmFpbCB0byBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJTd2FwcGluZyBhID0gMSwgYiA9IDIgdG8gYSA9IDIsIGIgPSAxIGxlYXZlcyBTID0gODM4IGRlc3BpdGUgdGhlIGRpZmZlcmVudCBieXRlcy4gVGhpcyBpcyBhIGNvbGxpc2lvbiBmb3IgdGhlIHN1bSBTLCBub3QgYSBjb2xsaXNpb24gY2FsY3VsYXRlZCBmb3IgU0hBLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDcyLW0xOnJlZmVyZW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMDcyLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVmZXJlbmNlLWRlLWNvbmZpYW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNhbiB5b3UgY29uY2x1ZGUgZnJvbSB0d28gZGlmZmVyZW50IGRpZ2VzdHM/IEFuZCB3aHkgZG9lcyBlcXVhbGl0eSBub3QgaWRlbnRpZnkgdGhlIGF1dGhvcj8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIHRoZSBzYW1lIEggY29ycmVjdGx5IGNhbGN1bGF0ZWQsIGRpZmZlcmVudCBkaWdlc3RzIGltcGx5IGRpZmZlcmVudCBpbnB1dHMuIEVxdWFsaXR5IHJlbWFpbnMgY29tcGF0aWJsZSB3aXRoIGEgY29sbGlzaW9uIG9yIHdpdGggc3Vic3RpdHV0aW9uIG9mIHRoZSBkYXRhIGFuZCBpdHMgcmVmZXJlbmNlLiBIYXNoaW5nIGFsb25lIGRvZXMgbm90IGF0dGVzdCB0byB3aG8gcHJvZHVjZWQgdGhlIHJlY29yZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c072-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIEggcmVjZWl2ZSwgYW5kIHdoYXQgZG9lcyBpdHMgZGV0ZXJtaW5pc20gZ3VhcmFudGVlPwlIIHJlY2VpdmVzIGEgc2VxdWVuY2Ugb2YgYnl0ZXMuIFdpdGggdGhlIHNhbWUgYWxnb3JpdGhtIGFuZCB0aGUgc2FtZSBieXRlcywgaXQgZ2l2ZXMgdGhlIHNhbWUgZGlnZXN0OyBpdCBkb2VzIG5vdCBpbnRlcnByZXQgdGhlIG1lYW5pbmcgb2YgdGhlIHJlY29yZC4JdG9kYWkgYzA3Mi1tMSBlbXByZWludGUKSG93IGNhbiB5b3UgcmVjb25zdHJ1Y3QgQyBmb3Igb3VyIHJlY29yZCB3aXRob3V0IGxvb2tpbmcgYXQgdGhlIGV4YW1wbGU/CUFjY2VwdCBleGFjdGx5IGEgYW5kIGIsIHdpdGggbm8gcmVwZWF0cywgYW5kIGludGVnZXJzIGZyb20gMSB0byAzOyB3cml0ZSBhIHRoZW4gYiwgbmFtZXMgaW4gcXVvdGF0aW9uIG1hcmtzLCBpbnRlZ2VycyB3aXRoIG5vIGxlYWRpbmcgMCwgbm8gc3BhY2VzIGFuZCBubyBmaW5hbCBuZXdsaW5lOyBlbmNvZGUgaW4gVVRG4oCROCB3aXRoIG5vIGluaXRpYWwgYnl0ZSBvcmRlciBtYXJrLiBUaGVzZSBydWxlcyBhcmUgc3BlY2lmaWMgdG8gdGhpcyBkb21haW4uCXRvZGFpIGMwNzItbTEgZW5jb2RhZ2UtY2Fub25pcXVlCldoeSBpcyBuID0gMTMgYnl0ZXMgbm90IGVub3VnaCB0byBpZGVudGlmeSB0aGUgcmVjb3JkPwlSZXBsYWNpbmcgYm94IDIgd2l0aCAzIHJlcGxhY2VzIG9uZSBkaWdpdCB3aXRoIGFub3RoZXI6IHRoZSBsZW5ndGggcmVtYWlucyAxMyBieXRlcyB3aGlsZSB0aGUgY29udGVudCBjaGFuZ2VzLiBTaXplIGNoZWNrcyBsZW5ndGg7IGl0IGlzIG5vdCBwcm9vZiBvZiBpZGVudGl0eS4JdG9kYWkgYzA3Mi1tMSB0YWlsbGUtZXQtY29udGVudQpXaGljaCBjb2xsaXNpb24gY2FuIHlvdSBjb25zdHJ1Y3QgaGVyZSwgYW5kIHdoYXQgZG9lcyBpdCBmYWlsIHRvIHByb3ZlPwlTd2FwcGluZyBhID0gMSwgYiA9IDIgdG8gYSA9IDIsIGIgPSAxIGxlYXZlcyBTID0gODM4IGRlc3BpdGUgdGhlIGRpZmZlcmVudCBieXRlcy4gVGhpcyBpcyBhIGNvbGxpc2lvbiBmb3IgdGhlIHN1bSBTLCBub3QgYSBjb2xsaXNpb24gY2FsY3VsYXRlZCBmb3IgU0hBLgl0b2RhaSBjMDcyLW0xIGNvbGxpc2lvbgpXaGF0IGNhbiB5b3UgY29uY2x1ZGUgZnJvbSB0d28gZGlmZmVyZW50IGRpZ2VzdHM/IEFuZCB3aHkgZG9lcyBlcXVhbGl0eSBub3QgaWRlbnRpZnkgdGhlIGF1dGhvcj8JV2l0aCB0aGUgc2FtZSBIIGNvcnJlY3RseSBjYWxjdWxhdGVkLCBkaWZmZXJlbnQgZGlnZXN0cyBpbXBseSBkaWZmZXJlbnQgaW5wdXRzLiBFcXVhbGl0eSByZW1haW5zIGNvbXBhdGlibGUgd2l0aCBhIGNvbGxpc2lvbiBvciB3aXRoIHN1YnN0aXR1dGlvbiBvZiB0aGUgZGF0YSBhbmQgaXRzIHJlZmVyZW5jZS4gSGFzaGluZyBhbG9uZSBkb2VzIG5vdCBhdHRlc3QgdG8gd2hvIHByb2R1Y2VkIHRoZSByZWNvcmQuCXRvZGFpIGMwNzItbTEgcmVmZXJlbmNlLWRlLWNvbmZpYW5jZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">abxiol tzrurx clmr</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Towards <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ywohdu gnzcpf mzfc</span></span> · specify the hashing input before studying a chain</h3><dl><div><dt>What you understand</dt><dd>The digest depends on the bytes and the algorithm; the canonical contract determines which variations in representation we ignore. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zhnszm egbesx khivxj hchnwd zjgzcq mtuibz hnbs</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rgaqow cfllnw kuuony jcowzv dfpgqu poyctb fkgten kphhsi igtfjx nxfnpy rnzruv ztrvgi prhbeu xysbdv uvnmfg halymx bktyaq hksxfn yajhol hkmsjn edxlby ejhivt ieoxjy eikmnz</span></span></dd></div><div><dt>Your level</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ckijnt kmwmyh gptlcu kcwmgf afnlzb vgihmy yjyo</span></span> This unit prepares only its encoding. Reading, an assisted answer and a static check of the page never establish that a level has been achieved.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rfexlr cjbkbt mzgkqh ufmija svlucw rwwdqh yhbihk wucueg znpqip jbsbdr fcvmxj sstntn zltzwq mlaqxl jiwydm lukpdh hvpeyz jmbjme pfqehk qpnehh tgnhce cxscux lzbbfg jgakmo</span></span></dd></div><div><dt>To continue</dt><dd>On another day, reconstruct the contract, the count and the collision for S without support, then explain the limitation of the reference. Continue with C072·M2 for the hash chain and its limits. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qlhovt xkchmf xpfbmx gkkenv kwvkck ppvndw wjdufs rszoaw qtowwd hicxqk ctkumn xspbht acyxxe yd</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c072-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c071-m5.html">Previous</a> · <a href="c072-m2.html">Next</a></nav>
+<footer><p>Course book · C072·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Decompose the expected squared prediction error into irreducible noise, squared bias and variance, then explain why a ridge penalty can lower the error by accepting some bias.">
+<title>C100·M4 · Bias–variance — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">juasqf kwlkcb gmkc</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C100·M4</p><h1>Bias–variance</h1><p class="objectif"><span>Your goal</span>Decompose the expected squared prediction error into irreducible noise, squared bias and variance, then explain why a ridge penalty can lower the error by accepting some bias.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c059-m6 : deterministic discrete Bellman · c066-m5 : standard errors and diagnostics · c100-m1 : predictive regression · c100-m2 : ridge · c100-m3 : lasso</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional delivery service wants to predict the duration of a 3 km trip. It has observed only 2 training trips, of 1 km and 2 km, and its rule is simple: duration is proportional to distance, with a coefficient in minutes per kilometre. All these values are fictional; they support a calculation rather than a field measurement.</p><p>Imagine repeating the training several times, with the same distances but different random traffic effects. The fitted coefficient changes from one training run to the next, so the prediction changes too. Two separate questions arise. Where is the mean of these predictions relative to the target duration? This systematic difference is called bias. And how spread out are the predictions around their own mean? This is the variance.</p><p>A third component is beyond the control of any model: the new trip also has its own random effect, independent of the training. This irreducible noise remains even if we know the true coefficient.</p><p>The ridge penalty, introduced in the unit on ridge, moves the coefficient towards 0. It brings the predictions closer together across training runs, reducing variance, but it also pulls their mean below the target duration, creating bias. Regularization means choosing a point in this trade-off; the example calculates it in full.</p><p>This decomposition is a theoretical calculation under a model whose truth we know because the scenario is invented. With real data, we have only one training run and cannot calculate bias and variance directly: we measure error on data held aside.</p><div class="schemas"><figure><svg viewBox="0 0 480 215" xmlns="http://www.w3.org/2000/svg" role="img"><title>Repeated training with and without a penalty</title><desc>Four predictions per setting. Without a penalty, they are spread around the target value of 6 minutes, with deviations of 9 and 3 minutes. With penalty 5, the deviations are multiplied by 0.5 and the mean shifts by -3 minutes.</desc><line x1="240" y1="34" x2="240" y2="172" class="trait" /><text x="240" y="24" text-anchor="middle">Target: 6 min</text><text x="10" y="58" class="petite-etiquette">λ = 0 km²: deviations ±9 and ±3 min</text><line x1="40" y1="82" x2="440" y2="82" class="trait" /><circle cx="60" cy="82" r="7" class="point-mesure" /><circle cx="180" cy="82" r="7" class="point-mesure" /><circle cx="300" cy="82" r="7" class="point-mesure" /><circle cx="420" cy="82" r="7" class="point-mesure" /><circle cx="240" cy="82" r="5" class="resultat" /><text x="10" y="116" class="petite-etiquette">λ = 5 km²: same deviations times 0.5</text><line x1="40" y1="140" x2="440" y2="140" class="trait" /><circle cx="90" cy="140" r="7" class="point-prediction" /><circle cx="150" cy="140" r="7" class="point-prediction" /><circle cx="210" cy="140" r="7" class="point-prediction" /><circle cx="270" cy="140" r="7" class="point-prediction" /><circle cx="180" cy="140" r="5" class="resultat" /><line x1="180" y1="162" x2="240" y2="162" class="trait" /><text x="210" y="192" text-anchor="middle">Bias: -3 min</text></svg><figcaption>Each point is the prediction from a training run, in minutes. Without a penalty, the points are spread around the target value; with a penalty, they are closer together but centred lower. The gold discs mark the means.</figcaption></figure><figure><svg viewBox="0 0 600 370" xmlns="http://www.w3.org/2000/svg" role="img"><title>Three error terms for different penalties</title><desc>Three stacked bars for penalties 0, 5 and 20. The noise of 25 square minutes is identical. Variance changes from 45 to 11.25 then 1.8, and squared bias from 0 to 9 then 23.04. The total errors are 70.00, 45.25 and 49.84.</desc><line x1="30" y1="320" x2="410" y2="320" class="trait" /><rect x="40" y="220" width="80" height="100" class="cadre-neutre" /><rect x="40" y="40" width="80" height="180" class="cadre-resultat" /><text x="80" y="32" text-anchor="middle">70.00</text><text x="80" y="345" text-anchor="middle">λ = 0</text><rect x="170" y="220" width="80" height="100" class="cadre-neutre" /><rect x="170" y="184" width="80" height="36" class="cadre-prediction" /><rect x="170" y="139" width="80" height="45" class="cadre-resultat" /><text x="210" y="131" text-anchor="middle">45.25</text><text x="210" y="345" text-anchor="middle">λ = 5</text><rect x="300" y="220" width="80" height="100" class="cadre-neutre" /><rect x="300" y="127.84" width="80" height="92.16" class="cadre-prediction" /><rect x="300" y="120.64" width="80" height="7.2" class="cadre-resultat" /><text x="340" y="112" text-anchor="middle">49.84</text><text x="340" y="345" text-anchor="middle">λ = 20</text><rect x="430" y="60" width="14" height="14" class="cadre-resultat" /><text x="452" y="73" class="petite-etiquette">Variance</text><rect x="430" y="90" width="14" height="14" class="cadre-prediction" /><text x="452" y="103" class="petite-etiquette">Squared bias</text><rect x="430" y="120" width="14" height="14" class="cadre-neutre" /><text x="452" y="133" class="petite-etiquette">Irreducible noise</text><text x="430" y="170" class="petite-etiquette">Above: total in min²</text></svg><figcaption>Heights are proportional to the errors, in min². Irreducible noise is the same at the base of each bar; only bias² and variance depend on the penalty λ, expressed in km².</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Expected error = irreducible noise + bias² + variance. A penalty improves prediction only if the variance it removes exceeds the bias² it adds.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Predict a 3 km trip after 2 training trips</h3><p>In a fictional scenario, the true relation is y = θx + ε, with θ = 2 min/km, unknown to the model. The random effect ε is +5 min or −5 min with equal probability, independently from one trip to another. The two training trips have x₁ = 1 km and x₂ = 2 km; we predict at x₀ = 3 km. Compare the expected squared error for λ = 0 km² and for λ = 5 km².</p><ol class="etapes"><li><h3>Define the symbols and assumptions</h3><p>x is distance in kilometres and y is duration in minutes. The true model is as follows, with i equal to 1 or 2. θ is the unknown coefficient, in minutes per kilometre; εᵢ is the random effect for trip i, in minutes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><mi>θ</mi><msub><mi>x</mi><mi>i</mi></msub><mo>+</mo><msub><mi>ε</mi><mi>i</mi></msub></mrow></math></div><p>Assumptions. Each random effect has 0 mean and variance σ² = s², here 5 × 5 = 25 min². The random effects for the trips are independent of one another and independent of the random effect ε<sub>0</sub> for the trip to be predicted. The distances are fixed in advance: only the duration is random. The fitted model has the same form as the true relation, with no intercept; its only possible weakness will therefore come from the penalty.</p><p>The target duration at x<sub>0</sub> is θx<sub>0</sub> = 2 × 3 = 6 min. The model does not know it; we know it because the scenario is invented, and because we want to decompose the error rather than estimate anything.</p></li><li><h3>Write the ridge estimator and the prediction</h3><p>Ridge seeks the θ̂ that minimizes the sum of squared training residuals plus λθ². The setting λ is expressed in km², so λθ² is in min², like the squared residuals. Setting the derivative with respect to θ to 0 gives θ̂(S + λ) = Σ xᵢyᵢ, where S is the sum of squared distances.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msup><msub><mi>x</mi><mi>i</mi></msub><mn>2</mn></msup></mrow></math></div><p>Here S = 1 × 1 + 2 × 2 = 1 + 4 = 5 km².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>θ</mi><mo>^</mo></mover><mi>λ</mi></msub><mo>=</mo><mfrac><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>x</mi><mi>i</mi></msub><msub><mi>y</mi><mi>i</mi></msub></mrow><mrow><mi>S</mi><mo>+</mo><mi>λ</mi></mrow></mfrac></mrow></math></div><p>Replace yᵢ with θxᵢ + εᵢ. The numerator becomes Sθ + g, where g, in km·min, is the sum of the xᵢεᵢ terms. The prediction at x<sub>0</sub> can then be written using r = S / (S + λ), a dimensionless shrinkage factor between 0 and one.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g</mi><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>x</mi><mi>i</mi></msub><msub><mi>ε</mi><mi>i</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mfrac><mrow><mi>S</mi></mrow><mrow><mi>S</mi><mo>+</mo><mi>λ</mi></mrow></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>=</mo><msub><mover><mi>θ</mi><mo>^</mo></mover><mi>λ</mi></msub><msub><mi>x</mi><mn>0</mn></msub><mo>=</mo><mi>r</mi><mo>(</mo><mi>θ</mi><msub><mi>x</mi><mn>0</mn></msub><mo>+</mo><mfrac><mrow><msub><mi>x</mi><mn>0</mn></msub><mi>g</mi></mrow><mrow><mi>S</mi></mrow></mfrac><mo>)</mo></mrow></math></div><p>The term x<sub>0</sub>g/S is the shift due to the training noise; r multiplies both the target duration and this shift.</p></li><li><h3>Repeat the training without a penalty</h3><p>For λ = 0 km², r = 1. Each random effect is ±5 min: the 4 combinations are equally likely, giving our 4 training runs. If the two random effects have the same sign, g = ±(1 + 2) × 5 = ±15 km·min. If they have opposite signs, g = ±(2 − 1) × 5 = ±5 km·min.</p><p>The shift x<sub>0</sub>g/S uses x<sub>0</sub>/S = 3 / 5 = 0.6 per kilometre, so its product with g remains in minutes. It therefore equals ±9 min or ±3 min. The 4 predictions are 6 ± 9 min and 6 ± 3 min.</p><p>Their mean remains 6 min: the bias is 0. Their variance is the mean of the squared deviations from this mean: (9² + 9² + 3² + 3²) / 4 = 45 min².</p><p>Check using the formula σ²x<sub>0</sub>²/S:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>=</mo><mfrac><mrow><mn>25</mn><mo>×</mo><mn>9</mn></mrow><mrow><mn>5</mn></mrow></mfrac><mo>=</mo><mn>45</mn><mtext> min²</mtext></mrow></math></div><p>The product 25 × 9 is 225, then 225 / 5 gives 45 min². The two methods agree. Adding the noise of the new trip, the expected error without a penalty is 0 + 45 + 25 = 70 min².</p></li><li><h3>Add the penalty</h3><p>Take λ = 5 km². Then S + λ = 5 + 5 = 10 km² and r = 5 / 10 = 0.5.</p><p>Each prediction is multiplied by r: the mean becomes 0.5 × 6 = 3 min. The bias is therefore 3 − 6 = -3 min, giving bias² of 9 min². The negative sign means that the model underestimates on average.</p><p>The deviations around the mean are multiplied by r, so their squares are multiplied by r² = 0.25:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>=</mo><mn>0.25</mn><mo>×</mo><mn>45</mn><mo>=</mo><mn>11.25</mn><mtext> min²</mtext></mrow></math></div><p>The predictions are closer together, but they are no longer centred on the target duration.</p></li><li><h3>Justify the decomposition</h3><p>Let m = E[f̂(x<sub>0</sub>)] be the mean of the predictions across training runs. For a new trip, y<sub>0</sub> = θx<sub>0</sub> + ε<sub>0</sub>. The difference splits into three parts:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mn>0</mn></msub><mo>−</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>=</mo><msub><mi>ε</mi><mn>0</mn></msub><mo>+</mo><mo>(</mo><mi>θ</mi><msub><mi>x</mi><mn>0</mn></msub><mo>−</mo><mi>m</mi><mo>)</mo><mo>+</mo><mo>(</mo><mi>m</mi><mo>−</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>)</mo></mrow></math></div><p>Square this expression and take the mean. The three squares give σ², (θx<sub>0</sub> − m)² and the variance of f̂. Three cross terms remain. The expected cross product of ε<sub>0</sub> with either of the other two parts is 0: ε<sub>0</sub> has 0 mean and is independent of the training. The expected cross product of the constant θx<sub>0</sub> − m with m − f̂ is also 0, since m − f̂ has 0 mean by the definition of m.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><msup><mo>(</mo><msub><mi>y</mi><mn>0</mn></msub><mo>−</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>)</mo><mn>2</mn></msup><mo>]</mo><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>+</mo><msup><mo>(</mo><mi>E</mi><mo>[</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>]</mo><mo>−</mo><mi>θ</mi><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mn>2</mn></msup><mo>+</mo><mi>Var</mi><mo>[</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>]</mo></mrow></math></div><p>For this model, the previous calculations give the two components in the following form:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>]</mo><mo>=</mo><mi>r</mi><mi>θ</mi><msub><mi>x</mi><mn>0</mn></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>[</mo><mover><mi>f</mi><mo>^</mo></mover><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>)</mo><mo>]</mo><mo>=</mo><msup><mi>r</mi><mn>2</mn></msup><msup><mi>σ</mi><mn>2</mn></msup><mfrac><mrow><msup><msub><mi>x</mi><mn>0</mn></msub><mn>2</mn></msup></mrow><mrow><mi>S</mi></mrow></mfrac></mrow></math></div><p>These formulas assume random effects with 0 mean and equal variance, independent of one another and of the new trip. Without these assumptions, cross terms or a variance that depends on distance would appear.</p></li><li><h3>Compare the errors and check the units</h3><p>Without a penalty: bias² = 0, variance = 45, noise = 25, total = 70 min². With λ = 5 km²:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>9</mn><mo>+</mo><mn>11.25</mn><mo>+</mo><mn>25</mn><mo>=</mo><mn>45.25</mn><mtext> min²</mtext></mrow></math></div><p>Variance falls from 45 to 11.25 min², while bias² rises from 0 to 9 min²: total error falls from 70 to 45.25 min². The noise of 25 min² is identical in both cases; no penalty removes it.</p><p>Units: bias is in minutes before it is squared; variance and noise are already in square minutes. Consistency check with the penalty: each deviation is multiplied by 0.5, so each square is multiplied by 0.25, giving 11.25 min² again.</p><p>These numerical results depend on a fictional scenario, a model of the correct form and a known truth. They illustrate a mechanism; they do not tell us which penalty to choose for real data.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the bias become nonzero with the penalty even though the model has the correct form? Then explain why the irreducible noise does not change when λ changes.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“An unbiased estimator must be the best.”</h3><p>Bias is only one of the three terms. Without a penalty it is 0, but the expected error is 70 min², compared with 45.25 min² with penalty 5 km². Compare the bars in the second diagram and revisit the comparison in the example.</p><a href="#exemple">Review the error comparison</a></li><li><h3>“The stronger the penalty, the lower the error.”</h3><p>Beyond a certain point, bias² grows faster than variance falls: for λ = 20 km², the expected error is 49.84 min², above the 45.25 min² obtained for λ = 5 km². In the limit, the prediction tends to 0 and bias² tends to 36 min².</p><a href="#exercices">Redo the exercise on three settings</a></li><li><h3>“Bias and variance can be measured using a single real dataset.”</h3><p>Bias and variance are averages across repeated training runs, and bias requires knowledge of the truth. With a single training run, we estimate error on data held aside. The milestone shows an example of this kind of split in code.</p><a href="#jalon"><span class="milestone-label">See the split in the code</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-penalite-forte"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>A stronger penalty</h3><p>In the same fictional scenario, take λ = 20 km². Calculate r, the mean of the predictions, bias, bias², variance, reducible error and then expected error including the noise of 25 min². Compare with λ = 5 km², then check your result against the third bar in the second diagram.</p>
+<label for="reponse-ex-penalite-forte">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-penalite-forte" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-penalite-forte" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-penalite-forte" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-penalite-forte" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Use S = 5 km² and r = S / (S + λ) again.</p></details><details class="indice"><summary>Hint 2</summary><p>Bias is the mean of the predictions minus the target duration of 6 min; variance is r² × 45 min².</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>S + λ = 5 + 20 = 25 km², so r = 5 / 25 = 0.2.</p><p>Mean: 0.2 × 6 = 1.2 min. Bias: 1.2 − 6 = -4.8 min, so bias² = 23.04 min².</p><p>Variance: r² = 0.04, then 0.04 × 45 = 1.8 min². Reducible error: 23.04 + 1.8 = 24.84 min². Including the noise: 24.84 + 25 = 49.84 min².</p><p>This is more than 45.25 min² for λ = 5 km²: variance has fallen from 11.25 to 1.8 min², but bias² has risen from 9 to 23.04 min².</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate r before any other term.</li><li>Keep the units: minutes for bias, square minutes for the three error terms.</li><li>Conclude by comparing total errors rather than variances alone.</li></ul></details></article><article class="exercice" id="ex-classer"><p class="repere">Exercise 2 · Diagnosis with explanation</p>
+<h3>Rank three settings</h3><p>A colleague looks only at variance and concludes that λ = 20 km² is the best setting for the fictional scenario. Rank λ = 0, 5 and 20 km² by expected error, then reply to her. Finally, consider a penalty so large that the prediction falls almost to 0: what are the variance, bias² and reducible error then?</p>
+<label for="reponse-ex-classer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-classer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-classer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-classer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-classer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare total errors; the noise of 25 min² is shared and does not change the ranking.</p></details><details class="indice"><summary>Hint 2</summary><p>When the prediction is almost 0, the bias is almost the negative of the target duration, 6 min.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Expected errors: 45.25 min² for λ = 5 km², 49.84 min² for λ = 20 km², 70 min² for λ = 0 km². The best of the three is therefore λ = 5 km², followed by λ = 20 km², then λ = 0 km².</p><p>Variance alone overlooks bias²: it is smallest for λ = 20 km² (1.8 min²), but this reduction comes at the cost of bias² of 23.04 min².</p><p>In the limit of an enormous penalty, variance tends to 0, bias² to 6² = 36 min², and therefore reducible error to 36 min². This is less than the 45 min² without a penalty, but more than the 20.25 min² of the intermediate setting. The best setting is intermediate, and this conclusion applies to the fictional scenario, whose truth is known.</p><p class="petit-titre">Check your reasoning</p><ul><li>Compare total errors expressed in the same unit.</li><li>Name the bias² overlooked by the argument based on variance alone.</li><li>Handle the limit without concluding that more penalty is always better or always worse.</li></ul></details></article><article class="exercice" id="ex-bruit-double"><p class="repere">Exercise 3 · Transfer</p>
+<h3>Noise with 2 times the amplitude</h3><p>Trips become more irregular: the random effect is now ±10 min instead of ±5 min, with no other change. Calculate variance, bias² and reducible error for λ = 0 and λ = 5 km². How does the benefit of the penalty change, and why?</p>
+<label for="reponse-ex-bruit-double">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bruit-double" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bruit-double" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bruit-double" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bruit-double" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Bias does not depend on the random effect: it comes only from r and the target duration.</p></details><details class="indice"><summary>Hint 2</summary><p>Without a penalty, variance is σ²x₀²/S; with a penalty, multiply it by r².</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>σ² = 10 × 10 = 100 min². Variance without a penalty: 100 × 9 = 900, then 900 / 5 = 180 min². Reducible error without a penalty is therefore 180 min², since bias is 0.</p><p>With λ = 5 km²: variance = 0.25 × 180 = 45 min². Bias² is unchanged, 9 min². Reducible error is 9 + 45 = 54 min².</p><p>The ranking is the same, but the gap has widened: bias² stays fixed while variance follows σ². The larger the random effect, the more variance a penalty removes for the same added bias. This applies to this fictional scenario; it is not a general rate of improvement.</p><p class="petit-titre">Check your reasoning</p><ul><li>State that bias² remains identical.</li><li>Recalculate variance with the new σ² before multiplying it by r².</li><li>Connect the wider gap to the role of variance without generalizing beyond the scenario.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="decomposition"><summary><span class="repere">Recall 1</span><span>How is the expected squared prediction error decomposed?</span></summary><p>Into irreducible noise, plus squared bias, plus the variance of predictions across repeated training runs, under random effects with 0 mean that are independent of the training.</p></details><details class="carte" data-carte="biais"><summary><span class="repere">Recall 2</span><span>What does bias measure, and in what unit?</span></summary><p>The difference between the mean of the predictions across repeated training runs and the target value, in the unit of the target; it is squared so it can be added to the other terms.</p></details><details class="carte" data-carte="penalite"><summary><span class="repere">Recall 3</span><span>What does an increasing ridge penalty do to bias and variance?</span></summary><p>It shrinks the predictions: variance falls and bias moves away from 0. Total error falls only if the variance removed exceeds the bias² added.</p></details><details class="carte" data-carte="mesure"><summary><span class="repere">Recall 4</span><span>Can bias and variance be calculated using a single real dataset?</span></summary><p>No: they require repeated training runs and a known truth. In practice, prediction error is estimated on data held aside.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>State the model, the fictional truth and the assumptions about random effects; write the penalized estimator and its shrinkage factor r; repeat the training to obtain the mean and spread of predictions; calculate bias², variance and noise; check that they add up; compare several penalties while remembering that the truth is known only in the invented scenario.</p></div><div class="exports"><a class="bouton" download="c100-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTQ6ZGVjb21wb3NpdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYmlhaXMtdmFyaWFuY2UiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGlzIHRoZSBleHBlY3RlZCBzcXVhcmVkIHByZWRpY3Rpb24gZXJyb3IgZGVjb21wb3NlZD8iLAogICAgICAicmVwb25zZSI6ICJJbnRvIGlycmVkdWNpYmxlIG5vaXNlLCBwbHVzIHNxdWFyZWQgYmlhcywgcGx1cyB0aGUgdmFyaWFuY2Ugb2YgcHJlZGljdGlvbnMgYWNyb3NzIHJlcGVhdGVkIHRyYWluaW5nIHJ1bnMsIHVuZGVyIHJhbmRvbSBlZmZlY3RzIHdpdGggMCBtZWFuIHRoYXQgYXJlIGluZGVwZW5kZW50IG9mIHRoZSB0cmFpbmluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMC1tNDpiaWFpcyIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYmlhaXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGJpYXMgbWVhc3VyZSwgYW5kIGluIHdoYXQgdW5pdD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBtZWFuIG9mIHRoZSBwcmVkaWN0aW9ucyBhY3Jvc3MgcmVwZWF0ZWQgdHJhaW5pbmcgcnVucyBhbmQgdGhlIHRhcmdldCB2YWx1ZSwgaW4gdGhlIHVuaXQgb2YgdGhlIHRhcmdldDsgaXQgaXMgc3F1YXJlZCBzbyBpdCBjYW4gYmUgYWRkZWQgdG8gdGhlIG90aGVyIHRlcm1zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW00OnBlbmFsaXRlIiwKICAgICAgInVuaXRlIjogImMxMDAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyaWRnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYW4gaW5jcmVhc2luZyByaWRnZSBwZW5hbHR5IGRvIHRvIGJpYXMgYW5kIHZhcmlhbmNlPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IHNocmlua3MgdGhlIHByZWRpY3Rpb25zOiB2YXJpYW5jZSBmYWxscyBhbmQgYmlhcyBtb3ZlcyBhd2F5IGZyb20gMC4gVG90YWwgZXJyb3IgZmFsbHMgb25seSBpZiB0aGUgdmFyaWFuY2UgcmVtb3ZlZCBleGNlZWRzIHRoZSBiaWFzwrIgYWRkZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTQ6bWVzdXJlIiwKICAgICAgInVuaXRlIjogImMxMDAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YWxpZGF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkNhbiBiaWFzIGFuZCB2YXJpYW5jZSBiZSBjYWxjdWxhdGVkIHVzaW5nIGEgc2luZ2xlIHJlYWwgZGF0YXNldD8iLAogICAgICAicmVwb25zZSI6ICJObzogdGhleSByZXF1aXJlIHJlcGVhdGVkIHRyYWluaW5nIHJ1bnMgYW5kIGEga25vd24gdHJ1dGguIEluIHByYWN0aWNlLCBwcmVkaWN0aW9uIGVycm9yIGlzIGVzdGltYXRlZCBvbiBkYXRhIGhlbGQgYXNpZGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c100-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGlzIHRoZSBleHBlY3RlZCBzcXVhcmVkIHByZWRpY3Rpb24gZXJyb3IgZGVjb21wb3NlZD8JSW50byBpcnJlZHVjaWJsZSBub2lzZSwgcGx1cyBzcXVhcmVkIGJpYXMsIHBsdXMgdGhlIHZhcmlhbmNlIG9mIHByZWRpY3Rpb25zIGFjcm9zcyByZXBlYXRlZCB0cmFpbmluZyBydW5zLCB1bmRlciByYW5kb20gZWZmZWN0cyB3aXRoIDAgbWVhbiB0aGF0IGFyZSBpbmRlcGVuZGVudCBvZiB0aGUgdHJhaW5pbmcuCXRvZGFpIGMxMDAtbTQgYmlhaXMtdmFyaWFuY2UKV2hhdCBkb2VzIGJpYXMgbWVhc3VyZSwgYW5kIGluIHdoYXQgdW5pdD8JVGhlIGRpZmZlcmVuY2UgYmV0d2VlbiB0aGUgbWVhbiBvZiB0aGUgcHJlZGljdGlvbnMgYWNyb3NzIHJlcGVhdGVkIHRyYWluaW5nIHJ1bnMgYW5kIHRoZSB0YXJnZXQgdmFsdWUsIGluIHRoZSB1bml0IG9mIHRoZSB0YXJnZXQ7IGl0IGlzIHNxdWFyZWQgc28gaXQgY2FuIGJlIGFkZGVkIHRvIHRoZSBvdGhlciB0ZXJtcy4JdG9kYWkgYzEwMC1tNCBiaWFpcwpXaGF0IGRvZXMgYW4gaW5jcmVhc2luZyByaWRnZSBwZW5hbHR5IGRvIHRvIGJpYXMgYW5kIHZhcmlhbmNlPwlJdCBzaHJpbmtzIHRoZSBwcmVkaWN0aW9uczogdmFyaWFuY2UgZmFsbHMgYW5kIGJpYXMgbW92ZXMgYXdheSBmcm9tIDAuIFRvdGFsIGVycm9yIGZhbGxzIG9ubHkgaWYgdGhlIHZhcmlhbmNlIHJlbW92ZWQgZXhjZWVkcyB0aGUgYmlhc8KyIGFkZGVkLgl0b2RhaSBjMTAwLW00IHJpZGdlCkNhbiBiaWFzIGFuZCB2YXJpYW5jZSBiZSBjYWxjdWxhdGVkIHVzaW5nIGEgc2luZ2xlIHJlYWwgZGF0YXNldD8JTm86IHRoZXkgcmVxdWlyZSByZXBlYXRlZCB0cmFpbmluZyBydW5zIGFuZCBhIGtub3duIHRydXRoLiBJbiBwcmFjdGljZSwgcHJlZGljdGlvbiBlcnJvciBpcyBlc3RpbWF0ZWQgb24gZGF0YSBoZWxkIGFzaWRlLgl0b2RhaSBjMTAwLW00IHZhbGlkYXRpb24K">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">juasqf kwlkcb gmkc</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cvrjpv tqnsls gyczam jnapjf dazpzs nptxgf iouh</span></span></h3><dl><div><dt>What you understand</dt><dd>A penalty shifts error between bias and variance. With real data, this balance cannot be calculated directly: it is assessed through error measured outside training.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vyymvj fuvkcp rylmmw prbxxo jekmxx yotayy kzpvli jtiqxe cikdyo jvwaxr nuekao bnapdf ntdwru ybdczi hydrmy tujbal tcgoie oziopx cbrmbt zkskvb kgamvr ikvxlx bbvjvm xhcedx</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: redo the decomposition for another penalty without help, explain why the noise does not change, and distinguish theoretical calculation from measurement outside training. Reading this page or a worked answer does not demonstrate that any level has been achieved.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fcdphp slbbjp hvabqv lmokka fpxlpx wsdnga eibqjo xtskjf maczan pmyktr ivyjku efwkbp njplaa xkdxwb pxgdhi msoywo ahpxse iozjvv macwdl kmjtxz yqufyk qitcni tkvzdp wygoxa gpkahp pynbza uhpalv ntfxkn lhmvpn dmbtod wsplzs qbpsgx fqwhyy jnfsdg nadlze ctqbbp rlndfb lq</span></span></dd></div><div><dt>Continue learning</dt><dd>Redo the example with two other penalties without support, then move to the unit on learning curves, which examines error as the amount of data changes. Before any real use, the validation protocol, parameters and authorized data will need to be checked separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c100-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c100-m3.html">Previous</a> · <a href="c100-m5.html">Next</a></nav>
+<footer><p>Course book · C100·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

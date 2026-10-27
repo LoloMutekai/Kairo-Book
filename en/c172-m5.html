@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct Euler-Maruyama steps, justify the noise scaling, and compare two time grids driven by the same Brownian motion.">
+<title>C172·M5 · Euler-Maruyama — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qjuipm yumwju njcx</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C172·M5</p><h1>Euler-Maruyama</h1><p class="objectif"><span>Your goal</span>Construct Euler-Maruyama steps, justify the noise scaling, and compare two time grids driven by the same Brownian motion.</p><p class="prerequis"><strong>Before you start</strong><br>c171-m5 : multidimensional case · c052-m5 : convergence protocol · c172-m1 : existence and uniqueness · c172-m2 : GBM · c172-m3 : Ornstein-Uhlenbeck · c172-m4 : CIR</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small object slides along a rail. A restoring effect pulls it back towards the origin mark; unpredictable jolts disturb its motion. Its position is signed: it may cross to the other side of the mark. We use a model with no inertia or end stop. The entire scene, its parameters, and the jolts used in the calculations are fictional.</p><p>To advance over a short interval, take the restoring drift calculated at the starting position, multiply it by the duration, then add the jolt for that interval. Start again from the new position. This procedure is called Euler-Maruyama: the Euler rule for the drift, with a Brownian increment added.</p><p>The deterministic part is proportional to the duration. The typical size of the jolt is proportional to its square root. This second choice preserves the correct noise variance when time is subdivided. An individual jolt may be small, large, or opposite in sign to the restoring drift.</p><p>The first diagram separates the contributions to a step; these boxes are calculation operations, rather than physical stages observed in the object. The second prepares a fair comparison between a whole interval and its subintervals.</p><div class="schemas"><figure><svg viewBox="0 0 360 265" xmlns="http://www.w3.org/2000/svg" role="img"><title>Break down the first step</title><desc>Starting from 2 centimetres, the restoring drift subtracts 1 centimetre, then the jolt adds 1/2 centimetre. The scheme gives 3/2 centimetre.</desc><rect x="20" y="15" width="320" height="48" rx="7" class="cadre-neutre" /><text x="180" y="46" text-anchor="middle">Start: 2 cm</text><line x1="180" y1="63" x2="180" y2="107" class="trait" /><text x="194" y="90" class="petite-etiquette">Drift: -1 cm</text><rect x="20" y="107" width="320" height="48" rx="7" class="cadre-prediction" /><text x="180" y="138" text-anchor="middle">After drift: 1 cm</text><line x1="180" y1="155" x2="180" y2="199" class="trait" /><text x="194" y="182" class="petite-etiquette">Jolt: +1/2 cm</text><rect x="20" y="199" width="320" height="48" rx="7" class="cadre-resultat" /><text x="180" y="230" text-anchor="middle">New position: 1.50 cm</text></svg><figcaption>The restoring drift is calculated at the start. The intermediate box is not used to recalculate the drift or diffusion during this same step.</figcaption></figure><figure><svg viewBox="0 0 360 265" xmlns="http://www.w3.org/2000/svg" role="img"><title>Subdivide time and add the noise</title><desc>From 0 to 1/2 second, the successive Brownian increments are 1/2 and -1/2 square root of a second. Their sum 0 is the increment to use for the coarse step.</desc><text x="180" y="30" text-anchor="middle">Same Brownian motion</text><text x="108" y="75" text-anchor="middle" class="petite-etiquette">ΔW : +1/2 √s</text><text x="252" y="75" text-anchor="middle" class="petite-etiquette">ΔW : -1/2 √s</text><line x1="36" y1="103" x2="324" y2="103" class="trait" /><path d="M36 96v14M180 96v14M324 96v14" class="trait" /><text x="36" y="137" text-anchor="middle">0 s</text><text x="180" y="137" text-anchor="middle">0.25 s</text><text x="324" y="137" text-anchor="middle">0.50 s</text><rect x="20" y="169" width="320" height="75" rx="7" class="cadre-resultat" /><text x="180" y="196" text-anchor="middle">Coarse step: sum of increments</text><text x="180" y="226" text-anchor="middle">1/2 + (-1/2) = 0 √s</text></svg><figcaption>The horizontal line is a time axis, rather than the path of the object. Adding the increments preserves the same noise over the whole interval; it does not force the schemes to give the same position.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Freeze the coefficients at the start of the step; add drift × duration and diffusion × Brownian increment; recalculate the coefficients at the next step.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Two steps for the same object</h3><p>The initial position is 2 cm. The restoring coefficient is λ = 2 per second and the diffusion is σ = 1 cm/√s. Take h = 1/4 s and the prepared standardized values: initial Z = 1, then next Z = -1. Calculate the positions up to T = 1/2 s. These values are chosen for calculation by hand; they do not form a sample from which a distribution can be estimated.</p><ol class="etapes"><li><h3>State the equation and its units</h3><p>X<sub>t</sub> is the continuous position in the model at time t, in centimetres. W<sub>t</sub> is a standard Brownian motion, expressed in square root of a second under our unit convention. The equation is interpreted in the Ito sense. The equilibrium mark is 0 cm and the initial state is deterministic.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><mo>−</mo><mi>λ</mi><msub><mi>X</mi><mi>t</mi></msub><mi>d</mi><mi>t</mi><mo>+</mo><mi>σ</mi><mi>d</mi><msub><mi>W</mi><mi>t</mi></msub></mrow></math></div><p>λ controls the strength of the restoring effect: −λX<sub>t</sub> is a drift in centimetres per second. σ is the diffusion amplitude in cm/√s. Each integrated term therefore gives a displacement in centimetres. The term dW<sub>t</sub> represents a random increment after integration, rather than an ordinary velocity that could be differentiated.</p><p>This is the Ornstein-Uhlenbeck model encountered earlier. Its coefficients are known and constant in time; its drift depends on position. We calculate a discrete approximation Y<sub>k</sub> of X at time t<sub>k</sub> = kh. k is a dimensionless integer index; h is a positive duration.</p></li><li><h3>Freeze the coefficients at the left endpoint of each interval</h3><p>More generally, b(t,x) denotes the drift in cm/s and a(t,x) the diffusion in cm/√s of an Ito equation dX<sub>t</sub> = b(t,X<sub>t</sub>)dt + a(t,X<sub>t</sub>)dW<sub>t</sub>. Over an interval, Euler-Maruyama replaces the coefficients inside the integrals with their known values at the start. Integrating dt gives h; integrating dW gives ΔW<sub>k</sub> = W at the next time − W at the current time.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>Y</mi><mi>k</mi></msub><mo>+</mo><mi>b</mi><mo>(</mo><msub><mi>t</mi><mi>k</mi></msub><mo>,</mo><msub><mi>Y</mi><mi>k</mi></msub><mo>)</mo><mi>h</mi><mo>+</mo><mi>a</mi><mo>(</mo><msub><mi>t</mi><mi>k</mi></msub><mo>,</mo><msub><mi>Y</mi><mi>k</mi></msub><mo>)</mo><msub><mrow><mi>Δ</mi><mi>W</mi></mrow><mi>k</mi></msub></mrow></math></div><p>In our scene, b(t,x) = −λx and a(t,x) = σ. The rule therefore becomes Y next = (1 − λh)Y current + σΔW. It is explicit: no unknown future position is needed to calculate the right-hand side.</p></li><li><h3>Give the noise the correct scale</h3><p>Over disjoint intervals of the same length h, Brownian increments are independent, with a normal distribution of mean 0 and variance h. We can therefore construct them using independent, dimensionless variables Z<sub>k</sub> with a normal distribution of mean 0 and variance 1, independent of the past of the model.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mrow><mi>Δ</mi><mi>W</mi></mrow><mi>k</mi></msub><mo>=</mo><msqrt><mi>h</mi></msqrt><msub><mi>Z</mi><mi>k</mi></msub></mrow></math></div><p>Here, √h = 1/2 √s, because 1/2 × 1/2 = 1/4 s. The first increment is 1/2 × 1 = 1/2 √s; the next is 1/2 × (-1) = -1/2 √s.</p><p>Distinguish the variance prescribed by the distribution from the square of an individual value. The prepared values are a deterministic input to the exercise, rather than evidence that generated increments follow this distribution. A simulation program would need to generate new independent Z values at each step.</p></li><li><h3>Carry out the first step without rounding</h3><p>At the start, λY = 2 × 2 = 4 cm/s. The restoring drift points towards the origin: b = -4 cm/s. Over h = 1/4 s, its displacement is -4 × 1/4 = -1 cm. The deterministic part therefore leads to 2 + (-1) = 1 cm.</p><p>The random displacement is σΔW = 1 × 1/2 = 1/2 cm. Add it to the deterministic part, without recalculating b halfway through the operation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mn>1</mn></msub><mo>=</mo><mn>2</mn><mo>+</mo><mo>(</mo><mn>-1</mn><mo>)</mo><mo>+</mo><mn>1/2</mn><mo>=</mo><mn>3/2</mn><mtext> cm</mtext></mrow></math></div><p>Check the direction: the restoring drift reduced the position; the positive jolt offset part of that reduction. 3/2 cm, or 1.50 cm, is an exact result of the scheme for this input. It is not the exact position of the continuous process.</p></li><li><h3>Start from the result and recalculate the restoring drift</h3><p>At the next step, the starting position is 3/2 cm. The new product λY is 3 cm/s, so b = -3 cm/s. The deterministic displacement is -3 × 1/4 = -3/4 cm; the deterministic part is 3/2 + (-3/4) = 3/4 cm.</p><p>The new jolt is σΔW = 1 × (-1/2) = -1/2 cm. This time, its sign agrees with the restoring drift.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mn>2</mn></msub><mo>=</mo><mn>3/2</mn><mo>+</mo><mo>(</mo><mn>-3/4</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>-1/2</mn><mo>)</mo><mo>=</mo><mn>1/4</mn><mtext> cm</mtext></mrow></math></div><p>At time T = 2 × 1/4 = 1/2 s, the scheme gives 0.25 cm. For another check, set c = 1 − λh = 1/2, which is dimensionless. The expanded form Y final = c × c × Y initial + cσΔW initial + σΔW next gives 1/2 × 1/2 × 2 + 1/2 × 1/2 + (-1/2) = 1/4 cm. The factor on the first noise term reveals its influence on the next restoring drift.</p></li><li><h3>Check the distribution and distinguish the scheme from the exact solution</h3><p>The squared diffusion is 1 square centimetres per second. The conditional variance of the random displacement is σ × σ × h = 1/4 square centimetres. Conditional means here that the starting position is fixed and we average only over future draws. E denotes this probabilistic average, and Var the average squared deviation from that average.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><mi>σ</mi><msqrt><mi>h</mi></msqrt><msub><mi>Z</mi><mi>k</mi></msub><mo>]</mo><mo>=</mo><mn>0</mn><mo>,</mo><mtext> </mtext><mi>Var</mi><mo>[</mo><mi>σ</mi><msqrt><mi>h</mi></msqrt><msub><mi>Z</mi><mi>k</mi></msub><mo>]</mo><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><mi>h</mi></mrow></math></div><p>In the simulation, replacing √h with h while keeping the same numerical value for σ would give a numerical amplitude of 1/4 and a numerical variance of 1/16, instead of 1/4 in the specified units. Checking the units also reveals the problem: σh does not have the unit of a displacement.</p><p>The mean of the first discrete step is (1 − λh)Y initial = 1 cm. For the continuous Ornstein-Uhlenbeck process, the exact mean at the same time is Y initial × exp(−λh), or 2 × exp(−1/2) cm. exp denotes the exponential function; its argument λh is dimensionless. The difference between these expressions comes from discretizing the restoring drift, even though the noise has the correct variance. The individual value 3/2 cm is neither of these means.</p></li><li><h3>Prepare a convergence check</h3><p>To compare approximations of the same path, keep T and the parameters fixed. Over a coarse interval made up of smaller intervals, add their ΔW values: in our trace, 1/2 + (-1/2) = 0 √s. Entirely new draws would change both the path and the step size. Keeping only the same random seed does not guarantee this addition across time grids.</p><p>A comparison of paths measures the difference between approximations driven by the same noise. A comparison of distributions instead examines means or distributions over many paths; its sampling uncertainty must be distinguished from discretization error. The last exercise constructs the path comparison for our trace; it does not measure a convergence rate.</p><p>For an autonomous equation, whose coefficients do not depend on time, globally Lipschitz coefficients with at most linear growth, together with a square-integrable initial state, are standard sufficient assumptions for mean-square convergence of the scheme over a fixed horizon as h tends to 0. Lipschitz means that the change in the coefficients is bounded by a constant times the change in the state; linear growth bounds their size by a constant times the sum of 1 and the absolute value of the state. Our linear restoring drift and constant diffusion satisfy these conditions. Mean-square convergence means that the average squared error tends to 0.</p><p>These conditions do not guarantee the accuracy of a given step. They do not automatically extend to every coefficient in the chapter. In particular, the CIR model in the previous unit has a diffusion involving the square root of the state: explicit Euler-Maruyama can leave its positive domain. Fixing this problem would require a separate method and analysis.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Why is the drift multiplied by h, the standardized draw by √h, and why is the first noise term still present in the restoring drift of the next step? Then explain why an exact fraction calculated by the scheme remains an approximation of the continuous position.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I multiply the standardized draw by h like everything else.”</h3><p>The variance of Z is 1. Multiplying Z by √h gives a variance of h; multiplying it by h gives h squared. Check the variance and units again before calculating a path.</p><a href="#exemple">Review the noise scaling and its check</a></li><li><h3>“I can recalculate the drift after adding the jolt for the same step.”</h3><p>Euler-Maruyama evaluates the coefficients at the start of the step, using the state that is already known. Evaluating them again after the jolt changes the scheme. At the next step, however, you must use the new position and recalculate the drift.</p><a href="#intuition">Reread the breakdown of a step</a></li><li><h3>“I reduce the step size, draw new independent noise values, and the difference proves convergence.”</h3><p>To compare the same path, the noise for the coarse step must be the sum of the noise for the smaller steps. With independent draws across time grids, the difference mixes noise with discretization. Even a single coupled comparison does not prove convergence.</p><a href="#exercices">Construct the coarse step using the supplied increments</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-signe"><p class="repere">Exercise 1 · Application · check the sign</p>
+<h3>The first jolt changes direction</h3><p>Start again from 2 cm, with the same h = 1/4 s, λ and σ. For this first step only, replace Z = 1 with Z = -1. Calculate ΔW, the deterministic and random displacements, then the new position. Before calculating, predict the direction of the change relative to the example.</p>
+<label for="reponse-ex-signe">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-signe" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-signe" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-signe" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-signe" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The restoring drift depends on the starting position, which has not changed.</p></details><details class="indice"><summary>Hint 2</summary><p>Use √h = 1/2 √s again, then apply the sign of the new Z.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The position will be lower than in the example because only the jolt changes sign. ΔW = 1/2 × (-1) = -1/2 √s. The restoring drift remains -4 cm/s, giving -1 cm during this step.</p><p>The random displacement is -1/2 cm. The position becomes 2 + (-1) + (-1/2) = 1/2 cm, or 0.50 cm. It remains positive here; this is not a property imposed on the object.</p><p class="petit-titre">Check your reasoning</p><ul><li>The initial drift is unchanged and its sign is justified.</li><li>ΔW is in √s; each displacement and the result are in cm.</li><li>The result 1/2 cm is related to the sign prediction.</li></ul></details></article><article class="exercice" id="ex-echelle"><p class="repere">Exercise 2 · Analysis · change the duration</p>
+<h3>Subdivide the step without suppressing the noise</h3><p>Start again from 2 cm, with the same λ and σ and Z = 1. For this trial only, take h fine = h/4 = 1/16 s. Calculate √h fine, the displacements, and the new position. By what factor do the noise variances per step differ for h and h fine? Is this trial enough to compare positions at the same time?</p>
+<label for="reponse-ex-echelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-echelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-echelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-echelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-echelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A square root is divided by 2 when its argument is divided by 4.</p></details><details class="indice"><summary>Hint 2</summary><p>The variance per step is σ squared times the duration. Also check the final time of each calculation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>√h fine = 1/4 √s, since 1/4 × 1/4 = 1/16 s. The deterministic displacement is -4 × 1/16 = -1/4 cm; the random displacement is 1 × 1/4 × 1 = 1/4 cm.</p><p>After the deterministic part, the position is 7/4 cm. The final sum is 7/4 + 1/4 = 2 cm. The displacements cancel for this prepared input, which does not mean there is no noise.</p><p>The variance changes from 1/4 to 1/16 square centimetres; the ratio is 4. The amplitude has been divided by 2, the variance by 4. The final times are 1/4 s and 1/16 s: this trial illustrates local scaling. It does not compare two approximations over the same horizon, and identical Z values alone do not construct a coupling between time grids.</p><p class="petit-titre">Check your reasoning</p><ul><li>The square root of the new step size is checked by squaring it.</li><li>Both contributions are calculated before their sum 2 cm.</li><li>The variance factor is distinguished from the amplitude factor.</li><li>The different final times prevent a conclusion about convergence.</li></ul></details></article><article class="exercice" id="ex-couplage"><p class="repere">Exercise 3 · Transfer · compare time grids</p>
+<h3>The total noise is 0; must the position be 0 too?</h3><p>Return to the complete trace in the example up to T = 1/2 s. Now construct a single coarse step of duration H = T starting from 2 cm, with ΔW coarse equal to the sum of the supplied increments. Calculate its position, then the difference from the 2 steps of duration h. Explain why a 0 sum of increments is not enough to make the results identical. What remains to be done to study convergence?</p>
+<label for="reponse-ex-couplage">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-couplage" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-couplage" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-couplage" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-couplage" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For the coarse step, the drift is frozen at the initial position throughout the duration H.</p></details><details class="indice"><summary>Hint 2</summary><p>In the smaller steps, the first noise term changes the position at which the next restoring drift is evaluated.</p></details><details class="indice"><summary>Hint 3</summary><p>The expanded form with c = 1/2 provides another way to recover the result of the smaller steps.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The coupling requires ΔW coarse = 1/2 + (-1/2) = 0 √s. No new draw is needed. The deterministic displacement of the coarse step is -4 × 1/2 = -2 cm, giving 0 cm before the noise; its random contribution is 0 cm. The final position is 0 cm.</p><p>The smaller steps give 1/4 cm. The signed difference, smaller steps minus coarse step, is 1/4 − 0 = 1/4 cm. Even though the total Brownian increment is 0, the first noise term changed the restoring drift in the second interval. The restoring drift itself was also evaluated again at the new position. The scheme therefore depends on more than the total noise.</p><p>This difference is not an error relative to the exact solution: that solution has not been reconstructed for this path. Continue refining at the same T, always aggregate the increments, and repeat over many mutually independent paths. To measure an error, add an exact reference or a finer approximation whose accuracy has been studied, then separate the spread across paths from the effect of the step size. A pair of time grids provides neither a convergence rate nor an actual gain.</p><p class="petit-titre">Check your reasoning</p><ul><li>The coarse increment is a sum, rather than a new draw.</li><li>The coarse step gives 0 cm and the signed difference is 1/4 cm.</li><li>Reevaluating the restoring drift explains why the results may differ.</li><li>The difference between schemes is distinguished from the exact error and from a proof of convergence.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="regle"><summary><span class="repere">Recall 1</span><span>How do you reconstruct an Euler-Maruyama step, and where do you evaluate the coefficients?</span></summary><p>Start from the known position. Add b(t current, Y current)h, then a(t current, Y current)ΔW. Both coefficients are frozen at the start of the step. The result becomes the starting point of the next step, where the coefficients are recalculated.</p></details><details class="carte" data-carte="racine"><summary><span class="repere">Recall 2</span><span>Why write ΔW = √h Z rather than h Z?</span></summary><p>Z is normally distributed with mean 0 and variance 1. Multiplying by √h gives a variance of h, the variance of a Brownian increment of duration h. With h Z, the variance would be h squared. The Z values must be independent over disjoint intervals and independent of the past.</p></details><details class="carte" data-carte="exactitude"><summary><span class="repere">Recall 3</span><span>Why is our fraction 1/4 cm not an exact solution of the continuous equation?</span></summary><p>It is exact for the operations of the scheme and the prepared increments. Euler-Maruyama froze the drift over each interval, whereas the continuous model lets it evolve. Exact arithmetic does not remove this approximation of the model in time.</p></details><details class="carte" data-carte="couplage"><summary><span class="repere">Recall 4</span><span>How do you compare two time grids for the same path over the same horizon?</span></summary><p>Construct the increments on the fine time grid, then add neighbouring increments for the intervals of the coarse time grid. Keep the same horizon, starting point, and coefficients. The same seed alone does not guarantee this relationship between increments.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>What does our difference of 1/4 cm between the time grids prove?</span></summary><p>It shows an effect of the time grid for this coupled trace. It does not say which approximation is closer to the exact path and does not prove convergence. Several refinements, repetitions, and a reference with known accuracy are needed to estimate an error.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without reopening the lesson, draw a step and name the units of each term. Reconstruct the formula from the frozen coefficients, justify √h using the variance, then calculate the successive positions again. Finish by constructing the coarse increment from the smaller ones and explaining what the difference between schemes actually allows you to conclude. Reading or answering after a hint remains preparation, rather than an attained level.</p></div><div class="exports"><a class="bouton" download="c172-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzItbTU6cmVnbGUiLAogICAgICAidW5pdGUiOiAiYzE3Mi1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV1bGVyLW1hcnV5YW1hIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB5b3UgcmVjb25zdHJ1Y3QgYW4gRXVsZXItTWFydXlhbWEgc3RlcCwgYW5kIHdoZXJlIGRvIHlvdSBldmFsdWF0ZSB0aGUgY29lZmZpY2llbnRzPyIsCiAgICAgICJyZXBvbnNlIjogIlN0YXJ0IGZyb20gdGhlIGtub3duIHBvc2l0aW9uLiBBZGQgYih0IGN1cnJlbnQsIFkgY3VycmVudCloLCB0aGVuIGEodCBjdXJyZW50LCBZIGN1cnJlbnQpzpRXLiBCb3RoIGNvZWZmaWNpZW50cyBhcmUgZnJvemVuIGF0IHRoZSBzdGFydCBvZiB0aGUgc3RlcC4gVGhlIHJlc3VsdCBiZWNvbWVzIHRoZSBzdGFydGluZyBwb2ludCBvZiB0aGUgbmV4dCBzdGVwLCB3aGVyZSB0aGUgY29lZmZpY2llbnRzIGFyZSByZWNhbGN1bGF0ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzItbTU6cmFjaW5lIiwKICAgICAgInVuaXRlIjogImMxNzItbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlY2hlbGxlLWJyb3duaWVubmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHdyaXRlIM6UVyA9IOKImmggWiByYXRoZXIgdGhhbiBoIFo/IiwKICAgICAgInJlcG9uc2UiOiAiWiBpcyBub3JtYWxseSBkaXN0cmlidXRlZCB3aXRoIG1lYW4gMCBhbmQgdmFyaWFuY2UgMS4gTXVsdGlwbHlpbmcgYnkg4oiaaCBnaXZlcyBhIHZhcmlhbmNlIG9mIGgsIHRoZSB2YXJpYW5jZSBvZiBhIEJyb3duaWFuIGluY3JlbWVudCBvZiBkdXJhdGlvbiBoLiBXaXRoIGggWiwgdGhlIHZhcmlhbmNlIHdvdWxkIGJlIGggc3F1YXJlZC4gVGhlIFogdmFsdWVzIG11c3QgYmUgaW5kZXBlbmRlbnQgb3ZlciBkaXNqb2ludCBpbnRlcnZhbHMgYW5kIGluZGVwZW5kZW50IG9mIHRoZSBwYXN0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTcyLW01OmV4YWN0aXR1ZGUiLAogICAgICAidW5pdGUiOiAiYzE3Mi1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVycmV1ci1kaXNjcmV0aXNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgaXMgb3VyIGZyYWN0aW9uIDEvNCBjbSBub3QgYW4gZXhhY3Qgc29sdXRpb24gb2YgdGhlIGNvbnRpbnVvdXMgZXF1YXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgaXMgZXhhY3QgZm9yIHRoZSBvcGVyYXRpb25zIG9mIHRoZSBzY2hlbWUgYW5kIHRoZSBwcmVwYXJlZCBpbmNyZW1lbnRzLiBFdWxlci1NYXJ1eWFtYSBmcm96ZSB0aGUgZHJpZnQgb3ZlciBlYWNoIGludGVydmFsLCB3aGVyZWFzIHRoZSBjb250aW51b3VzIG1vZGVsIGxldHMgaXQgZXZvbHZlLiBFeGFjdCBhcml0aG1ldGljIGRvZXMgbm90IHJlbW92ZSB0aGlzIGFwcHJveGltYXRpb24gb2YgdGhlIG1vZGVsIGluIHRpbWUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzItbTU6Y291cGxhZ2UiLAogICAgICAidW5pdGUiOiAiYzE3Mi1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvdXBsYWdlLWJyb3duaWVuIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB5b3UgY29tcGFyZSB0d28gdGltZSBncmlkcyBmb3IgdGhlIHNhbWUgcGF0aCBvdmVyIHRoZSBzYW1lIGhvcml6b24/IiwKICAgICAgInJlcG9uc2UiOiAiQ29uc3RydWN0IHRoZSBpbmNyZW1lbnRzIG9uIHRoZSBmaW5lIHRpbWUgZ3JpZCwgdGhlbiBhZGQgbmVpZ2hib3VyaW5nIGluY3JlbWVudHMgZm9yIHRoZSBpbnRlcnZhbHMgb2YgdGhlIGNvYXJzZSB0aW1lIGdyaWQuIEtlZXAgdGhlIHNhbWUgaG9yaXpvbiwgc3RhcnRpbmcgcG9pbnQsIGFuZCBjb2VmZmljaWVudHMuIFRoZSBzYW1lIHNlZWQgYWxvbmUgZG9lcyBub3QgZ3VhcmFudGVlIHRoaXMgcmVsYXRpb25zaGlwIGJldHdlZW4gaW5jcmVtZW50cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Mi1tNTpwcmV1dmUiLAogICAgICAidW5pdGUiOiAiYzE3Mi1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlLWNvbnZlcmdlbmNlLXN0b2NoYXN0aXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgb3VyIGRpZmZlcmVuY2Ugb2YgMS80IGNtIGJldHdlZW4gdGhlIHRpbWUgZ3JpZHMgcHJvdmU/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgc2hvd3MgYW4gZWZmZWN0IG9mIHRoZSB0aW1lIGdyaWQgZm9yIHRoaXMgY291cGxlZCB0cmFjZS4gSXQgZG9lcyBub3Qgc2F5IHdoaWNoIGFwcHJveGltYXRpb24gaXMgY2xvc2VyIHRvIHRoZSBleGFjdCBwYXRoIGFuZCBkb2VzIG5vdCBwcm92ZSBjb252ZXJnZW5jZS4gU2V2ZXJhbCByZWZpbmVtZW50cywgcmVwZXRpdGlvbnMsIGFuZCBhIHJlZmVyZW5jZSB3aXRoIGtub3duIGFjY3VyYWN5IGFyZSBuZWVkZWQgdG8gZXN0aW1hdGUgYW4gZXJyb3IuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c172-m5-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHlvdSByZWNvbnN0cnVjdCBhbiBFdWxlci1NYXJ1eWFtYSBzdGVwLCBhbmQgd2hlcmUgZG8geW91IGV2YWx1YXRlIHRoZSBjb2VmZmljaWVudHM/CVN0YXJ0IGZyb20gdGhlIGtub3duIHBvc2l0aW9uLiBBZGQgYih0IGN1cnJlbnQsIFkgY3VycmVudCloLCB0aGVuIGEodCBjdXJyZW50LCBZIGN1cnJlbnQpzpRXLiBCb3RoIGNvZWZmaWNpZW50cyBhcmUgZnJvemVuIGF0IHRoZSBzdGFydCBvZiB0aGUgc3RlcC4gVGhlIHJlc3VsdCBiZWNvbWVzIHRoZSBzdGFydGluZyBwb2ludCBvZiB0aGUgbmV4dCBzdGVwLCB3aGVyZSB0aGUgY29lZmZpY2llbnRzIGFyZSByZWNhbGN1bGF0ZWQuCXRvZGFpIGMxNzItbTUgZXVsZXItbWFydXlhbWEKV2h5IHdyaXRlIM6UVyA9IOKImmggWiByYXRoZXIgdGhhbiBoIFo/CVogaXMgbm9ybWFsbHkgZGlzdHJpYnV0ZWQgd2l0aCBtZWFuIDAgYW5kIHZhcmlhbmNlIDEuIE11bHRpcGx5aW5nIGJ5IOKImmggZ2l2ZXMgYSB2YXJpYW5jZSBvZiBoLCB0aGUgdmFyaWFuY2Ugb2YgYSBCcm93bmlhbiBpbmNyZW1lbnQgb2YgZHVyYXRpb24gaC4gV2l0aCBoIFosIHRoZSB2YXJpYW5jZSB3b3VsZCBiZSBoIHNxdWFyZWQuIFRoZSBaIHZhbHVlcyBtdXN0IGJlIGluZGVwZW5kZW50IG92ZXIgZGlzam9pbnQgaW50ZXJ2YWxzIGFuZCBpbmRlcGVuZGVudCBvZiB0aGUgcGFzdC4JdG9kYWkgYzE3Mi1tNSBlY2hlbGxlLWJyb3duaWVubmUKV2h5IGlzIG91ciBmcmFjdGlvbiAxLzQgY20gbm90IGFuIGV4YWN0IHNvbHV0aW9uIG9mIHRoZSBjb250aW51b3VzIGVxdWF0aW9uPwlJdCBpcyBleGFjdCBmb3IgdGhlIG9wZXJhdGlvbnMgb2YgdGhlIHNjaGVtZSBhbmQgdGhlIHByZXBhcmVkIGluY3JlbWVudHMuIEV1bGVyLU1hcnV5YW1hIGZyb3plIHRoZSBkcmlmdCBvdmVyIGVhY2ggaW50ZXJ2YWwsIHdoZXJlYXMgdGhlIGNvbnRpbnVvdXMgbW9kZWwgbGV0cyBpdCBldm9sdmUuIEV4YWN0IGFyaXRobWV0aWMgZG9lcyBub3QgcmVtb3ZlIHRoaXMgYXBwcm94aW1hdGlvbiBvZiB0aGUgbW9kZWwgaW4gdGltZS4JdG9kYWkgYzE3Mi1tNSBlcnJldXItZGlzY3JldGlzYXRpb24KSG93IGRvIHlvdSBjb21wYXJlIHR3byB0aW1lIGdyaWRzIGZvciB0aGUgc2FtZSBwYXRoIG92ZXIgdGhlIHNhbWUgaG9yaXpvbj8JQ29uc3RydWN0IHRoZSBpbmNyZW1lbnRzIG9uIHRoZSBmaW5lIHRpbWUgZ3JpZCwgdGhlbiBhZGQgbmVpZ2hib3VyaW5nIGluY3JlbWVudHMgZm9yIHRoZSBpbnRlcnZhbHMgb2YgdGhlIGNvYXJzZSB0aW1lIGdyaWQuIEtlZXAgdGhlIHNhbWUgaG9yaXpvbiwgc3RhcnRpbmcgcG9pbnQsIGFuZCBjb2VmZmljaWVudHMuIFRoZSBzYW1lIHNlZWQgYWxvbmUgZG9lcyBub3QgZ3VhcmFudGVlIHRoaXMgcmVsYXRpb25zaGlwIGJldHdlZW4gaW5jcmVtZW50cy4JdG9kYWkgYzE3Mi1tNSBjb3VwbGFnZS1icm93bmllbgpXaGF0IGRvZXMgb3VyIGRpZmZlcmVuY2Ugb2YgMS80IGNtIGJldHdlZW4gdGhlIHRpbWUgZ3JpZHMgcHJvdmU/CUl0IHNob3dzIGFuIGVmZmVjdCBvZiB0aGUgdGltZSBncmlkIGZvciB0aGlzIGNvdXBsZWQgdHJhY2UuIEl0IGRvZXMgbm90IHNheSB3aGljaCBhcHByb3hpbWF0aW9uIGlzIGNsb3NlciB0byB0aGUgZXhhY3QgcGF0aCBhbmQgZG9lcyBub3QgcHJvdmUgY29udmVyZ2VuY2UuIFNldmVyYWwgcmVmaW5lbWVudHMsIHJlcGV0aXRpb25zLCBhbmQgYSByZWZlcmVuY2Ugd2l0aCBrbm93biBhY2N1cmFjeSBhcmUgbmVlZGVkIHRvIGVzdGltYXRlIGFuIGVycm9yLgl0b2RhaSBjMTcyLW01IGNvbnRyb2xlLWNvbnZlcmdlbmNlLXN0b2NoYXN0aXF1ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qjuipm yumwju njcx</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Code reading · identify what the simulation draws</h3><dl><div><dt>What you understand</dt><dd>A random simulation is defined by its distribution, its state, and its evolution rule. Euler-Maruyama requires Brownian increments and a recurrence with a time step; the word simulation alone does not guarantee this mechanism.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">roiawf gnrifu wypbqw pvxtjl ezmmfb gkfaty ftuigx mkcdlx uzeuny nzxbjg ttoqcg nxxdvo bmzspw nzivuf xipymc nhrlle zhnizr xnbccv awcinb zqbpbm svkhlb prhdyx lpadqj tdttbq</span></span></dd></div><div><dt>Your level</dt><dd>To prepare at the level of this unit: repeat the steps, check the variance and units, then construct a coupling between time grids without support. An answer after a hint, reading the code, or reading the page does not confer any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">oseyqw elhtki pycyea eozqyq btcrrd xlzwzj jaeocd nhfhru zaqqau lpkgdg jjlxuv ikpscq lbdkcr kgbmfc awkcpd ktyujy jqdbva zqeluz zejvlk yovnxc lsyzjy cxvscn rjbmdj gerzpa</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the calculation without support after a delay. To consider a Brownian simulation in the project, it would still be necessary to define its purpose, choose the equation and its units, and prepare coupled increments and a convergence reference on an isolated test bench. Connecting it to an actual call and establishing its effect would then require their own evidence; no integration is established here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c172-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c172-m4.html">Previous</a> · <a href="c174-m1.html">Next</a></nav>
+<footer><p>Course book · C172·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

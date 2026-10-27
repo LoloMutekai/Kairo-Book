@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Turn a table row into a point in a coordinate system, plot it using the scale of each axis, then read it back to check that it represents the same record.">
+<title>C006·M1 · Coordinates — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uymnbz aydzcw lzym</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 0 <span>·</span> C006·M1</p><h1>Coordinates</h1><p class="objectif"><span>Your goal</span>Turn a table row into a point in a coordinate system, plot it using the scale of each axis, then read it back to check that it represents the same record.</p><p class="prerequis"><strong>Before you start</strong><br>c004-m5 : rational equations</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are filling a water bottle with volume markings under a gently running tap. Every minute, you read the level and write it in a notebook. Each row in the notebook keeps together two readings taken at the same instant: a time, in minutes (min), and a volume of water, in decilitres (dL). A decilitre is a tenth of a litre.</p><p>The notebook for this trial is fictional: its values were chosen for the lesson and are not actual measurements. It contains 5 records. At 0, 1, 2, 3 and 4 min, it gives 2, 4, 6, 8 and 10 dL respectively.</p><p>To see these rows at a glance, draw a coordinate system. The horizontal axis is marked in minutes: it is the time axis. The vertical axis is marked in decilitres: it is the volume axis. They meet at a right angle at a point O, the origin, which represents both 0 min and 0 dL.</p><p>The row “3 min, 8 dL” becomes a point. From O, move 3 min along the horizontal axis, then move up 8 dL, parallel to the vertical axis. Write this point as (3 ; 8). These numbers are its coordinates. The first, called the x-coordinate or abscissa, is read on the horizontal axis; the second, called the y-coordinate or ordinate, is read on the vertical axis. A semicolon separates them to avoid confusion with a decimal comma.</p><p>The order matters: it is stated with the coordinate system, here (time ; volume). Swapping the numbers gives (8 ; 3), which would mean 8 min and 3 dL. This is a different point, and a record that the notebook does not contain, since it stops at 4 min.</p><p>Finally, a point tells us nothing about what happened between two readings. Draw separate points without joining them: a line between them would assert volumes that nobody read. That would require an additional rule, which is not given in this unit.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>From notebook to coordinate system</title><desc>On the left, the fictional notebook with 5 records: times from 0 to 4 minutes and volumes from 2 to 10 decilitres. The row for 3 minutes is highlighted. On the right, a coordinate system with time in minutes horizontally and volume in decilitres vertically. Each row becomes a separate filled circle; two guides run from the axes to the larger point (3 ; 8). The points are not joined.</desc><rect x="6" y="14" width="112" height="196" rx="7" class="cadre-neutre" /><text x="36" y="38" text-anchor="middle" class="petite-etiquette">time</text><text x="90" y="38" text-anchor="middle" class="petite-etiquette">volume</text><text x="36" y="56" text-anchor="middle" class="petite-etiquette">min</text><text x="90" y="56" text-anchor="middle" class="petite-etiquette">dL</text><line x1="12" y1="64" x2="112" y2="64" class="trait" /><rect x="12" y="149" width="100" height="24" rx="4" class="cadre-resultat" /><text x="36" y="88" text-anchor="middle">0</text><text x="90" y="88" text-anchor="middle" class="mesure">2</text><text x="36" y="114" text-anchor="middle">1</text><text x="90" y="114" text-anchor="middle" class="mesure">4</text><text x="36" y="140" text-anchor="middle">2</text><text x="90" y="140" text-anchor="middle" class="mesure">6</text><text x="36" y="166" text-anchor="middle">3</text><text x="90" y="166" text-anchor="middle" class="mesure">8</text><text x="36" y="192" text-anchor="middle">4</text><text x="90" y="192" text-anchor="middle" class="mesure">10</text><line x1="170" y1="222" x2="345" y2="222" class="trait" /><polyline points="339,217 345,222 339,227" class="trait" /><line x1="170" y1="222" x2="170" y2="46" class="trait" /><polyline points="165,52 170,46 175,52" class="trait" /><line x1="208" y1="222" x2="208" y2="228" class="trait" /><line x1="246" y1="222" x2="246" y2="228" class="trait" /><line x1="284" y1="222" x2="284" y2="228" class="trait" /><line x1="322" y1="222" x2="322" y2="228" class="trait" /><line x1="164" y1="192" x2="170" y2="192" class="trait" /><line x1="164" y1="162" x2="170" y2="162" class="trait" /><line x1="164" y1="132" x2="170" y2="132" class="trait" /><line x1="164" y1="102" x2="170" y2="102" class="trait" /><line x1="164" y1="72" x2="170" y2="72" class="trait" /><text x="170" y="244" text-anchor="middle" class="petite-etiquette">0</text><text x="208" y="244" text-anchor="middle" class="petite-etiquette">1</text><text x="246" y="244" text-anchor="middle" class="petite-etiquette">2</text><text x="284" y="244" text-anchor="middle" class="petite-etiquette">3</text><text x="322" y="244" text-anchor="middle" class="petite-etiquette">4</text><text x="158" y="197" text-anchor="end" class="petite-etiquette">2</text><text x="158" y="167" text-anchor="end" class="petite-etiquette">4</text><text x="158" y="137" text-anchor="end" class="petite-etiquette">6</text><text x="158" y="107" text-anchor="end" class="petite-etiquette">8</text><text x="158" y="77" text-anchor="end" class="petite-etiquette">10</text><text x="345" y="264" text-anchor="end" class="petite-etiquette">time (min)</text><text x="178" y="40" class="petite-etiquette">volume (dL)</text><line x1="284" y1="222" x2="284" y2="102" class="chemin-correction" /><line x1="170" y1="102" x2="284" y2="102" class="chemin-correction" /><circle cx="170" cy="192" r="6" class="point-mesure" /><circle cx="208" cy="162" r="6" class="point-mesure" /><circle cx="246" cy="132" r="6" class="point-mesure" /><circle cx="322" cy="72" r="6" class="point-mesure" /><circle cx="284" cy="102" r="8" class="resultat" /><text x="276" y="90" text-anchor="end">(3 ; 8)</text></svg><figcaption>Each notebook row becomes exactly one point. The gold guides show the path for the highlighted record: move along the time axis, then move up to the height of the volume. The points stay separate: there are no records between them.</figcaption></figure><figure><svg viewBox="0 0 360 262" xmlns="http://www.w3.org/2000/svg" role="img"><title>Reversing the pair changes the record</title><desc>A coordinate system with time in minutes and volume in decilitres. A grey area covers the times in the notebook, from 0 to 4 minutes. The point (3 ; 8), drawn as a filled circle, lies in this area. The reversed pair (8 ; 3), drawn as a square, lies at 8 minutes and 3 decilitres, outside the area: the notebook contains no record at that time.</desc><rect x="44" y="62" width="136" height="152" class="cadre-neutre" /><text x="112" y="80" text-anchor="middle" class="petite-etiquette">notebook range</text><line x1="44" y1="214" x2="345" y2="214" class="trait" /><polyline points="339,209 345,214 339,219" class="trait" /><line x1="44" y1="214" x2="44" y2="46" class="trait" /><polyline points="39,52 44,46 49,52" class="trait" /><line x1="78" y1="214" x2="78" y2="220" class="trait" /><line x1="112" y1="214" x2="112" y2="220" class="trait" /><line x1="146" y1="214" x2="146" y2="220" class="trait" /><line x1="180" y1="214" x2="180" y2="220" class="trait" /><line x1="214" y1="214" x2="214" y2="220" class="trait" /><line x1="248" y1="214" x2="248" y2="220" class="trait" /><line x1="282" y1="214" x2="282" y2="220" class="trait" /><line x1="316" y1="214" x2="316" y2="220" class="trait" /><text x="44" y="236" text-anchor="middle" class="petite-etiquette">0</text><text x="146" y="236" text-anchor="middle" class="petite-etiquette">3</text><text x="180" y="236" text-anchor="middle" class="petite-etiquette">4</text><text x="316" y="236" text-anchor="middle" class="prediction">8 ?</text><text x="345" y="256" text-anchor="end" class="petite-etiquette">time (min)</text><text x="52" y="42" class="petite-etiquette">volume (dL)</text><text x="36" y="107" text-anchor="end" class="petite-etiquette">8</text><text x="36" y="177" text-anchor="end" class="petite-etiquette">3</text><line x1="316" y1="214" x2="316" y2="172" class="trait" /><line x1="44" y1="172" x2="316" y2="172" class="trait" /><line x1="146" y1="214" x2="146" y2="102" class="chemin-correction" /><line x1="44" y1="102" x2="146" y2="102" class="chemin-correction" /><circle cx="146" cy="102" r="8" class="resultat" /><text x="138" y="92" text-anchor="end">(3 ; 8)</text><rect x="309" y="165" width="14" height="14" class="point-prediction" /><text x="316" y="154" text-anchor="middle" class="prediction">(8 ; 3) ?</text></svg><figcaption>The same numbers in the opposite order identify a different point. The gold circle is the notebook record; the pink square puts the volume on the time axis and falls outside the recorded times.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>A coordinate consists of a number, the axis it belongs to and its unit. First move according to the first coordinate along the horizontal axis, then move up according to the second; read the point back to recover exactly the same table row.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Plot the record at 3 minutes on graph paper</h3><p>You have a sheet of graph paper. On the horizontal axis, one square represents 1 min; on the vertical axis, one square represents 2 dL, so that the 10 dL of the last record fit on the sheet. Let us plot the record at 3 min, then read it back to check.</p><ol class="etapes"><li><h3>Read the row and identify each number</h3><p>Let t be the time elapsed since filling began, in minutes, and V the volume of water in the bottle, in decilitres. The chosen row gives t = 3 min and V = 8 dL. These two numbers belong to the same record: keep them together.</p><p>The coordinate system states the order (t ; V): time first, then volume. The point we want is therefore written as follows.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>=</mo><mo>(</mo><mi>t</mi><mo>;</mo><mi>V</mi><mo>)</mo><mo>=</mo><mo>(</mo><mn>3</mn><mo>;</mo><mn>8</mn><mo>)</mo></mrow></math></div></li><li><h3>Set up the coordinate system and its scales</h3><p>Draw the axes at right angles and mark the origin O = (0 ; 0). Let h be the value represented by one horizontal square, h = 1 min per square, and k the value represented by one vertical square, k = 2 dL per square.</p><p>Assumptions for plotting: each axis starts at 0 at the origin, and all squares along the same axis represent the same quantity. The two axes can have different scales because they measure different things; a horizontal length therefore cannot be compared directly with a vertical length.</p></li><li><h3>Move along according to the first coordinate</h3><p>To find how many squares to move, divide the quantity by the value represented by one square on that axis. The minutes cancel, leaving a number of squares, denoted by a.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>a</mi><mo>=</mo><mfrac><mi>t</mi><mi>h</mi></mfrac><mo>=</mo><mfrac><mrow><mn>3</mn><mtext> min</mtext></mrow><mrow><mn>1</mn><mtext> min par carreau</mtext></mrow></mfrac><mo>=</mo><mn>3</mn><mtext> carreaux</mtext></mrow></math></div><p>From O, move 3 squares to the right along the time axis. Do not move up yet.</p></li><li><h3>Move up according to the second coordinate</h3><p>Use the same reasoning on the vertical axis, with its own scale. Denote the number of squares to move up by b.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>=</mo><mfrac><mi>V</mi><mi>k</mi></mfrac><mo>=</mo><mfrac><mrow><mn>8</mn><mtext> dL</mtext></mrow><mrow><mn>2</mn><mtext> dL par carreau</mtext></mrow></mfrac><mo>=</mo><mn>4</mn><mtext> carreaux</mtext></mrow></math></div><p>From the position reached, move vertically up 4 squares. Mark the point, then write its label (3 ; 8) beside it. Moving up 8 squares would be wrong: each vertical square represents 2 dL, which would place the point at twice the volume.</p></li><li><h3>Check by reading the point back</h3><p>Reverse the construction. From the point, go down to the horizontal axis and count 3 squares along that axis from the origin; from the point, go across to the vertical axis and count 4 squares along that axis from the origin. Multiply each count by the scale of its axis.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>a</mi><mo>×</mo><mi>h</mi><mo>=</mo><mn>3</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>3</mn><mtext> min</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>×</mo><mi>k</mi><mo>=</mo><mn>4</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>8</mn><mtext> dL</mtext></mrow></math></div><p>This recovers exactly the notebook row. A second check, independent of the calculation: the point must be higher than the one at 2 min (6 dL) and lower than the one at 4 min (10 dL), as in the notebook. It is.</p></li><li><h3>Compare with the reversed pair</h3><p>Apply the same method to (8 ; 3). You would have to move 8 squares along, representing 8 min: this is 4 min after the last record, which is at 4 min. You would then have to move up 3 ÷ 2 = 1.5 squares, between two scale marks.</p><p>This point exists in the coordinate system, but no notebook row corresponds to it. Reversing the pair has changed the role and unit of each number; it has not produced another way of writing the same record.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking back, explain why you move up 4 squares, rather than 8, to represent 8 dL. Then explain why the reversed pair does not identify the same record.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The height of the point gives the time.”</h3><p>Read the name of each axis before reading a value. Here, height is read on the vertical axis, which gives volume in decilitres. Read the time by going down from the point to the horizontal axis.</p><a href="#intuition">Review the diagram of the notebook and coordinate system</a></li><li><h3>“Coordinates are two numbers with no order.”</h3><p>The order is stated with the coordinate system: (time ; volume). Swapping the numbers sends the point to 8 min, a time that the notebook does not contain. The first coordinate is always read on the horizontal axis.</p><a href="#exemple">Revisit the step on the reversed pair</a></li><li><h3>“Joining the points must give the values between them.”</h3><p>Each point comes from a notebook row. Between two records, no reading was taken: a line would propose volumes with no source. An additional rule is needed; it will be studied in the next unit.</p><a href="#exercices">Redo the exercise on the point that contradicts the notebook</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-relire"><p class="repere">Exercise 1 · Guided reading</p>
+<h3>Recover the record represented by a point</h3><p>On the sheet used in the example (one horizontal square represents 1 min and one vertical square represents 2 dL), a point is placed 2 squares to the right of the origin and 3 squares above it. Give its coordinates with their units. Does it correspond to a notebook row?</p>
+<label for="reponse-ex-relire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-relire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-relire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-relire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-relire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Multiply each number of squares by the value represented by one square on its own axis.</p></details><details class="indice"><summary>Hint 2</summary><p>Write the time first, then the volume, and look for that row in the notebook.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Time: 2 squares × 1 min = 2 min. Volume: 3 squares × 2 dL = 6 dL. The point is (2 ; 6).</p><p>The notebook does give 6 dL at 2 min: this point represents that record. Reverse check: 6 ÷ 2 = 3 squares. Answering “3 dL” would mean forgetting the vertical scale.</p><p class="petit-titre">Check your reasoning</p><ul><li>The coordinates are in the order (time ; volume).</li><li>Each number has its unit, minutes or decilitres.</li><li>The scale of each axis is used separately.</li><li>The result is compared with the notebook as well as calculated.</li></ul></details></article><article class="exercice" id="ex-litres"><p class="repere">Exercise 2 · Change of unit</p>
+<h3>The same record, written in litres</h3><p>A friend records volumes in litres (L). One litre equals 10 dL. Write the record at 3 min with the volume in litres. On your friend’s vertical axis, one square represents 0.2 L: how many squares should the point be moved up? Is the point in the same place as yours on the sheet?</p>
+<label for="reponse-ex-litres">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-litres" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-litres" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-litres" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-litres" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A decilitre is a tenth of a litre: multiply the number of decilitres by that fraction.</p></details><details class="indice"><summary>Hint 2</summary><p>To count the squares, divide the volume in litres by the value represented by one square, also in litres.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>One decilitre equals 1 ÷ 10 = 0.1 L. So 8 dL = 8 × 0.1 L = 0.8 L, and the record is written (3 ; 0.8) in the coordinate system (min ; L).</p><p>Squares to move up: 0.8 ÷ 0.2 = 4, meaning 8 tenths of a litre divided into groups of 2 tenths. This is the same number of squares as in the example: the point is in the same place.</p><p>The second coordinate has a different numerical value because its unit has changed; the record and position have stayed the same. A coordinate written without a unit would therefore be ambiguous.</p><p class="petit-titre">Check your reasoning</p><ul><li>The conversion starts from one decilitre being equal to a tenth of a litre.</li><li>The scale and volume are expressed in the same unit before division.</li><li>The conclusion distinguishes the number written from the quantity represented.</li></ul></details></article><article class="exercice" id="ex-contradiction"><p class="repere">Exercise 3 · Diagnosis</p>
+<h3>The point that contradicts the notebook</h3><p>A classmate has plotted the points (0 ; 2), (1 ; 4), (2 ; 6), (3 ; 4) and (4 ; 10). How many agree with the notebook? For the one that differs, give the difference in decilitres and then in squares, using the scale from the example. Is joining the points enough to correct it?</p>
+<label for="reponse-ex-contradiction">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-contradiction" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-contradiction" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-contradiction" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-contradiction" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare row by row: at the same time, the volumes must be equal.</p></details><details class="indice"><summary>Hint 2</summary><p>Convert a vertical difference in decilitres to squares using the vertical scale.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At 0, 1, 2 and 4 min, the proposed volumes equal those in the notebook. At 3 min, the notebook gives 8 dL and the point proposes 4. Therefore, 1 point out of 5 disagrees, and 5 − 1 = 4 points agree.</p><p>Difference: 8 − 4 = 4 dL, or 4 ÷ 2 = 2 squares. The point is too low: move it up 2 squares without changing its x-coordinate.</p><p>Joining the points corrects nothing and adds no records. A point can be neatly drawn and still contradict the data: comparison with the table decides whether it is correct, rather than the appearance of the drawing.</p><p class="petit-titre">Check your reasoning</p><ul><li>The comparison is made at the same time, row by row.</li><li>The number of agreeing points is a justified whole number.</li><li>The difference is given in decilitres, then converted using the vertical scale.</li><li>The answer rejects drawing a line as a way to correct the point.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="point"><summary><span class="repere">Recall 1</span><span>What does a point in a coordinate system represent?</span></summary><p>An ordered pair of coordinates: the first is read on the horizontal axis and the second on the vertical axis, each with the unit of its axis.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 2</span><span>In the bottle’s coordinate system (time ; volume), what does the first number in (3 ; 8) mean?</span></summary><p>3 minutes, read on the horizontal axis. The second number, 8, represents 8 decilitres on the vertical axis.</p></details><details class="carte" data-carte="echelle"><summary><span class="repere">Recall 3</span><span>How do you convert a value to the number of squares to move?</span></summary><p>Divide the value by the value represented by one square on that axis, then check by multiplying the number of squares by that same scale.</p></details><details class="carte" data-carte="entre-deux"><summary><span class="repere">Recall 4</span><span>Do the notebook points give the volume at a time that was not recorded?</span></summary><p>No. A point comes from a recorded row; between two records, an additional rule would be needed, and none is given here.</p></details><details class="carte" data-carte="axes"><summary><span class="repere">Recall 5</span><span>Why is a graph without axis names or units insufficient?</span></summary><p>You can no longer tell which number represents time or volume, or in what unit; the point no longer lets you recover the meaning of the record.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>A table row becomes a point: name the axes and their units, state the order of the coordinates, move along according to the first and up according to the second by dividing each value by the scale of its axis, then read the point back to recover the row. Without an additional rule, do not join the points.</p></div><div class="exports"><a class="bouton" download="c006-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMDYtbTE6cG9pbnQiLAogICAgICAidW5pdGUiOiAiYzAwNi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvb3Jkb25uZWVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhIHBvaW50IGluIGEgY29vcmRpbmF0ZSBzeXN0ZW0gcmVwcmVzZW50PyIsCiAgICAgICJyZXBvbnNlIjogIkFuIG9yZGVyZWQgcGFpciBvZiBjb29yZGluYXRlczogdGhlIGZpcnN0IGlzIHJlYWQgb24gdGhlIGhvcml6b250YWwgYXhpcyBhbmQgdGhlIHNlY29uZCBvbiB0aGUgdmVydGljYWwgYXhpcywgZWFjaCB3aXRoIHRoZSB1bml0IG9mIGl0cyBheGlzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDA2LW0xOm9yZHJlIiwKICAgICAgInVuaXRlIjogImMwMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvcmRyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJJbiB0aGUgYm90dGxl4oCZcyBjb29yZGluYXRlIHN5c3RlbSAodGltZSA7IHZvbHVtZSksIHdoYXQgZG9lcyB0aGUgZmlyc3QgbnVtYmVyIGluICgzIDsgOCkgbWVhbj8iLAogICAgICAicmVwb25zZSI6ICIzIG1pbnV0ZXMsIHJlYWQgb24gdGhlIGhvcml6b250YWwgYXhpcy4gVGhlIHNlY29uZCBudW1iZXIsIDgsIHJlcHJlc2VudHMgOCBkZWNpbGl0cmVzIG9uIHRoZSB2ZXJ0aWNhbCBheGlzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDA2LW0xOmVjaGVsbGUiLAogICAgICAidW5pdGUiOiAiYzAwNi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVjaGVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBjb252ZXJ0IGEgdmFsdWUgdG8gdGhlIG51bWJlciBvZiBzcXVhcmVzIHRvIG1vdmU/IiwKICAgICAgInJlcG9uc2UiOiAiRGl2aWRlIHRoZSB2YWx1ZSBieSB0aGUgdmFsdWUgcmVwcmVzZW50ZWQgYnkgb25lIHNxdWFyZSBvbiB0aGF0IGF4aXMsIHRoZW4gY2hlY2sgYnkgbXVsdGlwbHlpbmcgdGhlIG51bWJlciBvZiBzcXVhcmVzIGJ5IHRoYXQgc2FtZSBzY2FsZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAwNi1tMTplbnRyZS1kZXV4IiwKICAgICAgInVuaXRlIjogImMwMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbnRlcnBvbGF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkRvIHRoZSBub3RlYm9vayBwb2ludHMgZ2l2ZSB0aGUgdm9sdW1lIGF0IGEgdGltZSB0aGF0IHdhcyBub3QgcmVjb3JkZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIEEgcG9pbnQgY29tZXMgZnJvbSBhIHJlY29yZGVkIHJvdzsgYmV0d2VlbiB0d28gcmVjb3JkcywgYW4gYWRkaXRpb25hbCBydWxlIHdvdWxkIGJlIG5lZWRlZCwgYW5kIG5vbmUgaXMgZ2l2ZW4gaGVyZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAwNi1tMTpheGVzIiwKICAgICAgInVuaXRlIjogImMwMDYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJheGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBhIGdyYXBoIHdpdGhvdXQgYXhpcyBuYW1lcyBvciB1bml0cyBpbnN1ZmZpY2llbnQ/IiwKICAgICAgInJlcG9uc2UiOiAiWW91IGNhbiBubyBsb25nZXIgdGVsbCB3aGljaCBudW1iZXIgcmVwcmVzZW50cyB0aW1lIG9yIHZvbHVtZSwgb3IgaW4gd2hhdCB1bml0OyB0aGUgcG9pbnQgbm8gbG9uZ2VyIGxldHMgeW91IHJlY292ZXIgdGhlIG1lYW5pbmcgb2YgdGhlIHJlY29yZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c006-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgcG9pbnQgaW4gYSBjb29yZGluYXRlIHN5c3RlbSByZXByZXNlbnQ/CUFuIG9yZGVyZWQgcGFpciBvZiBjb29yZGluYXRlczogdGhlIGZpcnN0IGlzIHJlYWQgb24gdGhlIGhvcml6b250YWwgYXhpcyBhbmQgdGhlIHNlY29uZCBvbiB0aGUgdmVydGljYWwgYXhpcywgZWFjaCB3aXRoIHRoZSB1bml0IG9mIGl0cyBheGlzLgl0b2RhaSBjMDA2LW0xIGNvb3Jkb25uZWVzCkluIHRoZSBib3R0bGXigJlzIGNvb3JkaW5hdGUgc3lzdGVtICh0aW1lIDsgdm9sdW1lKSwgd2hhdCBkb2VzIHRoZSBmaXJzdCBudW1iZXIgaW4gKDMgOyA4KSBtZWFuPwkzIG1pbnV0ZXMsIHJlYWQgb24gdGhlIGhvcml6b250YWwgYXhpcy4gVGhlIHNlY29uZCBudW1iZXIsIDgsIHJlcHJlc2VudHMgOCBkZWNpbGl0cmVzIG9uIHRoZSB2ZXJ0aWNhbCBheGlzLgl0b2RhaSBjMDA2LW0xIG9yZHJlCkhvdyBkbyB5b3UgY29udmVydCBhIHZhbHVlIHRvIHRoZSBudW1iZXIgb2Ygc3F1YXJlcyB0byBtb3ZlPwlEaXZpZGUgdGhlIHZhbHVlIGJ5IHRoZSB2YWx1ZSByZXByZXNlbnRlZCBieSBvbmUgc3F1YXJlIG9uIHRoYXQgYXhpcywgdGhlbiBjaGVjayBieSBtdWx0aXBseWluZyB0aGUgbnVtYmVyIG9mIHNxdWFyZXMgYnkgdGhhdCBzYW1lIHNjYWxlLgl0b2RhaSBjMDA2LW0xIGVjaGVsbGUKRG8gdGhlIG5vdGVib29rIHBvaW50cyBnaXZlIHRoZSB2b2x1bWUgYXQgYSB0aW1lIHRoYXQgd2FzIG5vdCByZWNvcmRlZD8JTm8uIEEgcG9pbnQgY29tZXMgZnJvbSBhIHJlY29yZGVkIHJvdzsgYmV0d2VlbiB0d28gcmVjb3JkcywgYW4gYWRkaXRpb25hbCBydWxlIHdvdWxkIGJlIG5lZWRlZCwgYW5kIG5vbmUgaXMgZ2l2ZW4gaGVyZS4JdG9kYWkgYzAwNi1tMSBpbnRlcnBvbGF0aW9uCldoeSBpcyBhIGdyYXBoIHdpdGhvdXQgYXhpcyBuYW1lcyBvciB1bml0cyBpbnN1ZmZpY2llbnQ/CVlvdSBjYW4gbm8gbG9uZ2VyIHRlbGwgd2hpY2ggbnVtYmVyIHJlcHJlc2VudHMgdGltZSBvciB2b2x1bWUsIG9yIGluIHdoYXQgdW5pdDsgdGhlIHBvaW50IG5vIGxvbmdlciBsZXRzIHlvdSByZWNvdmVyIHRoZSBtZWFuaW5nIG9mIHRoZSByZWNvcmQuCXRvZGFpIGMwMDYtbTEgYXhlcwo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uymnbz aydzcw lzym</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zqniwm pvcvve ubcy</span></span> · preview milestone, to prepare after C006·M3</h3><dl><div><dt>What you understand</dt><dd>A coordinate only makes sense with its axis and unit. A score computed from text can be plotted on axes like a bottle record; reading its position describes a model output, not a measured human emotion.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">osjmoc fxbplx zizszf szvejb omekrj yqffia gjqngp tfbhfj copnun yurrfs pwzxns ejscmv jfadxc gpitgy ulnkfy wlspvi cxhvoj oasqxo cfbrjq empqte fhpkuh gqoxpg wkclbb srojqp ppofdq mtyahc qaoauy bnbuwb qjobgz lnucbi prytcr zymdnp vstiig btwsqd jfklca zijdog hyenqn ip</span></span></dd></div><div><dt>Your level</dt><dd>This is a preview milestone; no skill relating to this component is required here. Prepare for level a after C006·M3: name from memory what each axis of such a graph represents and explain why this score is not a measurement of emotion. Reading this lesson grants no level; an assisted answer remains assisted, and mastery requires reconstructing the answer without hints at least two days later, assessed separately.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lgcwsi xqorul mygokf ftyuqk swwmxa jefbhs mewukk fpsryt msmpfg qfifbk gseoje lrgaxr ksqxip ccnfbz eezcgs vqzcpj dkrdoq mppmgj dwrrkp wgtgqq ajbsgx yyzuyi tjcyup pxlfhm</span></span></dd></div><div><dt>To continue</dt><dd>Redo the three exercises without support in two days. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">spdnzz slmojf ucezbe ovuucy xboqdd xahxly ojtw</span></span> To aim for b afterwards: C042·M5, C065·M5 and C086·M5, then review the score calculation before any interpretation.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c006-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c005-m5.html">Previous</a> · <a href="c006-m2.html">Next</a></nav>
+<footer><p>Course book · C006·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

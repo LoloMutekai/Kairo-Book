@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Recalculate a simulated trade including its costs and distinguish a position valued at the final price from an assumed liquidation at the end of the record.">
+<title>C098·M3 · Fees, slippage and the terminal assumption — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cowrjz batbpr azqd</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C098·M3</p><h1>Fees, slippage and the terminal assumption</h1><p class="objectif"><span>Your goal</span>Recalculate a simulated trade including its costs and distinguish a position valued at the final price from an assumed liquidation at the end of the record.</p><p class="prerequis"><strong>Before you start</strong><br>c097-m5 : risk and horizon · c067-m5 : pipeline · c090-m5 : stationarity · c037-m5 : controlled cleaning · c098-m1 : chronology, delay and available information · c098-m2 : cash, units and total value</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A simulation ledger records the purchase of 5 units of a fictional asset with a reference price of 100.00 € per unit. At the end of the record, this price is 110.00 €. The tempting calculation is to multiply the increase by the quantity. But did the ledger record a purchase at that price? And did it actually record a sale at the end?</p><p>A fee is an amount charged when an order is executed. Slippage is the difference between the chosen reference price and the execution price. Here, by assumption, the purchase price is higher and the sale price lower than their references. Slippage is therefore already included in the amounts exchanged; fees are added separately.</p><p>The record ends while units are still held. Valuing them at the final price means assigning them a value on the balance sheet without selling them. Liquidating them means simulating a sale: its costs must then be applied and the execution assumption stated. The end of a file is not a sell order.</p><p>All amounts, prices and costs in this scene are fictional. We are only following the ledger for a planned trade; we are not choosing a strategy or measuring any real performance. Before calculating, predict which of the endings shown still leaves units held.</p><div class="schemas"><figure><svg viewBox="0 0 360 254" xmlns="http://www.w3.org/2000/svg" role="img"><title>The execution price and fees have distinct roles</title><desc>Purchase of 5 units: reference 100.00 euros per unit, execution 101.00 euros per unit, amount 505.00 euros. Fees add 2.00 euros; the total debit is 507.00 euros.</desc><rect x="18" y="12" width="324" height="60" rx="7" class="cadre-prediction" /><text x="180" y="36" text-anchor="middle">Reference: 100.00 €/unit</text><text x="180" y="58" text-anchor="middle" class="petite-etiquette">Adverse slippage: 1 %</text><path d="M180 72v22m-5-5 5 5 5-5" class="trait" /><rect x="18" y="96" width="324" height="62" rx="7" class="cadre-neutre" /><text x="180" y="121" text-anchor="middle">Execution: 101.00 €/unit</text><text x="180" y="145" text-anchor="middle">5 units cost 505.00 €</text><path d="M180 158v22m-5-5 5 5 5-5" class="trait" /><rect x="18" y="182" width="324" height="60" rx="7" class="cadre-resultat" /><text x="180" y="207" text-anchor="middle">Fees: + 2.00 €</text><text x="180" y="231" text-anchor="middle">Debit: 507.00 €</text></svg><figcaption>The price changes before multiplication by the quantity. Fees are then added to the purchase amount; the debit already includes slippage.</figcaption></figure><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two conventions for the same end of the record</title><desc>Before the terminal convention: 493.00 euros in cash and 5 units. Without a sale, the total value at the final price is 1043.00 euros. With an assumed full liquidation and costs, 0 units and 1035.50 euros in cash remain.</desc><rect x="18" y="12" width="324" height="54" rx="7" class="cadre-neutre" /><text x="180" y="35" text-anchor="middle">End of record</text><text x="180" y="56" text-anchor="middle">493.00 € and 5 units</text><path d="M180 66v17M30 138V83H350V250M30 138h28M350 250h-8" class="trait" /><rect x="58" y="100" width="284" height="76" rx="7" class="cadre-prediction" /><text x="200" y="124" text-anchor="middle">Value without selling</text><text x="200" y="146" text-anchor="middle">Total: 1043.00 €</text><text x="200" y="166" text-anchor="middle" class="petite-etiquette">Cash: 493.00 €; 5 units</text><rect x="58" y="212" width="284" height="76" rx="7" class="cadre-resultat" /><text x="200" y="236" text-anchor="middle">Liquidate with costs</text><text x="200" y="258" text-anchor="middle">Total: 1035.50 €</text><text x="200" y="278" text-anchor="middle" class="petite-etiquette">All in cash; 0 units</text></svg><figcaption>The branches are alternative endings for the same ledger. The line to liquidation runs along the right; it does not mean that valuation triggers a sale.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Apply slippage to the price, fees to the cash flow and the terminal convention to the balance sheet; keep cash and units separate.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Buy, value, then compare with an assumed liquidation</h3><p>The ledger starts with 1000.00 € in cash and 0 units. The planned purchase is for q = 5 units, using P = 100.00 €/unit. The final reference price is M = 110.00 €/unit. For each fully executed purchase or sale, we assume adverse slippage of 1 % of the reference and fixed fees of 2.00 € per order.</p><ol class="etapes"><li><h3>Define the rules of the ledger</h3><p>C<sub>0</sub> is the initial capital in euros. C denotes cash after the purchase, in euros. q is the quantity of the asset, in units; P and M are the reference prices at entry and at the end, respectively, in euros per unit. p<sub>a</sub> and pᵥ will denote the purchase and sale execution prices, in the same unit. The subscripts a and v label purchase and sale.</p><p>s is the dimensionless slippage rate: s = 1/100 = 1/100 = 0.01. f denotes fixed fees, in euros per executed order. V is the total value, in euros; its subscripts denote the marked and liquidated terminal conventions. G is a gain in euros, calculated relative to C<sub>0</sub>, without annualization.</p><p>We assume q &gt; 0, P &gt; 0, M &gt; 0, 0 ≤ s &lt; 1 and f ≥ 0. The quantity stays fixed and the same rate s applies to both orders. Executions are complete, with no borrowing or other flows: no deposits, dividends, interest or taxes. The bid–ask spread is not added separately: our slippage represents the entire execution price difference assumed here. The purchase rule is decided before execution; the final price is used only for the balance sheet. All calculations retain their exact fractions.</p><p>Before replaying the trade, the report must choose: keep the position and value it at the final price, or impose terminal liquidation with its costs. To compare the conventions, we will calculate both branches here. The second assumes that a sale is possible at the final point; it proves neither that a future order exists nor that a real market would accept the full quantity.</p></li><li><h3>Buy at the execution price</h3><p>Adverse slippage increases the purchase price. The factor is 1 + 0.01 = 1.01; each unit therefore costs 100.00 × 1.01 = 101.00 €.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>p</mi><mi>a</mi></msub><mo>=</mo><mi>P</mi><mo>(</mo><mn>1</mn><mo>+</mo><mi>s</mi><mo>)</mo></mrow></math></div><p>The purchase amount is 5 × 101.00 = 505.00 €. Add the fees for this order: 505.00 + 2.00 = 507.00 € debited. The cash balance becomes C = 1000.00 − 507.00 = 493.00 €. The ledger now holds 5 units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><msub><mi>C</mi><mn>0</mn></msub><mo>−</mo><mi>q</mi><msub><mi>p</mi><mi>a</mi></msub><mo>−</mo><mi>f</mi></mrow></math></div><p>Immediate check: remaining cash + amount paid for the units + fees = initial capital, giving 493.00 + 505.00 + 2.00 = 1000.00 €. The capital is sufficient; there is no hidden borrowing.</p></li><li><h3>End the record without selling</h3><p>Valuing the position means multiplying the units still held by the final reference price: 5 × 110.00 = 550.00 €. Add the cash, which has not changed since the purchase.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>marqué</mtext></msub><mo>=</mo><mi>C</mi><mo>+</mo><mi>q</mi><mi>M</mi><mo>=</mo><mn>493.00</mn><mo>+</mo><mn>550.00</mn><mo>=</mo><mn>1043.00</mn><mtext> €</mtext></mrow></math></div><p>The difference from the initial capital is 1043.00 − 1000.00 = 43.00 €. This is a valuation gain, already reduced by entry costs. The balance sheet still contains 5 units and only 493.00 € in cash. Exit fees have not been incurred.</p></li><li><h3>Simulate terminal liquidation</h3><p>Start again from the same state after the purchase. On sale, adverse slippage decreases the price: factor 1 − 0.01 = 0.99. The execution price is 110.00 × 0.99 = 108.90 €/unit. The sale amount is 5 × 108.90 = 544.50 €.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>p</mi><mi>v</mi></msub><mo>=</mo><mi>M</mi><mo>(</mo><mn>1</mn><mo>−</mo><mi>s</mi><mo>)</mo></mrow></math></div><p>Fees reduce the cash received: 544.50 − 2.00 = 542.50 €. Final cash is therefore 493.00 + 542.50 = 1035.50 €. After the full sale, final q is 0 units; total value and final cash coincide.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>liquidé</mtext></msub><mo>=</mo><mi>C</mi><mo>+</mo><mi>q</mi><msub><mi>p</mi><mi>v</mi></msub><mo>−</mo><mi>f</mi></mrow></math></div><p>The net gain for this branch is G = 1035.50 − 1000.00 = 35.50 €. This result follows from our simulation assumptions, rather than from an actually observed trade.</p></li><li><h3>Check using gross gain minus costs</h3><p>Find the same gain by another route. Without costs, the increase per unit would be 110.00 − 100.00 = 10.00 €, so the gross gain would be 5 × 10.00 = 50.00 €.</p><p>At entry, each unit costs 101.00 − 100.00 = 1.00 € more: 5 × 1.00 = 5.00 €. At exit, it brings in 110.00 − 108.90 = 1.10 € less: 5 × 1.10 = 5.50 €. Slippage costs 10.50 € in total; the 2 orders incur 2 × 2.00 = 4.00 € in fees.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>G</mi><mo>=</mo><mi>q</mi><mo>(</mo><mi>M</mi><mo>−</mo><mi>P</mi><mo>)</mo><mo>−</mo><mi>q</mi><mi>s</mi><mo>(</mo><mi>P</mi><mo>+</mo><mi>M</mi><mo>)</mo><mo>−</mo><mn>2</mn><mi>f</mi></mrow></math></div><p>The total cost is 10.50 + 4.00 = 14.50 €. We obtain 50.00 − 14.50 = 35.50 €, as with the cash ledger. This subtraction checks the result starting from gross gain; repeating it on net gain would count the costs a second time.</p><p>Final check: valuation minus liquidation = 1043.00 − 1035.50 = 7.50 €. This is exactly the exit slippage plus its fees: 5.50 + 2.00 = 7.50 €. Entry costs are already included in both branches and cancel in their difference.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the final amounts. Rebuild the ledger with a cash column and a units column, then explain why an increase in the reference price does not become a gain received entirely in cash. Justify the difference between the terminal conventions without subtracting entry costs again.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I used the execution price; I still need to subtract slippage.”</h3><p>The amount quantity × execution price already includes this difference. Deduct only the separate fees. To check, start again from the gross gain at reference prices and subtract all costs once; you should obtain the ledger result.</p><a href="#exemple">Review the check by breaking down the costs</a></li><li><h3>“Slippage of 1 % increases the price in both directions.”</h3><p>We model adverse slippage: you pay more when buying and receive less when selling. The factors are 1.01 and 0.99. The sign comes from the order side; a favorable difference would be another assumption to state.</p><a href="#intuition">Review the intuition about the price paid and the price received</a></li><li><h3>“The final value is available cash because the record has ended.”</h3><p>The valued branch still holds 5 units. A simulated sale and its costs are needed to obtain a balance sheet entirely in cash. If the final price is the only observation available, explicitly state the assumed execution opportunity; do not invent a future observation.</p><a href="#exercices">Audit the final balance sheet in the second exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-entree"><p class="repere">Exercise 1 · Applying the ledger</p>
+<h3>Costs appear before any price increase</h3><p>Recalculate the purchase of 5 units at the reference price 100.00 €/unit, with the same slippage and fees. Give the execution price, the debit, the remaining cash and the total value immediately after the purchase, valued at the reference price, which is still unchanged. Explain the difference from the initial capital.</p>
+<label for="reponse-ex-entree">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-entree" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-entree" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-entree" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-entree" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The amount paid and the value of the units at the reference price use different prices.</p></details><details class="indice"><summary>Hint 2</summary><p>For the immediate balance sheet, add the remaining cash and q × P. Purchase fees have already been debited.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The execution price is 101.00 €/unit. The 5 units cost 505.00 €; with 2.00 € in fees, the debit is 507.00 €. The remaining cash is 493.00 €.</p><p>At the unchanged reference price, the units are worth 5 × 100.00 = 500.00 €. The balance sheet value is 493.00 + 500.00 = 993.00 €. It is below the initial capital by 7.00 €, exactly 5.00 € in entry slippage plus 2.00 € in fees.</p><p>The decrease in balance sheet value comes from the simulated trade; no movement in the reference price is needed for a cost to appear. No sale fees are added, since no sale has taken place.</p><p class="petit-titre">Check your reasoning</p><ul><li>You distinguish the 101.00 €/unit paid from the 100.00 €/unit used for valuation.</li><li>You obtain 993.00 € and relate the difference solely to entry costs.</li><li>You keep 5 units in the ledger.</li></ul></details></article><article class="exercice" id="ex-terminal"><p class="repere">Exercise 2 · Auditing a conclusion</p>
+<h3>Is everything already in cash?</h3><p>At the end of the same record, a report states “1043.00 € available, trade closed”. Yet its ledger holds 493.00 € and 5 units, with a final reference of 110.00 €/unit. Correct this sentence, then calculate the result of an assumed full liquidation with our costs. Justify the difference between the balance sheets.</p>
+<label for="reponse-ex-terminal">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-terminal" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-terminal" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-terminal" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-terminal" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start by naming what is still held, before carrying out another operation.</p></details><details class="indice"><summary>Hint 2</summary><p>The difference between the branches comes solely from exit: entry is identical.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The correct sentence is: total value 1043.00 €, including 493.00 € in cash and 5 units valued at 110.00 €/unit; position open, exit costs not incurred. The end date does not justify “trade closed”.</p><p>For the liquidated branch, the sale price becomes 108.90 €/unit, giving 544.50 € in sale proceeds. After 2.00 € in fees, the cash received is 542.50 €. Added to the cash already held, this gives 1035.50 € and 0 units.</p><p>The difference of 7.50 € is 5.50 € in exit slippage plus 2.00 € in fees. Full liquidation is an assumption in the report, conditional on the assumed execution of the entire quantity at the final point. The ledger alone does not prove this is feasible.</p><p class="petit-titre">Check your reasoning</p><ul><li>You correct the conclusion before calculating and keep the position open in the valued branch.</li><li>You obtain 1035.50 € and 0 units for the liquidated branch.</li><li>You justify 7.50 € through exit costs and name the execution assumption.</li></ul></details></article><article class="exercice" id="ex-hausse-faible"><p class="repere">Exercise 3 · Transfer and sign check</p>
+<h3>Is a price increase enough to cover costs?</h3><p>Replay the same trade, changing only the final reference price to 102.00 €/unit. Keep the entry, quantity, slippage and fees. Predict the sign of the net liquidation gain, calculate it and compare it with the gross gain. This variant examines the assumption; it is not a way to choose the most favorable ending after the fact.</p>
+<label for="reponse-ex-hausse-faible">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-hausse-faible" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-hausse-faible" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-hausse-faible" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-hausse-faible" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Cash after the purchase remains 493.00 €. Only the sale proceeds change.</p></details><details class="indice"><summary>Hint 2</summary><p>Apply the sale factor to the new price, multiply by the quantity and subtract exit fees.</p></details><details class="indice"><summary>Hint 3</summary><p>Check by separating the gross increase, entry slippage, exit slippage and order fees.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The reference price increases by 102.00 − 100.00 = 2.00 €/unit. The gross gain is 5 × 2.00 = 10.00 €; it is positive.</p><p>The sale price is 102.00 × 0.99 = 100.98 €/unit. The amount is 5 × 100.98 = 504.90 €. After fees of 2.00 €, the cash received is 502.90 €. Final cash is 493.00 + 502.90 = 995.90 €.</p><p>The net gain is 995.90 − 1000.00 = -4.10 €. Costs therefore exceed the gross increase. To check without a new ledger: take 10.00 €, subtract 5.00 € at entry, then the difference between 5 × 102.00 and 504.90 at exit, then 4.00 € in fees. You obtain -4.10 € again.</p><p>An increase in the reference price and a negative net gain are compatible. If your prediction was positive, keep it and explain which cost you had forgotten; consulting the correction remains a form of help, rather than proof of independent mastery.</p><p class="petit-titre">Check your reasoning</p><ul><li>You record your prediction before the calculations and do not change the entry retroactively.</li><li>You obtain 10.00 € gross and -4.10 € net with their signs.</li><li>You check the result through the costs and explain why the increase is insufficient.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="prix-et-frais"><summary><span class="repere">Recall 1</span><span>Where do slippage and fees enter the ledger?</span></summary><p>Slippage changes the execution price. The amount quantity × execution price already includes it. Fees are a separate flow, added to the purchase debit or subtracted from the sale proceeds. Their calculation rule must be stated.</p></details><details class="carte" data-carte="sens-ordre"><summary><span class="repere">Recall 2</span><span>Why do the price factors differ between buying and selling?</span></summary><p>Under our adverse slippage assumption, buying costs more and selling brings in less: P × (1 + s) for the purchase, M × (1 − s) for the sale. P and M are the references in euros per unit; s is the dimensionless rate.</p></details><details class="carte" data-carte="fin-du-releve"><summary><span class="repere">Recall 3</span><span>What distinguishes final valuation from final liquidation?</span></summary><p>Valuation keeps the units and values them at the final reference price. Liquidation adds an assumed sale with slippage and fees; it removes all units only if execution is complete. The end of the record does not prove this sale opportunity exists.</p></details><details class="carte" data-carte="double-controle"><summary><span class="repere">Recall 4</span><span>How can you check net gain without counting slippage twice?</span></summary><p>Compare final cash minus initial capital with the gross gain calculated at reference prices, reduced once by slippage and fees. Do not subtract slippage again from a gain already calculated using execution prices.</p></details><details class="carte" data-carte="couts-et-signe"><summary><span class="repere">Recall 5</span><span>Does an increase in the reference price guarantee a positive net gain?</span></summary><p>No: the gross gain from the increase may remain below entry and exit costs. You must state the terminal convention and recalculate the flows before concluding what sign the simulated gain has.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path of the capital: reference price, execution price, amount, fees, cash and units. Then draw the “value” and “liquidate” endings, write the gain for each and find their difference using exit costs alone. Finally, explain why a price increase can leave a net loss. Check your units and assumptions after your attempt.</p></div><div class="exports"><a class="bouton" download="c098-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTgtbTM6cHJpeC1ldC1mcmFpcyIsCiAgICAgICJ1bml0ZSI6ICJjMDk4LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZnJhaXMtZXQtZ2xpc3NlbWVudCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGVyZSBkbyBzbGlwcGFnZSBhbmQgZmVlcyBlbnRlciB0aGUgbGVkZ2VyPyIsCiAgICAgICJyZXBvbnNlIjogIlNsaXBwYWdlIGNoYW5nZXMgdGhlIGV4ZWN1dGlvbiBwcmljZS4gVGhlIGFtb3VudCBxdWFudGl0eSDDlyBleGVjdXRpb24gcHJpY2UgYWxyZWFkeSBpbmNsdWRlcyBpdC4gRmVlcyBhcmUgYSBzZXBhcmF0ZSBmbG93LCBhZGRlZCB0byB0aGUgcHVyY2hhc2UgZGViaXQgb3Igc3VidHJhY3RlZCBmcm9tIHRoZSBzYWxlIHByb2NlZWRzLiBUaGVpciBjYWxjdWxhdGlvbiBydWxlIG11c3QgYmUgc3RhdGVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk4LW0zOnNlbnMtb3JkcmUiLAogICAgICAidW5pdGUiOiAiYzA5OC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdsaXNzZW1lbnQtZGVmYXZvcmFibGUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvIHRoZSBwcmljZSBmYWN0b3JzIGRpZmZlciBiZXR3ZWVuIGJ1eWluZyBhbmQgc2VsbGluZz8iLAogICAgICAicmVwb25zZSI6ICJVbmRlciBvdXIgYWR2ZXJzZSBzbGlwcGFnZSBhc3N1bXB0aW9uLCBidXlpbmcgY29zdHMgbW9yZSBhbmQgc2VsbGluZyBicmluZ3MgaW4gbGVzczogUCDDlyAoMSArIHMpIGZvciB0aGUgcHVyY2hhc2UsIE0gw5cgKDEg4oiSIHMpIGZvciB0aGUgc2FsZS4gUCBhbmQgTSBhcmUgdGhlIHJlZmVyZW5jZXMgaW4gZXVyb3MgcGVyIHVuaXQ7IHMgaXMgdGhlIGRpbWVuc2lvbmxlc3MgcmF0ZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OC1tMzpmaW4tZHUtcmVsZXZlIiwKICAgICAgInVuaXRlIjogImMwOTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJoeXBvdGhlc2UtdGVybWluYWxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZGlzdGluZ3Vpc2hlcyBmaW5hbCB2YWx1YXRpb24gZnJvbSBmaW5hbCBsaXF1aWRhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJWYWx1YXRpb24ga2VlcHMgdGhlIHVuaXRzIGFuZCB2YWx1ZXMgdGhlbSBhdCB0aGUgZmluYWwgcmVmZXJlbmNlIHByaWNlLiBMaXF1aWRhdGlvbiBhZGRzIGFuIGFzc3VtZWQgc2FsZSB3aXRoIHNsaXBwYWdlIGFuZCBmZWVzOyBpdCByZW1vdmVzIGFsbCB1bml0cyBvbmx5IGlmIGV4ZWN1dGlvbiBpcyBjb21wbGV0ZS4gVGhlIGVuZCBvZiB0aGUgcmVjb3JkIGRvZXMgbm90IHByb3ZlIHRoaXMgc2FsZSBvcHBvcnR1bml0eSBleGlzdHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTgtbTM6ZG91YmxlLWNvbnRyb2xlIiwKICAgICAgInVuaXRlIjogImMwOTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1kdS1yZWdpc3RyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSBjaGVjayBuZXQgZ2FpbiB3aXRob3V0IGNvdW50aW5nIHNsaXBwYWdlIHR3aWNlPyIsCiAgICAgICJyZXBvbnNlIjogIkNvbXBhcmUgZmluYWwgY2FzaCBtaW51cyBpbml0aWFsIGNhcGl0YWwgd2l0aCB0aGUgZ3Jvc3MgZ2FpbiBjYWxjdWxhdGVkIGF0IHJlZmVyZW5jZSBwcmljZXMsIHJlZHVjZWQgb25jZSBieSBzbGlwcGFnZSBhbmQgZmVlcy4gRG8gbm90IHN1YnRyYWN0IHNsaXBwYWdlIGFnYWluIGZyb20gYSBnYWluIGFscmVhZHkgY2FsY3VsYXRlZCB1c2luZyBleGVjdXRpb24gcHJpY2VzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk4LW0zOmNvdXRzLWV0LXNpZ25lIiwKICAgICAgInVuaXRlIjogImMwOTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJnYWluLW5ldCIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIGFuIGluY3JlYXNlIGluIHRoZSByZWZlcmVuY2UgcHJpY2UgZ3VhcmFudGVlIGEgcG9zaXRpdmUgbmV0IGdhaW4/IiwKICAgICAgInJlcG9uc2UiOiAiTm86IHRoZSBncm9zcyBnYWluIGZyb20gdGhlIGluY3JlYXNlIG1heSByZW1haW4gYmVsb3cgZW50cnkgYW5kIGV4aXQgY29zdHMuIFlvdSBtdXN0IHN0YXRlIHRoZSB0ZXJtaW5hbCBjb252ZW50aW9uIGFuZCByZWNhbGN1bGF0ZSB0aGUgZmxvd3MgYmVmb3JlIGNvbmNsdWRpbmcgd2hhdCBzaWduIHRoZSBzaW11bGF0ZWQgZ2FpbiBoYXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c098-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hlcmUgZG8gc2xpcHBhZ2UgYW5kIGZlZXMgZW50ZXIgdGhlIGxlZGdlcj8JU2xpcHBhZ2UgY2hhbmdlcyB0aGUgZXhlY3V0aW9uIHByaWNlLiBUaGUgYW1vdW50IHF1YW50aXR5IMOXIGV4ZWN1dGlvbiBwcmljZSBhbHJlYWR5IGluY2x1ZGVzIGl0LiBGZWVzIGFyZSBhIHNlcGFyYXRlIGZsb3csIGFkZGVkIHRvIHRoZSBwdXJjaGFzZSBkZWJpdCBvciBzdWJ0cmFjdGVkIGZyb20gdGhlIHNhbGUgcHJvY2VlZHMuIFRoZWlyIGNhbGN1bGF0aW9uIHJ1bGUgbXVzdCBiZSBzdGF0ZWQuCXRvZGFpIGMwOTgtbTMgZnJhaXMtZXQtZ2xpc3NlbWVudApXaHkgZG8gdGhlIHByaWNlIGZhY3RvcnMgZGlmZmVyIGJldHdlZW4gYnV5aW5nIGFuZCBzZWxsaW5nPwlVbmRlciBvdXIgYWR2ZXJzZSBzbGlwcGFnZSBhc3N1bXB0aW9uLCBidXlpbmcgY29zdHMgbW9yZSBhbmQgc2VsbGluZyBicmluZ3MgaW4gbGVzczogUCDDlyAoMSArIHMpIGZvciB0aGUgcHVyY2hhc2UsIE0gw5cgKDEg4oiSIHMpIGZvciB0aGUgc2FsZS4gUCBhbmQgTSBhcmUgdGhlIHJlZmVyZW5jZXMgaW4gZXVyb3MgcGVyIHVuaXQ7IHMgaXMgdGhlIGRpbWVuc2lvbmxlc3MgcmF0ZS4JdG9kYWkgYzA5OC1tMyBnbGlzc2VtZW50LWRlZmF2b3JhYmxlCldoYXQgZGlzdGluZ3Vpc2hlcyBmaW5hbCB2YWx1YXRpb24gZnJvbSBmaW5hbCBsaXF1aWRhdGlvbj8JVmFsdWF0aW9uIGtlZXBzIHRoZSB1bml0cyBhbmQgdmFsdWVzIHRoZW0gYXQgdGhlIGZpbmFsIHJlZmVyZW5jZSBwcmljZS4gTGlxdWlkYXRpb24gYWRkcyBhbiBhc3N1bWVkIHNhbGUgd2l0aCBzbGlwcGFnZSBhbmQgZmVlczsgaXQgcmVtb3ZlcyBhbGwgdW5pdHMgb25seSBpZiBleGVjdXRpb24gaXMgY29tcGxldGUuIFRoZSBlbmQgb2YgdGhlIHJlY29yZCBkb2VzIG5vdCBwcm92ZSB0aGlzIHNhbGUgb3Bwb3J0dW5pdHkgZXhpc3RzLgl0b2RhaSBjMDk4LW0zIGh5cG90aGVzZS10ZXJtaW5hbGUKSG93IGNhbiB5b3UgY2hlY2sgbmV0IGdhaW4gd2l0aG91dCBjb3VudGluZyBzbGlwcGFnZSB0d2ljZT8JQ29tcGFyZSBmaW5hbCBjYXNoIG1pbnVzIGluaXRpYWwgY2FwaXRhbCB3aXRoIHRoZSBncm9zcyBnYWluIGNhbGN1bGF0ZWQgYXQgcmVmZXJlbmNlIHByaWNlcywgcmVkdWNlZCBvbmNlIGJ5IHNsaXBwYWdlIGFuZCBmZWVzLiBEbyBub3Qgc3VidHJhY3Qgc2xpcHBhZ2UgYWdhaW4gZnJvbSBhIGdhaW4gYWxyZWFkeSBjYWxjdWxhdGVkIHVzaW5nIGV4ZWN1dGlvbiBwcmljZXMuCXRvZGFpIGMwOTgtbTMgY29udHJvbGUtZHUtcmVnaXN0cmUKRG9lcyBhbiBpbmNyZWFzZSBpbiB0aGUgcmVmZXJlbmNlIHByaWNlIGd1YXJhbnRlZSBhIHBvc2l0aXZlIG5ldCBnYWluPwlObzogdGhlIGdyb3NzIGdhaW4gZnJvbSB0aGUgaW5jcmVhc2UgbWF5IHJlbWFpbiBiZWxvdyBlbnRyeSBhbmQgZXhpdCBjb3N0cy4gWW91IG11c3Qgc3RhdGUgdGhlIHRlcm1pbmFsIGNvbnZlbnRpb24gYW5kIHJlY2FsY3VsYXRlIHRoZSBmbG93cyBiZWZvcmUgY29uY2x1ZGluZyB3aGF0IHNpZ24gdGhlIHNpbXVsYXRlZCBnYWluIGhhcy4JdG9kYWkgYzA5OC1tMyBnYWluLW5ldAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cowrjz batbpr azqd</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">waaxup rhdilq hgvd</span></span> · identify costs and the end of the ledger</h3><dl><div><dt>What you understand</dt><dd>You separate the reference price, execution price, fees and terminal convention. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zwusqb dnwurd cbzyfc kurjxj brrcra emlosj wdamvt ncbbly ejixhc nnoxxd lnfwjh lybxjv vzouaa qw</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mgbnwc uytoxs noxbjx bvthcf sopldc dsxonl sxrnwm mvmhca jzsvhd iefklo tmggcj jnmfei pvxhoj kgzayu ddfxjl mhztve uzggzp grgqwe fwzgzs odzxdl vssmfh bgirgx mtxhso lwsmdk lznljg ebqazj gxdvkk gubelu qfnxrf qrhwwr osvumk lzhamj nupgur lxzaii vjnnky qrdekf cfxjcr xd</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2 to demonstrate: rebuild the ledger and its breakdown without help, then defend an explicitly stated terminal convention. Reading, viewing a correction or giving an assisted answer does not establish any attained level. Attempt the exercises again without support after at least 2 days and explain your choices.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pytxvt jylnmj hqebyg mqwsuv qcovyl miubrv qjnkft mbeufq ebihnq zacpbt qvkfkw hmchiq grqthu eibzdg vrdldn kjtyue jbovhw mgajyt sqdwdb ahpawp mwxnxm clgxtg xwtzlr weqypv</span></span></dd></div><div><dt>Next step</dt><dd>First redo the terminal branches and the price variant without support. Then continue with C098·M4, forecast errors and comparison with a control. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">elwywq tpblpb wrahcf nzbhdt oyrvny rmbdnq kwcsiq jfebpz kmzwiz ldyxyk krojsz envwrz pdlyfj un</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c098-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c098-m2.html">Previous</a> · <a href="c098-m4.html">Next</a></nav>
+<footer><p>Course book · C098·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

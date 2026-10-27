@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Update an estimate using an observation linked to the state by a nonlinear function, by linearizing that function around the prediction, then identify where this approximation stops being reliable.">
+<title>C234·M3 · Nonlinear filtering — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iuvbtx uzyxff pblg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C234·M3</p><h1>Nonlinear filtering</h1><p class="objectif"><span>Your goal</span>Update an estimate using an observation linked to the state by a nonlinear function, by linearizing that function around the prediction, then identify where this approximation stops being reliable.</p><p class="prerequis"><strong>Before you start</strong><br>c233-m5 : verification theorem · c066-m5 : standard errors and diagnostics · c227-m5 : Ito-Tanaka · c234-m1 : state space · c234-m2 : Kalman filter</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A square tarpaulin is stretched out on the floor of a workshop. Its side length x, in metres, is the latent state we want to estimate. We do not measure it directly: a fictional instrument reports only the area z, in square metres, with noise. The prediction from the previous step gives a prior estimate of 3 m and a variance of 1 m². The instrument reports 10 m².</p><p>If the side length were exactly 3 m, the expected area would be 9 m². The difference of 1 m² provides information, but how much should we update the side length? With a direct reading of the side length, the Kalman filter would give the answer. Here the area is the square of the side length: a curve rather than a straight line. The change in side length corresponding to a given change in area depends on where we are on the curve.</p><p>The idea of the extended Kalman filter is to replace the curve with its tangent at the predicted point. The slope H of this tangent tells us how much area is added per metre added to the side length, very close to x̂⁻. It propagates uncertainty in the side length to the area and apportions the difference between prediction and reading. The rest of the procedure is the linear update: innovation, gain, update.</p><p>The diagram retains an asymmetry to remember: the difference to be corrected is calculated with the exact function, but the weighting is calculated with the tangent. This tangent is exact only at the point of tangency; the further we move from that point, the larger the error in the first-order approximation becomes.</p><p>All values in this scene are fictional: the tarpaulin, the instrument and its noise do not describe any real measurement. This page uses only state space and the scalar Kalman filter; the other chapter prerequisites are not used here.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Area as a function of side length and its tangent</title><desc>Curve of area as a function of side length. At a side length of 3 m, the predicted area is 9 m² and the tangent has slope 6 m²/m. The measured area of 10 m² lies just above the predicted value.</desc><line x1="40" y1="200" x2="335" y2="200" class="trait" /><line x1="40" y1="200" x2="40" y2="30" class="trait" /><polyline points="40,200.0 57.5,199.38 75.0,197.5 92.5,194.38 110,190.0 127.5,184.38 145.0,177.5 162.5,169.38 180,160.0 197.5,149.38 215.0,137.5 232.5,124.38 250,110.0 267.5,94.38 285.0,77.5 302.5,59.38 320,40.0" class="chemin-correction" /><line x1="180" y1="170" x2="320" y2="50" class="trait" /><line x1="40" y1="100" x2="335" y2="100" class="trait" /><circle cx="250" cy="110" r="5" class="point-prediction" /><circle cx="40" cy="100" r="5" class="point-mesure" /><text x="46" y="24" class="petite-etiquette">area (m²)</text><text x="335" y="222" text-anchor="end" class="petite-etiquette">side length x (m)</text><text x="50" y="92" class="petite-etiquette">reading z = 10 m²</text><text x="50" y="42" class="petite-etiquette">tangent at x̂⁻</text><text x="50" y="62" class="petite-etiquette">slope H = 6 m²/m</text><text x="335" y="152" text-anchor="end" class="petite-etiquette">x̂⁻ = 3 m</text><text x="335" y="172" text-anchor="end" class="petite-etiquette">h(x̂⁻) = 9 m²</text></svg><figcaption>The curve is exact; the tangent is a local approximation. The slope of the tangent is used for the gain, and the difference in height between the reading and the predicted point is used for the innovation.</figcaption></figure><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>An update cycle with a nonlinear observation</title><desc>Five linked blocks: the prior prediction of 3 m and 1 m², the local slope 6, the innovation of 1 m², the gain 0.15, then the updated estimate of 3.15 m with a variance of 0.1 m².</desc><rect x="25" y="6" width="310" height="52" rx="7" class="cadre-prediction" /><text x="180" y="28" text-anchor="middle">Prior prediction</text><text x="180" y="48" text-anchor="middle" class="petite-etiquette">x̂⁻ = 3 m ; P⁻ = 1 m²</text><line x1="180" y1="58" x2="180" y2="72" class="trait" /><rect x="25" y="72" width="310" height="52" rx="7" class="cadre-neutre" /><text x="180" y="94" text-anchor="middle">Local slope of h at x̂⁻</text><text x="180" y="114" text-anchor="middle" class="petite-etiquette">H = 6 m²/m</text><line x1="180" y1="124" x2="180" y2="138" class="trait" /><rect x="25" y="138" width="310" height="52" rx="7" class="cadre-neutre" /><text x="180" y="160" text-anchor="middle">Innovation using exact h</text><text x="180" y="180" text-anchor="middle" class="petite-etiquette">y = z − h(x̂⁻) = 1 m²</text><line x1="180" y1="190" x2="180" y2="204" class="trait" /><rect x="25" y="204" width="310" height="52" rx="7" class="cadre-neutre" /><text x="180" y="226" text-anchor="middle">Gain using the slope</text><text x="180" y="246" text-anchor="middle" class="petite-etiquette">K = 0.15 m⁻¹</text><line x1="180" y1="256" x2="180" y2="270" class="trait" /><rect x="25" y="270" width="310" height="52" rx="7" class="cadre-resultat" /><text x="180" y="292" text-anchor="middle">Posterior estimate</text><text x="180" y="312" text-anchor="middle" class="petite-etiquette">x̂⁺ = 3.15 m ; P⁺ = 0.1 m²</text></svg><figcaption>An update cycle: only the form of the observation changes from the linear case, because the local slope replaces a fixed factor.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Calculate the predicted observation with the exact function h; weight the innovation using the slope of h at the predicted point; then check that the tangent stays close to the curve over the resulting change in side length.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Update the side length of a tarpaulin from its area</h3><p>Start with x̂⁻ = 3 m and P⁻ = 1 m², a measured area z = 10 m² and measurement noise with variance R = 4 m⁴. The area of a square is h(x) = x squared. Calculate the pair x̂⁺, P⁺ after this observation. All these values are fictional.</p><ol class="etapes"><li><h3>Set out the model and its assumptions</h3><p>x denotes the unknown side length, in metres. The observation is the measured area z, in square metres. The observation model is z = h(x) + v. The function h gives the area of a square; v is measurement noise with mean 0 and variance R = 4 m⁴ (the variance of an area, so its unit is square metres squared). This value is fictional.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></math></div><p>Assumptions: the prior state is summarized by its mean x̂⁻ = 3 m and its variance P⁻ = 1 m²; the noise v is independent of the prior error; the state distribution is approximated by a normal distribution with this mean and variance; and h is smooth enough to be replaced by its tangent near x̂⁻. The superscript − means “before this reading”, rather than a negative value.</p></li><li><h3>Predict the observation with the exact function</h3><p>Evaluate h at the prior estimate, without approximation: 3 × 3 = 9 m². This area is what the model predicts if the side length is exactly x̂⁻.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>z</mi><mo>^</mo></mover><mo>=</mo><mi>h</mi><mo>(</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mo>)</mo><mo>=</mo><mn>3</mn><mo>×</mo><mn>3</mn><mo>=</mo><mn>9</mn><mtext> m²</mtext></mrow></math></div></li><li><h3>Linearize around the prediction</h3><p>Write x = x̂⁻ + δ, where δ is the side length deviation to be corrected, in metres. Expanding the square requires no differentiation rule: the area becomes the area at the predicted side length, plus a term proportional to δ, plus a term in δ squared.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>(</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mo>+</mo><mi>δ</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mn>2</mn><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mi>δ</mi><mo>+</mo><msup><mi>δ</mi><mn>2</mn></msup><mo>≈</mo><mi>h</mi><mo>(</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mo>)</mo><mo>+</mo><mi>H</mi><mi>δ</mi></mrow></math></div><p>Keep the first-order term and discard δ squared. The slope is therefore H = 2 × 3 = 6 m²/m, which simplifies to 6 m. The discarded term is the source of the approximation: it is assumed to be small, rather than 0.</p></li><li><h3>Form the innovation using exact h</h3><p>The innovation is the difference between the observation received and the predicted observation: y = z − h(x̂⁻) = 10 − 9 = 1 m². Both terms are areas, so the subtraction makes sense. We do not use the tangent here: it is used only to propagate uncertainty.</p></li><li><h3>Calculate the innovation variance and the gain</h3><p>An error in side length propagates to the area through the slope H; uncertainty, expressed as a squared error, propagates through H squared. The innovation variance adds this contribution and the measurement noise variance.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><msup><mi>H</mi><mn>2</mn></msup><msup><mi>P</mi><mo>−</mo></msup><mo>+</mo><mi>R</mi><mo>=</mo><mn>36</mn><mo>×</mo><mn>1</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>40</mn><mtext> m⁴</mtext></mrow></math></div><p>The gain K converts an area error into a side length update. Its numerator is the covariance between the side length and the linearized area, P⁻H = 6 m³.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>K</mi><mo>=</mo><mfrac><mrow><msup><mi>P</mi><mo>−</mo></msup><mi>H</mi></mrow><mi>S</mi></mfrac><mo>=</mo><mfrac><mn>6</mn><mn>40</mn></mfrac><mo>=</mo><mn>0.15</mn><mtext> m⁻¹</mtext></mrow></math></div></li><li><h3>Update the estimate and the variance</h3><p>The side length changes by K y, and the variance decreases by the amount contributed by the reading.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mover><mi>x</mi><mo>^</mo></mover><mo>+</mo></msup><mo>=</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>−</mo></msup><mo>+</mo><mi>K</mi><mi>y</mi><mo>=</mo><mn>3</mn><mo>+</mo><mn>0.15</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>3.15</mn><mtext> m</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>P</mi><mo>+</mo></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>K</mi><mi>H</mi><mo>)</mo><msup><mi>P</mi><mo>−</mo></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>0.9</mn><mo>)</mo><mo>×</mo><mn>1</mn><mo>=</mo><mn>0.1</mn><mtext> m²</mtext></mrow></math></div><p>The result is the pair x̂⁺ = 3.15 m and P⁺ = 0.1 m². The reading has moved the side length slightly upwards and greatly reduced uncertainty, because the side length uncertainty, propagated through the slope, contributes more than the measurement noise.</p></li><li><h3>Check the result</h3><p>First check, by another route: in information form, 1/P⁺ = 1/P⁻ + H²/R = 1 + 36/4 = 1 + 9 = 10 m⁻², so P⁺ = 1/10 m². This is the value obtained above.</p><p>Second check, on the tangent. At the updated side length, the exact area is 3.15 × 3.15 = 9.9225 m². The tangent gave 9 + 6 × 0.15 = 9.9 m². The difference of 0.0225 m² is exactly δ squared, with δ = 0.15 m, the discarded term. It is tiny compared with the noise standard deviation, 2 m². The approximation is acceptable for this change in side length; it would not automatically be acceptable for a much larger change or much greater uncertainty.</p><p>This check validates the arithmetic and the size of the neglected term in this fictional model. It does not prove that the noise model would describe a real instrument.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain why the innovation uses h(x̂⁻) rather than x̂⁻, then why H appears squared in the innovation variance but only once in the numerator of the gain.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The gain remains P⁻ / (P⁻ + R), as if the area were the side length.”</h3><p>Without H, we obtain K = 1 / 5 = 0.20, which treats an area error as a side length error. We need K = P⁻H / (H²P⁻ + R) = 0.15 m⁻¹: H converts square metres to metres.</p><a href="#exemple">Review the gain calculation</a></li><li><h3>“The innovation is z − x̂⁻.”</h3><p>z is an area in m², while x̂⁻ is a side length in m: their difference has no consistent unit. The innovation compares z with h(x̂⁻) = 9 m², giving 1 m² in the example.</p><a href="#exemple">Review the innovation</a></li><li><h3>“Linearizing gives the exact distribution after the reading.”</h3><p>The tangent is an approximation: it discards a term (δ squared, or 0.0225 m² in the example). This term can become large, or the slope can become 0, as at x̂⁻ = 0 m. First compare this term with the noise standard deviation.</p><a href="#exercices">See the case of 0 slope</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-pente"><p class="repere">Exercise 1 · Explained application</p>
+<h3>Linearize at another point</h3><p>Use the same area model, but a different fictional prediction: x̂⁻ = 5 m, and the instrument reports z = 26 m². Calculate the predicted area, the slope H and the innovation.</p>
+<label for="reponse-ex-pente">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pente" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pente" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pente" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pente" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The predicted area uses the exact function: side length multiplied by itself.</p></details><details class="indice"><summary>Hint 2</summary><p>The slope is 2 times the predicted side length.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Predicted area: 5 × 5 = 25 m². Slope: H = 2 × 5 = 10 m²/m. Innovation: y = 26 − 25 = 1 m². The innovation is the same as in the example, but the slope is steeper: the same area difference corresponds to a smaller change in side length.</p><p class="petit-titre">Check your reasoning</p><ul><li>The predicted area comes from h, rather than the tangent.</li><li>The slope is calculated at the predicted point.</li><li>The units m² and m²/m are distinguished.</li></ul></details></article><article class="exercice" id="ex-bruit"><p class="repere">Exercise 2 · Complete variation</p>
+<h3>A noisier reading</h3><p>Repeat the example with a measurement variance R = 12 m⁴ instead of 4 m⁴, making it 3 times as large. Calculate S, K, x̂⁺ and P⁺, check P⁺ using information form, then compare with the example.</p>
+<label for="reponse-ex-bruit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bruit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bruit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bruit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bruit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The quantities H = 6 m²/m, P⁻ and y = 1 m² do not change.</p></details><details class="indice"><summary>Hint 2</summary><p>Only the denominator S contains R.</p></details><details class="indice"><summary>Hint 3</summary><p>Check: 1/P⁺ = 1/P⁻ + H²/R.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>S = 36 × 1 + 12 = 48 m⁴. K = 6 / 48 = 0.125 m⁻¹. Update: 0.125 × 1 = 0.125 m, so x̂⁺ = 3 + 0.125 = 3.125 m. Variance: K H = 0.75, then P⁺ = (1 − 0.75) × 1 = 0.25 m².</p><p>Check: 1/P⁺ = 1 + 36 / 12 = 1 + 3 = 4, so P⁺ = 0.25 m². With more noise, the reading has less weight: the side length changes by 0.125 m instead of 0.15 m and the final variance is larger, 0.25 m² instead of 0.1 m².</p><p class="petit-titre">Check your reasoning</p><ul><li>S contains R and the square of the slope.</li><li>K, x̂⁺ and P⁺ are obtained in order.</li><li>The information form check confirms P⁺.</li><li>The comparison states that the noisy reading produces a smaller update.</li></ul></details></article><article class="exercice" id="ex-nulle"><p class="repere">Exercise 3 · Model limitation</p>
+<h3>When the slope becomes 0</h3><p>Take x̂⁻ = 0 m, P⁻ = 1 m², R = 4 m⁴ and z = 10 m². Calculate H, S, K, x̂⁺ and P⁺. What can be said about the update, and why is linearization misleading here?</p>
+<label for="reponse-ex-nulle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-nulle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-nulle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-nulle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-nulle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate H = 2 times the predicted side length, then S, remembering R.</p></details><details class="indice"><summary>Hint 2</summary><p>A 0 gain leaves the estimate unchanged, despite the innovation.</p></details><details class="indice"><summary>Hint 3</summary><p>Compare x and its opposite: is the area the same?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>H = 2 × 0 = 0 m²/m. Therefore S = 0 × 0 × 1 + 4 = 4 m⁴, K = 0 and x̂⁺ = 0 m: the innovation is nevertheless 10 − 0 = 10 m², but it produces no change. P⁺ = (1 − 0) × 1 = 1 m²: uncertainty has not decreased.</p><p>The tangent is horizontal at this point: to first order, the area does not depend on the side length. Yet an area of 10 m² indicates a side length far from 0, and x and its opposite give the same area, so the reading provides no information about the sign. The extended filter is unreliable at this point; this result is a limitation of the approximation, rather than a property of the tarpaulin.</p><p class="petit-titre">Check your reasoning</p><ul><li>H is calculated and identified as 0.</li><li>K, x̂⁺ and P⁺ are deduced without dividing by 0.</li><li>The explanation links the failure to the flat tangent and the neglected term.</li><li>No conclusion is drawn about the true posterior distribution.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="linearisation"><summary><span class="repere">Recall 1</span><span>What is replaced in the extended Kalman filter?</span></summary><p>Around the prior estimate, the observation function h is replaced by its tangent: h(x̂⁻) plus H times the deviation δ.</p></details><details class="carte" data-carte="innovation"><summary><span class="repere">Recall 2</span><span>How is the innovation formed when h is nonlinear?</span></summary><p>Using the exact function: y = z − h(x̂⁻). The tangent is used only to propagate uncertainty.</p></details><details class="carte" data-carte="gain"><summary><span class="repere">Recall 3</span><span>Where does the slope H enter the gain calculation?</span></summary><p>In the numerator, P⁻H, and squared in S = H²P⁻ + R. K converts an observation error into a state update.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>When does linearization become misleading?</span></summary><p>When the discarded term is significant compared with the noise, or when the slope is 0 or changes sign within the region of uncertainty.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Write the observation model z = h(x) + v and its assumptions; evaluate h at the prior point for the innovation; determine the slope H at that point; calculate S = H²P⁻ + R then K = P⁻H / S; update x̂⁺ = x̂⁻ + Ky and P⁺ = (1 − KH)P⁻; check using information form and compare the discarded term with the noise.</p></div><div class="exports"><a class="bouton" download="c234-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTM6bGluZWFyaXNhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGluw6lhcmlzYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBpcyByZXBsYWNlZCBpbiB0aGUgZXh0ZW5kZWQgS2FsbWFuIGZpbHRlcj8iLAogICAgICAicmVwb25zZSI6ICJBcm91bmQgdGhlIHByaW9yIGVzdGltYXRlLCB0aGUgb2JzZXJ2YXRpb24gZnVuY3Rpb24gaCBpcyByZXBsYWNlZCBieSBpdHMgdGFuZ2VudDogaCh4zILigbspIHBsdXMgSCB0aW1lcyB0aGUgZGV2aWF0aW9uIM60LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0zOmlubm92YXRpb24iLAogICAgICAidW5pdGUiOiAiYzIzNC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImlubm92YXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGlzIHRoZSBpbm5vdmF0aW9uIGZvcm1lZCB3aGVuIGggaXMgbm9ubGluZWFyPyIsCiAgICAgICJyZXBvbnNlIjogIlVzaW5nIHRoZSBleGFjdCBmdW5jdGlvbjogeSA9IHog4oiSIGgoeMyC4oG7KS4gVGhlIHRhbmdlbnQgaXMgdXNlZCBvbmx5IHRvIHByb3BhZ2F0ZSB1bmNlcnRhaW50eS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIzNC1tMzpnYWluIiwKICAgICAgInVuaXRlIjogImMyMzQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJnYWluIiwKICAgICAgInF1ZXN0aW9uIjogIldoZXJlIGRvZXMgdGhlIHNsb3BlIEggZW50ZXIgdGhlIGdhaW4gY2FsY3VsYXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiSW4gdGhlIG51bWVyYXRvciwgUOKBu0gsIGFuZCBzcXVhcmVkIGluIFMgPSBIwrJQ4oG7ICsgUi4gSyBjb252ZXJ0cyBhbiBvYnNlcnZhdGlvbiBlcnJvciBpbnRvIGEgc3RhdGUgdXBkYXRlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0zOmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoZW4gZG9lcyBsaW5lYXJpemF0aW9uIGJlY29tZSBtaXNsZWFkaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIldoZW4gdGhlIGRpc2NhcmRlZCB0ZXJtIGlzIHNpZ25pZmljYW50IGNvbXBhcmVkIHdpdGggdGhlIG5vaXNlLCBvciB3aGVuIHRoZSBzbG9wZSBpcyAwIG9yIGNoYW5nZXMgc2lnbiB3aXRoaW4gdGhlIHJlZ2lvbiBvZiB1bmNlcnRhaW50eS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c234-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyByZXBsYWNlZCBpbiB0aGUgZXh0ZW5kZWQgS2FsbWFuIGZpbHRlcj8JQXJvdW5kIHRoZSBwcmlvciBlc3RpbWF0ZSwgdGhlIG9ic2VydmF0aW9uIGZ1bmN0aW9uIGggaXMgcmVwbGFjZWQgYnkgaXRzIHRhbmdlbnQ6IGgoeMyC4oG7KSBwbHVzIEggdGltZXMgdGhlIGRldmlhdGlvbiDOtC4JdG9kYWkgYzIzNC1tMyBsaW7DqWFyaXNhdGlvbgpIb3cgaXMgdGhlIGlubm92YXRpb24gZm9ybWVkIHdoZW4gaCBpcyBub25saW5lYXI/CVVzaW5nIHRoZSBleGFjdCBmdW5jdGlvbjogeSA9IHog4oiSIGgoeMyC4oG7KS4gVGhlIHRhbmdlbnQgaXMgdXNlZCBvbmx5IHRvIHByb3BhZ2F0ZSB1bmNlcnRhaW50eS4JdG9kYWkgYzIzNC1tMyBpbm5vdmF0aW9uCldoZXJlIGRvZXMgdGhlIHNsb3BlIEggZW50ZXIgdGhlIGdhaW4gY2FsY3VsYXRpb24/CUluIHRoZSBudW1lcmF0b3IsIFDigbtILCBhbmQgc3F1YXJlZCBpbiBTID0gSMKyUOKBuyArIFIuIEsgY29udmVydHMgYW4gb2JzZXJ2YXRpb24gZXJyb3IgaW50byBhIHN0YXRlIHVwZGF0ZS4JdG9kYWkgYzIzNC1tMyBnYWluCldoZW4gZG9lcyBsaW5lYXJpemF0aW9uIGJlY29tZSBtaXNsZWFkaW5nPwlXaGVuIHRoZSBkaXNjYXJkZWQgdGVybSBpcyBzaWduaWZpY2FudCBjb21wYXJlZCB3aXRoIHRoZSBub2lzZSwgb3Igd2hlbiB0aGUgc2xvcGUgaXMgMCBvciBjaGFuZ2VzIHNpZ24gd2l0aGluIHRoZSByZWdpb24gb2YgdW5jZXJ0YWludHkuCXRvZGFpIGMyMzQtbTMgbGltaXRlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iuvbtx uzyxff pblg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Filtering in a transformed space: what the code shows</h3><dl><div><dt>What you understand</dt><dd>When the observation or the state is nonlinear, there are two approaches: linearize locally, as with the tarpaulin, or change variables to recover a linear model. This page teaches the first approach; the reviewed code illustrates the second.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hxnybk athzcq zzgebt zjokmm rkeomq eziwpi lbxpoh zetumn ljqray qufosh nrymch xcpwmx hicpma ylgkql xinhpb awbwia lxlieg kirawx sxtejh ipfqpb gshtzn vkbssb hhwwrs phpljr qlinyn vwwzil lqkios vczxxb ytnbhs wamhyl xmssbx odroxg fnxhdm ikpwed kqegck hmwacb pxyxuv me</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: reproduce the linearization, the innovation using exact h, the gain and the information form check without support, then explain the case of 0 slope. Reading the lesson and the code does not establish that any level has been achieved.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">npahmn zdiacf wqzzlb nenxgr iyvlxw duwajb bldhna dftxmf furaqb oocyxr hcicgk rbkusp gtmbtg wogdfa jivrjv ltzahu stjskj zdgbyg fkuoda vzruqs mrpshl htfiii qsqqke mylulh</span></span></dd></div><div><dt>Further work</dt><dd>Repeat the example on paper with other fictional values. Then, using authorized data and identical parameters, compare the direct filter and the logit variant separately before drawing any conclusion. Any local linearization would be a separate task, to be decided on and validated.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c234-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c234-m2.html">Previous</a> · <a href="c234-m4.html">Next</a></nav>
+<footer><p>Course book · C234·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

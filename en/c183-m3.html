@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Advance a finite difference diffusion calculation by one step with the implicit scheme: write the tridiagonal system, solve it by elimination and back substitution, then check it without confusing the absence of anomalies with accuracy.">
+<title>C183·M3 · Implicit scheme — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dpunrv gkzxdo qtlh</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C183·M3</p><h1>Implicit scheme</h1><p class="objectif"><span>Your goal</span>Advance a finite difference diffusion calculation by one step with the implicit scheme: write the tridiagonal system, solve it by elimination and back substitution, then check it without confusing the absence of anomalies with accuracy.</p><p class="prerequis"><strong>Before you start</strong><br>c167-m5 : initial and boundary value problem · c051-m5 : error diagnostics · c175-m5 : model limitations · c050-m5 : conditioning · c183-m1 : grid · c183-m2 : explicit scheme</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A thin rod is warm in the middle, and both ends are held at 0 °C. We track the temperature at 3 interior points, spaced 1 cm apart, and want to advance by one step of 1 s. The rod and its values are fictional: they are used for calculations and describe neither a real object nor a price.</p><p>The explicit scheme, introduced in the previous unit, calculates each new temperature using the old temperatures of its neighbours. This is direct. But with this step, it gives a result of −18 °C at the central point. In this diffusion model, a rod whose ends are at 0 °C and which contains only heat does not become colder than its ends. This negative sign is a diagnostic of numerical error, rather than physical information.</p><p>The implicit scheme changes just one part: exchange with neighbouring points is evaluated using the new values, the ones we are looking for. Each node then depends on its neighbours at the same instant, and we can no longer calculate the nodes one at a time. We must find them together by solving a small linear system.</p><p>This system is very sparse: each equation contains only its own node and the two neighbouring nodes, so its matrix is tridiagonal. Successive elimination followed by back substitution solves it in a single pass along the rod and back. The cost is a system to solve at each step; in this example, the benefit is that the same step no longer produces a negative temperature.</p><p>Assumptions: a constant diffusion coefficient, a regular grid, ends held at a prescribed temperature (0 here), and a single time step. This page does not establish the stability of the implicit scheme in general. It observes its behaviour in one case and teaches how to check a solution.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two ways to write a step</title><desc>On the left, for the explicit scheme, three old, known values determine one new value. On the right, for the implicit scheme, one old value and three interconnected new values form a system to solve.</desc><text x="90" y="26" text-anchor="middle">Explicit</text><text x="270" y="26" text-anchor="middle">Implicit</text><text x="90" y="56" text-anchor="middle" class="petite-etiquette">new, unknown</text><line x1="90" y1="90" x2="35" y2="171" class="trait" /><line x1="90" y1="90" x2="90" y2="171" class="trait" /><line x1="90" y1="90" x2="145" y2="171" class="trait" /><circle cx="90" cy="80" r="10" class="point-prediction" /><circle cx="35" cy="180" r="10" class="point-mesure" /><circle cx="90" cy="180" r="10" class="point-mesure" /><circle cx="145" cy="180" r="10" class="point-mesure" /><text x="90" y="216" text-anchor="middle" class="petite-etiquette">old, known</text><text x="270" y="56" text-anchor="middle" class="petite-etiquette">new, linked</text><line x1="225" y1="80" x2="260" y2="80" class="trait" /><line x1="280" y1="80" x2="315" y2="80" class="trait" /><line x1="270" y1="171" x2="215" y2="90" class="trait" /><line x1="270" y1="171" x2="270" y2="90" class="trait" /><line x1="270" y1="171" x2="325" y2="90" class="trait" /><circle cx="215" cy="80" r="10" class="point-prediction" /><circle cx="270" cy="80" r="10" class="point-prediction" /><circle cx="325" cy="80" r="10" class="point-prediction" /><circle cx="270" cy="180" r="10" class="point-mesure" /><text x="270" y="216" text-anchor="middle" class="petite-etiquette">old, known</text></svg><figcaption>The same grid point is expressed differently: the explicit scheme reads three old values; the implicit scheme links three new values to one another and to one old value.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same step, two results</title><desc>Three rows, one above the other, showing the three interior points of the rod. Initial values: 0, 6 and 0 degrees. Explicit: 12, minus 18 and 12 degrees, with one point colder than the ends. Implicit: approximately 0.71, 1.76 and 0.71 degrees, all within the initial range. Heights are not to scale.</desc><text x="8" y="22" class="petite-etiquette">Initial</text><line x1="105" y1="70" x2="335" y2="70" class="trait" /><polyline points="130,70 220,40 310,70" class="trait" /><circle cx="130" cy="70" r="7" class="point-mesure" /><circle cx="220" cy="40" r="7" class="point-mesure" /><circle cx="310" cy="70" r="7" class="point-mesure" /><text x="130" y="92" text-anchor="middle" class="petite-etiquette">0</text><text x="220" y="30" text-anchor="middle" class="petite-etiquette">6</text><text x="310" y="92" text-anchor="middle" class="petite-etiquette">0</text><text x="8" y="112" class="petite-etiquette">Explicit</text><line x1="105" y1="170" x2="335" y2="170" class="trait" /><polyline points="130,130 220,215 310,130" class="trait" /><circle cx="130" cy="130" r="7" class="point-prediction" /><circle cx="220" cy="215" r="7" class="point-prediction" /><circle cx="310" cy="130" r="7" class="point-prediction" /><text x="130" y="122" text-anchor="middle" class="petite-etiquette">12</text><text x="220" y="238" text-anchor="middle" class="petite-etiquette">−18</text><text x="310" y="122" text-anchor="middle" class="petite-etiquette">12</text><text x="8" y="252" class="petite-etiquette">Implicit</text><line x1="105" y1="290" x2="335" y2="290" class="trait" /><polyline points="130,283 220,275 310,283" class="chemin-correction" /><circle cx="130" cy="283" r="7" class="resultat" /><circle cx="220" cy="275" r="7" class="resultat" /><circle cx="310" cy="283" r="7" class="resultat" /><text x="130" y="268" text-anchor="middle" class="petite-etiquette">0.71</text><text x="220" y="262" text-anchor="middle" class="petite-etiquette">1.76</text><text x="310" y="268" text-anchor="middle" class="petite-etiquette">0.71</text></svg><figcaption>Qualitative drawing, with heights not to scale: only the labels give the values. The explicit step leaves the initial range; the implicit step stays within it. This does not measure accuracy.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Write the exchange with neighbouring points using the new values; set r = ν Δt / Δx²; solve the tridiagonal system for the step; check the solution using the residual, the balance and the expected range.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>One diffusion step on a fictional rod</h3><p>Fictional values: ν = 2 cm²/s, Δx = 1 cm and Δt = 1 s, so r = 2 is dimensionless. The ends remain at 0 °C. The 3 interior points have temperatures of 0, 6 and 0 °C. Let us calculate the temperature after one step with the implicit scheme, then check it.</p><ol class="etapes"><li><h3>Set out the quantities, units and assumptions</h3><p>The temperature u depends on position x in centimetres and time t in seconds; the model is ∂u/∂t = ν ∂²u/∂x², with constant ν in cm²/s. The grid has 4 equal intervals of width Δx, giving points x<sub>0</sub> to x<sub>4</sub>; x<sub>0</sub> and x<sub>4</sub> are the ends. We write uᵢ for the known temperature at the current step and vᵢ for the unknown temperature at the next step, with v<sub>0</sub> = v<sub>4</sub> = 0 °C.</p><p>The number r combines the three parameters:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mfrac><mrow><mi>ν</mi><mi>Δt</mi></mrow><msup><mrow><mi>Δx</mi></mrow><mn>2</mn></msup></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mfrac><mrow><mn>2</mn><mo>×</mo><mn>1</mn></mrow><msup><mn>1</mn><mn>2</mn></msup></mfrac><mo>=</mo><mn>2</mn></mrow></math></div><p>The units cancel (cm²/s × s ÷ cm²): r is dimensionless. It compares how far diffusion spreads during one step with the width of a grid cell.</p></li><li><h3>See the failure of the explicit step</h3><p>The explicit scheme is written as:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>i</mi></msub><mo>=</mo><msub><mi>u</mi><mi>i</mi></msub><mo>+</mo><mi>r</mi><mo>(</mo><msub><mi>u</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>−</mo><mn>2</mn><msub><mi>u</mi><mi>i</mi></msub><mo>+</mo><msub><mi>u</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow></math></div><p>At the first point, the exchange term is 0 − 2 × 0 + 6 = 6, so v<sub>1</sub> = 0 + 2 × 6 = 12 °C. At the central point, u<sub>1</sub> − 2u<sub>2</sub> + u<sub>3</sub> = −12, so v<sub>2</sub> = 6 − 2 × 12 = −18 °C. By symmetry, v<sub>3</sub> = 12 °C. The result is 12 ; −18 ; 12 °C: it exceeds the initial maximum, 6 °C, and falls below the 0 °C of the ends. We keep this counterexample as a diagnostic: this step is unusable. It does not prove the stability limit from the previous unit; it makes that limit visible.</p><p>As a reminder, the standard limit for the explicit scheme on this problem is r ≤ 1/2; our r exceeds it by a large margin.</p></li><li><h3>Write the implicit system</h3><p>In the implicit scheme, only the time level changes: the centred difference uses the new values.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>i</mi></msub><mo>−</mo><msub><mi>u</mi><mi>i</mi></msub><mo>=</mo><mi>r</mi><mo>(</mo><msub><mi>v</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>−</mo><mn>2</mn><msub><mi>v</mi><mi>i</mi></msub><mo>+</mo><msub><mi>v</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow></math></div><p>We move the unknowns to the left and set b = 1 + 2r:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><msub><mi>v</mi><mi>i</mi></msub><mo>−</mo><mi>r</mi><msub><mi>v</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>−</mo><mi>r</mi><msub><mi>v</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>u</mi><mi>i</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>=</mo><mn>1</mn><mo>+</mo><mn>2</mn><mi>r</mi><mo>=</mo><mn>1</mn><mo>+</mo><mn>2</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>5</mn></mrow></math></div><p>For the first and third points, v<sub>0</sub> and v<sub>4</sub> are known and equal to 0: their terms −r v<sub>0</sub> and −r v<sub>4</sub> vanish. If an end had a nonzero temperature, r times its value would move to the right-hand side. The three equations and their matrix form are:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtable><mtr><mtd><mrow><mn>5</mn><mi>v₁</mi><mo>−</mo><mn>2</mn><mi>v₂</mi><mo>=</mo><mn>0</mn></mrow></mtd></mtr><mtr><mtd><mrow><mo>−</mo><mn>2</mn><mi>v₁</mi><mo>+</mo><mn>5</mn><mi>v₂</mi><mo>−</mo><mn>2</mn><mi>v₃</mi><mo>=</mo><mn>6</mn></mrow></mtd></mtr><mtr><mtd><mrow><mo>−</mo><mn>2</mn><mi>v₂</mi><mo>+</mo><mn>5</mn><mi>v₃</mi><mo>=</mo><mn>0</mn></mrow></mtd></mtr></mtable></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mrow><mo>[</mo><mtable><mtr><mtd><mn>5</mn></mtd><mtd><mrow><mo>−</mo><mn>2</mn></mrow></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mrow><mo>−</mo><mn>2</mn></mrow></mtd><mtd><mn>5</mn></mtd><mtd><mrow><mo>−</mo><mn>2</mn></mrow></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mrow><mo>−</mo><mn>2</mn></mrow></mtd><mtd><mn>5</mn></mtd></mtr></mtable><mo>]</mo></mrow><mrow><mo>[</mo><mtable><mtr><mtd><mi>v₁</mi></mtd></mtr><mtr><mtd><mi>v₂</mi></mtd></mtr><mtr><mtd><mi>v₃</mi></mtd></mtr></mtable><mo>]</mo></mrow><mo>=</mo><mrow><mo>[</mo><mtable><mtr><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>6</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd></mtr></mtable><mo>]</mo></mrow></mrow></math></div></li><li><h3>Eliminate downwards</h3><p>We divide the first equation by b: v<sub>1</sub> = q<sub>1</sub> v<sub>2</sub> with q<sub>1</sub> = r/b, and its right-hand side 0 remains 0. We substitute v<sub>1</sub> into the second equation, which becomes p<sub>2</sub> v<sub>2</sub> − r v<sub>3</sub> = 6 with p<sub>2</sub> = b − r q<sub>1</sub>. We divide by p<sub>2</sub>: v<sub>2</sub> = g<sub>2</sub> + q<sub>2</sub> v<sub>3</sub>, with q<sub>2</sub> = r/p<sub>2</sub> and g<sub>2</sub> = 6/p<sub>2</sub>. Each division is allowed because its divisor remains strictly positive.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>q₁</mi><mo>=</mo><mfrac><mi>r</mi><mi>b</mi></mfrac><mo>=</mo><mfrac><mn>2</mn><mn>5</mn></mfrac><mo>=</mo><mn>2/5</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p₂</mi><mo>=</mo><mi>b</mi><mo>−</mo><mi>r</mi><mi>q₁</mi><mo>=</mo><mn>5</mn><mo>−</mo><mn>2</mn><mo>×</mo><mn>2/5</mn><mo>=</mo><mn>21/5</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>q₂</mi><mo>=</mo><mfrac><mi>r</mi><mi>p₂</mi></mfrac><mo>=</mo><mfrac><mn>2</mn><mn>21/5</mn></mfrac><mo>=</mo><mn>10/21</mn><mo>;</mo><mi>g₂</mi><mo>=</mo><mfrac><mn>6</mn><mn>21/5</mn></mfrac><mo>=</mo><mn>10/7</mn></mrow></math></div><p>We now substitute v<sub>2</sub> into the third equation. One equation with a single unknown remains: p<sub>3</sub> v<sub>3</sub> = r g<sub>2</sub>, with p<sub>3</sub> = b − r q<sub>2</sub>.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p₃</mi><mo>=</mo><mi>b</mi><mo>−</mo><mi>r</mi><mi>q₂</mi><mo>=</mo><mn>5</mn><mo>−</mo><mn>2</mn><mo>×</mo><mn>10/21</mn><mo>=</mo><mn>85/21</mn></mrow></math></div></li><li><h3>Back substitution</h3><p>The last equation gives v<sub>3</sub>. Each value already found is then used to find the preceding one.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>v₃</mi><mo>=</mo><mfrac><mrow><mi>r</mi><mi>g₂</mi></mrow><mi>p₃</mi></mfrac><mo>=</mo><mfrac><mrow><mn>2</mn><mo>×</mo><mn>10/7</mn></mrow><mn>85/21</mn></mfrac><mo>=</mo><mn>12/17</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>v₂</mi><mo>=</mo><mi>g₂</mi><mo>+</mo><mi>q₂</mi><mi>v₃</mi><mo>=</mo><mn>10/7</mn><mo>+</mo><mn>10/21</mn><mo>×</mo><mn>12/17</mn><mo>=</mo><mn>30/17</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>v₁</mi><mo>=</mo><mi>q₁</mi><mi>v₂</mi><mo>=</mo><mn>2/5</mn><mo>×</mo><mn>30/17</mn><mo>=</mo><mn>12/17</mn></mrow></math></div><p>The solution is 12/17 ; 30/17 ; 12/17 °C, or approximately 0.71 ; 1.76 ; 0.71 °C. The two outer values of the result are equal, as required by the initial symmetry, and the central point remains the warmest.</p></li><li><h3>Check in three ways</h3><p>Residual: we substitute the solution into the middle equation, which elimination changed the most.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>5</mn><mo>×</mo><mn>30/17</mn><mo>−</mo><mn>2</mn><mo>×</mo><mrow><mo>(</mo><mn>12/17</mn><mo>+</mo><mn>12/17</mn><mo>)</mo></mrow><mo>=</mo><mn>150/17</mn><mo>−</mo><mn>48/17</mn><mo>=</mo><mn>6</mn></mrow></math></div><p>The expected right-hand side is 6: the result is indeed 6. Balance: adding the three equations shows that the sum of the values plus r × (v<sub>1</sub> + v<sub>3</sub>) must give the initial sum.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mrow><mn>54/17</mn></mrow><mo>+</mo><mn>2</mn><mo>×</mo><mrow><mo>(</mo><mn>12/17</mn><mo>+</mo><mn>12/17</mn><mo>)</mo></mrow><mo>=</mo><mn>54/17</mn><mo>+</mo><mn>48/17</mn><mo>=</mo><mn>6</mn></mrow></math></div><p>The sum falls from 6 to 54/17; the loss 48/17 is exactly r × (v<sub>1</sub> + v<sub>3</sub>) = 48/17: this is the heat leaving through the ends at 0 °C. Range: 0.71 ; 1.76 ; 0.71 °C stay between 0 and 6 °C. These three checks validate the solution of this system. They do not tell us how accurate this step is or whether the model represents a real rod.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why can we no longer calculate the three new temperatures one at a time? Which checks of the solution do not require repeating the elimination, and what do they fail to prove?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The implicit scheme gives the new value at a node directly, just like the explicit scheme.”</h3><p>Each equation contains a new, unknown neighbouring value: the three values are coupled. First write the equations, then solve them together. Here the first equation contains v₁ and v₂, never v₁ alone with known values.</p><a href="#exemple">Review how to write the system and perform elimination</a></li><li><h3>“An output with no negative temperature proves that the result is exact, whatever the step size.”</h3><p>The absence of anomalies does not establish accuracy. Check the solution using the residual and the balance, then measure the effect of Δt with convergence tests, the subject of unit c183-m5. This page gives no numerical assessment of accuracy.</p><a href="#exercices">Repeat the balance calculation in exercise three</a></li><li><h3>“The ends are at 0 °C, so they do not appear anywhere in the system.”</h3><p>They are 0 here: their contribution r × v₀ vanishes. If an end had a nonzero temperature, r times its value would be added to the right-hand side for the first or last point. The ends also enter the balance, where the loss is r × (v₁ + v₃).</p><a href="#exemple">Review how to write the system</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-pas-r-un"><p class="repere">Exercise 1 · Guided application</p>
+<h3>An implicit step with a smaller r</h3><p>Use the same fictional rod and the same initial temperatures (0, 6, 0 °C), but with ν = 1 cm²/s: r is therefore 1. Write the implicit system, solve it using the symmetry v₁ = v₃, then check the first equation.</p>
+<label for="reponse-ex-pas-r-un">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pas-r-un" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pas-r-un" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pas-r-un" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pas-r-un" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate b = 1 + 2r, then write the three equations.</p></details><details class="indice"><summary>Hint 2</summary><p>The first equation relates v₁ to v₂: express v₁ in terms of v₂ and substitute it into the second equation.</p></details><details class="indice"><summary>Hint 3</summary><p>Since v₃ = v₁, the second equation becomes b v₂ − 2r v₁ = 6. Multiply by b to eliminate the fraction.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The coefficient is b = 1 + 2 × 1 = 3. The equations are 3v<sub>1</sub> − 1v<sub>2</sub> = 0, then −1v<sub>1</sub> + 3v<sub>2</sub> − 1v<sub>3</sub> = 6, then −1v<sub>2</sub> + 3v<sub>3</sub> = 0. The symmetry of the system and the right-hand side gives v<sub>1</sub> = v<sub>3</sub>: if a solution exists, its reflection is also a solution, and the solution is unique because the determinant is nonzero.</p><p>The first equation gives v<sub>1</sub> = q v<sub>2</sub> with q = r/b = 1/3. In the second: b v<sub>2</sub> − 2r q v<sub>2</sub> = 6, so (b² − 2r²) v<sub>2</sub> = b × 6. Here b² = 9 and 2r² = 2, giving the reduced determinant 9 − 2 = 7 and the right-hand side 6 × 3 = 18. Thus v<sub>2</sub> = 18/7 = 18/7, or approximately 2.57 °C, then v<sub>1</sub> = v<sub>3</sub> = 1/3 × 18/7 = 6/7, or approximately 0.86 °C.</p><p>Check: 3 × 6/7 − 1 × 18/7 = 0, as the first equation requires. The three values stay between 0 and 6 °C.</p><p class="petit-titre">Check your reasoning</p><ul><li>The written system has b on the diagonal and −r on either side.</li><li>The symmetry is justified, rather than simply used.</li><li>The three values are given with the unit °C and checked in an equation.</li></ul></details></article><article class="exercice" id="ex-explicite-r-un"><p class="repere">Exercise 2 · Diagnostic</p>
+<h3>The explicit step, even with a smaller r</h3><p>With r = 1, calculate one explicit step starting from (0, 6, 0) °C. Compare it with the implicit result from the previous exercise: which respects the expected range between 0 and 6 °C?</p>
+<label for="reponse-ex-explicite-r-un">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-explicite-r-un" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-explicite-r-un" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-explicite-r-un" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-explicite-r-un" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The exchange term at the first point is 6, as in the example: it does not depend on r.</p></details><details class="indice"><summary>Hint 2</summary><p>For the central point, the absolute value of the exchange term is 12, and its sign is negative.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>First point: 0 + 1 × 6 = 6 °C. Central point: 6 − 1 × 12 = 6 − 12 = −6 °C. Third point, by symmetry: 6 °C. The explicit step therefore gives 6 ; −6 ; 6 °C.</p><p>The negative value falls outside the range, and the first point already reaches the initial maximum. The implicit step from the previous exercise gives 6/7 ; 18/7 ; 6/7 °C, all between 0 and 6 °C. The value r = 1 still exceeds 1/2, the standard threshold for the explicit scheme on this problem: this calculation supplies a counterexample, rather than proving the threshold, and does not assess the accuracy of the implicit solution.</p><p class="petit-titre">Check your reasoning</p><ul><li>The sign of the exchange term at the central point is handled correctly.</li><li>The comparison concerns the expected range, rather than an impression.</li><li>The conclusion distinguishes a counterexample, a proof and accuracy.</li></ul></details></article><article class="exercice" id="ex-bilan"><p class="repere">Exercise 3 · Independent check</p>
+<h3>Balance of the heat lost</h3><p>In the example, calculate the sum of the three new values and its difference from the initial sum. Show that this loss equals r × (v₁ + v₃), then explain why a loss is expected here.</p>
+<label for="reponse-ex-bilan">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bilan" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bilan" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bilan" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bilan" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add the three equations of the system, column by column.</p></details><details class="indice"><summary>Hint 2</summary><p>The coefficients of v₁ and v₃ become b − r; that of v₂ becomes b − 2r, which equals 1.</p></details><details class="indice"><summary>Hint 3</summary><p>The ends are at 0 °C: heat can leave through them, and the model supplies none.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Adding gives (b − r)v<sub>1</sub> + (b − 2r)v<sub>2</sub> + (b − r)v<sub>3</sub> = 6 + 0 + 0. Since b − 2r = 1 and b − r = 1 + r, this can be written as: sum of the values + r × (v<sub>1</sub> + v<sub>3</sub>) = 6. The balance can therefore be read without repeating the elimination.</p><p>Numerically, v<sub>1</sub> + v<sub>3</sub> = 24/17, the sum of the three values is 24/17 + 30/17 = 54/17, and the loss is 6 − 54/17 = 48/17. Also, r × (v<sub>1</sub> + v<sub>3</sub>) = 48/17: the two agree. A positive loss is expected because heat leaves through both ends, held at 0 °C. This agreement validates the solution process, rather than the accuracy of the step or the relevance of the model.</p><p class="petit-titre">Check your reasoning</p><ul><li>The identity is proved from the equations, rather than merely checked with the numbers.</li><li>The loss is compared with r × (v₁ + v₃).</li><li>The interpretation in terms of the ends is given, together with the limitation of the model.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="implicite"><summary><span class="repere">Recall 1</span><span>What distinguishes the implicit scheme from the explicit scheme when writing the diffusion equation?</span></summary><p>The exchange term with neighbouring points is evaluated using the unknown values at the next step, rather than those at the current step.</p></details><details class="carte" data-carte="systeme"><summary><span class="repere">Recall 2</span><span>What do we solve at each implicit step, and what form does it take?</span></summary><p>A tridiagonal linear system: b = 1 + 2r on the diagonal, −r on either side, and the old values and contributions from the ends on the right-hand side.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 3</span><span>Which checks can be applied to an implicit solution without repeating the elimination?</span></summary><p>The residual in the original equations, the sum balance with the loss r × (v₁ + v₃) at the ends, and the expected range of the values.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>Does an output with no negative value prove that the implicit result is accurate?</span></summary><p>No: it shows only the absence of this anomaly. Accuracy as a function of Δt is measured using convergence tests, the subject of unit c183-m5.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Write diffusion using the new values; set r = ν Δt / Δx²; form the tridiagonal system (b = 1 + 2r on the diagonal, −r beside it, and old values and ends on the right-hand side); eliminate downwards, then use back substitution; check using the residual, the balance and the range; never confuse the absence of anomalies with accuracy.</p></div><div class="exports"><a class="bouton" download="c183-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxODMtbTM6aW1wbGljaXRlIiwKICAgICAgInVuaXRlIjogImMxODMtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzY2hlbWEtaW1wbGljaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZGlzdGluZ3Vpc2hlcyB0aGUgaW1wbGljaXQgc2NoZW1lIGZyb20gdGhlIGV4cGxpY2l0IHNjaGVtZSB3aGVuIHdyaXRpbmcgdGhlIGRpZmZ1c2lvbiBlcXVhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZXhjaGFuZ2UgdGVybSB3aXRoIG5laWdoYm91cmluZyBwb2ludHMgaXMgZXZhbHVhdGVkIHVzaW5nIHRoZSB1bmtub3duIHZhbHVlcyBhdCB0aGUgbmV4dCBzdGVwLCByYXRoZXIgdGhhbiB0aG9zZSBhdCB0aGUgY3VycmVudCBzdGVwLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTgzLW0zOnN5c3RlbWUiLAogICAgICAidW5pdGUiOiAiYzE4My1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInN5c3RlbWUtdHJpZGlhZ29uYWwiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkbyB3ZSBzb2x2ZSBhdCBlYWNoIGltcGxpY2l0IHN0ZXAsIGFuZCB3aGF0IGZvcm0gZG9lcyBpdCB0YWtlPyIsCiAgICAgICJyZXBvbnNlIjogIkEgdHJpZGlhZ29uYWwgbGluZWFyIHN5c3RlbTogYiA9IDEgKyAyciBvbiB0aGUgZGlhZ29uYWwsIOKIknIgb24gZWl0aGVyIHNpZGUsIGFuZCB0aGUgb2xkIHZhbHVlcyBhbmQgY29udHJpYnV0aW9ucyBmcm9tIHRoZSBlbmRzIG9uIHRoZSByaWdodC1oYW5kIHNpZGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxODMtbTM6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzE4My1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlLXNvbHV0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIGNoZWNrcyBjYW4gYmUgYXBwbGllZCB0byBhbiBpbXBsaWNpdCBzb2x1dGlvbiB3aXRob3V0IHJlcGVhdGluZyB0aGUgZWxpbWluYXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHJlc2lkdWFsIGluIHRoZSBvcmlnaW5hbCBlcXVhdGlvbnMsIHRoZSBzdW0gYmFsYW5jZSB3aXRoIHRoZSBsb3NzIHIgw5cgKHbigoEgKyB24oKDKSBhdCB0aGUgZW5kcywgYW5kIHRoZSBleHBlY3RlZCByYW5nZSBvZiB0aGUgdmFsdWVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTgzLW0zOmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTgzLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJlY2lzaW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgYW4gb3V0cHV0IHdpdGggbm8gbmVnYXRpdmUgdmFsdWUgcHJvdmUgdGhhdCB0aGUgaW1wbGljaXQgcmVzdWx0IGlzIGFjY3VyYXRlPyIsCiAgICAgICJyZXBvbnNlIjogIk5vOiBpdCBzaG93cyBvbmx5IHRoZSBhYnNlbmNlIG9mIHRoaXMgYW5vbWFseS4gQWNjdXJhY3kgYXMgYSBmdW5jdGlvbiBvZiDOlHQgaXMgbWVhc3VyZWQgdXNpbmcgY29udmVyZ2VuY2UgdGVzdHMsIHRoZSBzdWJqZWN0IG9mIHVuaXQgYzE4My1tNS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c183-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkaXN0aW5ndWlzaGVzIHRoZSBpbXBsaWNpdCBzY2hlbWUgZnJvbSB0aGUgZXhwbGljaXQgc2NoZW1lIHdoZW4gd3JpdGluZyB0aGUgZGlmZnVzaW9uIGVxdWF0aW9uPwlUaGUgZXhjaGFuZ2UgdGVybSB3aXRoIG5laWdoYm91cmluZyBwb2ludHMgaXMgZXZhbHVhdGVkIHVzaW5nIHRoZSB1bmtub3duIHZhbHVlcyBhdCB0aGUgbmV4dCBzdGVwLCByYXRoZXIgdGhhbiB0aG9zZSBhdCB0aGUgY3VycmVudCBzdGVwLgl0b2RhaSBjMTgzLW0zIHNjaGVtYS1pbXBsaWNpdGUKV2hhdCBkbyB3ZSBzb2x2ZSBhdCBlYWNoIGltcGxpY2l0IHN0ZXAsIGFuZCB3aGF0IGZvcm0gZG9lcyBpdCB0YWtlPwlBIHRyaWRpYWdvbmFsIGxpbmVhciBzeXN0ZW06IGIgPSAxICsgMnIgb24gdGhlIGRpYWdvbmFsLCDiiJJyIG9uIGVpdGhlciBzaWRlLCBhbmQgdGhlIG9sZCB2YWx1ZXMgYW5kIGNvbnRyaWJ1dGlvbnMgZnJvbSB0aGUgZW5kcyBvbiB0aGUgcmlnaHQtaGFuZCBzaWRlLgl0b2RhaSBjMTgzLW0zIHN5c3RlbWUtdHJpZGlhZ29uYWwKV2hpY2ggY2hlY2tzIGNhbiBiZSBhcHBsaWVkIHRvIGFuIGltcGxpY2l0IHNvbHV0aW9uIHdpdGhvdXQgcmVwZWF0aW5nIHRoZSBlbGltaW5hdGlvbj8JVGhlIHJlc2lkdWFsIGluIHRoZSBvcmlnaW5hbCBlcXVhdGlvbnMsIHRoZSBzdW0gYmFsYW5jZSB3aXRoIHRoZSBsb3NzIHIgw5cgKHbigoEgKyB24oKDKSBhdCB0aGUgZW5kcywgYW5kIHRoZSBleHBlY3RlZCByYW5nZSBvZiB0aGUgdmFsdWVzLgl0b2RhaSBjMTgzLW0zIGNvbnRyb2xlLXNvbHV0aW9uCkRvZXMgYW4gb3V0cHV0IHdpdGggbm8gbmVnYXRpdmUgdmFsdWUgcHJvdmUgdGhhdCB0aGUgaW1wbGljaXQgcmVzdWx0IGlzIGFjY3VyYXRlPwlObzogaXQgc2hvd3Mgb25seSB0aGUgYWJzZW5jZSBvZiB0aGlzIGFub21hbHkuIEFjY3VyYWN5IGFzIGEgZnVuY3Rpb24gb2YgzpR0IGlzIG1lYXN1cmVkIHVzaW5nIGNvbnZlcmdlbmNlIHRlc3RzLCB0aGUgc3ViamVjdCBvZiB1bml0IGMxODMtbTUuCXRvZGFpIGMxODMtbTMgcHJlY2lzaW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dpunrv gkzxdo qtlh</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognise an explicit decay step in the code</h3><dl><div><dt>What you understand</dt><dd>An explicit step calculates the new state from the old state alone; an implicit step writes the equation at the new state and requires it to be solved. This unit teaches how to write, solve and check the second type on a fictional rod.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kssihk hdbavz uzagky kaehgm jerlpf lsuhmj ykesxz megjag mcicqq trklgx dqnyfm znkzyi eazkev xpdfnw figqzw wgvfth jfyagp ibsqhu qsfnmv oqhubv pybjwx rsyjlh wvqfcw jxtsjz</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: form the tridiagonal system for another r, carry out the elimination without support, then check the result using the residual and the balance. Reading this page and rereading this code do not establish that any level has been achieved.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bqxuab giiuis kykazs dokfky frdglz kbpifj vifyqi bkyuzk xazovq krciqb vzmnlz onbjri txufzz gbpjed fytckg noktfp pbgtdi xgaicz qnehwi xommdq pdofqs jxxxbk jzkamg tfexyd</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the example with another r, without support. Then read the Crank-Nicolson unit, followed by the unit on convergence tests. Before connecting any real code to this course, you will need to look for an implicit scheme or a system solve in it, and test it on authorised data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c183-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c183-m2.html">Previous</a> · <a href="c183-m4.html">Next</a></nav>
+<footer><p>Course book · C183·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

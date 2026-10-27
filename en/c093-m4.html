@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish a silent sensor from a 0 reading, decide when an empty end of a series needs a label, then measure what an invented 0 does to the median, MAD and slope.">
+<title>C093·M4 · Silent sensor and gaps — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mmbexh ryfdyk ugrx</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C093·M4</p><h1>Silent sensor and gaps</h1><p class="objectif"><span>Your goal</span>Distinguish a silent sensor from a 0 reading, decide when an empty end of a series needs a label, then measure what an invented 0 does to the median, MAD and slope.</p><p class="prerequis"><strong>Before you start</strong><br>c090-m5 : stationarity · c056-m5 : effect size · c063-m5 : synthetic dataset and external validity · c025-m5 : O, Omega and Theta · c093-m1 : median, MAD and normal scale · c093-m2 : pairwise slopes and Theil–Sen · c093-m3 : L1 residuals, step, drift and spike</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A temperature probe monitors a heated greenhouse, one time slot after another. At each slot, the collector receives a reading or receives nothing. The scene is fictional: its readings are used for calculations, describe no real greenhouse and set no real threshold.</p><p>It is tempting to turn this absence into 0 so that the series looks complete. But 0 is a number: it enters the median, the median absolute deviation (MAD) and the slopes. An empty slot is simply missing information. In this scene, the greenhouse is heated and the probe does not drop to 0 degrees: 0 would therefore be an invented code, rather than a temperature.</p><p>There are two kinds of gaps. An isolated gap, surrounded by readings, is a brief interruption after which the series resumes. Trailing silence leaves the last known value without any further readings: it no longer tells us about the present. We want to label this silence without claiming to know its cause.</p><p>Before looking for a step, drift or spike, we therefore need to decide whether the series can be used: enough valid readings, no excessive gaps, or trailing silence. The thresholds in the scene are fictional and smaller than those in the code read at the end of the page, so that the calculations are easy to follow.</p><div class="schemas"><figure><svg viewBox="0 0 360 150" xmlns="http://www.w3.org/2000/svg" role="img"><title>Twelve slots from a fictional probe</title><desc>Seven slots contain a reading: positions 1, 2, 3, 5, 6, 8, 9. Two isolated gaps occur at positions 4 and 7. Trailing silence occupies the last 3 slots, from 10 to 12.</desc><rect x="6" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="19" y="36" text-anchor="middle" class="petite-etiquette">1</text><text x="19" y="68" text-anchor="middle">20</text><rect x="35" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="48" y="36" text-anchor="middle" class="petite-etiquette">2</text><text x="48" y="68" text-anchor="middle">21</text><rect x="64" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="77" y="36" text-anchor="middle" class="petite-etiquette">3</text><text x="77" y="68" text-anchor="middle">20</text><rect x="93" y="14" width="26" height="70" rx="5" class="cadre-neutre" /><text x="106" y="36" text-anchor="middle" class="petite-etiquette">4</text><text x="106" y="68" text-anchor="middle">—</text><rect x="122" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="135" y="36" text-anchor="middle" class="petite-etiquette">5</text><text x="135" y="68" text-anchor="middle">22</text><rect x="151" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="164" y="36" text-anchor="middle" class="petite-etiquette">6</text><text x="164" y="68" text-anchor="middle">21</text><rect x="180" y="14" width="26" height="70" rx="5" class="cadre-neutre" /><text x="193" y="36" text-anchor="middle" class="petite-etiquette">7</text><text x="193" y="68" text-anchor="middle">—</text><rect x="209" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="222" y="36" text-anchor="middle" class="petite-etiquette">8</text><text x="222" y="68" text-anchor="middle">21</text><rect x="238" y="14" width="26" height="70" rx="5" class="cadre-resultat" /><text x="251" y="36" text-anchor="middle" class="petite-etiquette">9</text><text x="251" y="68" text-anchor="middle">22</text><rect x="267" y="14" width="26" height="70" rx="5" class="cadre-prediction" /><text x="280" y="36" text-anchor="middle" class="petite-etiquette">10</text><text x="280" y="68" text-anchor="middle">—</text><rect x="296" y="14" width="26" height="70" rx="5" class="cadre-prediction" /><text x="309" y="36" text-anchor="middle" class="petite-etiquette">11</text><text x="309" y="68" text-anchor="middle">—</text><rect x="325" y="14" width="26" height="70" rx="5" class="cadre-prediction" /><text x="338" y="36" text-anchor="middle" class="petite-etiquette">12</text><text x="338" y="68" text-anchor="middle">—</text><text x="106" y="106" text-anchor="middle" class="petite-etiquette">gap</text><text x="193" y="106" text-anchor="middle" class="petite-etiquette">gap</text><line x1="267" y1="96" x2="351" y2="96" class="trait" /><text x="352" y="118" text-anchor="end" class="petite-etiquette">trailing silence: 3 slots</text><text x="6" y="140" class="petite-etiquette">7 valid readings over 12 slots</text></svg><figcaption>Each box is a slot. Boxes with a solid border contain a reading; gray boxes are isolated gaps; the last three boxes form the trailing silence. A dash means “nothing received”, rather than 0.</figcaption></figure><figure><svg viewBox="0 0 360 156" xmlns="http://www.w3.org/2000/svg" role="img"><title>A median pulled by invented zeros</title><desc>Seven valid readings form a cluster between 20 and 22 °C. The 5 invented zeros line up on the left. Median A of the valid readings is 21 °C; median C, including the zeros, is 20 °C.</desc><text x="6" y="16" class="petite-etiquette">A, gaps excluded: median 21, MAD 1 °C</text><text x="6" y="34" class="petite-etiquette">C, gaps coded 0: median 20, MAD 2 °C</text><circle cx="30" cy="108" r="6" class="point-prediction" /><circle cx="30" cy="94" r="6" class="point-prediction" /><circle cx="30" cy="80" r="6" class="point-prediction" /><circle cx="30" cy="66" r="6" class="point-prediction" /><circle cx="30" cy="52" r="6" class="point-prediction" /><circle cx="302.8" cy="108" r="6" class="point-mesure" /><circle cx="302.8" cy="94" r="6" class="point-mesure" /><circle cx="316.4" cy="108" r="6" class="point-mesure" /><circle cx="316.4" cy="94" r="6" class="point-mesure" /><circle cx="316.4" cy="80" r="6" class="point-mesure" /><circle cx="330.1" cy="108" r="6" class="point-mesure" /><circle cx="330.1" cy="94" r="6" class="point-mesure" /><line x1="316.4" y1="56" x2="316.4" y2="122" class="trait" /><text x="316.4" y="52" text-anchor="middle">A</text><line x1="302.8" y1="74" x2="302.8" y2="122" class="trait" /><text x="302.8" y="70" text-anchor="middle">C</text><line x1="20" y1="118" x2="345" y2="118" class="trait" /><text x="30" y="142" text-anchor="middle" class="petite-etiquette">0</text><text x="302.8" y="142" text-anchor="middle" class="petite-etiquette">20</text><text x="330.1" y="142" text-anchor="middle" class="petite-etiquette">22</text><text x="46" y="84" class="petite-etiquette">5 invented zeros</text><text x="356" y="142" text-anchor="end" class="petite-etiquette">°C</text></svg><figcaption>The cluster of points on the right contains the valid readings; the isolated points on the left are invented zeros. A and C mark two medians: first with gaps excluded, then with zeros included. The zeros pull the median down and inflate the scale.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>A gap is not 0: exclude empty slots while keeping the position of each reading, first label any trailing silence, and only then calculate the median, MAD and slopes from the valid readings.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Twelve slots, seven readings and trailing silence</h3><p>A fictional greenhouse probe sends a temperature in °C at each of 12 slots. It gave 20, 21, 20, 22, 21, 21 and 22 °C at slots 1, 2, 3, 5, 6, 8 and 9. Nothing arrived at slots 4, 7, 10, 11 and 12. Fictional thresholds: at least 5 valid readings; trailing silence from 3 consecutive empty slots onward; a series is considered to have too many gaps if the fraction of empty slots is strictly greater than 0.3. What does this series tell us, and what would an invented 0 do?</p><ol class="etapes"><li><h3>Define the quantities and assumptions</h3><p>A slot has a position p, a unitless integer starting at 1, and a reading y in °C, or no reading. Let n be the number of slots, v the number of valid readings and m = n − v the number of empty slots. Let d be the position of the last valid reading. The trailing silence r is the number of consecutive empty slots at the very end: r = n − d. The gap fraction m/n is unitless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mi>n</mi><mo>−</mo><mi>d</mi></mrow></math></div><p>Assumptions: an empty slot means that the collector received nothing; the heated greenhouse does not drop to 0, so 0 would be an invented code; valid readings do not drift during the window, otherwise the median and MAD would summarize a mixture of levels (stationarity); the thresholds have not been calibrated for any real greenhouse.</p></li><li><h3>Count readings, gaps and trailing silence</h3><p>The last valid reading is at slot 9, so d = 9.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mn>12</mn><mo>−</mo><mn>9</mn><mo>=</mo><mn>3</mn></mrow></math></div><p>Slots 4 and 7 are isolated gaps: 2 gaps. In total, m = 2 + 3 = 5, so v = 12 − 5 = 7. The gap fraction is 5/12, or approximately 0.42. Check: 2 + 3 + 7 = 12, and the list in the problem does contain 7 readings.</p></li><li><h3>Apply the tests in order</h3><p>First, a combined test: are there at least 5 valid readings and trailing silence of at least 3 slots? Margin for readings: 7 − 5 = 2. Margin for silence: 3 − 3 = 0. The threshold is met exactly, and “at least” triggers the test. Verdict: trailing silence.</p><p>If the gap test came first, the fraction 0.42 would exceed 0.30 by 0.12; the series would be excluded for excessive gaps and the silence would never be labeled. The order of the tests is therefore a design decision. In the code read at the end of the page, trailing silence is tested before insufficient readings and before the gap fraction.</p></li><li><h3>Measure what a 0 would do</h3><p>Recall: the median M is the central value of the sorted values, or the average of the two central values if their count is even. The MAD is the median of the absolute deviations from M. Multiplied by the constant k, it estimates a standard deviation under a normal distribution.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>MAD</mi><mo>=</mo><mi>médiane</mi><mo>(</mo><mo>|</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mi>M</mi><mo>|</mo><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>σ</mi><mo>^</mo></mover><mo>=</mo><mi>k</mi><mo>×</mo><mi>MAD</mi><mo>,</mo><mi>k</mi><mo>=</mo><mfrac><mn>14826</mn><mn>10000</mn></mfrac><mo>=</mo><mn>1.4826</mn></mrow></math></div><p>Case A, with gaps excluded: the sorted readings are 20, 20, 21, 21, 21, 22 and 22 °C. There are 7 values; the value at rank 4 is the median: 21 °C. The absolute deviations are 0 (3 times), 1 for 20 and 1 for 22 (4 times in total); when sorted, the deviation at rank 4 is 1 °C. The normal scale is 1.4826 × 1 = 1.4826 °C.</p><p>Case C, with an invented 0 at each of the 5 empty slots: there are 12 values, namely 5 zeros followed by the 7 readings. The count is even: the median is the average of ranks 6 and 7, both equal to 20, giving 20 °C. The deviations from this median are 20 for each 0, 0 for 20 (2 times), 1 for 21 (3 times) and 2 for 22 (2 times). When sorted, ranks 6 and 7 equal 2: the MAD is 2 °C and the scale is 1.4826 × 2 = 2.9652 °C.</p><p>The zeros are not the majority, so the median resists: it moves by only 1 °C, from 21 to 20. But the MAD changes from 1 to 2 °C: the scale doubles, and the series appears noisier than it is.</p></li><li><h3>Keep the positions when calculating the slope</h3><p>The slope of a pair of readings is calculated as shown below, in °C per slot; indices i and j refer to the two valid readings.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>=</mo><mfrac><msub><mi>y</mi><mi>j</mi></msub><mo>−</mo><msub><mi>y</mi><mi>i</mi></msub><msub><mi>p</mi><mi>j</mi></msub><mo>−</mo><msub><mi>p</mi><mi>i</mi></msub></mfrac></mrow></math></div><p>Take slots 6 (21 °C) and 9 (22 °C). The reading difference is 1 °C, and the position difference is 9 − 6 = 3 slots: the slope is 1/3 °C per slot, or approximately 0.33. If the valid readings had been packed together with the gaps omitted, these two readings would be at ranks 5 and 7, separated by 2: the slope would become 1/2, or 0.50, with the same readings. The gap affects elapsed time; it must remain part of the slope calculation.</p></li><li><h3>Check and limit the conclusion</h3><p>Checks: the counts agree (2 + 3 + 7 = 12); the MAD in case A is smaller than in case C (1 versus 2), as expected when adding 5 deviations of 20 °C; the slope returns to 0.33 as soon as the actual positions are used.</p><p>Limits: the series is fictional. It shows the sequence of calculations, rather than the cause of silence (probe, connection or collector) or the quality of thresholds for a real greenhouse, which is a question of external validity. Trailing silence also does not establish that the actual temperature has remained unchanged.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain why an isolated gap and trailing silence lead to different decisions, and why the order of the tests changes the verdict for the series. Then say what an invented 0 changes in the median and scale, without looking at the page.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A slot without a reading is 0; the median will be unaffected.”</h3><p>0 is an invented reading. Here, 5 zeros move the median from 21 to 20 °C and raise the MAD from 1 to 2 °C; with as many zeros as readings, the median collapses. Remove the empty slots and keep the position of each reading.</p><a href="#exemple">Review the effect of a 0</a></li><li><h3>“For the slope, we can pack valid readings together one after another.”</h3><p>A pairwise slope divides by the difference in actual positions. For slots 6 and 9, packing the readings together gives 0.50 instead of 0.33 °C per slot, with the same readings.</p><a href="#exercices">Recalculate a slope with a gap</a></li><li><h3>“Trailing silence proves that the probe has failed.”</h3><p>It only proves that nothing has reached the collector for 3 slots: the probe, connection or collector may be responsible. The code passage being read labels the situation and the number of missing readings without identifying the cause.</p><a href="#jalon"><span class="milestone-label">Reread the code passage</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-ordre"><p class="repere">Exercise 1 · Explained application</p>
+<h3>Another series, another verdict</h3><p>The same greenhouse, with the same fictional thresholds. A series of 10 slots has valid readings at slots 1, 2, 3, 5, 6, 7 and 8. Nothing arrived at slots 4, 9 and 10. Apply the tests in order, give the verdict and say how many more empty slots would be needed to declare trailing silence.</p>
+<label for="reponse-ex-ordre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ordre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ordre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ordre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ordre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Count trailing silence from the last valid slot, then count all empty slots.</p></details><details class="indice"><summary>Hint 2</summary><p>In this scene, “too many gaps” means strictly greater than the threshold: compare the fraction with the threshold without rounding.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Last reading at slot 8: r = 10 − 8 = 2, less than 3. No trailing silence; 1 more empty slot would be needed. Valid readings: 7, at least 5, so there are enough.</p><p>Empty slots: m = 10 − 7 = 3, fraction 3/10 = 0.3. The difference from the threshold 0.3 is 0: the fraction equals the threshold without exceeding it, so the series is not excluded. Verdict: analysis can proceed using the valid readings and their positions. One more missing reading would change the conclusion.</p><p class="petit-titre">Check your reasoning</p><ul><li>Trailing silence counted from the last valid reading.</li><li>Tests applied in the stated order.</li><li>Equality at the threshold handled according to the rule of the scene.</li><li>Verdict limited to the fictional series.</li></ul></details></article><article class="exercice" id="ex-moitie"><p class="repere">Exercise 2 · Explained application</p>
+<h3>One more gap, half the values are zeros</h3><p>In the example series, the reading at slot 8 (21 °C) also disappears, and every empty slot is coded as 0. Calculate the median and MAD of the 12 values, then compare them with case A. What can you conclude about the resistance of the median?</p>
+<label for="reponse-ex-moitie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-moitie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-moitie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-moitie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-moitie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Count the zeros, then sort the 12 values: the count is even, so the median is the average of ranks 6 and 7.</p></details><details class="indice"><summary>Hint 2</summary><p>For the MAD, recalculate the deviations from the new median before sorting them.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>There are 6 zeros, followed by 20, 20, 21, 21, 22 and 22. Ranks 6 and 7 are 0 and 20: median (0 + 20) / 2 = 10 °C.</p><p>The deviations from 10 are 10 for each 0 and for 20, 11 for 21, 12 for 22. The 8 smallest deviations all equal 10: ranks 6 and 7 fall among them, so the MAD is 10 °C.</p><p>With 5 zeros, the median was 20 °C; with 6 zeros out of 12, it drops to 10 °C, a value the probe never gave. The median resists as long as the zeros remain a minority, but it is not immune. This conclusion applies to this fictional series.</p><p class="petit-titre">Check your reasoning</p><ul><li>Correct number of zeros and total number of values.</li><li>Average of the two central ranks for an even count.</li><li>Deviations recalculated from the new median.</li><li>Conclusion without generalizing beyond the series.</li></ul></details></article><article class="exercice" id="ex-pente"><p class="repere">Exercise 3 · Transfer</p>
+<h3>A slope across a gap</h3><p>From the valid readings in the example, keep slot 1 (20 °C), slot 2 (21 °C) and slot 5 (22 °C). Calculate the three pairwise slopes and their median. Repeat after packing these three readings together at ranks 1, 2 and 3. What is the difference, and why?</p>
+<label for="reponse-ex-pente">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pente" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pente" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pente" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pente" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Three readings give three pairs; for each pair, divide the reading difference by the position difference.</p></details><details class="indice"><summary>Hint 2</summary><p>With three slopes, the median is the middle one after sorting.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Reading differences: 1 (slots 1 and 2), 2 (slots 1 and 5), 1 (slots 2 and 5). Position differences: 1, 4 and 3. Slopes: 1, 1/2 (or 0.50) and 1/3 (or approximately 0.33) °C per slot. After sorting, the middle slope is 1/2 °C per slot.</p><p>Packed together at ranks 1, 2 and 3, the readings give a slope of 1 between the first two, 1 between the last two and 2 / 2 = 1 between the endpoints: the median becomes 1 °C per slot, compared with 1/2 using the actual positions. The readings have not changed: packing them together has erased the time difference created by the gap.</p><p class="petit-titre">Check your reasoning</p><ul><li>Three pairs, reading difference divided by position difference.</li><li>Median taken as the middle of the three sorted slopes.</li><li>Comparison with the ranks after packing the readings together.</li><li>Explanation based on elapsed time rather than readings.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="trou-0"><summary><span class="repere">Recall 1</span><span>Why do we avoid replacing an empty slot with 0?</span></summary><p>0 is an invented reading that enters the median and MAD; a gap is missing information. In this scene, 5 zeros change the median from 21 to 20 °C and the MAD from 1 to 2 °C.</p></details><details class="carte" data-carte="silence-final"><summary><span class="repere">Recall 2</span><span>How is trailing silence r calculated, and when is it declared?</span></summary><p>r is the number of consecutive empty slots at the end: n minus the position of the last valid reading. In this scene, it is declared if r is at least 3 and there are at least 5 valid readings.</p></details><details class="carte" data-carte="ordre-tests"><summary><span class="repere">Recall 3</span><span>Why does the order of the tests change the verdict in the example?</span></summary><p>The gap fraction (0.42) exceeds 0.30 and would make the series unusable if that test came first. Trailing silence (3 slots) is tested first and labels the situation.</p></details><details class="carte" data-carte="positions-pente"><summary><span class="repere">Recall 4</span><span>What do we divide in a pairwise slope when the series has gaps?</span></summary><p>The reading difference by the difference in actual positions: for slots 6 and 9, 1 divided by 3 gives 0.33, rather than 0.50 after packing the readings into consecutive ranks.</p></details><details class="carte" data-carte="limite-mediane"><summary><span class="repere">Recall 5</span><span>How far does the median resist invented zeros?</span></summary><p>It already moves with 5 zeros out of 12 (20 °C) and drops to 10 °C when 6 values out of 12 are zeros: its resistance has a limit.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Define n, v, m, d and r; remove empty slots without coding them as 0 and keep the positions; first test for enough valid readings together with trailing silence, then for excessive gaps; only then calculate the median, MAD and pairwise slopes using the actual positions; draw no conclusion about the cause of a failure or the validity of the thresholds for a real series.</p></div><div class="exports"><a class="bouton" download="c093-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTMtbTQ6dHJvdS0wIiwKICAgICAgInVuaXRlIjogImMwOTMtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0cm91LTAiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvIHdlIGF2b2lkIHJlcGxhY2luZyBhbiBlbXB0eSBzbG90IHdpdGggMD8iLAogICAgICAicmVwb25zZSI6ICIwIGlzIGFuIGludmVudGVkIHJlYWRpbmcgdGhhdCBlbnRlcnMgdGhlIG1lZGlhbiBhbmQgTUFEOyBhIGdhcCBpcyBtaXNzaW5nIGluZm9ybWF0aW9uLiBJbiB0aGlzIHNjZW5lLCA1IHplcm9zIGNoYW5nZSB0aGUgbWVkaWFuIGZyb20gMjEgdG8gMjAgwrBDIGFuZCB0aGUgTUFEIGZyb20gMSB0byAyIMKwQy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5My1tNDpzaWxlbmNlLWZpbmFsIiwKICAgICAgInVuaXRlIjogImMwOTMtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzaWxlbmNlLWZpbmFsIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBpcyB0cmFpbGluZyBzaWxlbmNlIHIgY2FsY3VsYXRlZCwgYW5kIHdoZW4gaXMgaXQgZGVjbGFyZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiciBpcyB0aGUgbnVtYmVyIG9mIGNvbnNlY3V0aXZlIGVtcHR5IHNsb3RzIGF0IHRoZSBlbmQ6IG4gbWludXMgdGhlIHBvc2l0aW9uIG9mIHRoZSBsYXN0IHZhbGlkIHJlYWRpbmcuIEluIHRoaXMgc2NlbmUsIGl0IGlzIGRlY2xhcmVkIGlmIHIgaXMgYXQgbGVhc3QgMyBhbmQgdGhlcmUgYXJlIGF0IGxlYXN0IDUgdmFsaWQgcmVhZGluZ3MuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTMtbTQ6b3JkcmUtdGVzdHMiLAogICAgICAidW5pdGUiOiAiYzA5My1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm9yZHJlLXRlc3RzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHRoZSBvcmRlciBvZiB0aGUgdGVzdHMgY2hhbmdlIHRoZSB2ZXJkaWN0IGluIHRoZSBleGFtcGxlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBnYXAgZnJhY3Rpb24gKDAuNDIpIGV4Y2VlZHMgMC4zMCBhbmQgd291bGQgbWFrZSB0aGUgc2VyaWVzIHVudXNhYmxlIGlmIHRoYXQgdGVzdCBjYW1lIGZpcnN0LiBUcmFpbGluZyBzaWxlbmNlICgzIHNsb3RzKSBpcyB0ZXN0ZWQgZmlyc3QgYW5kIGxhYmVscyB0aGUgc2l0dWF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDkzLW00OnBvc2l0aW9ucy1wZW50ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDkzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9zaXRpb25zLXBlbnRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gd2UgZGl2aWRlIGluIGEgcGFpcndpc2Ugc2xvcGUgd2hlbiB0aGUgc2VyaWVzIGhhcyBnYXBzPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSByZWFkaW5nIGRpZmZlcmVuY2UgYnkgdGhlIGRpZmZlcmVuY2UgaW4gYWN0dWFsIHBvc2l0aW9uczogZm9yIHNsb3RzIDYgYW5kIDksIDEgZGl2aWRlZCBieSAzIGdpdmVzIDAuMzMsIHJhdGhlciB0aGFuIDAuNTAgYWZ0ZXIgcGFja2luZyB0aGUgcmVhZGluZ3MgaW50byBjb25zZWN1dGl2ZSByYW5rcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5My1tNDpsaW1pdGUtbWVkaWFuZSIsCiAgICAgICJ1bml0ZSI6ICJjMDkzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlLW1lZGlhbmUiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGZhciBkb2VzIHRoZSBtZWRpYW4gcmVzaXN0IGludmVudGVkIHplcm9zPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGFscmVhZHkgbW92ZXMgd2l0aCA1IHplcm9zIG91dCBvZiAxMiAoMjAgwrBDKSBhbmQgZHJvcHMgdG8gMTAgwrBDIHdoZW4gNiB2YWx1ZXMgb3V0IG9mIDEyIGFyZSB6ZXJvczogaXRzIHJlc2lzdGFuY2UgaGFzIGEgbGltaXQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c093-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGRvIHdlIGF2b2lkIHJlcGxhY2luZyBhbiBlbXB0eSBzbG90IHdpdGggMD8JMCBpcyBhbiBpbnZlbnRlZCByZWFkaW5nIHRoYXQgZW50ZXJzIHRoZSBtZWRpYW4gYW5kIE1BRDsgYSBnYXAgaXMgbWlzc2luZyBpbmZvcm1hdGlvbi4gSW4gdGhpcyBzY2VuZSwgNSB6ZXJvcyBjaGFuZ2UgdGhlIG1lZGlhbiBmcm9tIDIxIHRvIDIwIMKwQyBhbmQgdGhlIE1BRCBmcm9tIDEgdG8gMiDCsEMuCXRvZGFpIGMwOTMtbTQgdHJvdS0wCkhvdyBpcyB0cmFpbGluZyBzaWxlbmNlIHIgY2FsY3VsYXRlZCwgYW5kIHdoZW4gaXMgaXQgZGVjbGFyZWQ/CXIgaXMgdGhlIG51bWJlciBvZiBjb25zZWN1dGl2ZSBlbXB0eSBzbG90cyBhdCB0aGUgZW5kOiBuIG1pbnVzIHRoZSBwb3NpdGlvbiBvZiB0aGUgbGFzdCB2YWxpZCByZWFkaW5nLiBJbiB0aGlzIHNjZW5lLCBpdCBpcyBkZWNsYXJlZCBpZiByIGlzIGF0IGxlYXN0IDMgYW5kIHRoZXJlIGFyZSBhdCBsZWFzdCA1IHZhbGlkIHJlYWRpbmdzLgl0b2RhaSBjMDkzLW00IHNpbGVuY2UtZmluYWwKV2h5IGRvZXMgdGhlIG9yZGVyIG9mIHRoZSB0ZXN0cyBjaGFuZ2UgdGhlIHZlcmRpY3QgaW4gdGhlIGV4YW1wbGU/CVRoZSBnYXAgZnJhY3Rpb24gKDAuNDIpIGV4Y2VlZHMgMC4zMCBhbmQgd291bGQgbWFrZSB0aGUgc2VyaWVzIHVudXNhYmxlIGlmIHRoYXQgdGVzdCBjYW1lIGZpcnN0LiBUcmFpbGluZyBzaWxlbmNlICgzIHNsb3RzKSBpcyB0ZXN0ZWQgZmlyc3QgYW5kIGxhYmVscyB0aGUgc2l0dWF0aW9uLgl0b2RhaSBjMDkzLW00IG9yZHJlLXRlc3RzCldoYXQgZG8gd2UgZGl2aWRlIGluIGEgcGFpcndpc2Ugc2xvcGUgd2hlbiB0aGUgc2VyaWVzIGhhcyBnYXBzPwlUaGUgcmVhZGluZyBkaWZmZXJlbmNlIGJ5IHRoZSBkaWZmZXJlbmNlIGluIGFjdHVhbCBwb3NpdGlvbnM6IGZvciBzbG90cyA2IGFuZCA5LCAxIGRpdmlkZWQgYnkgMyBnaXZlcyAwLjMzLCByYXRoZXIgdGhhbiAwLjUwIGFmdGVyIHBhY2tpbmcgdGhlIHJlYWRpbmdzIGludG8gY29uc2VjdXRpdmUgcmFua3MuCXRvZGFpIGMwOTMtbTQgcG9zaXRpb25zLXBlbnRlCkhvdyBmYXIgZG9lcyB0aGUgbWVkaWFuIHJlc2lzdCBpbnZlbnRlZCB6ZXJvcz8JSXQgYWxyZWFkeSBtb3ZlcyB3aXRoIDUgemVyb3Mgb3V0IG9mIDEyICgyMCDCsEMpIGFuZCBkcm9wcyB0byAxMCDCsEMgd2hlbiA2IHZhbHVlcyBvdXQgb2YgMTIgYXJlIHplcm9zOiBpdHMgcmVzaXN0YW5jZSBoYXMgYSBsaW1pdC4JdG9kYWkgYzA5My1tNCBsaW1pdGUtbWVkaWFuZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mmbexh ryfdyk ugrx</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nwaxwf anrriq wcpw</span></span> · separate sensor silence from a 0 reading</h3><dl><div><dt>What you understand</dt><dd>An empty slot is not a 0 reading: remove it while keeping the position of each reading, label any trailing silence before describing a change, then calculate the median, MAD and slopes from the valid readings. The next unit will ask how reliable these detections are when the noise is autocorrelated.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zufkzz qghvwo vyhrii axyygl kwxkia bjsknt gzsnmw zczucw azawek gknnpr xrdgyl otynjb twymhi drceku gijaci fdgtzu ywrmys geaqin aonuhf eeikpa zsztap qiejkk fjjhne mfyfpd fxnkti bbpzco qdubni btkxnm npyahl ywlgsx fybpnq xgjruj ghmnvb ljxika tqkmbc rdbghe wdjcao oh</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: reproduce, without support, the median, MAD, a pairwise slope and the L1 residual comparison from the previous unit in the chapter, using a small series with gaps. This page covers only gaps, trailing silence, the effect of a 0 and positions in the slope. Reading the page or obtaining an assisted answer does not award any attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xkltxc bwzfad yyfuad gujmsz kahsmp wmsfjd nqfias jvtjwi bhyomv qtqzsj aybdux ebeppg dozsuy fylafy nrpflh rlsvwa fhaqgo pyybgy hwxfps zvduza xixqjx oiyejj ktrfkd tiibkq</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example, then cases A, C and D, without support on another day. Then read the unit on autocorrelation, quadratic cost and false positives. On line 50 of the same file, the number of retained points is bounded because the pairwise slope calculation is quadratic: this is a concrete use of the O notation seen earlier. Before any real use, the connections, thresholds and authorized series will need to be checked separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c093-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c093-m3.html">Previous</a> · <a href="c093-m5.html">Next</a></nav>
+<footer><p>Course book · C093·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

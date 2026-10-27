@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Compare the volatility of a calibrated SVI curve with the bid-ask ranges for a slice, measure each deviation in half-widths, then distinguish a true range violation from an unusable quote.">
+<title>C244·M5 · Bid-ask diagnostic — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fndhqn aiwlst zlbf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C244·M5</p><h1>Bid-ask diagnostic</h1><p class="objectif"><span>Your goal</span>Compare the volatility of a calibrated SVI curve with the bid-ask ranges for a slice, measure each deviation in half-widths, then distinguish a true range violation from an unusable quote.</p><p class="prerequis"><strong>Before you start</strong><br>c243-m5 : SSVI · c051-m5 : error diagnostics · c220-m5 : numerical reproducibility · c198-m5 : independent validation · c244-m1 : initialization · c244-m2 : constraints · c244-m3 : quasi-explicit calibration · c244-m4 : admissible interpolation</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An SVI slice describes an implied volatility curve for a single expiry. After initialization, constraints, quasi-explicit calibration and admissible interpolation, one question remains: is this curve compatible with the market quotes for four options with this expiry?</p><p>The market displays a range rather than a single price. The bid is the best price offered by a buyer, and the ask is the best price requested by a seller. Here we express them directly in implied volatility, in ticks: one tick is one tenth of a volatility point, and 10 ticks make one point, meaning one percent of annualized volatility. The midpoint of the range is a useful reference; it is not a traded price.</p><p>A deviation of 3 ticks between the curve and the midpoint carries a different weight in a range of 4 ticks than in a range of 24 ticks. We therefore measure the deviation in half-widths of the range, making it comparable across options.</p><p>The diagnostic answers a single question: does the model value lie between the bid and the ask? It does not establish that the curve is free of arbitrage, that the calibration is good, or that a trade could be executed at this level.</p><p>The quotes, curve values and slice are fictional. They are used to work through an example; they describe neither a real market nor a configuration to reuse.</p><div class="schemas"><figure><svg viewBox="0 0 620 400" xmlns="http://www.w3.org/2000/svg" role="img"><title>Bid–ask ranges and model value for four options</title><desc>Four vertical bars represent the bid–ask ranges in volatility ticks. The model value is 258 for the range 240 to 264, 203 for the range 198 to 202, hence just above the ask, 209 for the range 205 to 217, and 228 for the range 236 to 256, hence below the bid. A thin line marks the midpoint of each range.</desc><rect x="88" y="54" width="44" height="96" rx="4" class="cadre-prediction" /><line x1="84" y1="102" x2="136" y2="102" class="trait" /><circle cx="110" cy="78" r="7" class="point-mesure" /><text x="140" y="83" class="petite-etiquette">V = 258</text><text x="82" y="59" text-anchor="end" class="petite-etiquette">264</text><text x="82" y="155" text-anchor="end" class="petite-etiquette">240</text><text x="110" y="355" text-anchor="middle">low</text><text x="110" y="382" text-anchor="middle" class="petite-etiquette">inside</text><rect x="218" y="302" width="44" height="16" rx="4" class="cadre-prediction" /><line x1="214" y1="310" x2="266" y2="310" class="trait" /><circle cx="240" cy="298" r="7" class="point-mesure" /><text x="270" y="303" class="petite-etiquette">V = 203</text><text x="212" y="307" text-anchor="end" class="petite-etiquette">202</text><text x="212" y="323" text-anchor="end" class="petite-etiquette">198</text><text x="240" y="355" text-anchor="middle">central</text><text x="240" y="382" text-anchor="middle" class="petite-etiquette">outside, above</text><rect x="348" y="242" width="44" height="48" rx="4" class="cadre-prediction" /><line x1="344" y1="266" x2="396" y2="266" class="trait" /><circle cx="370" cy="274" r="7" class="point-mesure" /><text x="400" y="279" class="petite-etiquette">V = 209</text><text x="342" y="247" text-anchor="end" class="petite-etiquette">217</text><text x="342" y="295" text-anchor="end" class="petite-etiquette">205</text><text x="370" y="355" text-anchor="middle">high</text><text x="370" y="382" text-anchor="middle" class="petite-etiquette">inside</text><rect x="478" y="86" width="44" height="80" rx="4" class="cadre-prediction" /><line x1="474" y1="126" x2="526" y2="126" class="trait" /><circle cx="500" cy="198" r="7" class="point-mesure" /><text x="530" y="203" class="petite-etiquette">V = 228</text><text x="472" y="91" text-anchor="end" class="petite-etiquette">256</text><text x="472" y="171" text-anchor="end" class="petite-etiquette">236</text><text x="500" y="355" text-anchor="middle">extreme</text><text x="500" y="382" text-anchor="middle" class="petite-etiquette">outside, below</text></svg><figcaption>Each bar is a bid–ask range, the point is the model value, and the thin line is the midpoint. The central bar is narrow: its point is only slightly above the ask and falls outside the band, whereas the point for the low option, farther from its midpoint in ticks, remains inside.</figcaption></figure><figure><svg viewBox="0 0 560 190" xmlns="http://www.w3.org/2000/svg" role="img"><title>Scores in half-widths of the range</title><desc>An axis marked from minus 2 to 2 has a colored region from minus 1 to 1. The scores are 0.50 for the low option, 1.50 for the central option, -0.33 for the high option and -1.80 for the extreme option. The central and extreme scores fall outside the colored region.</desc><rect x="180" y="55" width="200" height="70" rx="4" class="cadre-resultat" /><text x="280" y="73" text-anchor="middle" class="petite-etiquette">within the range</text><line x1="60" y1="95" x2="500" y2="95" class="trait" /><line x1="80" y1="87" x2="80" y2="103" class="trait" /><text x="80" y="172" text-anchor="middle" class="petite-etiquette">−2</text><line x1="180" y1="87" x2="180" y2="103" class="trait" /><text x="180" y="172" text-anchor="middle" class="petite-etiquette">−1</text><line x1="280" y1="87" x2="280" y2="103" class="trait" /><text x="280" y="172" text-anchor="middle" class="petite-etiquette">0</text><line x1="380" y1="87" x2="380" y2="103" class="trait" /><text x="380" y="172" text-anchor="middle" class="petite-etiquette">1</text><line x1="480" y1="87" x2="480" y2="103" class="trait" /><text x="480" y="172" text-anchor="middle" class="petite-etiquette">2</text><circle cx="330" cy="95" r="8" class="point-mesure" /><text x="330" y="40" text-anchor="middle">low</text><text x="330" y="148" text-anchor="middle" class="petite-etiquette">0.50</text><circle cx="430" cy="95" r="8" class="point-mesure" /><text x="430" y="40" text-anchor="middle">central</text><text x="430" y="148" text-anchor="middle" class="petite-etiquette">1.50</text><circle cx="247" cy="95" r="8" class="point-mesure" /><text x="247" y="40" text-anchor="middle">high</text><text x="247" y="148" text-anchor="middle" class="petite-etiquette">-0.33</text><circle cx="100" cy="95" r="8" class="point-mesure" /><text x="100" y="40" text-anchor="middle">extreme</text><text x="100" y="148" text-anchor="middle" class="petite-etiquette">-1.80</text></svg><figcaption>The same result in half-widths: the colored region runs from −1 to 1. A score outside this region identifies a range that does not contain the model value.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For each option: calculate the midpoint M and half-width h of the range, measure the residual r = V − M, then the score z = r / h. If the range is valid, meaning that the ask is strictly above the bid, the curve is within the range exactly when the absolute value of z does not exceed 1.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Four options in a fictional slice, from range to verdict</h3><p>A fictional slice contains four options, named low, central, high and extreme according to their strikes. The ranges and calibrated curve values, in volatility ticks, are: low 240 to 264 with a model value of 258; central 198 to 202 with 203; high 205 to 217 with 209; extreme 236 to 256 with 228. For each option, let us decide whether the curve falls within the range, and by how much it falls outside otherwise.</p><ol class="etapes"><li><h3>Define the quantities, units and assumptions</h3><p>For a given option, B is the bid, A the ask and V the implied volatility of the curve, all in ticks. The curve comes from the raw SVI total variance w(k), where k is the logarithm of the ratio of the strike to the forward price, T is the maturity in years, and a, b, ρ, m, s are the slice parameters. These lowercase letters belong to the SVI formula; the uppercase letters B, A, V, M and L refer to the range and the model.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>(</mo><mi>ρ</mi><mo>(</mo><mi>k</mi><mo>−</mo><mi>m</mi><mo>)</mo><mo>+</mo><msqrt><msup><mrow><mo>(</mo><mi>k</mi><mo>−</mo><mi>m</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mi>s</mi><mn>2</mn></msup></msqrt><mo>)</mo></mrow></math></div><p>The model volatility is derived from this variance, then expressed in tick units. The parameters come from the calibration in the preceding units; here we take the V values as given and do not recalculate them.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>=</mo><msqrt><mfrac><mrow><mi>w</mi><mo>(</mo><mi>k</mi><mo>)</mo></mrow><mrow><mi>T</mi></mrow></mfrac></msqrt></mrow></math></div><p>Assumptions: the four quotes refer to the same expiry and the same instant, converted to volatility using a common convention whose conversion this unit does not repeat; each range is valid, meaning B is strictly below A; the V values are outputs from a calibration that has already been performed. If the second assumption fails, the score below no longer has any meaning.</p></li><li><h3>Calculate the midpoint, width and half-width</h3><p>The midpoint M is the average of the bid and the ask. The width L is their difference. The half-width h is the distance from the midpoint to each boundary, so the bid is M − h and the ask is M + h; this property will link the score to the range.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>M</mi><mo>=</mo><mfrac><mrow><mo>(</mo><mi>B</mi><mo>+</mo><mi>A</mi><mo>)</mo></mrow><mrow><mn>2</mn></mrow></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mi>A</mi><mo>−</mo><mi>B</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>=</mo><mfrac><mrow><mi>L</mi></mrow><mrow><mn>2</mn></mrow></mfrac></mrow></math></div><p>Low option: M = 504 / 2 = 252 ticks, L = 264 − 240 = 24 ticks, h = 12 ticks. Central option: M = 400 / 2 = 200, L = 4, h = 2. High option: M = 422 / 2 = 211, L = 12, h = 6. Extreme option: M = 492 / 2 = 246, L = 20, h = 10. All these quantities remain in ticks.</p></li><li><h3>Measure the residual, then the score</h3><p>The residual r is positive when the curve is above the midpoint and negative when it is below. The score z divides r by h: it is dimensionless, and equals 1 when the curve touches the ask, minus 1 when it touches the bid.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mi>V</mi><mo>−</mo><mi>M</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mfrac><mrow><mi>r</mi></mrow><mrow><mi>h</mi></mrow></mfrac></mrow></math></div><p>Low option: r = 258 − 252 = 6 ticks, z = 6 / 12 = 0.50. Central option: r = 203 − 200 = 3 ticks, z = 3 / 2 = 1.50. High option: r = 209 − 211 = -2 ticks, z = -2 / 6 = -0.33. Extreme option: r = 228 − 246 = -18 ticks, z = -18 / 10 = -1.80.</p><p>The contrast is clear: the residual for the low option (6 ticks) is 2 times that for the central option (3 ticks), but its score (0.50) is lower than the central score (1.50). The width of the range makes the difference.</p></li><li><h3>Decide: inside, outside, and by how much</h3><p>The condition on z is equivalent to a direct comparison with the boundaries: V − M must lie between −h and h, which means M − h ≤ V ≤ M + h, or B ≤ V ≤ A according to the preceding step.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>B</mi><mo>=</mo><mi>M</mi><mo>−</mo><mi>h</mi><mo>,</mo><mi>A</mi><mo>=</mo><mi>M</mi><mo>+</mo><mi>h</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>|</mo><mi>z</mi><mo>|</mo><mo>≤</mo><mn>1</mn><mo>⟺</mo><mi>B</mi><mo>≤</mo><mi>V</mi><mo>≤</mo><mi>A</mi></mrow></math></div><p>Low option: the score 0.50 is within the region, so the curve is inside. Central option: the score 1.50 exceeds 1, and the value 203 exceeds the ask 202, with an excess of 203 − 202 = 1 in ticks. High option: the score -0.33 is within the region, so the curve is inside. Extreme option: the score -1.80 falls outside the region, and the value 228 is below the bid 236, with an excess of 236 − 228 = 8 ticks.</p><p>Only the low and high options keep the curve within their ranges; for the central and extreme options, it falls outside. The central option falls only slightly outside, but its range is very narrow.</p></li><li><h3>Check by another method</h3><p>First method: compare V directly with the boundaries. Low: 240 ≤ 258 ≤ 264 is true. Central: 203 exceeds 202. High: 205 ≤ 209 ≤ 217 is true. Extreme: 228 is less than 236. All four verdicts agree with those from the scores.</p><p>Boundary cases: if V equals M, then r and z equal 0; if V equals A, then z equals 1. A score outside these bounds therefore does lie outside the range.</p><p>Unit check: M, L, h, r and V are expressed in ticks; z has no unit. Adding a residual in ticks to a dimensionless score would be an error.</p></li><li><h3>Interpret the verdict without overinterpreting it</h3><p>This verdict establishes compatibility between the curve and the supplied quotes, and nothing more. It establishes neither the absence of calendar or butterfly arbitrage, nor the quality of the calibration across the whole slice, since four points do not cover the entire strike interval, nor the possibility of executing trades at these levels: a quote may be stale, indicative or for a tiny size.</p><p>A point outside the range is a signal to examine: quote timestamps, volatility convention, curve rigidity. It is not an instruction to move the curve until it fits. Before calculating any score, you must also check that L is strictly greater than 0.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain in your own words why the absolute value of z being less than or equal to 1 is equivalent to B ≤ V ≤ A, then why the central option falls outside its range despite having the smaller residual.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The smallest residual in ticks identifies the best point.”</h3><p>A residual must be assessed relative to the width of the range. For the low option, 6 ticks remain within a range of 24 ticks; for the central option, 3 ticks fall outside a range of 4 ticks. Compare the scores rather than the raw ticks.</p><a href="#exemple">Review how to measure the score</a></li><li><h3>“Being within the range proves that the calibration is good and free of arbitrage.”</h3><p>The test compares the curve with a few displayed quotes. It checks neither calendar nor butterfly arbitrage, areas without quotes, nor the possibility of execution. Treat it as a necessary condition in a diagnostic, never as a certificate.</p><a href="#intuition">Reread what the diagnostic answers</a></li><li><h3>“A crossed range or a range of 0 width still gives a usable score.”</h3><p>If the ask is below or equal to the bid, the half-width is negative or 0: the score changes sign or the division fails. First check that L exceeds 0; otherwise exclude the point and flag it. The last exercise demonstrates this.</p><a href="#exercices">Redo the exercise on the crossed quote</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-score"><p class="repere">Exercise 1 · Worked application</p>
+<h3>A fifth point</h3><p>A fifth fictional point is quoted at 150 to 160 ticks and the curve value there is 158 ticks. Calculate M, h, r and z, then state whether the curve is within the range.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mfrac><mrow><mi>r</mi></mrow><mrow><mi>h</mi></mrow></mfrac></mrow></math></div>
+<label for="reponse-ex-score">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-score" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-score" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-score" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-score" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with the midpoint, then the width: the half-width follows from it.</p></details><details class="indice"><summary>Hint 2</summary><p>The residual keeps the sign of V − M: it is positive if the curve is above the midpoint.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Midpoint: (150 + 160) / 2 = 310 / 2 = 155 ticks. Width: 160 − 150 = 10 ticks, so h = 5 ticks. Residual: 158 − 155 = 3 ticks. Score: 3 / 5 = 3/5, or 0.6.</p><p>The score does not exceed 1: the curve is within the range. Direct check: 150 ≤ 158 ≤ 160. This verdict establishes only this compatibility.</p><p class="petit-titre">Check your reasoning</p><ul><li>Midpoint, width and then half-width calculated in that order.</li><li>Dimensionless score, compared with one.</li><li>Verdict confirmed by direct comparison with the bid and the ask.</li></ul></details></article><article class="exercice" id="ex-elargir"><p class="repere">Exercise 2 · Inverse reasoning</p>
+<h3>By how much should the central range be widened?</h3><p>At the central strike in the example, keep the midpoint 200 and widen the range symmetrically until the model value 203 is exactly on a boundary. What width do you obtain, by what factor has the original width been multiplied, and what does this factor tell you about the score? This widening is a measurement tool, not a proposed quote.</p>
+<label for="reponse-ex-elargir">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-elargir" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-elargir" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-elargir" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-elargir" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A boundary is one half-width from the midpoint; the model value is at a distance r from the midpoint.</p></details><details class="indice"><summary>Hint 2</summary><p>The new half-width must equal the absolute value of the residual.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new half-width must be 3 ticks, so the width becomes 3 × 2 = 6 ticks and the upper boundary falls on 203. The factor is 6 / 4 = 3/2, or 1.5. It equals the central option score 1.50: with the midpoint fixed, the absolute value of the score is the minimum widening factor required for the range to contain the model value.</p><p>Measuring this mismatch does not authorize changing the quote. The question asks only how much wider the observed range would need to be to contain the curve.</p><p class="petit-titre">Check your reasoning</p><ul><li>Midpoint unchanged, half-width equal to the absolute value of the residual.</li><li>Factor obtained by dividing the widths and linked to the score.</li><li>No quote is presented as having been corrected.</li></ul></details></article><article class="exercice" id="ex-croise"><p class="repere">Exercise 3 · Boundary case</p>
+<h3>A crossed quote</h3><p>A sixth fictional point displays a bid of 210 ticks and an ask of 208 ticks; the curve value there is 212 ticks. Calculate the width, then the score that a mechanical application of the formula would produce. What do you do with this point?</p>
+<label for="reponse-ex-croise">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-croise" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-croise" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-croise" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-croise" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate the width first: its sign tells you whether a range exists.</p></details><details class="indice"><summary>Hint 2</summary><p>If the half-width is negative, what happens to the sign of the score for the same residual?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Width: 208 − 210 = -2 ticks, which is negative: the ask is below the bid, so there is no valid range. To examine the pitfall, the mechanical formula gives M = 418 / 2 = 209 ticks, r = 212 − 209 = 3 ticks, h = -1 ticks and z = 3 / (-1) = -3.</p><p>This score is misleading: the curve is above the midpoint, but the negative sign would suggest that it is below the range, and its absolute value would suggest a range violation. Neither verdict makes sense, because the bid and the ask do not define a band. The point is excluded from the count, flagged as a crossed quote to check (timestamp, source, swapped columns), and counted as neither inside nor outside.</p><p class="petit-titre">Check your reasoning</p><ul><li>Width calculated first and recognized as negative.</li><li>Mechanical score presented as misleading, with no inside or outside verdict.</li><li>Point excluded and flagged rather than silently corrected.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="fourchette"><summary><span class="repere">Recall 1</span><span>What does the bid-ask range represent in this diagnostic?</span></summary><p>The band of quoted volatilities between the best bid and the best ask; the diagnostic tests whether the model value falls within it, without treating that value as a traded price.</p></details><details class="carte" data-carte="score"><summary><span class="repere">Recall 2</span><span>How is the deviation of the model from the midpoint measured, and what threshold separates inside from outside?</span></summary><p>Divide the residual V − M by the half-width h; the curve is within the range when the absolute value of the score does not exceed 1, which is equivalent to B ≤ V ≤ A.</p></details><details class="carte" data-carte="normaliser"><summary><span class="repere">Recall 3</span><span>Why can a smaller absolute residual be more serious than a larger one?</span></summary><p>Because the range is narrower: in the example, 3 ticks fall outside a range of 4 ticks whereas 6 ticks remain within a range of 24 ticks.</p></details><details class="carte" data-carte="croisee"><summary><span class="repere">Recall 4</span><span>What should you do with a quote whose ask is below the bid?</span></summary><p>Exclude it from the count and flag it: its width is negative, so there is no band and the mechanical score has no meaning.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>What does a curve contained within the ranges fail to prove?</span></summary><p>It proves neither the absence of arbitrage, nor the quality of calibration away from the quoted points, nor the possibility of execution: only compatibility with supplied quotes.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct from memory: check that each range is valid, with the ask strictly above the bid; calculate the midpoint, width and half-width; measure the residual of the curve relative to the midpoint; divide it by the half-width to obtain the score; conclude inside if the absolute value of the score does not exceed 1, otherwise give the excess in ticks; finally state what the test does not prove.</p></div><div class="exports"><a class="bouton" download="c244-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDQtbTU6Zm91cmNoZXR0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZm91cmNoZXR0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGJpZC1hc2sgcmFuZ2UgcmVwcmVzZW50IGluIHRoaXMgZGlhZ25vc3RpYz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgYmFuZCBvZiBxdW90ZWQgdm9sYXRpbGl0aWVzIGJldHdlZW4gdGhlIGJlc3QgYmlkIGFuZCB0aGUgYmVzdCBhc2s7IHRoZSBkaWFnbm9zdGljIHRlc3RzIHdoZXRoZXIgdGhlIG1vZGVsIHZhbHVlIGZhbGxzIHdpdGhpbiBpdCwgd2l0aG91dCB0cmVhdGluZyB0aGF0IHZhbHVlIGFzIGEgdHJhZGVkIHByaWNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjQ0LW01OnNjb3JlIiwKICAgICAgInVuaXRlIjogImMyNDQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzY29yZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgaXMgdGhlIGRldmlhdGlvbiBvZiB0aGUgbW9kZWwgZnJvbSB0aGUgbWlkcG9pbnQgbWVhc3VyZWQsIGFuZCB3aGF0IHRocmVzaG9sZCBzZXBhcmF0ZXMgaW5zaWRlIGZyb20gb3V0c2lkZT8iLAogICAgICAicmVwb25zZSI6ICJEaXZpZGUgdGhlIHJlc2lkdWFsIFYg4oiSIE0gYnkgdGhlIGhhbGYtd2lkdGggaDsgdGhlIGN1cnZlIGlzIHdpdGhpbiB0aGUgcmFuZ2Ugd2hlbiB0aGUgYWJzb2x1dGUgdmFsdWUgb2YgdGhlIHNjb3JlIGRvZXMgbm90IGV4Y2VlZCAxLCB3aGljaCBpcyBlcXVpdmFsZW50IHRvIEIg4omkIFYg4omkIEEuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDQtbTU6bm9ybWFsaXNlciIsCiAgICAgICJ1bml0ZSI6ICJjMjQ0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibm9ybWFsaXNlciIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2FuIGEgc21hbGxlciBhYnNvbHV0ZSByZXNpZHVhbCBiZSBtb3JlIHNlcmlvdXMgdGhhbiBhIGxhcmdlciBvbmU/IiwKICAgICAgInJlcG9uc2UiOiAiQmVjYXVzZSB0aGUgcmFuZ2UgaXMgbmFycm93ZXI6IGluIHRoZSBleGFtcGxlLCAzIHRpY2tzIGZhbGwgb3V0c2lkZSBhIHJhbmdlIG9mIDQgdGlja3Mgd2hlcmVhcyA2IHRpY2tzIHJlbWFpbiB3aXRoaW4gYSByYW5nZSBvZiAyNCB0aWNrcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0NC1tNTpjcm9pc2VlIiwKICAgICAgInVuaXRlIjogImMyNDQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjcm9pc2VlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgc2hvdWxkIHlvdSBkbyB3aXRoIGEgcXVvdGUgd2hvc2UgYXNrIGlzIGJlbG93IHRoZSBiaWQ/IiwKICAgICAgInJlcG9uc2UiOiAiRXhjbHVkZSBpdCBmcm9tIHRoZSBjb3VudCBhbmQgZmxhZyBpdDogaXRzIHdpZHRoIGlzIG5lZ2F0aXZlLCBzbyB0aGVyZSBpcyBubyBiYW5kIGFuZCB0aGUgbWVjaGFuaWNhbCBzY29yZSBoYXMgbm8gbWVhbmluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0NC1tNTpsaW1pdGUiLAogICAgICAidW5pdGUiOiAiYzI0NC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBjdXJ2ZSBjb250YWluZWQgd2l0aGluIHRoZSByYW5nZXMgZmFpbCB0byBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBwcm92ZXMgbmVpdGhlciB0aGUgYWJzZW5jZSBvZiBhcmJpdHJhZ2UsIG5vciB0aGUgcXVhbGl0eSBvZiBjYWxpYnJhdGlvbiBhd2F5IGZyb20gdGhlIHF1b3RlZCBwb2ludHMsIG5vciB0aGUgcG9zc2liaWxpdHkgb2YgZXhlY3V0aW9uOiBvbmx5IGNvbXBhdGliaWxpdHkgd2l0aCBzdXBwbGllZCBxdW90ZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c244-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBiaWQtYXNrIHJhbmdlIHJlcHJlc2VudCBpbiB0aGlzIGRpYWdub3N0aWM/CVRoZSBiYW5kIG9mIHF1b3RlZCB2b2xhdGlsaXRpZXMgYmV0d2VlbiB0aGUgYmVzdCBiaWQgYW5kIHRoZSBiZXN0IGFzazsgdGhlIGRpYWdub3N0aWMgdGVzdHMgd2hldGhlciB0aGUgbW9kZWwgdmFsdWUgZmFsbHMgd2l0aGluIGl0LCB3aXRob3V0IHRyZWF0aW5nIHRoYXQgdmFsdWUgYXMgYSB0cmFkZWQgcHJpY2UuCXRvZGFpIGMyNDQtbTUgZm91cmNoZXR0ZQpIb3cgaXMgdGhlIGRldmlhdGlvbiBvZiB0aGUgbW9kZWwgZnJvbSB0aGUgbWlkcG9pbnQgbWVhc3VyZWQsIGFuZCB3aGF0IHRocmVzaG9sZCBzZXBhcmF0ZXMgaW5zaWRlIGZyb20gb3V0c2lkZT8JRGl2aWRlIHRoZSByZXNpZHVhbCBWIOKIkiBNIGJ5IHRoZSBoYWxmLXdpZHRoIGg7IHRoZSBjdXJ2ZSBpcyB3aXRoaW4gdGhlIHJhbmdlIHdoZW4gdGhlIGFic29sdXRlIHZhbHVlIG9mIHRoZSBzY29yZSBkb2VzIG5vdCBleGNlZWQgMSwgd2hpY2ggaXMgZXF1aXZhbGVudCB0byBCIOKJpCBWIOKJpCBBLgl0b2RhaSBjMjQ0LW01IHNjb3JlCldoeSBjYW4gYSBzbWFsbGVyIGFic29sdXRlIHJlc2lkdWFsIGJlIG1vcmUgc2VyaW91cyB0aGFuIGEgbGFyZ2VyIG9uZT8JQmVjYXVzZSB0aGUgcmFuZ2UgaXMgbmFycm93ZXI6IGluIHRoZSBleGFtcGxlLCAzIHRpY2tzIGZhbGwgb3V0c2lkZSBhIHJhbmdlIG9mIDQgdGlja3Mgd2hlcmVhcyA2IHRpY2tzIHJlbWFpbiB3aXRoaW4gYSByYW5nZSBvZiAyNCB0aWNrcy4JdG9kYWkgYzI0NC1tNSBub3JtYWxpc2VyCldoYXQgc2hvdWxkIHlvdSBkbyB3aXRoIGEgcXVvdGUgd2hvc2UgYXNrIGlzIGJlbG93IHRoZSBiaWQ/CUV4Y2x1ZGUgaXQgZnJvbSB0aGUgY291bnQgYW5kIGZsYWcgaXQ6IGl0cyB3aWR0aCBpcyBuZWdhdGl2ZSwgc28gdGhlcmUgaXMgbm8gYmFuZCBhbmQgdGhlIG1lY2hhbmljYWwgc2NvcmUgaGFzIG5vIG1lYW5pbmcuCXRvZGFpIGMyNDQtbTUgY3JvaXNlZQpXaGF0IGRvZXMgYSBjdXJ2ZSBjb250YWluZWQgd2l0aGluIHRoZSByYW5nZXMgZmFpbCB0byBwcm92ZT8JSXQgcHJvdmVzIG5laXRoZXIgdGhlIGFic2VuY2Ugb2YgYXJiaXRyYWdlLCBub3IgdGhlIHF1YWxpdHkgb2YgY2FsaWJyYXRpb24gYXdheSBmcm9tIHRoZSBxdW90ZWQgcG9pbnRzLCBub3IgdGhlIHBvc3NpYmlsaXR5IG9mIGV4ZWN1dGlvbjogb25seSBjb21wYXRpYmlsaXR5IHdpdGggc3VwcGxpZWQgcXVvdGVzLgl0b2RhaSBjMjQ0LW01IGxpbWl0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fndhqn aiwlst zlbf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone c244-m5 · distinguish the diagnostic being taught from the code being read</h3><dl><div><dt>You understand</dt><dd>A calibrated curve is also assessed against quoted ranges: the score in half-widths distinguishes a minor deviation from a deviation that falls outside the band, provided the range is valid. This diagnostic certifies neither the absence of arbitrage nor the quality of calibration.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">visgdw fepwfu kbkoyi ffkyvv ezozcs spgbqv brvfis bcduak qhnqgx zgmqtc eokwbb ogxnbm nlnodc qlnntt xhfrgi abdhej gtmpaw nmlgcj vbiugg gxfiby nyvreg tjmjwm vbqlty qykulz mxfghb lgbdxf ddwdkc hxbvdf qotctg hldaoh leyjyk dbvyft sklwjo dxspbq hyrmcw xwctfm koelxm tw</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: redo the score calculation for a new range without support, justify the equivalence with direct comparison to the bid and the ask, then handle a crossed quote. Reading this page and producing an assisted answer do not confer any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mtzokz hrziob bzlvez mgvwjf vfgzbw njfahr ttwfzn oxvlya mtczpk rblzzq rksqmz biyhnu sxayae agntez hulznd uxbvmy emygea xqskyh fjjpxy sfdfqz sggjdz jdbsdm lgjwls xjbyez xhhbie cicvka vfgpdh zgirhv qhoqbi ypugkc hzhqmf hwkcse uweykd ajtyrw xgwtzp oaylcc vdazdf mq</span></span></dd></div><div><dt>To continue</dt><dd>Redo the three exercises without hints on another day. If use in the project were ever considered, it would be necessary to choose an authorized, timestamped quote source separately, fix the volatility convention, decide how to handle invalid ranges, then verify the wiring and tests. This page announces no implementation.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c244-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c244-m4.html">Previous</a> · <a href="c246-m1.html">Next</a></nav>
+<footer><p>Course book · C244·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

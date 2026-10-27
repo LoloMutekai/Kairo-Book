@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the first draws from a stateful generator, then specify what must be kept to replay a simulation.">
+<title>C176·M1 · Generators and seeds — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">aecgcp njzlsc wqnb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C176·M1</p><h1>Generators and seeds</h1><p class="objectif"><span>Your goal</span>Calculate the first draws from a stateful generator, then specify what must be kept to replay a simulation.</p><p class="prerequis"><strong>Before you start</strong><br>c060-m5 : approximations and assumptions · c061-m5 : identifiability and uncertainty · c051-m5 : error diagnostics · c172-m5 : Euler-Maruyama · c017-m5 : reproduction protocol</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are preparing a simulator for waiting at a service counter. To track down a bug, you want to be able to give it exactly the same sequence of numerical inputs again. We study only how this sequence is generated: no waiting time is calculated yet. The scene and all its parameters are fictional.</p><p>Imagine a machine that keeps a number in a storage slot. On each request, it replaces this number according to a fixed rule, then provides an output. The slot is its internal state; here, the rule and the way an output is produced make up the generator. The seed initializes the state before the first call.</p><p>A pseudorandom generator therefore calculates a deterministic sequence: the same initialization and the same calls give the same outputs. The numbers can represent randomness in a model, but this calculation does not automatically make the outputs independent or suitable for that model.</p><p>Our miniature machine starts with the seed 3. It produces the states 0, 1, 6, 15. A second machine starting from the same seed reproduces them. However, an extra request advances the state: the next customer receives a value at a different position in the sequence.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>A seed initializes, a call advances</title><desc>The seed 3 fills the starting slot. The first call calculates 5 times 3 plus 1, then keeps the remainder after division by 16. The state becomes 0 and the output is 0, with no unit.</desc><rect x="24" y="12" width="312" height="50" rx="7" class="cadre-prediction" /><text x="180" y="43" text-anchor="middle">Start: seed 3</text><path d="M180 62v28m-5-6 5 6 5-6" class="trait" /><rect x="24" y="90" width="312" height="62" rx="7" class="cadre-neutre" /><text x="180" y="116" text-anchor="middle">Calculate 5 × state + 1</text><text x="180" y="140" text-anchor="middle">Keep the remainder modulo 16</text><path d="M180 152v28m-5-6 5 6 5-6" class="trait" /><rect x="24" y="180" width="312" height="58" rx="7" class="cadre-resultat" /><text x="180" y="205" text-anchor="middle">New state: 0</text><text x="180" y="228" text-anchor="middle">Output: 0/16 = 0</text></svg><figcaption>The starting box shows the seed; the last box shows the state after a call. The new state is kept for the next call. The seed is not put back into the slot each time.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Replay from the same starting point</title><desc>Two separate trials are initialized with seed 3 and make the same 4 calls. Each obtains states 0, 1, 6, 15. Their agreement establishes a replay, not independence of the trials.</desc><text x="180" y="31" text-anchor="middle">Same seed: 3</text><rect x="20" y="53" width="320" height="52" rx="7" class="cadre-prediction" /><text x="180" y="85" text-anchor="middle">Trial A: 0 → 1 → 6 → 15</text><rect x="20" y="126" width="320" height="52" rx="7" class="cadre-resultat" /><text x="180" y="158" text-anchor="middle">Trial B: 0 → 1 → 6 → 15</text><text x="180" y="210" text-anchor="middle">Same rule, same calls.</text><text x="180" y="235" text-anchor="middle" class="petite-etiquette">Integer states, no physical unit.</text></svg><figcaption>The arrows show the sequence of states. A and B are identical replays, not new observations of randomness. The positions of the calls are part of the experiment.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The seed sets the starting point; each call advances the state. To replay, also keep the rule, the inputs, and the order of calls.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Prepare the simulator inputs, then replay them</h3><p>Let us use a = 5, c = 1, m = 16, and the seed g = 3. We calculate 4 outputs. All these numbers have no physical unit: they describe the generator, not minutes of waiting. This miniature rule helps explain the mechanism; it is not proposed for an actual simulation.</p><ol class="etapes"><li><h3>Define the state and the rule</h3><p>n is the number of calls already made, an integer starting at 0. s<sub>n</sub> is the state after those calls. In this example only, initialization means that s at position 0 equals g. In an actual library, the seed may be transformed into a much larger internal state; it is not necessarily that state.</p><p>a and c are known integers: a is the multiplier and c is the increment added. m is the modulus, a strictly positive integer that bounds the states. Our seed g is an integer from 0 inclusive to m exclusive. The word modulo refers to the remainder after integer division by m: subtract integer multiples of m until an integer in this same interval is obtained. This rule is called a linear congruential generator.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mo>(</mo><mi>a</mi><msub><mi>s</mi><mi>n</mi></msub><mo>+</mo><mi>c</mi><mo>)</mo><mo>mod</mo><mi>m</mi></mrow></math></div><p>We assume exact integer operations and a single sequence of calls executed in order. The outputs u are the resulting states divided by m. The index n + 1 reminds us that the state advances before the output is provided.</p></li><li><h3>Make the first call</h3><p>The starting state is 3. Multiplication followed by addition applies the rule: 5 × 3 = 15, then 15 + 1 = 16. This intermediate result is not yet the next state.</p><p>It contains exactly 1 complete group of 16. Subtract it: 16 − 16 = 0. The state at position 1 is therefore 0. Check: 16 = 1 × 16 + 0, and the remainder is indeed in the allowed interval. The seed 3 is therefore not the first output.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mn>1</mn></msub><mo>=</mo><mo>(</mo><mn>5</mn><mo>×</mo><mn>3</mn><mo>+</mo><mn>1</mn><mo>)</mo><mo>mod</mo><mn>16</mn><mo>=</mo><mn>0</mn></mrow></math></div></li><li><h3>Reuse the state without reinitializing</h3><p>The second call starts from 0: 5 × 0 = 0; 0 + 1 = 1. This number is already in the allowed interval. We subtract 0 multiples of the modulus: the state at position 2 is 1 − 0 = 1.</p><p>The third call therefore starts from 1: 5 × 1 = 5; 5 + 1 = 6. Again, no positive integer multiple of 16 fits into this result: the state at position 3 is 6 − 0 = 6. The checks are 1 = 0 × 16 + 1 and 6 = 0 × 16 + 6.</p></li><li><h3>Return to the interval on the fourth call</h3><p>Starting from state 6, the product is 5 × 6 = 30; adding c gives 30 + 1 = 31. We subtract 1 times 16: the state at position 4 is 31 − 16 = 15.</p><p>Check independently of the subtraction step: 31 = 1 × 16 + 15, with 0 ≤ 15 &lt; 16. These conditions identify the remainder; subtracting the modulus just once is not enough in every case, as the first exercise will show.</p></li><li><h3>Convert the integer state to the normalized output</h3><p>u denotes the normalized output, which has no unit. Dividing s by m places the output in the interval from 0 inclusive to 1 exclusive, since the state stays in the interval from 0 inclusive to m exclusive. It is not yet a duration or a variable following another distribution.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>u</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mfrac><msub><mi>s</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mi>m</mi></mfrac><mo>;</mo><mn>0</mn><mo>≤</mo><msub><mi>u</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>&lt;</mo><mn>1</mn></mrow></math></div><p>The 4 outputs are 0/16 = 0; 1/16 = 1/16, or 0.0625; 6/16 = 3/8, or 0.375; 15/16 = 15/16, or 0.9375. All have no unit. Fractions are kept for calculation; decimals are used for readability.</p><p>Check: multiplying each exact output by 16 gives its state back. The largest allowed state is 16 − 1 = 15; even its output remains less than 1. Our outputs lie on a finite grid with spacing 1/16: they do not exactly follow a continuous uniform distribution. Dividing by m normalizes the values, but proves neither uniformity on this grid nor independence.</p></li><li><h3>Distinguish replay from the quality of simulated randomness</h3><p>Starting again from g = 3 with this rule gives state 0 again after the first call. If the states match at a given position, the same operation gives the same state at the next position. This explains replay for the entire sequence; observing only an equal first value would not be enough to prove that the rules are the same.</p><p>A finite set of states means that a state must eventually repeat. From that repetition onward, the sequence runs in a cycle; the period is the minimum number of calls needed to go through that cycle. Our machine has only 16 possible states: it illustrates the mechanism without providing an inexhaustible supply of new numbers. In another generator, different states may produce the same output: seeing an output repeat is then not enough to identify a cycle.</p><p>For the simulator, record the algorithm, its parameters, the seed, the tool version, the inputs, and the order of calls. To resume partway through rather than start again, you must recover the state reached or replay all previous calls. When several tasks share a generator, the order in which they consume outputs must also be controlled.</p><p>Different seeds do not guarantee independent sequences. In our machine, choosing seed 6 means starting from a state already encountered: the first output becomes 15/16, which already occurs later in the first trial. We have explained how to reproduce a stream; Monte Carlo error will be covered in the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Cover the calculations. Distinguish the seed, the current state, and the output. Explain why an extra call shifts the simulator along the sequence even if the seed has not changed, then say which claim about the quality of randomness still needs justification.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“To keep the same seed, I put it back before each request.”</h3><p>Initialization is used at the start of a trial. Reinitializing before each request returns our machine to the same state and always gives 0 again. To obtain a sequence, keep the new state from one call to the next.</p><a href="#exemple">Review how the state is reused</a></li><li><h3>“With the same seed number, all programs must give the same results.”</h3><p>The seed has meaning only with an algorithm and its initialization. Also keep the version, the inputs, and the sequence of calls. A logger that draws an extra number advances the same generator, even if the rest of the program seems unchanged.</p><a href="#exercices">Diagnose the draw consumed by the logger</a></li><li><h3>“Different seeds guarantee independent trials.”</h3><p>A seed can lead to a state already visited by another sequence. Our seed 6 starts at just such a point. Reproducibility demonstrates neither the independence of the streams nor the suitability of the generator for the simulated model.</p><a href="#exemple">Review cycles and the limits of replay</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-suite"><p class="repere">Exercise 1 · Numerical application</p>
+<h3>Calculate the next output</h3><p>After 4 calls, the generator for the service counter keeps state 15. With the same a, c, and m, calculate the state and then the output at position 5. Justify how many multiples of the modulus you subtract and check the remainder.</p>
+<label for="reponse-ex-suite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-suite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-suite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-suite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-suite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with 5 × 15 + 1. This result may exceed the modulus several times over.</p></details><details class="indice"><summary>Hint 2</summary><p>Find the largest multiple of 16 that does not exceed this result; the remainder must be less than 16.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The product is 5 × 15 = 75. Adding the increment gives 75 + 1 = 76. This result contains 4 complete groups of 16, totaling 64. The next state is the remainder 76 − 64 = 12.</p><p>Check: 76 = 4 × 16 + 12 and 0 ≤ 12 &lt; 16. The output at position 5 is therefore 12/16 = 3/4, or 0.75, with no unit. Subtracting only the modulus would have left a value outside the state interval.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the intermediate result 76 from the remainder 12.</li><li>Justify the integer quotient 4 using the remainder and its bounds.</li><li>Normalize by 16 and give an output with no unit.</li></ul></details></article><article class="exercice" id="ex-reinitialiser"><p class="repere">Exercise 2 · State diagnosis</p>
+<h3>Replay a trial or repeat its starting point?</h3><p>A simulator trial requests 3 outputs. Procedure A initializes with 3 at the start of each trial, then keeps the generator for all its calls. Procedure B initializes with 3 before each request. Give the sequence received in each case. Which procedure allows the entire trial to be replayed without fixing all its inputs at the first output?</p>
+<label for="reponse-ex-reinitialiser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reinitialiser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reinitialiser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For A, reuse the state obtained each time. For B, write the initial state again before each call.</p></details><details class="indice"><summary>Hint 2</summary><p>Replaying a trial means reproducing the same entire sequence, not just repeating its first element.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A receives 0, 1/16, 3/8. A new trial initialized in the same way receives this entire sequence again. The state advances within the trial and returns to the starting point between trials.</p><p>B receives 0, 0, 0: each reinitialization cancels the progression. A suits the replay described. However, identical replays are not independent repetitions for measuring uncertainty.</p><p class="petit-titre">Check your reasoning</p><ul><li>Write the sequences for A and B, including the role of each reinitialization.</li><li>Explain why keeping the state is necessary within a trial.</li><li>Distinguish an identical replay from a new independent trial.</li></ul></details></article><article class="exercice" id="ex-journal"><p class="repere">Exercise 3 · Apply the reproduction protocol</p>
+<h3>The logger consumed a number</h3><p>The original trial gives the simulator 3 successive outputs. In an instrumented version, after the first output, a logger requests an output from the same generator and keeps it for itself; the simulator then requests its 2 remaining outputs. The parameters and the seed 3 are kept. Write the sequence received by the simulator and propose a fix that restores the original sequence of calls.</p>
+<label for="reponse-ex-journal">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-journal" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-journal" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-journal" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-journal" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Label the calls in order: simulator, logger, simulator, simulator.</p></details><details class="indice"><summary>Hint 2</summary><p>A value consumed by the logger advances the state even if the simulator never sees it.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The order of consumers determines the result. The simulator first receives 0. The logger consumes 1/16. The following calls give the simulator 3/8 and then 15/16. Its sequence therefore becomes 0, 3/8, 15/16, instead of 0, 1/16, 3/8.</p><p>To restore the original sequence of calls, the logger can simply copy an output already obtained, without requesting a new draw. Another possibility is to give it a separate generator with a documented protocol, keeping the simulation generator and its calls. This isolates consumption; the statistical independence of separate streams still needs separate justification.</p><p>Archive the algorithm and its parameters, the tool version, the seed, the inputs, and the order of calls. To check the bug described, compare the exact sequences at the expected positions before comparing a final simulation result. Equal seeds alone are not a sufficient check.</p><p class="petit-titre">Check your reasoning</p><ul><li>Assign 1/16 to the logger and find the remaining simulator outputs.</li><li>Propose a fix that preserves the number and order of simulator calls.</li><li>Give a replay protocol and distinguish separate consumers from independent streams.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="graine-etat"><summary><span class="repere">Recall 1</span><span>What is the difference between the seed and the current state?</span></summary><p>The seed initializes a generator. The current state is the memory that its calls change. Here, the seed directly fills the slot at the start; this equality does not hold in general. Reinitializing on every call prevents progression through the sequence.</p></details><details class="carte" data-carte="modulo"><summary><span class="repere">Recall 2</span><span>Why keep a remainder and then divide by the modulus?</span></summary><p>The remainder brings the integer state into the interval from 0 inclusive to m exclusive. Dividing this state by m gives an output with no unit from 0 inclusive to 1 exclusive. This normalization proves neither uniformity nor independence.</p></details><details class="carte" data-carte="rejeu"><summary><span class="repere">Recall 3</span><span>What must be kept besides the seed to replay?</span></summary><p>The algorithm, its parameters, the tool version, the inputs, and the order of calls. To resume partway through, you must also recover the state reached or replay the previous calls.</p></details><details class="carte" data-carte="consommation"><summary><span class="repere">Recall 4</span><span>Why can a draw reserved for the logger change the simulation?</span></summary><p>It advances the shared generator. The simulator then receives values at other positions in the same sequence. Copying an existing output into the log does not consume a new draw.</p></details><details class="carte" data-carte="independance"><summary><span class="repere">Recall 5</span><span>What do neither a fixed seed nor different seeds prove?</span></summary><p>A fixed seed does not guarantee the quality of simulated randomness; different seeds do not guarantee independent streams. An identical replay adds no new realization. These questions must be distinguished from reproducibility alone.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the equations, reconstruct the path from seed → initial state → integer update → remainder → normalized output → stored state. Justify replay using the deterministic rule, explain the shift caused by an extra call, and name the elements of the protocol. Finish by distinguishing reproduction, period, and independence.</p></div><div class="exports"><a class="bouton" download="c176-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTE6Z3JhaW5lLWV0YXQiLAogICAgICAidW5pdGUiOiAiYzE3Ni1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdyYWluZS1ldC1ldGF0IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiB0aGUgc2VlZCBhbmQgdGhlIGN1cnJlbnQgc3RhdGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHNlZWQgaW5pdGlhbGl6ZXMgYSBnZW5lcmF0b3IuIFRoZSBjdXJyZW50IHN0YXRlIGlzIHRoZSBtZW1vcnkgdGhhdCBpdHMgY2FsbHMgY2hhbmdlLiBIZXJlLCB0aGUgc2VlZCBkaXJlY3RseSBmaWxscyB0aGUgc2xvdCBhdCB0aGUgc3RhcnQ7IHRoaXMgZXF1YWxpdHkgZG9lcyBub3QgaG9sZCBpbiBnZW5lcmFsLiBSZWluaXRpYWxpemluZyBvbiBldmVyeSBjYWxsIHByZXZlbnRzIHByb2dyZXNzaW9uIHRocm91Z2ggdGhlIHNlcXVlbmNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTc2LW0xOm1vZHVsbyIsCiAgICAgICJ1bml0ZSI6ICJjMTc2LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVzdGUtZXQtbm9ybWFsaXNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkga2VlcCBhIHJlbWFpbmRlciBhbmQgdGhlbiBkaXZpZGUgYnkgdGhlIG1vZHVsdXM/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHJlbWFpbmRlciBicmluZ3MgdGhlIGludGVnZXIgc3RhdGUgaW50byB0aGUgaW50ZXJ2YWwgZnJvbSAwIGluY2x1c2l2ZSB0byBtIGV4Y2x1c2l2ZS4gRGl2aWRpbmcgdGhpcyBzdGF0ZSBieSBtIGdpdmVzIGFuIG91dHB1dCB3aXRoIG5vIHVuaXQgZnJvbSAwIGluY2x1c2l2ZSB0byAxIGV4Y2x1c2l2ZS4gVGhpcyBub3JtYWxpemF0aW9uIHByb3ZlcyBuZWl0aGVyIHVuaWZvcm1pdHkgbm9yIGluZGVwZW5kZW5jZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Ni1tMTpyZWpldSIsCiAgICAgICJ1bml0ZSI6ICJjMTc2LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVwcm9kdWN0aW9uLWQtdW4tZmx1eCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgYmUga2VwdCBiZXNpZGVzIHRoZSBzZWVkIHRvIHJlcGxheT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgYWxnb3JpdGhtLCBpdHMgcGFyYW1ldGVycywgdGhlIHRvb2wgdmVyc2lvbiwgdGhlIGlucHV0cywgYW5kIHRoZSBvcmRlciBvZiBjYWxscy4gVG8gcmVzdW1lIHBhcnR3YXkgdGhyb3VnaCwgeW91IG11c3QgYWxzbyByZWNvdmVyIHRoZSBzdGF0ZSByZWFjaGVkIG9yIHJlcGxheSB0aGUgcHJldmlvdXMgY2FsbHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTE6Y29uc29tbWF0aW9uIiwKICAgICAgInVuaXRlIjogImMxNzYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvcmRyZS1kZXMtYXBwZWxzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gYSBkcmF3IHJlc2VydmVkIGZvciB0aGUgbG9nZ2VyIGNoYW5nZSB0aGUgc2ltdWxhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJJdCBhZHZhbmNlcyB0aGUgc2hhcmVkIGdlbmVyYXRvci4gVGhlIHNpbXVsYXRvciB0aGVuIHJlY2VpdmVzIHZhbHVlcyBhdCBvdGhlciBwb3NpdGlvbnMgaW4gdGhlIHNhbWUgc2VxdWVuY2UuIENvcHlpbmcgYW4gZXhpc3Rpbmcgb3V0cHV0IGludG8gdGhlIGxvZyBkb2VzIG5vdCBjb25zdW1lIGEgbmV3IGRyYXcuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTE6aW5kZXBlbmRhbmNlIiwKICAgICAgInVuaXRlIjogImMxNzYtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGVzLWQtdW5lLWdyYWluZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIG5laXRoZXIgYSBmaXhlZCBzZWVkIG5vciBkaWZmZXJlbnQgc2VlZHMgcHJvdmU/IiwKICAgICAgInJlcG9uc2UiOiAiQSBmaXhlZCBzZWVkIGRvZXMgbm90IGd1YXJhbnRlZSB0aGUgcXVhbGl0eSBvZiBzaW11bGF0ZWQgcmFuZG9tbmVzczsgZGlmZmVyZW50IHNlZWRzIGRvIG5vdCBndWFyYW50ZWUgaW5kZXBlbmRlbnQgc3RyZWFtcy4gQW4gaWRlbnRpY2FsIHJlcGxheSBhZGRzIG5vIG5ldyByZWFsaXphdGlvbi4gVGhlc2UgcXVlc3Rpb25zIG11c3QgYmUgZGlzdGluZ3Vpc2hlZCBmcm9tIHJlcHJvZHVjaWJpbGl0eSBhbG9uZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c176-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBzZWVkIGFuZCB0aGUgY3VycmVudCBzdGF0ZT8JVGhlIHNlZWQgaW5pdGlhbGl6ZXMgYSBnZW5lcmF0b3IuIFRoZSBjdXJyZW50IHN0YXRlIGlzIHRoZSBtZW1vcnkgdGhhdCBpdHMgY2FsbHMgY2hhbmdlLiBIZXJlLCB0aGUgc2VlZCBkaXJlY3RseSBmaWxscyB0aGUgc2xvdCBhdCB0aGUgc3RhcnQ7IHRoaXMgZXF1YWxpdHkgZG9lcyBub3QgaG9sZCBpbiBnZW5lcmFsLiBSZWluaXRpYWxpemluZyBvbiBldmVyeSBjYWxsIHByZXZlbnRzIHByb2dyZXNzaW9uIHRocm91Z2ggdGhlIHNlcXVlbmNlLgl0b2RhaSBjMTc2LW0xIGdyYWluZS1ldC1ldGF0CldoeSBrZWVwIGEgcmVtYWluZGVyIGFuZCB0aGVuIGRpdmlkZSBieSB0aGUgbW9kdWx1cz8JVGhlIHJlbWFpbmRlciBicmluZ3MgdGhlIGludGVnZXIgc3RhdGUgaW50byB0aGUgaW50ZXJ2YWwgZnJvbSAwIGluY2x1c2l2ZSB0byBtIGV4Y2x1c2l2ZS4gRGl2aWRpbmcgdGhpcyBzdGF0ZSBieSBtIGdpdmVzIGFuIG91dHB1dCB3aXRoIG5vIHVuaXQgZnJvbSAwIGluY2x1c2l2ZSB0byAxIGV4Y2x1c2l2ZS4gVGhpcyBub3JtYWxpemF0aW9uIHByb3ZlcyBuZWl0aGVyIHVuaWZvcm1pdHkgbm9yIGluZGVwZW5kZW5jZS4JdG9kYWkgYzE3Ni1tMSByZXN0ZS1ldC1ub3JtYWxpc2F0aW9uCldoYXQgbXVzdCBiZSBrZXB0IGJlc2lkZXMgdGhlIHNlZWQgdG8gcmVwbGF5PwlUaGUgYWxnb3JpdGhtLCBpdHMgcGFyYW1ldGVycywgdGhlIHRvb2wgdmVyc2lvbiwgdGhlIGlucHV0cywgYW5kIHRoZSBvcmRlciBvZiBjYWxscy4gVG8gcmVzdW1lIHBhcnR3YXkgdGhyb3VnaCwgeW91IG11c3QgYWxzbyByZWNvdmVyIHRoZSBzdGF0ZSByZWFjaGVkIG9yIHJlcGxheSB0aGUgcHJldmlvdXMgY2FsbHMuCXRvZGFpIGMxNzYtbTEgcmVwcm9kdWN0aW9uLWQtdW4tZmx1eApXaHkgY2FuIGEgZHJhdyByZXNlcnZlZCBmb3IgdGhlIGxvZ2dlciBjaGFuZ2UgdGhlIHNpbXVsYXRpb24/CUl0IGFkdmFuY2VzIHRoZSBzaGFyZWQgZ2VuZXJhdG9yLiBUaGUgc2ltdWxhdG9yIHRoZW4gcmVjZWl2ZXMgdmFsdWVzIGF0IG90aGVyIHBvc2l0aW9ucyBpbiB0aGUgc2FtZSBzZXF1ZW5jZS4gQ29weWluZyBhbiBleGlzdGluZyBvdXRwdXQgaW50byB0aGUgbG9nIGRvZXMgbm90IGNvbnN1bWUgYSBuZXcgZHJhdy4JdG9kYWkgYzE3Ni1tMSBvcmRyZS1kZXMtYXBwZWxzCldoYXQgZG8gbmVpdGhlciBhIGZpeGVkIHNlZWQgbm9yIGRpZmZlcmVudCBzZWVkcyBwcm92ZT8JQSBmaXhlZCBzZWVkIGRvZXMgbm90IGd1YXJhbnRlZSB0aGUgcXVhbGl0eSBvZiBzaW11bGF0ZWQgcmFuZG9tbmVzczsgZGlmZmVyZW50IHNlZWRzIGRvIG5vdCBndWFyYW50ZWUgaW5kZXBlbmRlbnQgc3RyZWFtcy4gQW4gaWRlbnRpY2FsIHJlcGxheSBhZGRzIG5vIG5ldyByZWFsaXphdGlvbi4gVGhlc2UgcXVlc3Rpb25zIG11c3QgYmUgZGlzdGluZ3Vpc2hlZCBmcm9tIHJlcHJvZHVjaWJpbGl0eSBhbG9uZS4JdG9kYWkgYzE3Ni1tMSBsaW1pdGVzLWQtdW5lLWdyYWluZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">aecgcp njzlsc wqnb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading milestone · recognize a local generator</h3><dl><div><dt>What you understand</dt><dd>A seed initializes a generator, then each call consumes a position in its stream. The miniature machine in the lesson explains this distinction; it does not describe the algorithm used by the project library.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">brmvxu xpcuog uplqos odmyno hqozct qiqvee jvvdui hsxdmi qssklj tcshuy kvypjp mmxhzm xjtkhx ktxqsj puhsfm uahmvu gavdpo xayqhy hwoxru cwfpmy mlmlvd bdygpv zpibmd dzzhsg</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for the canonical level of this unit: recalculate the sequence, distinguish initialization from consumption, then explain a replay failure and its limits. Reading, revealing a card, and giving an assisted answer do not count as attaining a level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">crerwt kanlqw haiijr tbgelg bdxntz pkhvqe uzkkgg gruqkw zoavtv ujttox ugmugc xhyrha tjxplm xklkye cdkakt qweanj ehjptd mrtpwp gbpnrf gfbpfn zecljy lypzzk obcvpm zbunrg</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises and reconstruct the protocol without help after some time has passed since reading. Then continue with C176·M2 on Monte Carlo error. To assess actual use of the code, its callers, the protocol, and an authorized execution would still need to be traced; this reading does not replace them.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c176-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c174-m5.html">Previous</a> · <a href="c176-m2.html">Next</a></nav>
+<footer><p>Course book · C176·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

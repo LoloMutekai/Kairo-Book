@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Divide a simulation into successive test segments, assign each trade using its two dates to avoid temporal leakage, then explain why a numerical measure of degradation is not enough to resolve an inconclusive verdict.">
+<title>C098·M5 · Walk-forward, leakage and an inconclusive verdict — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qiloqz zjaptt avxf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C098·M5</p><h1>Walk-forward, leakage and an inconclusive verdict</h1><p class="objectif"><span>Your goal</span>Divide a simulation into successive test segments, assign each trade using its two dates to avoid temporal leakage, then explain why a numerical measure of degradation is not enough to resolve an inconclusive verdict.</p><p class="prerequis"><strong>Before you start</strong><br>c097-m5 : risk and horizon · c067-m5 : pipeline · c090-m5 : stationarity · c037-m5 : controlled cleaning · c098-m1 : chronology, delay and available information · c098-m2 : cash, units and total value · c098-m3 : fees, slippage and the terminal assumption · c098-m4 : forecast errors and a baseline comparison</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional simulator has replayed a strategy over 40 daily bars, ordered by time. It produced 7 simulated trades. To find out whether these results hold up “in the future”, we keep them in chronological order: we place a cutoff, look at what comes before it, then examine a test segment immediately after it. Walk-forward repeats this procedure: the cutoff advances by one segment, and what was ahead of it becomes part of the past.</p><p>A trade’s result is known only at its exit: it depends on all the bars between entry and exit. If the trade enters before a cutoff and exits after it, its result includes bars that the cutoff is supposed to know nothing about. Assigning it to the past creates temporal leakage: information from after the cutoff is used to judge what came before it.</p><p>In the version reviewed at the milestone, the strategy is not retuned at each cutoff: the simulator replays the entire series once, then sorts the trades relative to the cutoffs. This sorting is the subject of this page.</p><p>The verdict remains. Even without leakage, a few trades do not support a conclusion. The reviewed code goes further: it never draws a conclusion. Its verdict is “inconclusive” (INCONCLUSIVE), which means neither “good” nor “bad”: the calculation establishes nothing, and the figures remain descriptive.</p><div class="schemas"><figure><svg viewBox="0 0 460 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Seven trades, three cutoffs, two trades crossing cutoffs</title><desc>A fictional series of 40 bars. The cutoffs fall at bars 25, 30 and 35, and the series ends at bar 40. Trades A and B exit at bars 18 and 24, before the first cutoff. Trade C enters at bar 23 and exits at bar 28: it crosses the first cutoff. D, F and G enter and exit within a single test segment. E enters at bar 28 and exits at bar 33: it crosses cutoff 30.</desc><text x="210" y="14" text-anchor="middle" class="petite-etiquette">past</text><text x="350" y="14" text-anchor="middle" class="petite-etiquette">test segments</text><line x1="275" y1="20" x2="275" y2="225" class="trait" /><text x="275" y="246" text-anchor="middle" class="petite-etiquette">25</text><line x1="320" y1="20" x2="320" y2="225" class="trait" /><text x="320" y="246" text-anchor="middle" class="petite-etiquette">30</text><line x1="365" y1="20" x2="365" y2="225" class="trait" /><text x="365" y="246" text-anchor="middle" class="petite-etiquette">35</text><line x1="410" y1="20" x2="410" y2="225" class="trait" /><text x="410" y="246" text-anchor="middle" class="petite-etiquette">40</text><line x1="50" y1="225" x2="410" y2="225" class="trait" /><line x1="140" y1="219" x2="140" y2="231" class="trait" /><text x="140" y="246" text-anchor="middle" class="petite-etiquette">warmup 10</text><text x="230" y="272" text-anchor="middle" class="petite-etiquette">bar number</text><rect x="158" y="32" width="54" height="16" rx="3" class="cadre-neutre" /><text x="150" y="46" text-anchor="end">A</text><rect x="230" y="56" width="36" height="16" rx="3" class="cadre-neutre" /><text x="222" y="70" text-anchor="end">B</text><rect x="257" y="80" width="45" height="16" rx="3" class="cadre-prediction" /><text x="249" y="94" text-anchor="end">C</text><rect x="284" y="104" width="27" height="16" rx="3" class="cadre-resultat" /><text x="276" y="118" text-anchor="end">D</text><rect x="302" y="128" width="45" height="16" rx="3" class="cadre-prediction" /><text x="294" y="142" text-anchor="end">E</text><rect x="329" y="152" width="27" height="16" rx="3" class="cadre-resultat" /><text x="321" y="166" text-anchor="end">F</text><rect x="374" y="176" width="27" height="16" rx="3" class="cadre-resultat" /><text x="366" y="190" text-anchor="end">G</text><text x="221" y="94" text-anchor="end" class="petite-etiquette">crossing</text><text x="266" y="142" text-anchor="end" class="petite-etiquette">crossing</text></svg><figcaption>First diagram — each rectangle runs from the entry to the exit of a fictional trade. Neutral: exit before the first cutoff. Gold: entry and exit within a single test segment. Pink: crossing a cutoff, so excluded at that cutoff.</figcaption></figure><figure><svg viewBox="0 0 440 255" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two means, a descriptive difference, an inconclusive verdict</title><desc>Mean result before the first cutoff: 25 bp across 2 trades. Mean after the cutoff: 10 bp across 4 trades. The relative difference is 60 percent. Both counts remain below the legacy sample-count threshold of 30, and the code returns an inconclusive verdict in every case.</desc><text x="200" y="24" text-anchor="middle">degradation 60 %</text><rect x="70" y="45" width="90" height="125" rx="4" class="cadre-neutre" /><rect x="240" y="120" width="90" height="50" rx="4" class="cadre-resultat" /><line x1="50" y1="170" x2="350" y2="170" class="trait" /><text x="115" y="38" text-anchor="middle">25 bp</text><text x="285" y="112" text-anchor="middle">10 bp</text><text x="115" y="192" text-anchor="middle" class="petite-etiquette">2 trades</text><text x="285" y="192" text-anchor="middle" class="petite-etiquette">4 trades</text><text x="115" y="212" text-anchor="middle" class="petite-etiquette">before cutoff</text><text x="285" y="212" text-anchor="middle" class="petite-etiquette">after cutoff</text><text x="220" y="240" text-anchor="middle" class="petite-etiquette">legacy threshold: 30 · verdict: inconclusive</text></svg><figcaption>Second diagram — two means calculated on either side of the first cutoff, their relative difference, and the trade counts compared with the legacy threshold. The numerical difference describes the fictional example; it does not settle the verdict.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For a given cutoff, a trade belongs to the past only if it exited before that cutoff, and to the segment only if it entered within the segment and exited before its end; otherwise it is excluded. A numerical difference between two means remains descriptive, and an inconclusive verdict is neither a success nor a failure.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Three cutoffs, seven fictional trades</h3><p>A fictional series contains 40 daily bars; the requested warmup is 10 bars and we want 3 test segments. Seven simulated trades, all invented, are described by their entry bar, exit bar and result in basis points (bp). A: entry 12, exit 18, 40 bp. B: entry 20, exit 24, 10 bp. C: entry 23, exit 28, 70 bp. D: entry 26, exit 29, 20 bp. E: entry 28, exit 33, 10 bp. F: entry 31, exit 34, 6 bp. G: entry 36, exit 39, 4 bp. We want to place the cutoffs, sort the trades, compare the past with the test period, then read the verdict.</p><ol class="etapes"><li><h3>Define the symbols and assumptions</h3><p>A bar is a period in the series, here a fictional day, numbered in chronological order. N is the number of bars in the series (40 here). w is the warmup, in bars, that the simulator requires before it can assess results (10 here). K is the number of successive test segments (3 here). A cutoff s is a bar number; e is the bar where the test segment ends, with that bar excluded.</p><p>A trade has three numbers: its entry bar a, its exit bar b, with a &lt; b, and its result p. The result p is expressed in basis points (bp): one bp is one hundredth of a percent of the amount invested.</p><p>Assumptions for this example: a single simulation covers the entire series and the strategy is not tuned segment by segment; the result p is known only at bar b; all values are fictional and represent no real market.</p></li><li><h3>Place the cutoffs</h3><p>The first cutoff s<sub>p</sub> is placed halfway between the warmup and the end, leaving an actual past interval before it:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>p</mi></msub><mo>=</mo><mfrac><mrow><mi>N</mi><mo>+</mo><mi>w</mi></mrow><mrow><mn>2</mn></mrow></mfrac></mrow></math></div><p>Calculation: N + w = 40 + 10 = 50, then 50 / 2 = 25. Check: 25 &gt; 10, and 25 − 10 = 15 = 40 − 25.</p><p>The test segments all have the same length L, and the last extends to the end of the series:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><mrow><mi>N</mi><mo>−</mo><msub><mi>s</mi><mi>p</mi></msub></mrow><mrow><mi>K</mi></mrow></mfrac></mrow></math></div><p>Calculation: L = (40 − 25) / 3 = 15 / 3 = 5 bars. Each subsequent cutoff adds L to the previous one:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>j</mi><mo>+</mo><mn>1</mn></msub><mo>=</mo><msub><mi>s</mi><mi>j</mi></msub><mo>+</mo><mi>L</mi></mrow></math></div><p>Thus 30 = 25 + 5, then 35 = 30 + 5. The last segment runs from 35 to 40, covering 5 bars. Check: 5 + 5 + 5 = 15, exactly the bars after the first cutoff. In the reviewed code, both divisions use integer division; the values in this example are chosen so that both divide exactly.</p></li><li><h3>Sort the trades at the first cutoff</h3><p>For a cutoff s and the end e of the segment that follows it, there are two sorting rules:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>passé :</mtext><mi>b</mi><mo>&lt;</mo><mi>s</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>segment :</mtext><mi>s</mi><mo>≤</mo><mi>a</mi><mtext>et</mtext><mi>b</mi><mo>&lt;</mo><mi>e</mi></mrow></math></div><p>Reason: the result exists only at the exit bar. A trade whose exit is not strictly before the cutoff includes bars that the cutoff does not yet know.</p><p>At cutoff 25: A (exit 18) and B (exit 24) exit before it, so they belong to the past. C enters at bar 23, which is 2 bars before the cutoff, and exits at bar 28, which is 3 bars after it: it crosses the cutoff and is excluded from the past. D, E, F and G enter at or after bar 25: they belong to the test period.</p><p>Check: 2 trades in the past, 4 in the test period and 1 excluded make 7, the seven original trades.</p></li><li><h3>Advance the cutoff: the next segment</h3><p>At cutoff 30, the past consists of all trades that exited before bar 30: A, B, C (exit 28) and D (exit 29), making 4 trades. C, excluded at the previous cutoff, now belongs to the past: its exit is finally earlier than the cutoff. It was deferred rather than lost.</p><p>The segment from 30 to 35 (excluded) contains F: entry 31, exit 34. E enters at bar 28 but exits at bar 33: it crosses cutoff 30, so it is left out of the segment. The code therefore keeps two counts: one per segment, requiring entry and exit within it, and one for the entire test period, retaining every trade entered at or after the first cutoff. The next step uses the second count.</p></li><li><h3>Summarize the past and the test period</h3><p>Past at the first cutoff: A and B. Sum: 40 + 10 = 50 bp across 2 trades, giving a mean of 25 bp. Test period: D, E, F, G. Sum: 20 + 10 = 30, then 30 + 6 = 36, then 36 + 4 = 40 bp across 4 trades, giving a mean of 10 bp.</p><p>Relative degradation compares the two means, using the mean for the past as the reference:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><mfrac><mrow><msub><mi>m</mi><mtext>passé</mtext></msub><mo>−</mo><msub><mi>m</mi><mtext>test</mtext></msub></mrow><mrow><mo>|</mo><msub><mi>m</mi><mtext>passé</mtext></msub><mo>|</mo></mrow></mfrac><mo>×</mo><mn>100</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mn>25</mn><mo>−</mo><mn>10</mn></mrow><mrow><mn>25</mn></mrow></mfrac><mo>×</mo><mn>100</mn><mo>=</mo><mn>60</mn></mrow></math></div><p>Calculation: a difference of 15 bp, a ratio of 0.60, giving 60 %. Check: 10 + 15 = 25. This number describes these seven fictional trades; it says nothing about a real strategy.</p></li><li><h3>Measure the effect of leakage</h3><p>Suppose we wrongly assign C to the past. The sum becomes 50 + 70 = 120 bp across 3 trades, giving a mean of 40 bp. Degradation becomes (40 − 10) / 40 × 100 = 75 %, instead of 60 %. The figure shifts by 15 percentage points.</p><p>Reason: C’s result depends on bars 25 to 28, which are already in the test period. This shift applies to the fictional result chosen for C; it is not a general cost of leakage, only evidence that leakage can change the conclusion we think we see.</p></li><li><h3>Read the inconclusive verdict</h3><p>Counts: 2 trades in the past and 4 in the test period, compared with a legacy sample-count threshold of 30. The shortfalls are 30 − 2 = 28 on one side and 30 − 4 = 26 on the other; the code adds a count warning, described as descriptive and never as a confidence gate.</p><p>Above all, the reviewed code performs no inference: its note says so, sets a p-value of 1.0 and an effect size of 0.0 as compatibility placeholders, and returns an inconclusive verdict in every case. Our 60 % therefore remains descriptive accounting: evidence of neither overfitting nor robustness.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain without looking at the page: why trade C is excluded at cutoff 25 but admitted to the past at cutoff 30, and why a degradation of 60 % does not allow you to say that the strategy is bad.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A trade entered before the cutoff belongs to the past, even if it exits after it”</h3><p>Its result exists only at exit. Compare the exit bar with the cutoff: strictly before it for the past. A trade that enters before and exits after crosses the cutoff and remains excluded.</p><a href="#exemple">Review the sorting of trade C at the first cutoff</a></li><li><h3>“A trade excluded at one cutoff is lost for all later cutoffs”</h3><p>Exclusion depends on the cutoff being considered. At the next cutoff, the exit may now be earlier than the cutoff: the trade then joins the past, like C at cutoff 30. Sort the trades again at each cutoff.</p><a href="#exercices">Find this change of category in the sorting exercise</a></li><li><h3>“A numerical degradation is enough to declare a strategy robust or overfit”</h3><p>The reviewed code calculates the difference without inference and always returns an inconclusive verdict. A figure such as 60 % describes a fictional sample; it does not measure uncertainty, dependence between neighboring trades, or strategy selection.</p><a href="#jalon"><span class="milestone-label">Reread the cited code lines and their limitations</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-coupures"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Place the cutoffs in another series</h3><p>Another fictional series contains 52 bars, with a warmup of 12 bars and 4 test segments. Calculate the first cutoff and the length of a segment, then check that the cutoff leaves an actual past interval.</p>
+<label for="reponse-ex-coupures">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-coupures" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-coupures" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-coupures" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-coupures" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add the number of bars and the warmup before dividing by two.</p></details><details class="indice"><summary>Hint 2</summary><p>The length of a segment is the number of bars after the first cutoff, divided by the number of segments.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Sum: 52 + 12 = 64, then 64 / 2 = 32: the first cutoff is at bar 32. Bars after it: 52 − 32 = 20, and 20 / 4 = 5 bars per segment.</p><p>Check: 32 &gt; 12, and 5 × 4 = 20. The values are chosen so that the divisions are exact; otherwise, in the reviewed code, the last segment would absorb the remainder.</p><p class="petit-titre">Check your reasoning</p><ul><li>Add before dividing by two.</li><li>Check that the cutoff is after the warmup.</li><li>Check that the number of segments times their length gives the number of bars after the cutoff.</li></ul></details></article><article class="exercice" id="ex-tri"><p class="repere">Exercise 2 · Guided transfer</p>
+<h3>Sort two trades that cross a boundary</h3><p>Using cutoffs 30 and 35 from the example, consider two fictional trades: H enters at bar 29 and exits at bar 32; J enters at bar 31 and exits at bar 35. For each, say whether it belongs to the past at cutoff 30, to the segment from 30 to 35, or is excluded, then whether it belongs to the past at cutoff 35. Justify your answer using the rule.</p>
+<label for="reponse-ex-tri">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-tri" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-tri" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-tri" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-tri" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For the past, first look at the exit bar: must it be strictly before the cutoff?</p></details><details class="indice"><summary>Hint 2</summary><p>For the segment, entry must be at or after the cutoff and exit strictly before the end of the segment.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>H: entry 29 before 30, exit 32 after it, which is 2 bars after the cutoff. It crosses the cutoff: excluded from the past and from the segment at cutoff 30. But 32 is before 35: at cutoff 35, H belongs to the past.</p><p>J: entry 31 at or after 30, but exit 35 is not strictly before the end 35: margin 35 − 35 = 0. It is excluded from the segment. It does not belong to the past at cutoff 35 either, because its exit 35 is not before 35. A 0 margin means exclusion: the comparison is strict.</p><p class="petit-titre">Check your reasoning</p><ul><li>Compare the exit with the cutoff using a strict inequality.</li><li>Require entry and exit within the segment to count the trade in it.</li><li>Sort again at each cutoff instead of keeping the first answer.</li></ul></details></article><article class="exercice" id="ex-verdict"><p class="repere">Exercise 3 · Open explanation</p>
+<h3>A verdict despite large samples?</h3><p>Another fictional simulation gives 45 trades in the past and 36 in the test period, with means of 20 bp and 18 bp. Both counts exceed the legacy sample-count threshold of 30. Calculate degradation, then say what verdict the reviewed code would return and why you would not conclude “robust”.</p>
+<label for="reponse-ex-verdict">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-verdict" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-verdict" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-verdict" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-verdict" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Apply the degradation formula from the example, using the two given means.</p></details><details class="indice"><summary>Hint 2</summary><p>Reread what the verdict step says about inference and the role of the threshold.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Difference: 20 − 18 = 2 bp, ratio 0.10, giving 10 %. Check: 18 + 2 = 20.</p><p>The counts exceed 30: the count warning disappears. The reviewed code still performs no inference and returns an inconclusive verdict. The figure of 10 % describes these fictional data; it does not measure uncertainty, dependence between neighboring trades, or the effect of choosing the strategy after the fact. This reading applies to the file cited at the milestone, not to another version.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the difference, then divide it by the mean for the past.</li><li>State that the verdict is inconclusive, not robust.</li><li>Explain that exceeding the threshold does not replace inference.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="carte-coupure"><summary><span class="repere">Recall 1</span><span>How is the first cutoff placed in this version, and what must it leave before it?</span></summary><p>Halfway between the warmup and the end: (N + w) / two. It must be after the warmup to leave an actual past interval.</p></details><details class="carte" data-carte="carte-tri"><summary><span class="repere">Recall 2</span><span>What rule assigns a trade to the past at a cutoff, and what rule assigns it to that cutoff’s segment?</span></summary><p>Past: exit strictly before the cutoff. Segment: entry at or after the cutoff and exit strictly before the end of the segment. Otherwise, excluded at this cutoff.</p></details><details class="carte" data-carte="carte-fuite"><summary><span class="repere">Recall 3</span><span>Why must a trade crossing a cutoff not be counted in the past?</span></summary><p>Its result exists only at exit and depends on bars after the cutoff: counting it in the past uses future information to judge what came before.</p></details><details class="carte" data-carte="carte-verdict"><summary><span class="repere">Recall 4</span><span>What does an inconclusive verdict mean, even with a numerical degradation?</span></summary><p>The calculation establishes neither robustness nor overfitting: the code performs no inference and the difference remains descriptive. Inconclusive does not mean bad.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct the sequence from memory: place a first cutoff between the warmup and the end, divide the test period into equal segments, then, at each cutoff, assign each trade using its two bars (past, segment or excluded). Calculate means and degradation using this sorting without leakage, compare the sample counts with the threshold, and conclude that the verdict remains inconclusive because the difference describes without inferring.</p></div><div class="exports"><a class="bouton" download="c098-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTgtbTU6Y2FydGUtY291cHVyZSIsCiAgICAgICJ1bml0ZSI6ICJjMDk4LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJlbWnDqHJlIGNvdXB1cmUiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGlzIHRoZSBmaXJzdCBjdXRvZmYgcGxhY2VkIGluIHRoaXMgdmVyc2lvbiwgYW5kIHdoYXQgbXVzdCBpdCBsZWF2ZSBiZWZvcmUgaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiSGFsZndheSBiZXR3ZWVuIHRoZSB3YXJtdXAgYW5kIHRoZSBlbmQ6IChOICsgdykgLyB0d28uIEl0IG11c3QgYmUgYWZ0ZXIgdGhlIHdhcm11cCB0byBsZWF2ZSBhbiBhY3R1YWwgcGFzdCBpbnRlcnZhbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OC1tNTpjYXJ0ZS10cmkiLAogICAgICAidW5pdGUiOiAiYzA5OC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInRyaSBkZXMgdHJhbnNhY3Rpb25zIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgcnVsZSBhc3NpZ25zIGEgdHJhZGUgdG8gdGhlIHBhc3QgYXQgYSBjdXRvZmYsIGFuZCB3aGF0IHJ1bGUgYXNzaWducyBpdCB0byB0aGF0IGN1dG9mZuKAmXMgc2VnbWVudD8iLAogICAgICAicmVwb25zZSI6ICJQYXN0OiBleGl0IHN0cmljdGx5IGJlZm9yZSB0aGUgY3V0b2ZmLiBTZWdtZW50OiBlbnRyeSBhdCBvciBhZnRlciB0aGUgY3V0b2ZmIGFuZCBleGl0IHN0cmljdGx5IGJlZm9yZSB0aGUgZW5kIG9mIHRoZSBzZWdtZW50LiBPdGhlcndpc2UsIGV4Y2x1ZGVkIGF0IHRoaXMgY3V0b2ZmLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk4LW01OmNhcnRlLWZ1aXRlIiwKICAgICAgInVuaXRlIjogImMwOTgtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmdWl0ZSB0ZW1wb3JlbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBtdXN0IGEgdHJhZGUgY3Jvc3NpbmcgYSBjdXRvZmYgbm90IGJlIGNvdW50ZWQgaW4gdGhlIHBhc3Q/IiwKICAgICAgInJlcG9uc2UiOiAiSXRzIHJlc3VsdCBleGlzdHMgb25seSBhdCBleGl0IGFuZCBkZXBlbmRzIG9uIGJhcnMgYWZ0ZXIgdGhlIGN1dG9mZjogY291bnRpbmcgaXQgaW4gdGhlIHBhc3QgdXNlcyBmdXR1cmUgaW5mb3JtYXRpb24gdG8ganVkZ2Ugd2hhdCBjYW1lIGJlZm9yZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OC1tNTpjYXJ0ZS12ZXJkaWN0IiwKICAgICAgInVuaXRlIjogImMwOTgtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2ZXJkaWN0IGluZMOpdGVybWluw6kiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGFuIGluY29uY2x1c2l2ZSB2ZXJkaWN0IG1lYW4sIGV2ZW4gd2l0aCBhIG51bWVyaWNhbCBkZWdyYWRhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgY2FsY3VsYXRpb24gZXN0YWJsaXNoZXMgbmVpdGhlciByb2J1c3RuZXNzIG5vciBvdmVyZml0dGluZzogdGhlIGNvZGUgcGVyZm9ybXMgbm8gaW5mZXJlbmNlIGFuZCB0aGUgZGlmZmVyZW5jZSByZW1haW5zIGRlc2NyaXB0aXZlLiBJbmNvbmNsdXNpdmUgZG9lcyBub3QgbWVhbiBiYWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c098-m5-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGlzIHRoZSBmaXJzdCBjdXRvZmYgcGxhY2VkIGluIHRoaXMgdmVyc2lvbiwgYW5kIHdoYXQgbXVzdCBpdCBsZWF2ZSBiZWZvcmUgaXQ/CUhhbGZ3YXkgYmV0d2VlbiB0aGUgd2FybXVwIGFuZCB0aGUgZW5kOiAoTiArIHcpIC8gdHdvLiBJdCBtdXN0IGJlIGFmdGVyIHRoZSB3YXJtdXAgdG8gbGVhdmUgYW4gYWN0dWFsIHBhc3QgaW50ZXJ2YWwuCXRvZGFpIGMwOTgtbTUgcHJlbWnDqHJlIGNvdXB1cmUKV2hhdCBydWxlIGFzc2lnbnMgYSB0cmFkZSB0byB0aGUgcGFzdCBhdCBhIGN1dG9mZiwgYW5kIHdoYXQgcnVsZSBhc3NpZ25zIGl0IHRvIHRoYXQgY3V0b2Zm4oCZcyBzZWdtZW50PwlQYXN0OiBleGl0IHN0cmljdGx5IGJlZm9yZSB0aGUgY3V0b2ZmLiBTZWdtZW50OiBlbnRyeSBhdCBvciBhZnRlciB0aGUgY3V0b2ZmIGFuZCBleGl0IHN0cmljdGx5IGJlZm9yZSB0aGUgZW5kIG9mIHRoZSBzZWdtZW50LiBPdGhlcndpc2UsIGV4Y2x1ZGVkIGF0IHRoaXMgY3V0b2ZmLgl0b2RhaSBjMDk4LW01IHRyaSBkZXMgdHJhbnNhY3Rpb25zCldoeSBtdXN0IGEgdHJhZGUgY3Jvc3NpbmcgYSBjdXRvZmYgbm90IGJlIGNvdW50ZWQgaW4gdGhlIHBhc3Q/CUl0cyByZXN1bHQgZXhpc3RzIG9ubHkgYXQgZXhpdCBhbmQgZGVwZW5kcyBvbiBiYXJzIGFmdGVyIHRoZSBjdXRvZmY6IGNvdW50aW5nIGl0IGluIHRoZSBwYXN0IHVzZXMgZnV0dXJlIGluZm9ybWF0aW9uIHRvIGp1ZGdlIHdoYXQgY2FtZSBiZWZvcmUuCXRvZGFpIGMwOTgtbTUgZnVpdGUgdGVtcG9yZWxsZQpXaGF0IGRvZXMgYW4gaW5jb25jbHVzaXZlIHZlcmRpY3QgbWVhbiwgZXZlbiB3aXRoIGEgbnVtZXJpY2FsIGRlZ3JhZGF0aW9uPwlUaGUgY2FsY3VsYXRpb24gZXN0YWJsaXNoZXMgbmVpdGhlciByb2J1c3RuZXNzIG5vciBvdmVyZml0dGluZzogdGhlIGNvZGUgcGVyZm9ybXMgbm8gaW5mZXJlbmNlIGFuZCB0aGUgZGlmZmVyZW5jZSByZW1haW5zIGRlc2NyaXB0aXZlLiBJbmNvbmNsdXNpdmUgZG9lcyBub3QgbWVhbiBiYWQuCXRvZGFpIGMwOTgtbTUgdmVyZGljdCBpbmTDqXRlcm1pbsOpCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qiloqz zjaptt avxf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Read the simulator’s walk-forward procedure without drawing a verdict from it</h3><dl><div><dt>What you understand</dt><dd>A walk-forward procedure places successive cutoffs and sorts each simulated trade using its two bars: only a trade that exited before the cutoff belongs to the past. In this example, C crosses the first cutoff, then joins the past at the next one. An inconclusive verdict says that the calculation establishes nothing, not that the strategy is bad.</dd></div><div><dt>Existing code and source</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">omczsx sbrjpx cpmrdz mtwuvz ovusmk qfeaoz bvjvcc zlfaku bwokqv uszssb qxjndp qaxoul pyszpq etjsgk dmgeao gqfiuu guhgaj tohsqj rxnsuo jxyilf jhaqpm ddiwxa nwqglp oxijfo ofvtxc ebjknn zpqrhk jtxplw nbppth xaaayg benzxa kwmjnc gctwux guqgnr vvgkeq cbanub dduvbj re</span></span></dd></div><div><dt>Level to prepare for</dt><dd>To prepare: sort a new set of trades around three cutoffs without support, recalculate degradation with and without the trade crossing the cutoff, then explain aloud why the verdict remains inconclusive. Reading this page or completing an exercise with a hint does not demonstrate that you have reached any level; only a later attempt without help can show that.</dd></div><div><dt>Evidence and what remains unestablished</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mpqojs epxlte ivnhqv ejnvqp wwhjgb lawkus jyxuqd jfbhmp myukyy ykhrgk tmhmwx ixdxmn gzjzux kxbxbl nxbkak xwjvox fubxzq onojeg ksffek peyivd zlwzqy wdsbfa wmxuae dkjqkz hujibm aohpvi nkuzxe edzntw xwosai kwqlrq nqbbes yuhvzz mzryzq pwsvrv rdlhaf dgypnc dlksmm ta</span></span></dd></div><div><dt>Next step</dt><dd>Find the method’s actual caller and how trades are constructed (entry and exit bars) in other files, using authorized data, before saying whether this division ever informs a decision. Then compare this sorting by trades with sorting by observations whose labels have a horizon, covered elsewhere in the book, keeping the two distinct.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c098-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c098-m4.html">Previous</a> · <a href="c099-m1.html">Next</a></nav>
+<footer><p>Course book · C098·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

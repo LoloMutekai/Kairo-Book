@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Normalize the pre-activations of a unit over a small batch: center them, divide by the square root of σ² + ε, then restore scale and shift with γ and β, while checking the mean and variance.">
+<title>C103·M4 · Normalization — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zrurdx rdkggj dutw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C103·M4</p><h1>Normalization</h1><p class="objectif"><span>Your goal</span>Normalize the pre-activations of a unit over a small batch: center them, divide by the square root of σ² + ε, then restore scale and shift with γ and β, while checking the mean and variance.</p><p class="prerequis"><strong>Before you start</strong><br>c102-m5 : finite-difference checking · c099-m5 : probability calibration · c067-m5 : pipeline · c103-m1 : initialization · c103-m2 : activations · c103-m3 : optimizers</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A unit in a dense layer computes, for each example, a weighted sum of its inputs plus a bias. We call this number the pre-activation z: it is the input to the activation function. Take a fictional unit and a small batch of 3 examples processed together. Its pre-activations are z<sub>1</sub> = 1, z<sub>2</sub> = 4 and z<sub>3</sub> = 10, in arbitrary units (a.u.).</p><p>During training, the weights of the preceding layers change at each step. The z values of a given unit can therefore shift or spread out from one batch to the next, and the activation function receiving them may encounter a different scale each time. Batch normalization acts inside the network: it centers the batch z values around 0, brings their spread to a comparable scale, then lets the network choose the final scale.</p><p>There are three successive steps. Center: subtract the batch mean μ. Scale: divide by a batch standard deviation, computed with a small quantity ε added to the variance to prevent division by 0. Restore: multiply by a factor γ and add a shift β. Like the weights, γ and β are parameters that the optimizer can adjust; here we fix them and train nothing. Without this last step, each unit would be restricted to a mean of 0, which could deprive the next layer of a useful adjustment.</p><p>This calculation resembles standardizing a data column in a pipeline (c067-m5). The difference is where and when it happens: here the mean and variance come from the current batch, inside the network, and are recalculated for each batch.</p><p>The values are fictional. They are chosen to give exact square roots; they do not come from any trained network. This page teaches the calculation, rather than its effect: it measures no improvement in training.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Before and after centering a batch</title><desc>Three pre-activations are 1, 4 and 10 arbitrary units, with mean 5. After centering and scaling, they are -1.07, -0.27 and 1.33, with mean 0, and retain their order.</desc><text x="180" y="20" text-anchor="middle" class="petite-etiquette">Before: z, in arbitrary units</text><line x1="20" y1="70" x2="340" y2="70" class="trait" /><line x1="180" y1="56" x2="180" y2="84" class="trait" /><text x="188" y="100" class="petite-etiquette">μ = 5</text><text x="68" y="50" text-anchor="middle" class="petite-etiquette">z₁ = 1</text><text x="152" y="50" text-anchor="middle" class="petite-etiquette">z₂ = 4</text><text x="320" y="50" text-anchor="middle" class="petite-etiquette">z₃ = 10</text><circle cx="68" cy="70" r="7" class="point-prediction" /><circle cx="152" cy="70" r="7" class="point-prediction" /><circle cx="320" cy="70" r="7" class="point-prediction" /><line x1="68" y1="77" x2="73" y2="153" class="trait" /><line x1="152" y1="77" x2="153" y2="153" class="trait" /><line x1="320" y1="77" x2="313" y2="153" class="trait" /><line x1="20" y1="160" x2="340" y2="160" class="trait" /><line x1="180" y1="146" x2="180" y2="174" class="trait" /><text x="188" y="136" class="petite-etiquette">mean 0</text><circle cx="73" cy="160" r="7" class="point-mesure" /><circle cx="153" cy="160" r="7" class="point-mesure" /><circle cx="313" cy="160" r="7" class="point-mesure" /><text x="73" y="190" text-anchor="middle" class="petite-etiquette">ẑ₁ = -1.07</text><text x="153" y="212" text-anchor="middle" class="petite-etiquette">ẑ₂ = -0.27</text><text x="313" y="190" text-anchor="middle" class="petite-etiquette">ẑ₃ = 1.33</text><text x="180" y="234" text-anchor="middle" class="petite-etiquette">After: ẑ, dimensionless</text></svg><figcaption>Centering shifts the points around 0 and changes their scale, while preserving their order. Fictional values, positions drawn by hand.</figcaption></figure><figure><svg viewBox="0 0 360 350" xmlns="http://www.w3.org/2000/svg" role="img"><title>The steps of batch normalization</title><desc>The batch of pre-activations 1, 4 and 10 gives mean 5 and variance 14. With ε equal to 1/16, the square root is 15/4. The standardized values then use γ equal to 2 and β equal to 1.</desc><rect x="25" y="12" width="310" height="60" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">Batch of 3 examples, one unit</text><text x="180" y="62" text-anchor="middle">z₁ = 1 ; z₂ = 4 ; z₃ = 10</text><line x1="180" y1="72" x2="180" y2="100" class="trait" /><text x="192" y="92" class="petite-etiquette">Batch μ and σ²</text><rect x="25" y="100" width="310" height="60" rx="7" class="cadre-prediction" /><text x="180" y="126" text-anchor="middle">μ = 5 ; σ² = 14</text><text x="180" y="150" text-anchor="middle">ε = 1/16 ; σ² + ε = 225/16</text><line x1="180" y1="160" x2="180" y2="188" class="trait" /><text x="192" y="180" class="petite-etiquette">root: 15/4</text><rect x="25" y="188" width="310" height="60" rx="7" class="cadre-neutre" /><text x="180" y="214" text-anchor="middle">ẑ = (z − μ) / √(σ² + ε)</text><text x="180" y="238" text-anchor="middle">-16/15 ; -4/15 ; 4/3</text><line x1="180" y1="248" x2="180" y2="276" class="trait" /><text x="192" y="268" class="petite-etiquette">γ = 2 ; β = 1</text><rect x="25" y="276" width="310" height="60" rx="7" class="cadre-resultat" /><text x="180" y="302" text-anchor="middle">y = γẑ + β</text><text x="180" y="326" text-anchor="middle">-17/15 ; 7/15 ; 11/3</text></svg><figcaption>Each box uses the result of the previous one. The numbers are those of the complete example: read them from top to bottom before recalculating them.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Center using μ, scale by dividing by √(σ² + ε), then restore the scale with γ and the shift with β; the mean and variance come from the batch, one unit at a time.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Normalize three pre-activations of a unit</h3><p>A batch of 3 examples gives a fictional unit the pre-activations z₁ = 1, z₂ = 4 and z₃ = 10 a.u. We fix ε = 1/16 a.u.² (0.0625 in decimal form), γ = 2 and β = 1. Let us calculate the output y for each example, then check its mean and variance.</p><ol class="etapes"><li><h3>Define the quantities and assumptions</h3><p>n is the number of examples in the batch, here 3. For example i, with i from 1 to n, the pre-activation of a single unit is written z, indexed by i, in a.u. μ is the batch mean, in a.u. σ² is the batch variance, in a.u.²: the mean of the squared deviations from μ, dividing by n. ε is a strictly positive real number, in the same units as σ². ẑ is the standardized value, which is dimensionless. γ, dimensionless, and β, in a.u., are the output scale and shift; y is the output.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>μ</mi><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>z</mi><mi>i</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msub><mi>z</mi><mi>i</mi></msub><mo>−</mo><mi>μ</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>Assumptions: only one unit is processed at a time; the statistics come from the entire batch itself; ε is the same for every example. Dividing by n, rather than n − 1, is a convention here; the third exercise compares the two.</p></li><li><h3>Center: mean and deviations</h3><p>We add the three values: 1 + 4 = 5, then 5 + 10 = 15. Dividing by n gives the mean: μ = 15 / 3 = 5 a.u. We then subtract μ from each value: d<sub>1</sub> = 1 − 5 = -4, d<sub>2</sub> = 4 − 5 = -1 and d<sub>3</sub> = 10 − 5 = 5.</p><p>Check: a mean is a balance point, so the deviations cancel out. Here -4 + (-1) + 5 = 0. If this sum is not 0, the error is in μ or in a subtraction.</p></li><li><h3>Measure the spread: batch variance</h3><p>Deviations with opposite signs would cancel in a simple sum, so we square them: the square of -4 is 16, that of -1 is 1 and that of 5 is 25, in a.u.² Their sum is 16 + 1 + 25 = 42. We divide by n: σ² = 42 / 3 = 14 a.u.²</p><p>Check by another method: the mean of the squared z values, minus the square of the mean, gives the same variance. This second method, recalculated separately in the unit checking file, also gives 14.</p></li><li><h3>Prepare the denominator with ε</h3><p>We add ε to the variance: σ² + ε = 14 + 1/16 = 225/16 a.u.² We still need to find a positive r such that r² = 225/16. We look for a numerator and a denominator whose squares match those of the fraction: 15 and 4 work. So r = 15 over 4, or 15/4 a.u. (3.75 in decimal form).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msqrt><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>+</mo><mi>ε</mi></mrow></msqrt><mo>=</mo><msqrt><mn>225/16</mn></msqrt><mo>=</mo><mn>15/4</mn></mrow></math></div><p>Check: 15/4 × 15/4 = 225/16, which is indeed σ² + ε. The values were chosen to make this square root exact; in general, it is irrational and is computed numerically. ε acts as a safeguard: if σ² were 0, the denominator would remain strictly positive.</p></li><li><h3>Scale: divide each deviation</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>z</mi><mo>^</mo></mover><mi>i</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>z</mi><mi>i</mi></msub><mo>−</mo><mi>μ</mi></mrow><msqrt><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>+</mo><mi>ε</mi></mrow></msqrt></mfrac></mrow></math></div><p>Each deviation is divided by r = 15/4, which makes the value dimensionless: -4 divided by 15/4 gives ẑ<sub>1</sub> = -16/15 (≈ -1.07); -1 divided by 15/4 gives ẑ<sub>2</sub> = -4/15 (≈ -0.27); 5 divided by 15/4 gives ẑ<sub>3</sub> = 4/3 (≈ 1.33).</p><p>Check: their sum remains 0, so their mean does too. Their variance is σ² / (σ² + ε), or 14 divided by 225/16, giving 224/225, approximately 0.996. It approaches 1 without reaching it as long as ε is positive: stating “variance equal to one” would be inaccurate.</p></li><li><h3>Restore the scale: γ and β</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><mi>γ</mi><msub><mover><mi>z</mi><mo>^</mo></mover><mi>i</mi></msub><mo>+</mo><mi>β</mi></mrow></math></div><p>With γ = 2, we first multiply: 2 × (-16/15) = -32/15, 2 × (-4/15) = -8/15 and 2 × 4/3 = 8/3. Then we add β = 1: y<sub>1</sub> = -17/15 (≈ -1.13), y<sub>2</sub> = 7/15 (≈ 0.47) and y<sub>3</sub> = 11/3 (≈ 3.67).</p><p>Check: since the mean of ẑ is 0, the mean of y is β. Here the sum of the three outputs is n × β = 3 × 1, so the mean is 1. The variance of y is γ² times that of ẑ: 4 × 224/225 = 896/225, or approximately 3.98 a.u.²</p></li><li><h3>Interpret the result without overstating it</h3><p>The same z placed in another batch would receive a different value of ẑ, because μ and σ² depend on the entire batch. This dependence follows from the calculation; it is not a data entry error.</p><p>This unit establishes neither that such normalization speeds up real training nor that ε = 1/16 is a good setting: ε is large here to keep the fractions readable. It also does not cover backpropagation through μ and σ², or the use of stored statistics to process an isolated example after training.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain why ε is placed under the square root, alongside σ², and why the variance of ẑ stays slightly below one as long as ε is positive. Also say how γ and β change the mean and variance of the output.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“After normalization, the output always has a mean of 0 and a variance of one.”</h3><p>Only the standardized value ẑ is centered, and its variance is σ² / (σ² + ε), so slightly less than 1. The output y has mean β = 1 and variance γ² times that of ẑ, or 3.98 a.u.² in the example.</p><a href="#exemple">Review the step that restores the scale</a></li><li><h3>“To scale, divide the deviation by the variance.”</h3><p>The variance is in a.u.² and the deviation in a.u.: the quotient would retain inverse units. You must divide by the square root. In the example, dividing d₁ = -4 by 225/16 would give -0.28, instead of ẑ₁ = -1.07.</p><a href="#exemple">Review the preparation of the denominator</a></li><li><h3>“A batch containing a single example is normalized like any other.”</h3><p>With a single example, the mean is that example, the deviation is 0 and so is the variance: ẑ is 0 regardless of z, and the output is β. Without ε, we would divide 0 by 0. The second exercise covers this limiting case with a constant batch.</p><a href="#exercices">Work through the constant batch</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-autre-echelle"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>A different scale and shift</h3><p>Use the standardized values ẑ₁, ẑ₂ and ẑ₃ from the example again. This time set γ = 3 and β = 5. Calculate the three outputs and check that their sum is n × β.</p>
+<label for="reponse-ex-autre-echelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-autre-echelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-autre-echelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-autre-echelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-autre-echelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>There is nothing to recalculate before multiplying: ẑ depends on neither γ nor β.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply each ẑ by γ, then add β. To check, compare the sum of the outputs with 3 × 5.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Multiplications: 3 × (-16/15) = -16/5, 3 × (-4/15) = -4/5 and 3 × 4/3 = 4.</p><p>Adding β = 5: y<sub>1</sub> = 9/5 (≈ 1.80), y<sub>2</sub> = 21/5 (≈ 4.20) and y<sub>3</sub> = 9.</p><p>Check: the sum of the three outputs is 3 × 5, so the mean is 5. The ẑ values have not changed: γ and β act after scaling.</p><p class="petit-titre">Check your reasoning</p><ul><li>ẑ reused without computing a new mean or variance.</li><li>Multiplication by γ before adding β.</li><li>Output mean equal to β, checked using the sum.</li></ul></details></article><article class="exercice" id="ex-lot-constant"><p class="repere">Exercise 2 · Limiting case</p>
+<h3>A batch in which all values are equal</h3><p>The three pre-activations in a batch are all 5 a.u. With ε = 1/16, γ = 2 and β = 1, calculate μ, σ², the denominator, ẑ and y. What would happen if ε were 0?</p>
+<label for="reponse-ex-lot-constant">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-lot-constant" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-lot-constant" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-lot-constant" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-lot-constant" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the deviations from the mean: all the numbers are equal.</p></details><details class="indice"><summary>Hint 2</summary><p>For the denominator, find a positive r such that r² = ε, since σ² is 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mean of three values equal to 5 is 5. Each deviation is 0, so σ² = 0.</p><p>The denominator is √(0 + 1/16) = 1/4, because 1/4 × 1/4 = 1/16. Then ẑ = 0 divided by 1/4, giving 0, for each example, and y = 2 × 0 + 1 = 1.</p><p>With ε equal to 0, we would have 0 / 0: the value is undefined. With positive ε, the output exists, but it no longer depends on z: the batch passes on no information about the inputs, only β.</p><p class="petit-titre">Check your reasoning</p><ul><li>0 deviations, hence 0 variance.</li><li>Positive square root of ε calculated and checked.</li><li>Conclusion that the output is β for every example.</li><li>Case of 0 ε identified as undefined division.</li></ul></details></article><article class="exercice" id="ex-diviser-par-n-moins-un"><p class="repere">Exercise 3 · Transfer</p>
+<h3>Divide by n or by n − one</h3><p>The code reviewed in the milestone standardizes a column using the sample standard deviation, which divides the sum of squared deviations by n − 1. For the batch in the example, calculate this variance, compare it with σ² computed by dividing by n, and give their ratio.</p>
+<label for="reponse-ex-diviser-par-n-moins-un">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-diviser-par-n-moins-un" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-diviser-par-n-moins-un" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-diviser-par-n-moins-un" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-diviser-par-n-moins-un" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>You already know the sum of squared deviations from the variance step.</p></details><details class="indice"><summary>Hint 2</summary><p>Divide it by n − 1, then divide this result by the batch variance.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>We have n − 1 = 2. The sample variance is 42 / 2 = 21 a.u.², compared with 14 a.u.² when dividing by n.</p><p>The ratio is 21 / 14 = 3/2, that is, n / (n − 1): the same sum is divided by a smaller number. The standard deviation, and therefore the standardized values, also change.</p><p>Neither convention is “the true one”: you must choose and remain consistent. The difference decreases as n grows, since n / (n − 1) approaches 1. For a batch of 3 examples, it is still substantial.</p><p class="petit-titre">Check your reasoning</p><ul><li>Same sum of squares reused.</li><li>Ratio equal to n / (n − one).</li><li>Neither convention presented as the only correct one.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="statistiques-du-lot"><summary><span class="repere">Recall 1</span><span>Which statistics are used to normalize a unit, and what are they calculated over?</span></summary><p>The mean μ and variance σ² of that unit’s pre-activations, calculated over the examples in the current batch. Each unit has its own μ and σ².</p></details><details class="carte" data-carte="epsilon"><summary><span class="repere">Recall 2</span><span>Why divide by √(σ² + ε) rather than by σ?</span></summary><p>ε, strictly positive and in the same units as σ², prevents division by 0 when the batch is constant. It also makes the variance of ẑ slightly less than 1.</p></details><details class="carte" data-carte="gamma-beta"><summary><span class="repere">Recall 3</span><span>What are the mean and variance of y = γẑ + β?</span></summary><p>The mean is β, because the mean of ẑ is 0. The variance is γ² times the variance of ẑ, or γ² σ² / (σ² + ε).</p></details><details class="carte" data-carte="dependance-du-lot"><summary><span class="repere">Recall 4</span><span>Why does the output for one example depend on the other examples in the batch?</span></summary><p>Because μ and σ² come from the entire batch: the same z, in another batch, receives a different ẑ. In a batch containing a single example, ẑ is always 0.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>One unit, one batch: calculate μ, then σ² by dividing by n; form √(σ² + ε), with ε positive and in the units of σ²; divide each deviation by this square root to obtain ẑ, with mean 0 and variance σ² / (σ² + ε); apply γ, then β to obtain y, with mean β. Keep the assumptions in mind: batch statistics, fictional values, no measured improvement in training.</p></div><div class="exports"><a class="bouton" download="c103-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTQ6c3RhdGlzdGlxdWVzLWR1LWxvdCIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3RhdGlzdGlxdWVzIGR1IGxvdCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBzdGF0aXN0aWNzIGFyZSB1c2VkIHRvIG5vcm1hbGl6ZSBhIHVuaXQsIGFuZCB3aGF0IGFyZSB0aGV5IGNhbGN1bGF0ZWQgb3Zlcj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiDOvCBhbmQgdmFyaWFuY2Ugz4PCsiBvZiB0aGF0IHVuaXTigJlzIHByZS1hY3RpdmF0aW9ucywgY2FsY3VsYXRlZCBvdmVyIHRoZSBleGFtcGxlcyBpbiB0aGUgY3VycmVudCBiYXRjaC4gRWFjaCB1bml0IGhhcyBpdHMgb3duIM68IGFuZCDPg8KyLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAzLW00OmVwc2lsb24iLAogICAgICAidW5pdGUiOiAiYzEwMy1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVwc2lsb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRpdmlkZSBieSDiiJooz4PCsiArIM61KSByYXRoZXIgdGhhbiBieSDPgz8iLAogICAgICAicmVwb25zZSI6ICLOtSwgc3RyaWN0bHkgcG9zaXRpdmUgYW5kIGluIHRoZSBzYW1lIHVuaXRzIGFzIM+DwrIsIHByZXZlbnRzIGRpdmlzaW9uIGJ5IDAgd2hlbiB0aGUgYmF0Y2ggaXMgY29uc3RhbnQuIEl0IGFsc28gbWFrZXMgdGhlIHZhcmlhbmNlIG9mIOG6kSBzbGlnaHRseSBsZXNzIHRoYW4gMS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMy1tNDpnYW1tYS1iZXRhIiwKICAgICAgInVuaXRlIjogImMxMDMtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlY2hlbGxlIGV0IGRlY2FsYWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgYXJlIHRoZSBtZWFuIGFuZCB2YXJpYW5jZSBvZiB5ID0gzrPhupEgKyDOsj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiBpcyDOsiwgYmVjYXVzZSB0aGUgbWVhbiBvZiDhupEgaXMgMC4gVGhlIHZhcmlhbmNlIGlzIM6zwrIgdGltZXMgdGhlIHZhcmlhbmNlIG9mIOG6kSwgb3IgzrPCsiDPg8KyIC8gKM+DwrIgKyDOtSkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTQ6ZGVwZW5kYW5jZS1kdS1sb3QiLAogICAgICAidW5pdGUiOiAiYzEwMy1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRlcGVuZGFuY2UgYXUgbG90IiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHRoZSBvdXRwdXQgZm9yIG9uZSBleGFtcGxlIGRlcGVuZCBvbiB0aGUgb3RoZXIgZXhhbXBsZXMgaW4gdGhlIGJhdGNoPyIsCiAgICAgICJyZXBvbnNlIjogIkJlY2F1c2UgzrwgYW5kIM+DwrIgY29tZSBmcm9tIHRoZSBlbnRpcmUgYmF0Y2g6IHRoZSBzYW1lIHosIGluIGFub3RoZXIgYmF0Y2gsIHJlY2VpdmVzIGEgZGlmZmVyZW50IOG6kS4gSW4gYSBiYXRjaCBjb250YWluaW5nIGEgc2luZ2xlIGV4YW1wbGUsIOG6kSBpcyBhbHdheXMgMC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c103-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hpY2ggc3RhdGlzdGljcyBhcmUgdXNlZCB0byBub3JtYWxpemUgYSB1bml0LCBhbmQgd2hhdCBhcmUgdGhleSBjYWxjdWxhdGVkIG92ZXI/CVRoZSBtZWFuIM68IGFuZCB2YXJpYW5jZSDPg8KyIG9mIHRoYXQgdW5pdOKAmXMgcHJlLWFjdGl2YXRpb25zLCBjYWxjdWxhdGVkIG92ZXIgdGhlIGV4YW1wbGVzIGluIHRoZSBjdXJyZW50IGJhdGNoLiBFYWNoIHVuaXQgaGFzIGl0cyBvd24gzrwgYW5kIM+DwrIuCXRvZGFpIGMxMDMtbTQgc3RhdGlzdGlxdWVzIGR1IGxvdApXaHkgZGl2aWRlIGJ5IOKImijPg8KyICsgzrUpIHJhdGhlciB0aGFuIGJ5IM+DPwnOtSwgc3RyaWN0bHkgcG9zaXRpdmUgYW5kIGluIHRoZSBzYW1lIHVuaXRzIGFzIM+DwrIsIHByZXZlbnRzIGRpdmlzaW9uIGJ5IDAgd2hlbiB0aGUgYmF0Y2ggaXMgY29uc3RhbnQuIEl0IGFsc28gbWFrZXMgdGhlIHZhcmlhbmNlIG9mIOG6kSBzbGlnaHRseSBsZXNzIHRoYW4gMS4JdG9kYWkgYzEwMy1tNCBlcHNpbG9uCldoYXQgYXJlIHRoZSBtZWFuIGFuZCB2YXJpYW5jZSBvZiB5ID0gzrPhupEgKyDOsj8JVGhlIG1lYW4gaXMgzrIsIGJlY2F1c2UgdGhlIG1lYW4gb2Yg4bqRIGlzIDAuIFRoZSB2YXJpYW5jZSBpcyDOs8KyIHRpbWVzIHRoZSB2YXJpYW5jZSBvZiDhupEsIG9yIM6zwrIgz4PCsiAvICjPg8KyICsgzrUpLgl0b2RhaSBjMTAzLW00IGVjaGVsbGUgZXQgZGVjYWxhZ2UKV2h5IGRvZXMgdGhlIG91dHB1dCBmb3Igb25lIGV4YW1wbGUgZGVwZW5kIG9uIHRoZSBvdGhlciBleGFtcGxlcyBpbiB0aGUgYmF0Y2g/CUJlY2F1c2UgzrwgYW5kIM+DwrIgY29tZSBmcm9tIHRoZSBlbnRpcmUgYmF0Y2g6IHRoZSBzYW1lIHosIGluIGFub3RoZXIgYmF0Y2gsIHJlY2VpdmVzIGEgZGlmZmVyZW50IOG6kS4gSW4gYSBiYXRjaCBjb250YWluaW5nIGEgc2luZ2xlIGV4YW1wbGUsIOG6kSBpcyBhbHdheXMgMC4JdG9kYWkgYzEwMy1tNCBkZXBlbmRhbmNlIGF1IGxvdAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zrurdx rdkggj dutw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jpctqy lnoxak pgwjqz zmckah padyyj xopoeu igvt</span></span></h3><dl><div><dt>What you understand</dt><dd>Normalizing means subtracting a mean and dividing by a standard deviation guaranteed to be nonzero. Batch normalization adds three things to this operation: the statistics come from the current batch, ε protects the denominator, and γ together with β restore the scale to the network.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mgieyv rjnbqi cwyptl yqqtas jywxqp tdfqee amgzug dnabzx hquyrr mpnfcn ufvaed ptiaxp dstqyu hrylns zjsuul yjdrmk xomsvi btcevv stbxnr gcwvpf hrgtpq okyqhi euqkfl yicdqt</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: explain what this code adds and leaves out compared with batch normalization, justify the protection against a 0 standard deviation, and say why dividing by n − 1 changes the values. This page and the presence of the code do not establish that any level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mnfbtj vnbjmv shwbnc gwthct fkaaoe aomtqt qffnhk ysmhfl akxdsq jerpft sjwxzd hrpmwj xswdij yltbsf qtflbz ntjtyt zzbjwc nzqupk lxzyuh zakzim ejcoyg rqxvwk dzyurq xisbmz</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example and the constant batch without help, then compare with division by n − 1. Before connecting this code to an actual use, its integration, the authorized data, the variance convention and its behavior when the standard deviation is 0 will need to be checked separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c103-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c103-m3.html">Previous</a> · <a href="c103-m5.html">Next</a></nav>
+<footer><p>Course book · C103·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

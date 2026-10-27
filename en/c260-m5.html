@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Simulate a short Hawkes sample path using proposals and rejections, keeping the candidate clock separate from the history of accepted events.">
+<title>C260·M5 · Event simulation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xlrxec qrinzk wmpq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C260·M5</p><h1>Event simulation</h1><p class="objectif"><span>Your goal</span>Simulate a short Hawkes sample path using proposals and rejections, keeping the candidate clock separate from the history of accepted events.</p><p class="prerequis"><strong>Before you start</strong><br>c226-m5 : integration with jumps · c061-m5 : identifiability and uncertainty · c259-m5 : simulation and limitations · c090-m5 : stationarity · c260-m1 : conditional intensity · c260-m2 : kernel · c260-m3 : branching ratio · c260-m4 : likelihood</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Consider an alert board in a fictional workshop. An alert can trigger others soon afterwards: checks, confirmations, new reports. We want to generate possible times using a stated model, without claiming to reconstruct the alerts of a real workshop.</p><p>In our model, each accepted alert temporarily increases the arrival rate by a = 0.25 alerts per minute, for d = 2 min. Its contribution then disappears. A background rate μ = 0.50 alerts per minute always remains. This rectangular kernel produces steps; the simulation keeps continuous event times, without dividing time into bins.</p><p>To propose times, we use an upper bound M on the rate, high enough to cover the actual rate until the next proposal. At each candidate time, a random draw decides whether to keep the alert. A rejection makes past alerts older but creates no new excitation. The calculations will make this separation visible.</p><p>We start with an alert already known at time 0 min, with no earlier history, and simulate up to T = 3 min. The initial history and all the draws on this page are fictional. They let us check a sample path with pencil and paper; they measure neither a real frequency nor prediction quality.</p><div class="schemas"><figure><svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg" role="img"><title>The temporary contribution of an alert</title><desc>An alert adds 0.25 alerts per minute for 2 minutes. At the end of this period, the addition disappears. The drawing shows the kernel, without the background rate.</desc><text x="180" y="27" text-anchor="middle">Added: 0.25 alerts/min</text><line x1="36" y1="145" x2="334" y2="145" class="trait" /><line x1="60" y1="151" x2="60" y2="52" class="trait" /><path d="M60 145 L60 68 L280 68 L280 145 L328 145" class="chemin-correction" /><text x="60" y="177" text-anchor="middle">0</text><text x="280" y="177" text-anchor="middle">2</text><text x="180" y="205" text-anchor="middle" class="petite-etiquette">Age of the alert, in minutes</text></svg><figcaption>The raised line represents an extra rate, not a probability. Several alerts that are still active add their contributions together.</figcaption></figure><figure><svg viewBox="0 0 360 245" xmlns="http://www.w3.org/2000/svg" role="img"><title>A rejected candidate still advances the clock</title><desc>At 2.25 minutes, the upper bound is 1 alerts per minute and the intensity is 0.75. The draw 0.875 exceeds the threshold 0.75: the candidate is rejected, but the clock stays at that time.</desc><rect x="22" y="12" width="316" height="60" rx="7" class="cadre-prediction" /><text x="180" y="36" text-anchor="middle">Candidate at 2.25 min</text><text x="180" y="59" text-anchor="middle" class="petite-etiquette">Bound: 1; intensity: 0.75</text><line x1="180" y1="72" x2="180" y2="98" class="trait" /><rect x="22" y="98" width="316" height="48" rx="7" class="cadre-neutre" /><text x="180" y="128" text-anchor="middle">U = 0.875 &gt; q = 0.75</text><line x1="180" y1="146" x2="180" y2="172" class="trait" /><rect x="22" y="172" width="316" height="60" rx="7" class="cadre-resultat" /><text x="180" y="197" text-anchor="middle">Rejection: the clock advances</text><text x="180" y="220" text-anchor="middle" class="petite-etiquette">No alert added</text></svg><figcaption>The upper bound and the intensity are in alerts per minute. U and q are dimensionless. The worked example gives the detailed calculation for this rejection.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Propose under a valid upper bound; evaluate the intensity before adding the candidate; accept or reject; advance the clock in either case, adding to the history only on acceptance.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Generate the next times for the alert board</h3><p>With the initial alert at 0 min, μ = 0.50 alerts/min, a = 0.25 alerts/min and d = 2 min, let us construct the accepted events before T = 3 min. We calculate the proposals in order, including the one that will be rejected.</p><ol class="etapes"><li><h3>Specify the model and its history</h3><p>t denotes a time, tᵢ the time of an accepted alert and τ = t − tᵢ its age, all in minutes. The index i runs through the history H of accepted times, which also includes the initial alert. λ(t) is the conditional intensity: an arrival rate, in alerts per minute, determined by this history. μ is the background rate; a is the height of the kernel; d is its duration. The indicator symbol equals 1 if the stated condition is true, 0 otherwise. The sum includes only times already accepted before t.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>λ</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mi>μ</mi><mo>+</mo><mi>a</mi><msub><mo>∑</mo><mrow><msub><mi>t</mi><mi>i</mi></msub><mo>∈</mo><mi>H</mi></mrow></msub><msub><mn>1</mn><mrow><mn>0</mn><mo>&lt;</mo><mi>t</mi><mo>−</mo><msub><mi>t</mi><mi>i</mi></msub><mo>&lt;</mo><mi>d</mi></mrow></msub></mrow></math></div><p>A contribution expires at tᵢ + d; we remove it at that time. None of the candidates chosen here falls exactly on an expiration time. With continuous draws, these equalities have probability 0. The parameters are constant and positive; alerts do not inhibit one another. The branching ratio is a × d = 0.25 × 2 = 0.50, less than 1. The model therefore admits a stationary regime, but our imposed start with no earlier history is not a draw from that regime.</p></li><li><h3>Construct a proposal under an upper bound</h3><p>s is the current clock time and M is the upper bound, in alerts per minute, fixed for the current proposal. Immediately after an acceptance, M includes the addition a from that alert. Without a new accepted alert, our kernel can only remain constant or disappear: the intensity cannot increase. Its value just after s is therefore a valid upper bound throughout the next waiting time, even if an older contribution expires in the meantime.</p><p>We draw a dimensionless E from an exponential distribution with rate 1, then obtain a waiting time Δ = E/M, in minutes. In other words, Δ follows an exponential distribution with rate M. To obtain E from a uniform generator, we can draw W between 0 and 1, excluding the endpoints, and set E = −ln(W), where ln is the natural logarithm. We separately draw U, uniform between the same endpoints, independent of E and of earlier draws. E proposes the time; U decides whether to keep it.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>c</mi><mo>=</mo><mi>s</mi><mo>+</mo><mfrac><mi>E</mi><mi>M</mi></mfrac><mo>;</mo><mi>q</mi><mo>=</mo><mfrac><msup><mi>λ</mi><mo>−</mo></msup><mo>(</mo><mi>c</mi><mo>)</mo><mi>M</mi></mfrac><mo>;</mo><mi>U</mi><mo>≤</mo><mi>q</mi><mo>⇒</mo><mtext>accepter</mtext></mrow></math></div><p>c is the candidate time. λ⁻(c) is the intensity calculated before adding this candidate; the − sign here means “before the addition”. q is the probability of acceptance conditional on this proposal, and is dimensionless. The upper bound guarantees 0 ≤ q ≤ 1. If c exceeds T, we stop before the test. Otherwise, we set s to c in either outcome; we add c to H only if U ≤ q. We then recalculate the upper bound and draw new independent variables.</p></li><li><h3>Accept the first candidate</h3><p>Initially, only the alert at 0 min is active. M = μ + a = 0.50 + 0.25 = 0.75 alerts/min. Take the fictional values E = 3/8 and U = 0.50. The values of E are supplied directly; we do not approximate any logarithms to reproduce the calculation.</p><p>The waiting time is Δ = 3/8 / 3/4 = 1/2 min. The candidate arrives at c = 0 + 1/2 = 0.50 min. The initial alert is less than d minutes old: λ⁻(c) = 0.75 alerts/min. Thus q = 3/4 / 3/4 = 1. Since 0.50 ≤ 1, we accept.</p><p>The history now contains 0 and 0.50 min. The new upper bound includes the new alert: M = 0.75 + 0.25 = 1 alerts/min. Keeping the old bound after this jump could underestimate the intensity.</p></li><li><h3>Let a contribution expire and reject</h3><p>With M = 1 alerts/min, take E = 7/4 and U = 0.875. The waiting time is 7/4 / 1 = 7/4 min. The candidate is therefore at 1/2 + 7/4 = 9/4 min, or 2.25 min.</p><p>The initial contribution expired at 0 + 2 = 2 min. The contribution from the next alert expires at 0.50 + 2 = 2.50 min. At the candidate time, only this latter contribution remains active. We must therefore reevaluate the rate: λ⁻(c) = 1 − 0.25 = 0.75 alerts/min. The upper bound used for the proposal was higher, but remained valid.</p><p>The threshold is q = 3/4 / 1 = 0.75. Since 0.875 &gt; 0.75, we reject. The clock advances to 2.25 min; H still contains only the times 0 and 0.50 min. The upper bound for the next proposal drops to 0.75 alerts/min.</p></li><li><h3>Continue from the rejection time</h3><p>Now take E = 3/32 and U = 0.25. With M = 0.75 alerts/min, Δ = 3/32 / 3/4 = 1/8 min. We add this waiting time to the rejected time, which is the current clock time: c = 9/4 + 1/8 = 19/8 min, or 2.375 min.</p><p>The age of the alert accepted at 0.50 min is 19/8 − 1/2 = 15/8 min, less than d = 2 min. It still contributes. λ⁻(c) remains 0.75 alerts/min and q = 1. We accept because 0.25 ≤ 1. The upper bound rises again to 0.75 + 0.25 = 1 alerts/min.</p></li><li><h3>Stop at the horizon and check the trace</h3><p>The next draw is E = 1. The waiting time is 1 / 1 = 1 min; the candidate would be at 19/8 + 1 = 27/8 min, or 3.375 min. It exceeds T = 3 min, so we stop. We do not artificially move it back to T or create an alert at the boundary.</p><p>The simulated output contains 2 new times: 0.50 min and 2.375 min. H contains 3 times if we also count the imposed initial alert. The candidate at 2.25 min belongs to the proposal log, not to the event output. At T, the contributions from the times 0 and 0.50 min have expired; the contribution from 2.375 min remains: λ(T) = 0.75 alerts/min.</p><p>Checks: candidate times are strictly increasing; every threshold stays in the interval from 0 to 1; every added event has passed its test. Directly recounting the alerts that have not expired gives the same intensities as the subtractions.</p></li><li><h3>Why does rejection preserve the correct rate?</h3><p>Over a very short duration h, in minutes, the candidate process with rate M makes a proposal with probability approximately M × h. With the history fixed, the proportion kept is λ/M. To first order, the probability of an accepted alert is therefore M × h × λ/M = λ × h: this is the rate required by the conditional intensity. This argument applies between updates to the history; expirations are accounted for in λ at the candidate time.</p><p>This method is called thinning: we remove points from a faster process. It simulates continuous time without discretization error if the upper bound is valid and the draws are correct. Replacing an exponential distribution with its mean waiting time would produce regularly scheduled arrivals, not the same distribution. Our rational draws form an imposed teaching trace, not a random generator.</p><p>A kernel that increases after a delay would require a different construction of the upper bound. Automatically setting M equal to the current rate would no longer suffice. And a simulated sample path, even a tightly clustered one, validates neither the chosen kernel nor its parameters for real alerts.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations: explain why the proposal can cross an expiration time without being redrawn, then why a rejection must change the clock while leaving the history intact. Reconstruct only the times that were actually added.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The candidate has arrived: we must add it before calculating its intensity.”</h3><p>First calculate λ⁻ from the alerts already accepted. Adding the candidate before its own test inflates its chance of acceptance. The jump a occurs only after an acceptance.</p><a href="#exemple">Reread the upper bound and the test before the addition</a></li><li><h3>“The candidate is rejected, so we return to the last accepted alert.”</h3><p>Elapsed time remains elapsed. Keep the rejection time as the clock time, remove expired contributions and leave H unchanged. The next waiting time starts from this new clock time.</p><a href="#exercices">Repair the log in the second exercise</a></li><li><h3>“A threshold greater than unity can be repaired by setting it to unity.”</h3><p>Such a threshold signals an upper bound that is too low or an incorrect history. Check both. Capping the threshold hides the fault and does not repair the distribution of proposals already drawn.</p><a href="#exercices">Find the cause of the impossible threshold</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-proposition"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Another draw after the first acceptance</h3><p>Start again from s = 0.50 min and H containing 0 and 0.50 min. In this variant, replace only the next E with 1/4, with U = 0.875. Calculate M, the waiting time, the candidate time and the threshold; decide whether the alert is accepted.</p>
+<label for="reponse-ex-proposition">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-proposition" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-proposition" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-proposition" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-proposition" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First check whether a contribution expires before the proposed time.</p></details><details class="indice"><summary>Hint 2</summary><p>The upper bound after the first acceptance includes the contributions from both alerts.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Both contributions are active at the start: M = 0.50 + 0.25 + 0.25 = 1 alerts/min. Δ = 1/4 / 1 = 1/4 min; c = 1/2 + 1/4 = 3/4 min, or 0.75 min.</p><p>This time precedes the expirations at 2 and 2.50 min. λ⁻(c) = 1 alerts/min, so q = 1. U = 0.875 is less than 1: the alert is accepted. A large draw U alone does not cause rejection; it must be compared with the threshold. This variant replaces the rest of the example; it is not added to it.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish a waiting time from an absolute time, with their units.</li><li>Count the contributions before adding the candidate.</li><li>Compare U with the calculated threshold, without reusing the threshold from the rejection in the example.</li></ul></details></article><article class="exercice" id="ex-reparation"><p class="repere">Exercise 2 · Diagnosis and repair</p>
+<h3>The phantom alert in the history</h3><p>Return to the main trace. After the rejection at 2.25 min, a program keeps the correct upper bound 0.75 alerts/min but mistakenly adds that time to H. At the next candidate at 2.375 min, it reports λ⁻ = 1 alerts/min. Find its threshold, explain the fault, then give the correct clock time, history and intensity just before the test.</p>
+<label for="reponse-ex-reparation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reparation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reparation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reparation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reparation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At that time, the mistakenly added alert would not yet have expired.</p></details><details class="indice"><summary>Hint 2</summary><p>A rejection allows no addition to H; the upper bound was calculated for the history without that addition.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The program counts an unwarranted extra contribution a: its threshold is 1 / 3/4 = 4/3, greater than 1. The problem is not the draw U: the history and the upper bound no longer describe the same process. Setting the threshold to 1 would preserve this fault.</p><p>Remove the phantom alert, keep the rejection clock time s = 2.25 min and H containing only 0 and 0.50 min. With the next E already supplied, the proposal remains 2.375 min. Before its test, the correct intensity is 0.75 alerts/min, the threshold is 1 and the candidate is not yet in H. Only after acceptance does it enter H and the upper bound become 1 alerts/min.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain the impossible threshold and identify the unwarranted addition.</li><li>Keep the rejection clock time without keeping the rejected candidate as an event.</li><li>Distinguish the history before the test from the history after acceptance.</li></ul></details></article><article class="exercice" id="ex-horizon"><p class="repere">Exercise 3 · Output check</p>
+<h3>Finish without inventing a final alert</h3><p>After the acceptance at 2.375 min, use E = 1 again. Establish the stopping decision at T = 3 min. Give the number of simulated alerts, the number of times in H including the initial alert, and the intensity at T. Can we conclude that the draws have validated a stationary regime?</p>
+<label for="reponse-ex-horizon">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-horizon" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-horizon" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-horizon" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-horizon" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The horizon is an observation limit, not a time to which a candidate should be moved.</p></details><details class="indice"><summary>Hint 2</summary><p>For λ(T), check the age of each accepted event separately; an expired event stays in the log but no longer contributes.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>M = 1 alerts/min; Δ = 1 / 1 = 1 min; c = 19/8 + 1 = 27/8 min. Since 27/8 &gt; 3, no new alert is accepted. The output contains 2 simulated alerts and H contains 3 times including the alert imposed at the start.</p><p>At T, the alerts at 0 and 0.50 min have exceeded their active duration. The alert at 2.375 min remains active. Thus λ(T) = μ + a = 0.75 alerts/min. Expiration of a contribution does not retroactively remove the time from the output.</p><p>No: the start with an imposed alert and no earlier history was not stationary. The ratio a × d being less than 1 is a property of the parameters, not statistical evidence drawn from this short output. We would need to distinguish this conditioned start from an initialization intended to represent the stationary regime and check the simulations in separate work.</p><p class="petit-titre">Check your reasoning</p><ul><li>Stop without moving the proposal to T.</li><li>Separate simulated events, the initial alert and contributions that are still active.</li><li>Infer neither observed stationarity nor model suitability from a fictional trace.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="borne"><summary><span class="repere">Recall 1</span><span>Why is the current rate an upper bound until the next proposal here?</span></summary><p>Without a new accepted alert, each rectangular contribution remains constant or expires. The rate therefore cannot increase. The upper bound includes the jump from an alert as soon as it is accepted.</p></details><details class="carte" data-carte="attente"><summary><span class="repere">Recall 2</span><span>How do you turn a dimensionless exponential draw into a waiting time in minutes?</span></summary><p>Draw E with unit rate and divide by M, in alerts per minute: Δ = E/M. The waiting time is exponential with rate M. An independent uniform draw U then decides acceptance.</p></details><details class="carte" data-carte="rejet"><summary><span class="repere">Recall 3</span><span>What changes after a rejection?</span></summary><p>The clock advances to the candidate time and the contributions grow older. No new time is added to the history of accepted alerts. Recalculate the upper bound before drawing the next proposal.</p></details><details class="carte" data-carte="seuil"><summary><span class="repere">Recall 4</span><span>Why divide the intensity before adding the candidate by the upper bound?</span></summary><p>Proposals arrive at rate M. Keeping a proportion λ⁻/M locally recovers the rate λ⁻. The ratio must stay between 0 and 1; the candidate does not contribute to its own threshold.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>What does an exactly recalculated fictional sample path prove?</span></summary><p>It lets us check the arithmetic, decisions and updates in that trace. It proves neither the quality of a random generator, nor an observed stationary regime, nor the suitability of the model for real alerts.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the chain: accepted history → valid upper bound → exponential waiting time → candidate time → intensity before addition → threshold → decision → new clock time and new history. Explain where an expiration occurs, where a rejection occurs and why the horizon creates no event. An answer after a hint is an assisted answer; try it again without support on another day before requesting validation of a level.</p></div><div class="exports"><a class="bouton" download="c260-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjAtbTU6Ym9ybmUiLAogICAgICAidW5pdGUiOiAiYzI2MC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNpbXVsYXRpb24taGF3a2VzLXBsYWZvbmQiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGlzIHRoZSBjdXJyZW50IHJhdGUgYW4gdXBwZXIgYm91bmQgdW50aWwgdGhlIG5leHQgcHJvcG9zYWwgaGVyZT8iLAogICAgICAicmVwb25zZSI6ICJXaXRob3V0IGEgbmV3IGFjY2VwdGVkIGFsZXJ0LCBlYWNoIHJlY3Rhbmd1bGFyIGNvbnRyaWJ1dGlvbiByZW1haW5zIGNvbnN0YW50IG9yIGV4cGlyZXMuIFRoZSByYXRlIHRoZXJlZm9yZSBjYW5ub3QgaW5jcmVhc2UuIFRoZSB1cHBlciBib3VuZCBpbmNsdWRlcyB0aGUganVtcCBmcm9tIGFuIGFsZXJ0IGFzIHNvb24gYXMgaXQgaXMgYWNjZXB0ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjAtbTU6YXR0ZW50ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjYwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2ltdWxhdGlvbi1oYXdrZXMtYXR0ZW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IHR1cm4gYSBkaW1lbnNpb25sZXNzIGV4cG9uZW50aWFsIGRyYXcgaW50byBhIHdhaXRpbmcgdGltZSBpbiBtaW51dGVzPyIsCiAgICAgICJyZXBvbnNlIjogIkRyYXcgRSB3aXRoIHVuaXQgcmF0ZSBhbmQgZGl2aWRlIGJ5IE0sIGluIGFsZXJ0cyBwZXIgbWludXRlOiDOlCA9IEUvTS4gVGhlIHdhaXRpbmcgdGltZSBpcyBleHBvbmVudGlhbCB3aXRoIHJhdGUgTS4gQW4gaW5kZXBlbmRlbnQgdW5pZm9ybSBkcmF3IFUgdGhlbiBkZWNpZGVzIGFjY2VwdGFuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjAtbTU6cmVqZXQiLAogICAgICAidW5pdGUiOiAiYzI2MC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNpbXVsYXRpb24taGF3a2VzLXJlamV0IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgY2hhbmdlcyBhZnRlciBhIHJlamVjdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgY2xvY2sgYWR2YW5jZXMgdG8gdGhlIGNhbmRpZGF0ZSB0aW1lIGFuZCB0aGUgY29udHJpYnV0aW9ucyBncm93IG9sZGVyLiBObyBuZXcgdGltZSBpcyBhZGRlZCB0byB0aGUgaGlzdG9yeSBvZiBhY2NlcHRlZCBhbGVydHMuIFJlY2FsY3VsYXRlIHRoZSB1cHBlciBib3VuZCBiZWZvcmUgZHJhd2luZyB0aGUgbmV4dCBwcm9wb3NhbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MC1tNTpzZXVpbCIsCiAgICAgICJ1bml0ZSI6ICJjMjYwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2ltdWxhdGlvbi1oYXdrZXMtYW1pbmNpc3NlbWVudCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZGl2aWRlIHRoZSBpbnRlbnNpdHkgYmVmb3JlIGFkZGluZyB0aGUgY2FuZGlkYXRlIGJ5IHRoZSB1cHBlciBib3VuZD8iLAogICAgICAicmVwb25zZSI6ICJQcm9wb3NhbHMgYXJyaXZlIGF0IHJhdGUgTS4gS2VlcGluZyBhIHByb3BvcnRpb24gzrvigbsvTSBsb2NhbGx5IHJlY292ZXJzIHRoZSByYXRlIM674oG7LiBUaGUgcmF0aW8gbXVzdCBzdGF5IGJldHdlZW4gMCBhbmQgMTsgdGhlIGNhbmRpZGF0ZSBkb2VzIG5vdCBjb250cmlidXRlIHRvIGl0cyBvd24gdGhyZXNob2xkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjYwLW01OnByZXV2ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjYwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2ltdWxhdGlvbi1oYXdrZXMtbGltaXRlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYW4gZXhhY3RseSByZWNhbGN1bGF0ZWQgZmljdGlvbmFsIHNhbXBsZSBwYXRoIHByb3ZlPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGxldHMgdXMgY2hlY2sgdGhlIGFyaXRobWV0aWMsIGRlY2lzaW9ucyBhbmQgdXBkYXRlcyBpbiB0aGF0IHRyYWNlLiBJdCBwcm92ZXMgbmVpdGhlciB0aGUgcXVhbGl0eSBvZiBhIHJhbmRvbSBnZW5lcmF0b3IsIG5vciBhbiBvYnNlcnZlZCBzdGF0aW9uYXJ5IHJlZ2ltZSwgbm9yIHRoZSBzdWl0YWJpbGl0eSBvZiB0aGUgbW9kZWwgZm9yIHJlYWwgYWxlcnRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c260-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGlzIHRoZSBjdXJyZW50IHJhdGUgYW4gdXBwZXIgYm91bmQgdW50aWwgdGhlIG5leHQgcHJvcG9zYWwgaGVyZT8JV2l0aG91dCBhIG5ldyBhY2NlcHRlZCBhbGVydCwgZWFjaCByZWN0YW5ndWxhciBjb250cmlidXRpb24gcmVtYWlucyBjb25zdGFudCBvciBleHBpcmVzLiBUaGUgcmF0ZSB0aGVyZWZvcmUgY2Fubm90IGluY3JlYXNlLiBUaGUgdXBwZXIgYm91bmQgaW5jbHVkZXMgdGhlIGp1bXAgZnJvbSBhbiBhbGVydCBhcyBzb29uIGFzIGl0IGlzIGFjY2VwdGVkLgl0b2RhaSBjMjYwLW01IHNpbXVsYXRpb24taGF3a2VzLXBsYWZvbmQKSG93IGRvIHlvdSB0dXJuIGEgZGltZW5zaW9ubGVzcyBleHBvbmVudGlhbCBkcmF3IGludG8gYSB3YWl0aW5nIHRpbWUgaW4gbWludXRlcz8JRHJhdyBFIHdpdGggdW5pdCByYXRlIGFuZCBkaXZpZGUgYnkgTSwgaW4gYWxlcnRzIHBlciBtaW51dGU6IM6UID0gRS9NLiBUaGUgd2FpdGluZyB0aW1lIGlzIGV4cG9uZW50aWFsIHdpdGggcmF0ZSBNLiBBbiBpbmRlcGVuZGVudCB1bmlmb3JtIGRyYXcgVSB0aGVuIGRlY2lkZXMgYWNjZXB0YW5jZS4JdG9kYWkgYzI2MC1tNSBzaW11bGF0aW9uLWhhd2tlcy1hdHRlbnRlCldoYXQgY2hhbmdlcyBhZnRlciBhIHJlamVjdGlvbj8JVGhlIGNsb2NrIGFkdmFuY2VzIHRvIHRoZSBjYW5kaWRhdGUgdGltZSBhbmQgdGhlIGNvbnRyaWJ1dGlvbnMgZ3JvdyBvbGRlci4gTm8gbmV3IHRpbWUgaXMgYWRkZWQgdG8gdGhlIGhpc3Rvcnkgb2YgYWNjZXB0ZWQgYWxlcnRzLiBSZWNhbGN1bGF0ZSB0aGUgdXBwZXIgYm91bmQgYmVmb3JlIGRyYXdpbmcgdGhlIG5leHQgcHJvcG9zYWwuCXRvZGFpIGMyNjAtbTUgc2ltdWxhdGlvbi1oYXdrZXMtcmVqZXQKV2h5IGRpdmlkZSB0aGUgaW50ZW5zaXR5IGJlZm9yZSBhZGRpbmcgdGhlIGNhbmRpZGF0ZSBieSB0aGUgdXBwZXIgYm91bmQ/CVByb3Bvc2FscyBhcnJpdmUgYXQgcmF0ZSBNLiBLZWVwaW5nIGEgcHJvcG9ydGlvbiDOu+KBuy9NIGxvY2FsbHkgcmVjb3ZlcnMgdGhlIHJhdGUgzrvigbsuIFRoZSByYXRpbyBtdXN0IHN0YXkgYmV0d2VlbiAwIGFuZCAxOyB0aGUgY2FuZGlkYXRlIGRvZXMgbm90IGNvbnRyaWJ1dGUgdG8gaXRzIG93biB0aHJlc2hvbGQuCXRvZGFpIGMyNjAtbTUgc2ltdWxhdGlvbi1oYXdrZXMtYW1pbmNpc3NlbWVudApXaGF0IGRvZXMgYW4gZXhhY3RseSByZWNhbGN1bGF0ZWQgZmljdGlvbmFsIHNhbXBsZSBwYXRoIHByb3ZlPwlJdCBsZXRzIHVzIGNoZWNrIHRoZSBhcml0aG1ldGljLCBkZWNpc2lvbnMgYW5kIHVwZGF0ZXMgaW4gdGhhdCB0cmFjZS4gSXQgcHJvdmVzIG5laXRoZXIgdGhlIHF1YWxpdHkgb2YgYSByYW5kb20gZ2VuZXJhdG9yLCBub3IgYW4gb2JzZXJ2ZWQgc3RhdGlvbmFyeSByZWdpbWUsIG5vciB0aGUgc3VpdGFiaWxpdHkgb2YgdGhlIG1vZGVsIGZvciByZWFsIGFsZXJ0cy4JdG9kYWkgYzI2MC1tNSBzaW11bGF0aW9uLWhhd2tlcy1saW1pdGVzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xlrxec qrinzk wmpq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Read code that generates times without attributing a Hawkes model to it</h3><dl><div><dt>What you understand</dt><dd>A sequence of irregular times is not enough to define a self-exciting process. It requires a history of accepted events, a kernel, an intensity and a consistent simulation rule. This reading checkpoint is required for the unit; the architecture assigns it no canonical private milestone number.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xceyhw kvmiwb uwuqon krpryo xrjezg nrcyhp gtkrsq wvxxml rjrwby pjecwy pucbls ueywjt saaqzr krtmtr dhphgx tujdif kfslrg qvlqgy wjzeie bchjra esozxp ddxlnt cbtyhn csbqcw</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 4: reconstruct a proposal, justify the upper bound, repair a rejection and distinguish the candidate output from the event output. Reading or giving an assisted answer does not establish an attained level; you must repeat the work and explain it without support after a delay.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tkxzub ofpwai amizpq mkgwce gdbsbl vlorvz aivwma zxsxqk xsyxuj xvafhq hrrwnu kcvvko gdmpkm dwjbcz dkjyfw rxoqji wpawcu fsrvzg mcmqba lhccsg burttb yyjjnk vkuwto kxgbjp</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the trace without the worked answers, then explain why the mixture of waiting times in the cited passage does not establish our model. Any investigation of how the code is connected, any executed random simulation and any validation using authorized observations require separate evidence; no activation is performed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c260-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c260-m4.html">Previous</a> · <a href="c261-m1.html">Next</a></nav>
+<footer><p>Course book · C260·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Choose SVM settings through cross-validation, justify the score, and preserve a final test independent of the choice.">
+<title>C140·M5 · Hyperparameter validation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fcfpce ihoylq bqla</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C140·M5</p><h1>Hyperparameter validation</h1><p class="objectif"><span>Your goal</span>Choose SVM settings through cross-validation, justify the score, and preserve a final test independent of the choice.</p><p class="prerequis"><strong>Before you start</strong><br>c059-m6 : Deterministic discrete Bellman · c099-m5 : probability calibration · c040-m5 : least squares · c140-m1 : margin · c140-m2 : hinge loss · c140-m3 : dual · c140-m4 : kernel trick</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop wants to classify washers as “acceptable” or “reject” using their diameter and the area of visible defects. Different settings for the same SVM produce different decision boundaries. Which should we choose before using it on new parts?</p><p>A hyperparameter is a setting fixed before fitting the model. The SVM then learns its boundary from the permitted examples. C sets the weight of the penalty for margin violations; γ, read as “gamma”, controls the range of the Gaussian kernel. Choosing these settings also uses data, so we need to set aside examples for this choice.</p><p>We have 80 fictional washers, already labelled by a reference inspection. We set aside 20 test washers. The remaining 60 form the development set, divided into 3 folds: disjoint groups of 20 washers. Each fold is used for validation while the others are used for fitting. This is cross-validation.</p><p>The sample sizes and errors on this page are invented for the calculations. The record directly provides the errors from fictional predictions; we do not claim to have trained an SVM. The exercise concerns making a decision from this record and does not demonstrate an industrial result.</p><div class="schemas"><figure><svg viewBox="0 0 360 350" xmlns="http://www.w3.org/2000/svg" role="img"><title>Choose before opening the test set</title><desc>The 80 washers are split into 60 for development and 20 for the final test. Only the development set is used to compare settings. The test set enters the process after selection and refitting.</desc><text x="180" y="28" text-anchor="middle">80 fictional washers</text><rect x="18" y="58" width="206" height="72" rx="7" class="cadre-prediction" /><text x="121" y="86" text-anchor="middle">Development</text><text x="121" y="112" text-anchor="middle">60 washers</text><rect x="242" y="58" width="100" height="72" rx="7" class="cadre-neutre" /><text x="292" y="86" text-anchor="middle">Test</text><text x="292" y="112" text-anchor="middle">20</text><path d="M121 130v40m-5-7 5 7 5-7" class="trait" /><rect x="18" y="170" width="206" height="62" rx="7" class="cadre-prediction" /><text x="121" y="196" text-anchor="middle">Compare A, B, C</text><text x="121" y="220" text-anchor="middle" class="petite-etiquette">Then refit the choice</text><path d="M121 232v38m-5-7 5 7 5-7M292 130v140m-5-7 5 7 5-7" class="trait" /><rect x="18" y="270" width="324" height="64" rx="7" class="cadre-resultat" /><text x="180" y="296" text-anchor="middle">After selection: final test</text><text x="180" y="321" text-anchor="middle" class="petite-etiquette">No return to comparison</text></svg><figcaption>The test set is set aside before comparing settings. Its result controls no arrow leading back to the choice.</figcaption></figure><figure><svg viewBox="0 0 360 258" xmlns="http://www.w3.org/2000/svg" role="img"><title>Each fold waits its turn</title><desc>Folds P, Q and R each contain 20 washers. In round P, fit on Q and R, then validate on P. In round Q, fit on P and R. In round R, fit on P and Q. The same rounds are used for all settings.</desc><text x="140" y="28" text-anchor="middle">P</text><text x="224" y="28" text-anchor="middle">Q</text><text x="308" y="28" text-anchor="middle">R</text><text x="18" y="72">Round P</text><rect x="102" y="44" width="76" height="44" rx="5" class="cadre-resultat" /><text x="140" y="72" text-anchor="middle" class="petite-etiquette">validate</text><rect x="186" y="44" width="76" height="44" rx="5" class="cadre-prediction" /><text x="224" y="72" text-anchor="middle" class="petite-etiquette">fit</text><rect x="270" y="44" width="76" height="44" rx="5" class="cadre-prediction" /><text x="308" y="72" text-anchor="middle" class="petite-etiquette">fit</text><text x="18" y="126">Round Q</text><rect x="102" y="98" width="76" height="44" rx="5" class="cadre-prediction" /><text x="140" y="126" text-anchor="middle" class="petite-etiquette">fit</text><rect x="186" y="98" width="76" height="44" rx="5" class="cadre-resultat" /><text x="224" y="126" text-anchor="middle" class="petite-etiquette">validate</text><rect x="270" y="98" width="76" height="44" rx="5" class="cadre-prediction" /><text x="308" y="126" text-anchor="middle" class="petite-etiquette">fit</text><text x="18" y="180">Round R</text><rect x="102" y="152" width="76" height="44" rx="5" class="cadre-prediction" /><text x="140" y="180" text-anchor="middle" class="petite-etiquette">fit</text><rect x="186" y="152" width="76" height="44" rx="5" class="cadre-prediction" /><text x="224" y="180" text-anchor="middle" class="petite-etiquette">fit</text><rect x="270" y="152" width="76" height="44" rx="5" class="cadre-resultat" /><text x="308" y="180" text-anchor="middle" class="petite-etiquette">validate</text><text x="180" y="220" text-anchor="middle">40 for fitting each round</text><text x="180" y="247" text-anchor="middle">20 for validation, kept separate</text></svg><figcaption>The words “fit” and “validate” indicate the roles, regardless of colour. A washer may be used for fitting in another round, but never for fitting the model that predicts its own validation label.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fit within each round; compare on the same folds; fix the choice; refit on the entire development set; finally open the test set without repeating selection.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Choose the settings for the washer inspector</h3><p>Let us compare exactly 3 pairs (C, γ), decided on before the scores: A = (1, 0.1), B = (10, 0.1), C = (10, 1). The letter for setting C is a row label; C within each pair is the hyperparameter. Every other training option stays fixed.</p><ol class="etapes"><li><h3>Fix what the protocol must represent</h3><p>We assume the washers are independent and come from the same population as future parts. Repeated photos of the same washer never cross group boundaries. Each fold contains 10 parts from each category; the test set contains 10 from each category. This balanced allocation is an assumption of the exercise.</p><p>An error on an acceptable part and an error on a part to reject have the same cost here. Our criterion is therefore the overall proportion of misclassifications, which we minimize. If letting a defective part through cost more than rejecting an acceptable part, we would need to fix a suitable criterion before the comparison; this protocol does not solve that new problem.</p><p>The split, candidate list and rule for ties are fixed before the results. In an exact tie, we prefer the smaller C, then the smaller γ. This convention makes the decision reproducible; it does not guarantee that this pair is better in the population.</p></li><li><h3>Separate the settings from what the model learns</h3><p>h denotes a candidate pair (C, γ). In our chosen convention, C multiplies the sum of margin losses in the training objective. A larger C gives more weight to this penalty relative to the regularization term. A larger γ makes Gaussian similarity more local. Neither change alone promises better validation results.</p><p>Diameter is measured in mm and defect area in mm². Before each fit, we centre and scale each feature separately: subtract its training mean, then divide by its training standard deviation, assumed strictly positive. The mean and standard deviation have the unit of the feature; the transformed coordinate has no unit. The transformed coordinates, C and γ are therefore dimensionless in our convention.</p><p>The means, standard deviations and SVM coefficients are learned only from the training washers in that round. We then apply the same transformations to the validation fold. Calculating means on the entire development set before validation would already pass on information from the held-out fold: this is data leakage, even without looking at its labels.</p></li><li><h3>Fit again in each round</h3><p>In round P, we fit on Q and R, then predict P without refitting on P. In round Q, we start from scratch on P and R. In round R, we start from scratch on P and Q. Each fit sees 60 − 20 = 40 parts; each evaluation sees the other 20.</p><p>The same folds are used for A, B and C, so a score difference is not mixed with a change in the split. This comparison requires 3 × 3 = 9 fits. Keeping the model from the previous round instead of starting from scratch could leave it with information from the fold to be predicted.</p><p>The fictional record gives, in order P, Q, R: A makes 3, 4, 5 errors; B makes 2, 3, 1 errors; C makes 4, 3, 5 errors. Each number counts misclassified parts among 20 parts kept separate from the corresponding model.</p></li><li><h3>Define the score before dividing</h3><p>K = 3 is the number of folds and n = 20 is their common size, in parts. The index j denotes a fold. mⱼ(h) is the number of errors made by candidate h on that fold, in parts. eⱼ(h) is the error proportion for the fold; E(h) is the mean of these proportions. Both scores are dimensionless and lie between 0 and 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>e</mi><mi>j</mi></msub><mo>(</mo><mi>h</mi><mo>)</mo><mo>=</mo><mfrac><mrow><msub><mi>m</mi><mi>j</mi></msub><mo>(</mo><mi>h</mi><mo>)</mo></mrow><mi>n</mi></mfrac><mo>;</mo><mi>E</mi><mo>(</mo><mi>h</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>K</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></msubsup><msub><mi>e</mi><mi>j</mi></msub><mo>(</mo><mi>h</mi><mo>)</mo></mrow></math></div><p>The symbol ∑ means to add the terms for all folds. Each prediction used in mⱼ(h) comes from a model fitted without fold j. Since the folds have the same size, E(h) also equals the total number of errors divided by 60. With different sizes, we would need to specify whether the criterion gives equal weight to each fold or to each part.</p></li><li><h3>Calculate and select</h3><p>For B, the proportions are 2/20 = 0.10, 3/20 = 0.15 and 1/20 = 0.05. Add them: 0.10 + 0.15 = 0.25, then 0.25 + 0.05 = 0.30. Then divide by the number of folds to obtain a mean:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>(</mo><mi>B</mi><mo>)</mo><mo>=</mo><mfrac><mn>0.30</mn><mn>3</mn></mfrac><mo>=</mo><mn>1/10</mn><mo>=</mo><mn>0.10</mn></mrow></math></div><p>Check by another route: 2 + 3 = 5, then 5 + 1 = 6 errors; 6/60 = 1/10, or 10 % fictional errors. We counted each development part only once in validation.</p><p>For A: 3 + 4 = 7, then 7 + 5 = 12; E(A) = 12/60 = 0.20, or 20 %. For C: 4 + 3 = 7, then 7 + 5 = 12; E(C) = 12/60 = 0.20, or 20 %.</p><p>B minimizes the score among the pairs tried: we select h★ = (10, 0.1). The star denotes the choice resulting from the comparison. We have not searched all possible pairs, and no statistical test here demonstrates superiority in the population.</p></li><li><h3>Freeze, refit, then evaluate on the test set</h3><p>We keep h★ and fit a new model on the 60 development parts, with new means and standard deviations learned from these parts alone. We do not arbitrarily reuse the model from the last fold. With this final fit, the protocol involves 9 + 1 = 10 fits.</p><p>After this freeze, the fictional test record reports 3 errors on 20 parts. The proportion is 3/20 = 3/20, or 0.15, or 15 %. The test describes this new model trained on the entire development set. The validation score compared models trained on 40 parts; the results need not coincide.</p><p>The validation minimum was used for selection: it benefits from that selection and is not sufficient as an independent final estimate. The held-out test set provides a separate view, under our sampling assumptions; its small size leaves uncertainty. If its score is disappointing, we report it. Going back to choose γ after reading it would turn this test set into development data and require a new independent evaluation.</p><p>A random split is not automatically suitable for every use. If the aim became predicting tomorrow’s parts under manufacturing drift, we would need to preserve time order; if several images described the same part, we would need to keep that group together. These situations change the protocol, not just C or γ.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the scores and describe the path of a washer from fold Q. Which model may see it during fitting? Which model must ignore it to validate it? Then explain why the final test cannot be used to choose from a new list of settings.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I choose the C that best classifies its own training examples.”</h3><p>A boundary can adapt to the examples already used to fit it. Recalculate the score on the fold excluded from that fit; this held-out score compares settings in our protocol.</p><a href="#exemple">Review the rounds and the score definition</a></li><li><h3>“I normalize all the washers before making the folds; this does not change the labels.”</h3><p>The features of the held-out fold would already have changed the means and standard deviations. Start again with only the training parts in the round to learn these transformations, then apply them to validation without fitting again.</p><a href="#exemple">Reread what is learned in each fit</a></li><li><h3>“The test is worse: let us try another γ and keep the best test result.”</h3><p>The test would then influence the choice. Keep its result as the result of the frozen protocol. A new search may reassign it to development, but must plan another independent evaluation before claiming to have a final test.</p><a href="#exercices">Repair the protocol in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-score"><p class="repere">Exercise 1 · Guided calculation</p>
+<h3>Check A’s score another way</h3><p>Return to A and its 3, 4, 5 errors in folds of 20 parts. Calculate the mean of the proportions and the overall proportion separately. Why do we obtain the same score here? Then compare with B.</p>
+<label for="reponse-ex-score">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-score" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-score" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-score" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-score" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write a fraction for each fold before taking the mean.</p></details><details class="indice"><summary>Hint 2</summary><p>The denominators are equal. You can add the errors, then divide by the total number of parts used for validation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mean is (3/20 + 4/20 + 5/20)/3 = (3 + 4 + 5)/(3 × 20). It equals 12/60 = 1/5, or 0.20, or 20 % fictional errors.</p><p>The second method counts the 12 errors among the 60 parts used for validation: the same result. Equality comes from the identical fold sizes, not from a general property of means. B has a smaller score, 0.10; under the fixed criterion, A does not replace it.</p><p class="petit-titre">Check your reasoning</p><ul><li>I write the divisor 3 for the mean of the proportions.</li><li>I obtain 12 errors and the score 1/5.</li><li>I justify the equality of the methods by the identical sample sizes and minimize the score.</li></ul></details></article><article class="exercice" id="ex-egalite"><p class="repere">Exercise 2 · Decision on paper</p>
+<h3>A transcription error changes the choice</h3><p>Before any final test, B’s record is corrected: its fold R contains 7 errors instead of 1. All other validation data stay identical. Recalculate its score and apply the rule for ties decided before the results. Do not reuse the example’s test score to decide.</p>
+<label for="reponse-ex-egalite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-egalite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-egalite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-egalite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-egalite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Keep the errors for folds P and Q and replace only the count for R.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the new score with those of A and C. If the scores are equal, reread the convention on C, then on γ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>B’s new total is 2 + 3 + 7 = 5 + 7 = 12 errors. Its score becomes 12/60 = 1/5, or 0.20.</p><p>A, B and C are now tied. The convention selects A, whose C is 1, rather than 10 for B and C. No tie needs to be broken using γ. We freeze this new choice and refit on the entire development set. The fictional test given for B in the example does not become a test result for A; no test score for A is provided.</p><p class="petit-titre">Check your reasoning</p><ul><li>I replace the correct count without changing the other folds.</li><li>I obtain 1/5 and explain why the convention selects A.</li><li>I invent neither statistical superiority for A nor a test result for its final model.</li></ul></details></article><article class="exercice" id="ex-fuite"><p class="repere">Exercise 3 · Repairing a protocol</p>
+<h3>The test has already been used for selection</h3><p>For these same washers, a colleague learns the means and standard deviations from the 80 parts, compares the candidates on the development set, then changes γ after each reading of the test result. She reports the best test score as an independent evaluation. Identify the leaks and propose a repair, distinguishing what can be recalculated from what requires a new held-out set.</p>
+<label for="reponse-ex-fuite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fuite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fuite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fuite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fuite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First look for which parts contributed to the learned transformations.</p></details><details class="indice"><summary>Hint 2</summary><p>Can the test still act as an unseen exam if its result changed γ?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The initial transformations used the held-out folds and the test set. Validation must be repeated: with the original split, each round learns its transformations from the 40 training parts, then applies them to its held-out fold. The same rounds and criterion are used for all candidates.</p><p>The test also influenced the choice through the changes to γ. Reading it again after correcting the normalization does not restore its independence. We document this use, and these data no longer serve as a final test. We plan a new independent held-out set suited to the same target population. Neither the size nor the score of this set is known here.</p><p>We then freeze the protocol and the choice, refit on the permitted development data, and evaluate on this new held-out set. Without it, we can provide a diagnosis and validation results, but cannot report an independent final evaluation.</p><p class="petit-titre">Check your reasoning</p><ul><li>I identify leakage through the transformations and through decisions made after reading the test result.</li><li>I put learning the transformations back inside the rounds.</li><li>I request a set that is still independent without assigning it an invented result.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="reglage"><summary><span class="repere">Recall 1</span><span>What is the difference between the pair (C, γ) and the SVM’s learned coefficients?</span></summary><p>The pair is fixed before each fit. The model coefficients are then learned from the permitted training examples. The validation scores choose the pair from the planned candidates.</p></details><details class="carte" data-carte="pli"><summary><span class="repere">Recall 2</span><span>When validating on Q, which washers and transformations are used for fitting?</span></summary><p>We fit the SVM and the transformations on P and R only. We apply these transformations to Q without learning them again. Q does not contribute to fitting the model that predicts it.</p></details><details class="carte" data-carte="moyenne"><summary><span class="repere">Recall 3</span><span>Why can we divide the total errors by 60 here?</span></summary><p>Each fold contains 20 parts, and each part is predicted once in validation. The mean of the proportions therefore equals the overall proportion. With different sample sizes, the choice of weights must be specified.</p></details><details class="carte" data-carte="selection"><summary><span class="repere">Recall 4</span><span>Why does the validation minimum not replace the final test?</span></summary><p>This minimum contributed to choosing the setting and may benefit from fluctuations in the folds. The held-out test set contributed neither to fitting nor to selection; it evaluates the final model, with the uncertainty of a finite sample.</p></details><details class="carte" data-carte="gel"><summary><span class="repere">Recall 5</span><span>What should we do after choosing B, before opening the test set?</span></summary><p>Freeze the settings and protocol, then refit the transformations and the SVM on the 60 development parts. Then evaluate on the test set without reusing it to choose another pair.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Close the explanations and reconstruct the protocol with the washers: assign a role to each held-out set; state where the transformations are learned; write the score; explain selection, refitting and the limit of the test. Reading or an answer obtained with a hint remains preparation. Reconstruct this again without help on another day before requesting validation of your level.</p></div><div class="exports"><a class="bouton" download="c140-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDAtbTU6cmVnbGFnZSIsCiAgICAgICJ1bml0ZSI6ICJjMTQwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaHlwZXJwYXJhbWV0cmUtc3ZtIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiB0aGUgcGFpciAoQywgzrMpIGFuZCB0aGUgU1ZN4oCZcyBsZWFybmVkIGNvZWZmaWNpZW50cz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcGFpciBpcyBmaXhlZCBiZWZvcmUgZWFjaCBmaXQuIFRoZSBtb2RlbCBjb2VmZmljaWVudHMgYXJlIHRoZW4gbGVhcm5lZCBmcm9tIHRoZSBwZXJtaXR0ZWQgdHJhaW5pbmcgZXhhbXBsZXMuIFRoZSB2YWxpZGF0aW9uIHNjb3JlcyBjaG9vc2UgdGhlIHBhaXIgZnJvbSB0aGUgcGxhbm5lZCBjYW5kaWRhdGVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTQwLW01OnBsaSIsCiAgICAgICJ1bml0ZSI6ICJjMTQwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidmFsaWRhdGlvbi1jcm9pc2VlIiwKICAgICAgInF1ZXN0aW9uIjogIldoZW4gdmFsaWRhdGluZyBvbiBRLCB3aGljaCB3YXNoZXJzIGFuZCB0cmFuc2Zvcm1hdGlvbnMgYXJlIHVzZWQgZm9yIGZpdHRpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiV2UgZml0IHRoZSBTVk0gYW5kIHRoZSB0cmFuc2Zvcm1hdGlvbnMgb24gUCBhbmQgUiBvbmx5LiBXZSBhcHBseSB0aGVzZSB0cmFuc2Zvcm1hdGlvbnMgdG8gUSB3aXRob3V0IGxlYXJuaW5nIHRoZW0gYWdhaW4uIFEgZG9lcyBub3QgY29udHJpYnV0ZSB0byBmaXR0aW5nIHRoZSBtb2RlbCB0aGF0IHByZWRpY3RzIGl0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTQwLW01Om1veWVubmUiLAogICAgICAidW5pdGUiOiAiYzE0MC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNjb3JlLXZhbGlkYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiB3ZSBkaXZpZGUgdGhlIHRvdGFsIGVycm9ycyBieSA2MCBoZXJlPyIsCiAgICAgICJyZXBvbnNlIjogIkVhY2ggZm9sZCBjb250YWlucyAyMCBwYXJ0cywgYW5kIGVhY2ggcGFydCBpcyBwcmVkaWN0ZWQgb25jZSBpbiB2YWxpZGF0aW9uLiBUaGUgbWVhbiBvZiB0aGUgcHJvcG9ydGlvbnMgdGhlcmVmb3JlIGVxdWFscyB0aGUgb3ZlcmFsbCBwcm9wb3J0aW9uLiBXaXRoIGRpZmZlcmVudCBzYW1wbGUgc2l6ZXMsIHRoZSBjaG9pY2Ugb2Ygd2VpZ2h0cyBtdXN0IGJlIHNwZWNpZmllZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tNTpzZWxlY3Rpb24iLAogICAgICAidW5pdGUiOiAiYzE0MC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNlbGVjdGlvbi1ldC1ldmFsdWF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHRoZSB2YWxpZGF0aW9uIG1pbmltdW0gbm90IHJlcGxhY2UgdGhlIGZpbmFsIHRlc3Q/IiwKICAgICAgInJlcG9uc2UiOiAiVGhpcyBtaW5pbXVtIGNvbnRyaWJ1dGVkIHRvIGNob29zaW5nIHRoZSBzZXR0aW5nIGFuZCBtYXkgYmVuZWZpdCBmcm9tIGZsdWN0dWF0aW9ucyBpbiB0aGUgZm9sZHMuIFRoZSBoZWxkLW91dCB0ZXN0IHNldCBjb250cmlidXRlZCBuZWl0aGVyIHRvIGZpdHRpbmcgbm9yIHRvIHNlbGVjdGlvbjsgaXQgZXZhbHVhdGVzIHRoZSBmaW5hbCBtb2RlbCwgd2l0aCB0aGUgdW5jZXJ0YWludHkgb2YgYSBmaW5pdGUgc2FtcGxlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTQwLW01OmdlbCIsCiAgICAgICJ1bml0ZSI6ICJjMTQwLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVmYWlyZS1hcHJlcy1zZWxlY3Rpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBzaG91bGQgd2UgZG8gYWZ0ZXIgY2hvb3NpbmcgQiwgYmVmb3JlIG9wZW5pbmcgdGhlIHRlc3Qgc2V0PyIsCiAgICAgICJyZXBvbnNlIjogIkZyZWV6ZSB0aGUgc2V0dGluZ3MgYW5kIHByb3RvY29sLCB0aGVuIHJlZml0IHRoZSB0cmFuc2Zvcm1hdGlvbnMgYW5kIHRoZSBTVk0gb24gdGhlIDYwIGRldmVsb3BtZW50IHBhcnRzLiBUaGVuIGV2YWx1YXRlIG9uIHRoZSB0ZXN0IHNldCB3aXRob3V0IHJldXNpbmcgaXQgdG8gY2hvb3NlIGFub3RoZXIgcGFpci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c140-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSBwYWlyIChDLCDOsykgYW5kIHRoZSBTVk3igJlzIGxlYXJuZWQgY29lZmZpY2llbnRzPwlUaGUgcGFpciBpcyBmaXhlZCBiZWZvcmUgZWFjaCBmaXQuIFRoZSBtb2RlbCBjb2VmZmljaWVudHMgYXJlIHRoZW4gbGVhcm5lZCBmcm9tIHRoZSBwZXJtaXR0ZWQgdHJhaW5pbmcgZXhhbXBsZXMuIFRoZSB2YWxpZGF0aW9uIHNjb3JlcyBjaG9vc2UgdGhlIHBhaXIgZnJvbSB0aGUgcGxhbm5lZCBjYW5kaWRhdGVzLgl0b2RhaSBjMTQwLW01IGh5cGVycGFyYW1ldHJlLXN2bQpXaGVuIHZhbGlkYXRpbmcgb24gUSwgd2hpY2ggd2FzaGVycyBhbmQgdHJhbnNmb3JtYXRpb25zIGFyZSB1c2VkIGZvciBmaXR0aW5nPwlXZSBmaXQgdGhlIFNWTSBhbmQgdGhlIHRyYW5zZm9ybWF0aW9ucyBvbiBQIGFuZCBSIG9ubHkuIFdlIGFwcGx5IHRoZXNlIHRyYW5zZm9ybWF0aW9ucyB0byBRIHdpdGhvdXQgbGVhcm5pbmcgdGhlbSBhZ2Fpbi4gUSBkb2VzIG5vdCBjb250cmlidXRlIHRvIGZpdHRpbmcgdGhlIG1vZGVsIHRoYXQgcHJlZGljdHMgaXQuCXRvZGFpIGMxNDAtbTUgdmFsaWRhdGlvbi1jcm9pc2VlCldoeSBjYW4gd2UgZGl2aWRlIHRoZSB0b3RhbCBlcnJvcnMgYnkgNjAgaGVyZT8JRWFjaCBmb2xkIGNvbnRhaW5zIDIwIHBhcnRzLCBhbmQgZWFjaCBwYXJ0IGlzIHByZWRpY3RlZCBvbmNlIGluIHZhbGlkYXRpb24uIFRoZSBtZWFuIG9mIHRoZSBwcm9wb3J0aW9ucyB0aGVyZWZvcmUgZXF1YWxzIHRoZSBvdmVyYWxsIHByb3BvcnRpb24uIFdpdGggZGlmZmVyZW50IHNhbXBsZSBzaXplcywgdGhlIGNob2ljZSBvZiB3ZWlnaHRzIG11c3QgYmUgc3BlY2lmaWVkLgl0b2RhaSBjMTQwLW01IHNjb3JlLXZhbGlkYXRpb24KV2h5IGRvZXMgdGhlIHZhbGlkYXRpb24gbWluaW11bSBub3QgcmVwbGFjZSB0aGUgZmluYWwgdGVzdD8JVGhpcyBtaW5pbXVtIGNvbnRyaWJ1dGVkIHRvIGNob29zaW5nIHRoZSBzZXR0aW5nIGFuZCBtYXkgYmVuZWZpdCBmcm9tIGZsdWN0dWF0aW9ucyBpbiB0aGUgZm9sZHMuIFRoZSBoZWxkLW91dCB0ZXN0IHNldCBjb250cmlidXRlZCBuZWl0aGVyIHRvIGZpdHRpbmcgbm9yIHRvIHNlbGVjdGlvbjsgaXQgZXZhbHVhdGVzIHRoZSBmaW5hbCBtb2RlbCwgd2l0aCB0aGUgdW5jZXJ0YWludHkgb2YgYSBmaW5pdGUgc2FtcGxlLgl0b2RhaSBjMTQwLW01IHNlbGVjdGlvbi1ldC1ldmFsdWF0aW9uCldoYXQgc2hvdWxkIHdlIGRvIGFmdGVyIGNob29zaW5nIEIsIGJlZm9yZSBvcGVuaW5nIHRoZSB0ZXN0IHNldD8JRnJlZXplIHRoZSBzZXR0aW5ncyBhbmQgcHJvdG9jb2wsIHRoZW4gcmVmaXQgdGhlIHRyYW5zZm9ybWF0aW9ucyBhbmQgdGhlIFNWTSBvbiB0aGUgNjAgZGV2ZWxvcG1lbnQgcGFydHMuIFRoZW4gZXZhbHVhdGUgb24gdGhlIHRlc3Qgc2V0IHdpdGhvdXQgcmV1c2luZyBpdCB0byBjaG9vc2UgYW5vdGhlciBwYWlyLgl0b2RhaSBjMTQwLW01IHJlZmFpcmUtYXByZXMtc2VsZWN0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fcfpce ihoylq bqla</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ejjslu abqzvl dksuwt ibjipl vlakzt oqljny uyaf</span></span></h3><dl><div><dt>What you understand</dt><dd>The data that fit a model and the data that evaluate its predictions have distinct roles. Choosing a setting adds a use of the data that must also be made explicit. The washer inspector remains a fictional example.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ykopqz nxpbzm sjxtnq uvvume qvdnzf hhapcj annbnf wpougv nkryjy yxxeok ekeqcw womomc inbkaq ocbnqn oeucbp nxdyni kmqrgi jgholj qkgbqc rkqqhc mjddct jlwwyh xrzfwh jsbqlb</span></span></dd></div><div><dt>Your level</dt><dd>Level 2 to prepare for: recalculate the score, explain the separation of roles, and repair data leakage without inventing a new result. This checkpoint creates no additional canonical milestone; reading and an assisted answer do not establish an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yfhmtk hqeexv qkjcaf wuxwur ziaejf adgnll gjjttm jwkihk egsxge iofzdo mykhsx rmpjrv mobblz mqsmrq lzdsnc fyhrww bjgqsx gtnpzx aruukg mbjoap cnhhaz rtuyju iivroy rmowgh</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the protocol without support after a delay and justify why the split must reflect future use. To connect this skill to a real system, the contract of the called model, the transformations, selection and the path that consumes the results would still need examination under a separate mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c140-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c140-m4.html">Previous</a> · <a href="c141-m1.html">Next</a></nav>
+<footer><p>Course book · C140·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

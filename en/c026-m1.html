@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Choose the next task from a queue using an explicit rule, break ties and calculate waiting time without confusing it with the time spent doing the work.">
+<title>C026·M1 · Queue and priority — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wkqpin lbzang yvaj</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C026·M1</p><h1>Queue and priority</h1><p class="objectif"><span>Your goal</span>Choose the next task from a queue using an explicit rule, break ties and calculate waiting time without confusing it with the time spent doing the work.</p><p class="prerequis"><strong>Before you start</strong><br>c019-m5 : clocks and persistence · c025-m5 : O, Omega and Theta · c020-m5 : counterexamples and sensitivity · c024-m5 : quality of measurements</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>The printer is finishing a job. Meanwhile, you send it a poster A, a ticket B and a meeting notice C, in that order. The documents are accepted but have to wait: keeping them in a queue holds the requests until the printer can choose one.</p><p>A queue in the strict sense serves requests in arrival order: first in, first out. A priority queue also holds waiting requests, but chooses the most urgent priority class first. Here, by convention, a smaller priority number comes before a larger one; ties are broken by arrival order.</p><p>A document being printed is no longer in the waiting queue. Our printer finishes every document it starts: changing a priority can change the next choice without tearing up the document currently coming out. This operation is called uninterrupted, or non-preemptive.</p><p>The whole scene and its durations are fictional. The priorities are labels chosen for this exercise, rather than measurements of importance. Before reading the times in the second diagram, predict whether B or C goes first, then what happens to poster A.</p><div class="schemas"><figure><svg viewBox="0 0 360 350" xmlns="http://www.w3.org/2000/svg" role="img"><title>Waiting documents</title><desc>At 3 minutes, documents A, B and C have all arrived. A has priority 2; B and C have priority 1. B was registered before C. Ranks are distinct from minutes.</desc><text x="180" y="27" text-anchor="middle">At 3 min, the printer becomes free</text><rect x="18" y="48" width="324" height="82" rx="7" class="cadre-neutre" /><text x="34" y="72">A · poster · rank 1</text><text x="34" y="96" class="petite-etiquette">Arrival 0 min · duration 4 min</text><text x="34" y="119" class="petite-etiquette">Priority 2</text><rect x="18" y="143" width="324" height="82" rx="7" class="cadre-resultat" /><text x="34" y="167">B · ticket · rank 2</text><text x="34" y="191" class="petite-etiquette">Arrival 1 min · duration 2 min</text><text x="34" y="214" class="petite-etiquette">Priority 1 · chosen next</text><rect x="18" y="238" width="324" height="82" rx="7" class="cadre-neutre" /><text x="34" y="262">C · notice · rank 3</text><text x="34" y="286" class="petite-etiquette">Arrival 2 min · duration 3 min</text><text x="34" y="309" class="petite-etiquette">Priority 1</text><text x="180" y="342" text-anchor="middle" class="petite-etiquette">B comes before C by arrival rank.</text></svg><figcaption>The cards keep registration order A, B, C. Choosing B first changes neither the documents received nor their durations: only the rule for leaving the queue changes.</figcaption></figure><figure><svg viewBox="0 0 360 350" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two rules, the same documents</title><desc>In arrival order: A from 3 to 7 minutes, B until 9, then C until 12. With priorities: B from 3 to 5, C until 8, then A until 12. Each row covers the same total work duration.</desc><text x="24" y="30">Arrival order</text><rect x="30" y="53" width="128" height="60" class="cadre-prediction" /><text x="94" y="78" text-anchor="middle">A</text><text x="94" y="101" text-anchor="middle" class="petite-etiquette">4 min</text><rect x="158" y="53" width="64" height="60" class="cadre-neutre" /><text x="190" y="78" text-anchor="middle">B</text><text x="190" y="101" text-anchor="middle" class="petite-etiquette">2 min</text><rect x="222" y="53" width="96" height="60" class="cadre-neutre" /><text x="270" y="78" text-anchor="middle">C</text><text x="270" y="101" text-anchor="middle" class="petite-etiquette">3 min</text><text x="30" y="141" text-anchor="middle">3</text><text x="158" y="141" text-anchor="middle">7</text><text x="222" y="141" text-anchor="middle">9</text><text x="318" y="141" text-anchor="middle">12</text><text x="24" y="188">Priority, then arrival</text><rect x="30" y="211" width="64" height="60" class="cadre-resultat" /><text x="62" y="236" text-anchor="middle">B</text><text x="62" y="259" text-anchor="middle" class="petite-etiquette">2 min</text><rect x="94" y="211" width="96" height="60" class="cadre-resultat" /><text x="142" y="236" text-anchor="middle">C</text><text x="142" y="259" text-anchor="middle" class="petite-etiquette">3 min</text><rect x="190" y="211" width="128" height="60" class="cadre-neutre" /><text x="254" y="236" text-anchor="middle">A</text><text x="254" y="259" text-anchor="middle" class="petite-etiquette">4 min</text><text x="30" y="299" text-anchor="middle">3</text><text x="94" y="299" text-anchor="middle">5</text><text x="190" y="299" text-anchor="middle">8</text><text x="318" y="299" text-anchor="middle">12</text><text x="180" y="338" text-anchor="middle" class="petite-etiquette">Times in minutes from the same origin.</text></svg><figcaption>The blocks represent durations; the numbers below their edges represent points in time. The order changes; the final finish time remains 12 min. The job already in progress before 3 min is not shown.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Whenever a job finishes, compare only the waiting tasks: increasing priority number, then increasing arrival rank. Let any job already started run to completion.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Which document does the printer choose when it becomes free?</h3><p>A arrives at 0 min, needs 4 min of work and has priority 2. B arrives at 1 min, needs 2 min and has priority 1. C arrives at 2 min, needs 3 min and has priority 1. The printer becomes free at 3 min. Let us work through the rule “priority, then arrival” and calculate waiting times from arrival.</p><ol class="etapes"><li><h3>Define the data and scope</h3><p>Here, a task is the complete printing of a document. Its identifier i is a letter, A, B or C. aᵢ is its arrival time, dᵢ its work duration, sᵢ its start time, fᵢ its finish time and wᵢ its waiting time before starting. All these times are expressed in minutes; the points in time share the same origin.</p><p>pᵢ denotes priority, with no physical unit. rᵢ is the registration rank, also with no unit: r_A = 1, r_B = 2, r_C = 3. It breaks ties rather than measuring a duration. The subscripts show which document each quantity belongs to.</p><p>Assume known, positive durations, all documents accepted, no breakdowns, no time spent switching between documents and no further arrivals. At 3 min, all the documents are present. The printer handles one document at a time, without interrupting a document it has started. Priorities remain fixed during this first run-through.</p></li><li><h3>Write the selection rule before calculating</h3><p>At a selection time, examine the documents that have arrived but have not yet started. Compare the pairs (pᵢ, rᵢ) from left to right: the smallest p goes first; only if the p values are equal does the smallest r win. Distinct ranks make each choice unambiguous.</p><p>B and C have the same priority 1, which is more urgent than priority 2 for A. B wins the tie because its rank 2 comes before rank 3 for C. After B, C still comes before A. The order of departure is therefore B → C → A.</p><p>This rule does not examine dᵢ: a priority does not mean “shortest job”. Priority numbers are used only for comparison; their difference indicates neither a waiting time nor a speed.</p></li><li><h3>Build the schedule by addition</h3><p>The first print job starts as soon as the printer becomes free: s_B = 3 min. To obtain a finish time, add the work duration to the start time; the next document starts at that finish time, since everything has already arrived.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>f</mi><mi>i</mi></msub><mo>=</mo><msub><mi>s</mi><mi>i</mi></msub><mo>+</mo><msub><mi>d</mi><mi>i</mi></msub></mrow></math></div><p>B: start 3 min, finish 3 + 2 = 5 min. C: start 5 min, finish 5 + 3 = 8 min. A: start 8 min, finish 8 + 4 = 12 min.</p><p>After B leaves, the queue contains only C and A, in departure order. After C leaves, it contains A. After A leaves, it is empty, even though A has not yet finished printing.</p></li><li><h3>Subtract arrival time to find waiting time</h3><p>Waiting here means having arrived without having started. So subtract arrival time from start time, rather than from finish time. The printing itself is not part of wᵢ.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><msub><mi>s</mi><mi>i</mi></msub><mo>−</mo><msub><mi>a</mi><mi>i</mi></msub></mrow></math></div><p>B waits 3 − 1 = 2 min. C waits 5 − 2 = 3 min. A waits 8 − 0 = 8 min.</p><p>Check C: from its arrival at 2 min, its wait of 3 min leads to its start at 5 min; its work lasting 3 min then leads to its finish at 8 min. These durations describe distinct parts of the same sequence.</p></li><li><h3>Calculate the average while keeping individual waiting times</h3><p>The waiting times for B and C add up to 2 + 3 = 5 min. Adding A gives 5 + 8 = 13 min of accumulated waiting time. The average shares this sum among the 3 documents; it does not describe each document.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>w</mi><mo>¯</mo></mover><mo>=</mo><mfrac><mrow><msub><mi>w</mi><mi>A</mi></msub><mo>+</mo><msub><mi>w</mi><mi>B</mi></msub><mo>+</mo><msub><mi>w</mi><mi>C</mi></msub></mrow><mi>n</mi></mfrac><mo>=</mo><mfrac><mn>13</mn><mn>3</mn></mfrac><mtext> min</mtext></mrow></math></div><p>n is the number of documents, here 3, and w̄ denotes the average waiting time. Its exact value is 13/3 min, or approximately 4.33 min. Keep the exact fraction until the final display.</p></li><li><h3>Check the run-through and compare the rules</h3><p>The document durations add up to 4 + 2 = 6 min, then 6 + 3 = 9 min. The occupied interval is 12 − 3 = 9 min: it contains exactly the same work, with no gaps or overlaps. Also check that each start follows the arrival of the document.</p><p>In arrival order, the finish times would be 7, 9, 12 min. The waiting times would be A: 3 min; B: 6 min; C: 7 min, giving 16 min of accumulated waiting time and 5.33 min on average. The first exercise asks you to reconstruct these numbers.</p><p>In this scene, the priority rule reduces average waiting time, but A waits 8 min instead of 3 min. The final finish times coincide at 12 min: the printer has not become faster. This worked example demonstrates neither a rule that is always better nor an improvement on a real printer.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the schedule. Justify choosing B over C, reconstruct the start and finish times, then explain why the waiting time for A increases while the last document finishes at the same time.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The largest numerical priority must go first.”</h3><p>The meaning of the numbers depends on the convention. Here, a smaller number comes before a larger one. Write this sentence before comparing the pairs; for equal priorities, use arrival rank. Priority cannot be inferred from the document name or its duration.</p><a href="#intuition">Reread the convention and the queue cards</a></li><li><h3>“The waiting time for C is calculated using its printing finish time.”</h3><p>The finish time also includes the work done by the printer. Waiting runs from arrival to start: for C, 5 − 2 = 3 min. Only then add its work duration to recover its finish time.</p><a href="#exemple">Revisit the calculation of waiting times and its check</a></li><li><h3>“A more urgent priority immediately interrupts the document being printed.”</h3><p>Our rule makes a choice only when the printer becomes free. Work that has started runs to completion. Interrupting work would be another policy that would need to be defined; a priority label does not add it.</p><a href="#exercices">Test the change while B is printing</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-arrivee"><p class="repere">Exercise 1 · Application · reconstruct a schedule</p>
+<h3>Work through arrival order</h3><p>Use the same arrivals, durations and time when the printer becomes available. Ignore priorities and serve A, B, C. Write the start time, finish time and waiting time for each document, then the average waiting time. Compare the waiting time for A with its waiting time in the priority run-through.</p>
+<label for="reponse-ex-arrivee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-arrivee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-arrivee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-arrivee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-arrivee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A starts at 3 min, rather than at its arrival time: the printer was already working.</p></details><details class="indice"><summary>Hint 2</summary><p>For each document, add its duration to obtain its finish time; subtract its arrival time from its start time to obtain its waiting time.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A starts at 3 min and finishes at 3 + 4 = 7 min. B starts at 7 min and finishes at 7 + 2 = 9 min. C starts at 9 min and finishes at 9 + 3 = 12 min.</p><p>The waiting times are A: 3 − 0 = 3 min; B: 7 − 1 = 6 min; C: 9 − 2 = 7 min. Their sum is 3 + 6 = 9 min, then 9 + 7 = 16 min.</p><p>The exact average is 16/3 = 16/3 min, approximately 5.33 min. A waits 3 min here compared with 8 min under priorities. Checking total work gives 12 − 3 = 9 min under both rules.</p><p class="petit-titre">Check your reasoning</p><ul><li>You place the start of A at the time the printer becomes free.</li><li>You provide waiting times by subtracting arrival times from start times.</li><li>You keep the exact average and identify the document delayed by priority.</li></ul></details></article><article class="exercice" id="ex-priorite"><p class="repere">Exercise 2 · Variation · predict, then calculate</p>
+<h3>The meeting notice moves to another class</h3><p>Return to the initial state, before any choice at 3 min. The priority of C becomes 0; those of A and B remain 2 and 1. Predict the order, then calculate finish times, waiting times and their average. Explain which document moves back compared with the initial run-through.</p>
+<label for="reponse-ex-priorite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-priorite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-priorite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-priorite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-priorite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare priorities first; arrival rank is used only when they are equal.</p></details><details class="indice"><summary>Hint 2</summary><p>C now starts at 3 min. Its 3 min of work delays the start of the next document.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The order becomes C → B → A, because 0 comes before 1, which comes before 2. C finishes at 3 + 3 = 6 min; B finishes at 6 + 2 = 8 min; A finishes at 8 + 4 = 12 min.</p><p>C waits 3 − 2 = 1 min; B waits 6 − 1 = 5 min; A waits 8 − 0 = 8 min. The sum is 1 + 5 = 6 min, then 6 + 8 = 14 min.</p><p>The average is 14/3 min, approximately 4.67 min. B moves back: its waiting time changes from 2 to 5 min; the waiting time for C changes from 3 to 1 min. The batch still finishes at 12 min. The choice follows the stated priorities without seeking to minimize the average.</p><p class="petit-titre">Check your reasoning</p><ul><li>You choose C before B despite its later arrival.</li><li>You recalculate the start of B and its waiting time from arrival.</li><li>You distinguish the priority objective from an objective of minimizing average waiting time.</li></ul></details></article><article class="exercice" id="ex-encours"><p class="repere">Exercise 3 · Transfer · refute a trace</p>
+<h3>A new priority while work is in progress</h3><p>Return to the initial run-through B → C → A. At 4 min, B is already printing; the priority of C then changes from 1 to 0. Someone claims: “C starts right now.” Accept or correct this trace, then give the next start time for C, its finish time, its waiting time and the time when the batch will be complete.</p>
+<label for="reponse-ex-encours">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-encours" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-encours" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-encours" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-encours" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Recover the finish time of B; a priority does not remove work that has already started.</p></details><details class="indice"><summary>Hint 2</summary><p>At the next choice, compare only C and A. For the waiting time of C, keep its original arrival time.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The proposed trace interrupts B, contrary to the assumption. At 4 min, it has 5 − 4 = 1 min of work remaining. B finishes at 5 min; C cannot start earlier.</p><p>At the next choice, C has priority over A. C starts at 5 min and finishes at 5 + 3 = 8 min. Its waiting time remains 5 − 2 = 3 min. A follows and finishes at 12 min.</p><p>The order and schedule remain those of the initial run-through because C was already the next task. A changed priority therefore does not necessarily produce a different schedule; you need to apply the rule again at the time when it can take effect.</p><p class="petit-titre">Check your reasoning</p><ul><li>You reject the immediate start by citing the assumption of no interruption.</li><li>You distinguish the new priority from the remaining work for B.</li><li>You keep the original arrival time of C and explain why the schedule does not change.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="file"><summary><span class="repere">Recall 1</span><span>What is the difference between a waiting document and a document being printed?</span></summary><p>The queue holds accepted documents that have not started. As soon as a document goes to print, it leaves this queue, even though its work is not complete.</p></details><details class="carte" data-carte="choix"><summary><span class="repere">Recall 2</span><span>How can you reconstruct the choice between B and C without memorizing their names?</span></summary><p>First compare priorities using the stated convention. If they are equal, compare arrival ranks: the earlier one wins. This second criterion breaks the tie between B and C in the initial state.</p></details><details class="carte" data-carte="attente"><summary><span class="repere">Recall 3</span><span>How do you calculate waiting time, and why should you avoid using finish time?</span></summary><p>Subtract arrival time from the start of the work: wᵢ = sᵢ − aᵢ. The finish time also includes the work duration; using it would measure time until completion, which is a different quantity.</p></details><details class="carte" data-carte="encours"><summary><span class="repere">Recall 4</span><span>When can a changed priority take effect in our printer?</span></summary><p>At the next choice, once the document being printed is complete. It compares tasks that are still waiting; it does not retroactively interrupt work that has started.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>Does a better average waiting time prove that everyone waits less or that the printer is faster?</span></summary><p>No. Individual waiting times can change in opposite directions. In this scene, the total work and final finish time remain identical. You need to check each waiting time, the priorities and printer occupancy separately.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without reopening the example, reconstruct the sequence: requests that have arrived → tasks still waiting → priority convention and tie-breaking → start and finish of each job → waiting time from arrival → check durations and individual effects. Then explain why changing the next task does not mean interrupting the one in progress.</p></div><div class="exports"><a class="bouton" download="c026-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTE6ZmlsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDI2LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZmlsZS1hdHRlbnRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiBhIHdhaXRpbmcgZG9jdW1lbnQgYW5kIGEgZG9jdW1lbnQgYmVpbmcgcHJpbnRlZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcXVldWUgaG9sZHMgYWNjZXB0ZWQgZG9jdW1lbnRzIHRoYXQgaGF2ZSBub3Qgc3RhcnRlZC4gQXMgc29vbiBhcyBhIGRvY3VtZW50IGdvZXMgdG8gcHJpbnQsIGl0IGxlYXZlcyB0aGlzIHF1ZXVlLCBldmVuIHRob3VnaCBpdHMgd29yayBpcyBub3QgY29tcGxldGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTE6Y2hvaXgiLAogICAgICAidW5pdGUiOiAiYzAyNi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByaW9yaXRlLXN0YWJsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSByZWNvbnN0cnVjdCB0aGUgY2hvaWNlIGJldHdlZW4gQiBhbmQgQyB3aXRob3V0IG1lbW9yaXppbmcgdGhlaXIgbmFtZXM/IiwKICAgICAgInJlcG9uc2UiOiAiRmlyc3QgY29tcGFyZSBwcmlvcml0aWVzIHVzaW5nIHRoZSBzdGF0ZWQgY29udmVudGlvbi4gSWYgdGhleSBhcmUgZXF1YWwsIGNvbXBhcmUgYXJyaXZhbCByYW5rczogdGhlIGVhcmxpZXIgb25lIHdpbnMuIFRoaXMgc2Vjb25kIGNyaXRlcmlvbiBicmVha3MgdGhlIHRpZSBiZXR3ZWVuIEIgYW5kIEMgaW4gdGhlIGluaXRpYWwgc3RhdGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTE6YXR0ZW50ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDI2LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZHVyZWUtYXR0ZW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGNhbGN1bGF0ZSB3YWl0aW5nIHRpbWUsIGFuZCB3aHkgc2hvdWxkIHlvdSBhdm9pZCB1c2luZyBmaW5pc2ggdGltZT8iLAogICAgICAicmVwb25zZSI6ICJTdWJ0cmFjdCBhcnJpdmFsIHRpbWUgZnJvbSB0aGUgc3RhcnQgb2YgdGhlIHdvcms6IHfhtaIgPSBz4bWiIOKIkiBh4bWiLiBUaGUgZmluaXNoIHRpbWUgYWxzbyBpbmNsdWRlcyB0aGUgd29yayBkdXJhdGlvbjsgdXNpbmcgaXQgd291bGQgbWVhc3VyZSB0aW1lIHVudGlsIGNvbXBsZXRpb24sIHdoaWNoIGlzIGEgZGlmZmVyZW50IHF1YW50aXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDI2LW0xOmVuY291cnMiLAogICAgICAidW5pdGUiOiAiYzAyNi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNhbnMtaW50ZXJydXB0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoZW4gY2FuIGEgY2hhbmdlZCBwcmlvcml0eSB0YWtlIGVmZmVjdCBpbiBvdXIgcHJpbnRlcj8iLAogICAgICAicmVwb25zZSI6ICJBdCB0aGUgbmV4dCBjaG9pY2UsIG9uY2UgdGhlIGRvY3VtZW50IGJlaW5nIHByaW50ZWQgaXMgY29tcGxldGUuIEl0IGNvbXBhcmVzIHRhc2tzIHRoYXQgYXJlIHN0aWxsIHdhaXRpbmc7IGl0IGRvZXMgbm90IHJldHJvYWN0aXZlbHkgaW50ZXJydXB0IHdvcmsgdGhhdCBoYXMgc3RhcnRlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAyNi1tMTpjb250cm9sZSIsCiAgICAgICJ1bml0ZSI6ICJjMDI2LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJvbGUtb3Jkb25uYW5jZW1lbnQiLAogICAgICAicXVlc3Rpb24iOiAiRG9lcyBhIGJldHRlciBhdmVyYWdlIHdhaXRpbmcgdGltZSBwcm92ZSB0aGF0IGV2ZXJ5b25lIHdhaXRzIGxlc3Mgb3IgdGhhdCB0aGUgcHJpbnRlciBpcyBmYXN0ZXI/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIEluZGl2aWR1YWwgd2FpdGluZyB0aW1lcyBjYW4gY2hhbmdlIGluIG9wcG9zaXRlIGRpcmVjdGlvbnMuIEluIHRoaXMgc2NlbmUsIHRoZSB0b3RhbCB3b3JrIGFuZCBmaW5hbCBmaW5pc2ggdGltZSByZW1haW4gaWRlbnRpY2FsLiBZb3UgbmVlZCB0byBjaGVjayBlYWNoIHdhaXRpbmcgdGltZSwgdGhlIHByaW9yaXRpZXMgYW5kIHByaW50ZXIgb2NjdXBhbmN5IHNlcGFyYXRlbHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c026-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIGEgd2FpdGluZyBkb2N1bWVudCBhbmQgYSBkb2N1bWVudCBiZWluZyBwcmludGVkPwlUaGUgcXVldWUgaG9sZHMgYWNjZXB0ZWQgZG9jdW1lbnRzIHRoYXQgaGF2ZSBub3Qgc3RhcnRlZC4gQXMgc29vbiBhcyBhIGRvY3VtZW50IGdvZXMgdG8gcHJpbnQsIGl0IGxlYXZlcyB0aGlzIHF1ZXVlLCBldmVuIHRob3VnaCBpdHMgd29yayBpcyBub3QgY29tcGxldGUuCXRvZGFpIGMwMjYtbTEgZmlsZS1hdHRlbnRlCkhvdyBjYW4geW91IHJlY29uc3RydWN0IHRoZSBjaG9pY2UgYmV0d2VlbiBCIGFuZCBDIHdpdGhvdXQgbWVtb3JpemluZyB0aGVpciBuYW1lcz8JRmlyc3QgY29tcGFyZSBwcmlvcml0aWVzIHVzaW5nIHRoZSBzdGF0ZWQgY29udmVudGlvbi4gSWYgdGhleSBhcmUgZXF1YWwsIGNvbXBhcmUgYXJyaXZhbCByYW5rczogdGhlIGVhcmxpZXIgb25lIHdpbnMuIFRoaXMgc2Vjb25kIGNyaXRlcmlvbiBicmVha3MgdGhlIHRpZSBiZXR3ZWVuIEIgYW5kIEMgaW4gdGhlIGluaXRpYWwgc3RhdGUuCXRvZGFpIGMwMjYtbTEgcHJpb3JpdGUtc3RhYmxlCkhvdyBkbyB5b3UgY2FsY3VsYXRlIHdhaXRpbmcgdGltZSwgYW5kIHdoeSBzaG91bGQgeW91IGF2b2lkIHVzaW5nIGZpbmlzaCB0aW1lPwlTdWJ0cmFjdCBhcnJpdmFsIHRpbWUgZnJvbSB0aGUgc3RhcnQgb2YgdGhlIHdvcms6IHfhtaIgPSBz4bWiIOKIkiBh4bWiLiBUaGUgZmluaXNoIHRpbWUgYWxzbyBpbmNsdWRlcyB0aGUgd29yayBkdXJhdGlvbjsgdXNpbmcgaXQgd291bGQgbWVhc3VyZSB0aW1lIHVudGlsIGNvbXBsZXRpb24sIHdoaWNoIGlzIGEgZGlmZmVyZW50IHF1YW50aXR5Lgl0b2RhaSBjMDI2LW0xIGR1cmVlLWF0dGVudGUKV2hlbiBjYW4gYSBjaGFuZ2VkIHByaW9yaXR5IHRha2UgZWZmZWN0IGluIG91ciBwcmludGVyPwlBdCB0aGUgbmV4dCBjaG9pY2UsIG9uY2UgdGhlIGRvY3VtZW50IGJlaW5nIHByaW50ZWQgaXMgY29tcGxldGUuIEl0IGNvbXBhcmVzIHRhc2tzIHRoYXQgYXJlIHN0aWxsIHdhaXRpbmc7IGl0IGRvZXMgbm90IHJldHJvYWN0aXZlbHkgaW50ZXJydXB0IHdvcmsgdGhhdCBoYXMgc3RhcnRlZC4JdG9kYWkgYzAyNi1tMSBzYW5zLWludGVycnVwdGlvbgpEb2VzIGEgYmV0dGVyIGF2ZXJhZ2Ugd2FpdGluZyB0aW1lIHByb3ZlIHRoYXQgZXZlcnlvbmUgd2FpdHMgbGVzcyBvciB0aGF0IHRoZSBwcmludGVyIGlzIGZhc3Rlcj8JTm8uIEluZGl2aWR1YWwgd2FpdGluZyB0aW1lcyBjYW4gY2hhbmdlIGluIG9wcG9zaXRlIGRpcmVjdGlvbnMuIEluIHRoaXMgc2NlbmUsIHRoZSB0b3RhbCB3b3JrIGFuZCBmaW5hbCBmaW5pc2ggdGltZSByZW1haW4gaWRlbnRpY2FsLiBZb3UgbmVlZCB0byBjaGVjayBlYWNoIHdhaXRpbmcgdGltZSwgdGhlIHByaW9yaXRpZXMgYW5kIHByaW50ZXIgb2NjdXBhbmN5IHNlcGFyYXRlbHkuCXRvZGFpIGMwMjYtbTEgY29udHJvbGUtb3Jkb25uYW5jZW1lbnQK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wkqpin lbzang yvaj</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Towards <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dsnrvz edknem cpnb</span></span> · recognize a selection rule without assuming it has run</h3><dl><div><dt>What you understand</dt><dd>A queue holds waiting tasks; a policy chooses which one leaves next. The priority rule and its tie-breaking must be explicit. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fwqivd xtocdy qgdflq avwcpi ywuafk xamlmx becx</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mtvteh wqcjoe zpddlt huizlz hyhevr ybxhhw xxljki ttplwv zxofjx ffaupk uorgcl fkleqq cirwhs mubkbh eqgzwx ezytul rofkcb hldydn xelkxs xwwxdw czpmbi xcmqdt cbnuan qgbgde</span></span></dd></div><div><dt>Level to prepare for</dt><dd>To prepare for the level of this unit, reconstruct the schedule, the tie-breaking and the limit imposed by no interruption without support, on another day. Reading or an assisted answer never constitutes an acquired level. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">venkxi skqvgl bfhtcr mrctql yqleox idbxof zwmo</span></span></dd></div><div><dt>Evidence and what remains open</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uziule ywrzqm nhfqqq oxlgqo xcdnyh soedjh eehsci jvmrfy koviuz yscpwo nyvrie zzyglp xfmihq gdukpt azfbau rtbjaa yeyfyr xomwrc akiwxg ntxfnm xhhaaw rlhjrl ohuxjr mqbdnp</span></span></dd></div><div><dt>Next step</dt><dd>Make the choices again without the solutions, then continue to admission and capacity. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yohhvl rauamm hwbupe jkcuoq lefdzh hwmejf ixxabl fglbzl wpbjnf hvykxk efqtrd mmhvnn hcaazo ofvgri fuwqmx ixqmmw jckjlp skxvfd cjaddg gcmroy brrril cnyqvg muasnc brugpj</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c026-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c025-m5.html">Previous</a> · <a href="c026-m2.html">Next</a></nav>
+<footer><p>Course book · C026·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

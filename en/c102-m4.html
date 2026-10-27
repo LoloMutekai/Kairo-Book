@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Compute the gradient of a scalar loss by working backwards through a graph, then correctly add the contributions to a shared parameter.">
+<title>C102·M4 · Backpropagation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kqfhsg iidogx qwcw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C102·M4</p><h1>Backpropagation</h1><p class="objectif"><span>Your goal</span>Compute the gradient of a scalar loss by working backwards through a graph, then correctly add the contributions to a shared parameter.</p><p class="prerequis"><strong>Before you start</strong><br>c057-m5 : Hessian · c100-m5 : learning curves · c059-m6 : deterministic discrete Bellman · c015-m5 : diagnosis · c102-m1 : matrix chain rule · c102-m2 : computational graph · c102-m3 : automatic differentiation</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a workshop, a small model estimates the water needed for a cleaning task. It includes a component proportional to activity, then a fixed component using the same setting w, and finally an offset b. The data and model are fictional: they let us follow a calculation and do not claim to describe an actual installation.</p><p>The activity x is 3, with no unit. The shared setting w is 2 L and the offset b is 1 L. The prediction p reaches 9 L; the reference quantity y is 7 L. We will measure the difference, then ask: how strongly does each setting affect the loss?</p><p>In the forward pass, each operation produces a value. In the backward pass, it receives the sensitivity of the loss to its output and passes it to its inputs using its local derivatives. This is backpropagation: an organized application of the chain rule, in the reverse order of the value calculations.</p><p>The difficult point is sharing. The same w acts through both the multiplication and the fixed addition. Changing w changes both branches together. Its total sensitivity must therefore combine their contributions. The lines in the diagrams show dependencies; their positions do not represent any physical scale.</p><div class="schemas"><figure><svg viewBox="0 0 360 340" xmlns="http://www.w3.org/2000/svg" role="img"><title>One setting, two paths to the prediction</title><desc>The same w of 2 liters feeds a equal to w times x, giving 6 liters, and a direct path of 2 liters. These two values give s equal to 8 liters. After adding b equal to 1 liter, p is 9 liters. The difference from y equal to 7 liters is 2 liters and the loss is 2 square liters.</desc><rect x="120" y="12" width="120" height="46" rx="7" class="cadre-prediction" /><text x="180" y="41" text-anchor="middle">w = 2 L</text><path d="M145 58L85 92m0-8v8h8M215 58L275 92m-8 0h8v-8" class="trait" /><rect x="12" y="96" width="146" height="70" rx="7" class="cadre-neutre" /><text x="85" y="122" text-anchor="middle">× x = 3</text><text x="85" y="148" text-anchor="middle">a = 6 L</text><rect x="202" y="96" width="146" height="70" rx="7" class="cadre-neutre" /><text x="275" y="122" text-anchor="middle">direct w</text><text x="275" y="148" text-anchor="middle">2 L</text><path d="M85 166L150 198m-8 0h8v-8M275 166L210 198m0-8v8h8" class="trait" /><rect x="105" y="202" width="150" height="46" rx="7" class="cadre-neutre" /><text x="180" y="232" text-anchor="middle">s = 8 L</text><path d="M180 248v20m-5-5 5 5 5-5" class="trait" /><rect x="20" y="272" width="320" height="55" rx="7" class="cadre-resultat" /><text x="180" y="294" text-anchor="middle">p = 9 L ; e = 2 L</text><text x="180" y="316" text-anchor="middle">Loss ℒ = 2 L²</text></svg><figcaption>Forward pass: a = wx, s = a + w, p = s + b, e = p − y; ℒ is e squared divided by 2. The “direct w” box denotes the same parameter as the top box. The model also receives b = 1 L and y = 7 L.</figcaption></figure><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Combine contributions to the shared setting</title><desc>In the backward pass, the sensitivity of the loss to s is 2 liters. Along the path through a, it is multiplied by x equal to 3, contributing 6 liters to the sensitivity to w. The direct path contributes 2 liters. Their sum is 8 liters.</desc><rect x="75" y="12" width="210" height="44" rx="7" class="cadre-resultat" /><text x="180" y="40" text-anchor="middle">Sensitivity to s: 2 L</text><path d="M140 56L85 88m0-8v8h8M220 56L275 88m-8 0h8v-8" class="trait" /><rect x="12" y="92" width="146" height="76" rx="7" class="cadre-neutre" /><text x="85" y="118" text-anchor="middle">Via a: × 3</text><text x="85" y="145" text-anchor="middle">6 L</text><rect x="202" y="92" width="146" height="76" rx="7" class="cadre-neutre" /><text x="275" y="118" text-anchor="middle">Direct: × 1</text><text x="275" y="145" text-anchor="middle">2 L</text><path d="M85 168L150 205m-8 0h8v-8M275 168L210 205m0-8v8h8" class="trait" /><rect x="30" y="209" width="300" height="46" rx="7" class="cadre-prediction" /><text x="180" y="238" text-anchor="middle">For w: 6 + 2 = 8 L</text></svg><figcaption>Backward pass: multiply by the local derivative on each edge. At w, add the contributions; copying only the last one would destroy part of the gradient. Here the sensitivity has unit L²/L, hence L.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Compute and store the forward values; initialize the sensitivities; work backwards through the operations in reverse order; multiply along each branch and add wherever branches meet.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Work backwards from the loss of the cleaning model</h3><p>Keep x = 3, w = 2 L, b = 1 L and y = 7 L. The model is p = wx + w + b; the loss ℒ is (p − y) squared divided by 2. We seek the derivatives with respect to the settings w and b. We will also compute the sensitivity to x, solely to understand the path; x and y remain fixed data.</p><ol class="etapes"><li><h3>Define the symbols, units and assumptions</h3><p>x is a unitless activity index. w is a coefficient in liters, shared between the variable component wx and the fixed component w. b is an offset in liters. p is the predicted quantity, y the reference and e = p − y the signed residual, all in liters. ℒ is a loss in L²: we penalize the squared difference and divide it by 2 to simplify its derivative.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><mi>w</mi><mi>x</mi><mo>+</mo><mi>w</mi><mo>+</mo><mi>b</mi><mo>;</mo><mi>ℒ</mi><mo>=</mo><mfrac><msup><mrow><mo>(</mo><mi>p</mi><mo>−</mo><mi>y</mi><mo>)</mo></mrow><mn>2</mn></msup><mn>2</mn></mfrac></mrow></math></div><p>a = wx and s = a + w name the intermediate results, in liters. The graph is finite, has no loops, and all its operations are differentiable at the values considered. No rounding, threshold or positivity constraint is imposed during differentiation here. The parameters and data remain unchanged between the forward and backward passes.</p><p>For any variable v in the graph, v̄ denotes ∂ℒ/∂v: the bar indicates a loss sensitivity, not an average. ∂ is the partial derivative symbol: the other independent inputs remain fixed. The unit of v̄ is L² divided by the unit of v. Thus w̄ and b̄ are in L, x̄ in L² and ℒ̄ is unitless. The gradient we seek is the pair (w̄, b̄).</p></li><li><h3>Run the forward pass and store its results</h3><p>Multiply the coefficient by the activity: a = 2 × 3 = 6 L. Add the fixed component that shares w: s = 6 + 2 = 8 L. The offset gives p = 8 + 1 = 9 L.</p><p>Subtract the reference to find the direction of the model’s error: e = 9 − 7 = 2 L. Its square is 2 × 2 = 4 L²; the loss is 4/2 = 2 L². Its value alone does not yet tell us how each parameter affects it.</p><p>Store these values: the backward pass uses the derivatives of the operations at this same calculation point. A new value of w would require a new forward pass.</p></li><li><h3>Initialize, then apply a single rule</h3><p>Initialize all sensitivities to 0, then ℒ̄ to 1, since the derivative of the loss with respect to itself is 1. This initial sensitivity is called the seed of the backward pass. For each operation with output v and an input u, add the following contribution to ū:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>u</mi><mo>¯</mo></mover><mo>←</mo><mover><mi>u</mi><mo>¯</mo></mover><mo>+</mo><mover><mi>v</mi><mo>¯</mo></mover><mfrac><mrow><mo>∂</mo><mi>v</mi></mrow><mrow><mo>∂</mo><mi>u</mi></mrow></mfrac></mrow></math></div><p>Here u and v are scalar variables linked by an operation; the local derivative ∂v/∂u concerns only that operation, with its other inputs fixed. Process the operations in the reverse order of their dependencies: all operations using v must have contributed to v̄ before v propagates this sum to its inputs. Contributions accumulate in the same location when a parameter is shared.</p><p>This is reverse mode automatic differentiation applied to a scalar loss. The pass stores the useful forward values and propagates local derivatives; it does not symbolically build the entire expanded expression or numerically perturb each parameter.</p></li><li><h3>Start from the loss and reach the prediction</h3><p>For the loss equal to e squared divided by 2, the local derivative is (2e)/2 = e. The factor from the square and the divisor cancel. Thus ē = ℒ̄ × e = 1 × 2 = 2 L.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>ℒ</mi></mrow><mrow><mo>∂</mo><mi>e</mi></mrow></mfrac><mo>=</mo><mi>e</mi><mo>;</mo><mover><mi>p</mi><mo>¯</mo></mover><mo>=</mo><mover><mi>e</mi><mo>¯</mo></mover><mo>×</mo><mn>1</mn><mo>=</mo><mn>2</mn><mtext> L</mtext></mrow></math></div><p>In e = p − y, the local derivative with respect to p is 1, giving p̄ = 2 L. y remains a fixed reference: no update to y is requested. The information flowing backwards is signed; the positive squared loss does not require a positive gradient in every case.</p></li><li><h3>Pass through the additions and the product</h3><p>In p = s + b, the local derivatives with respect to s and b are 1. Thus s̄ = 2 × 1 = 2 L and b̄ = 2 × 1 = 2 L. Addition passes the sensitivity to each of its inputs; it does not divide it into equal shares.</p><p>In s = a + w, we obtain ā = 2 × 1 = 2 L and a direct contribution to w̄ of 2 L. This contribution must remain in memory while the product is processed.</p><p>In a = wx, the local derivatives are ∂a/∂w = x, which is unitless, and ∂a/∂x = w, in L. The product path therefore contributes 2 × 3 = 6 L to w̄. For x, it gives x̄ = 2 × 2 = 4 L². Multiplying by w instead of x when computing w̄ would confuse the two inputs and their units.</p></li><li><h3>Combine the branches and interpret the gradient</h3><p>w is a single independent variable. Its contributions add up: w̄ = 2 + 6 = 8 L. The parameter gradient, in the order (w, b), is therefore (8 L, 2 L). The result 6 L alone would count only the variable branch.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>ℒ</mi></mrow><mrow><mo>∂</mo><mi>w</mi></mrow></mfrac><mo>=</mo><mi>e</mi><mo>(</mo><mi>x</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>8</mn><mtext> L</mtext></mrow></math></div><p>The gradient describes a local change: for small changes δw and δb, the approximation is δℒ ≈ w̄δw + b̄δb. Here δ means “small change”, with the unit of the corresponding variable; each product is in L². Positive sensitivities indicate that increasing either parameter on its own locally increases the loss. They are neither an amount of water to remove directly nor a training rule.</p><p>Backpropagation computes these derivatives. Choosing a step size and changing the parameters are then tasks for an optimization algorithm; here we keep w and b at their initial values.</p></li><li><h3>Check using an independent expression</h3><p>Combine the branches by hand: p = (x + 1)w + b, with x + 1 = 4. With x and y fixed, the loss is (4w + b − 7 L) squared divided by 2. Its direct derivative with respect to w is (4w + b − 7 L) × 4 = 2 × 4 = 8 L. With respect to b, it is 2 L. We recover the gradient from the backward pass without following its intermediate operations.</p><p>This check specifically tests the combination of branches. The units also agree: a derivative of L² with respect to a parameter in L is in L. Finally, if the reference were exactly the prediction 9 L, the residual would be 0 L, the loss 0 L² and w̄ would be 0 L. This case checks that the derivative vanishes at a 0 residual, without proving the model’s quality on other cleaning tasks.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Start again from the data, draw the two uses of the same w and reconstruct all the sensitivities. Justify the seed at the loss, the local multiplications and the final sum. Then explain why no parameter has been trained yet.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I have a contribution to w; I can replace the old one.”</h3><p>The parameter is shared: its two uses change together. Keep the direct contribution 2 L, then add 6 L from the product. Replacing it would lose a branch. Complete all downstream paths before propagating a sensitivity upstream.</p><a href="#intuition">Reread how the paths combine in the second diagram</a></li><li><h3>“The derivative of a with respect to w is already the loss gradient.”</h3><p>∂a/∂w = x concerns only the product. You still need to multiply by ā, then include the other path to w. Always state which output is being differentiated: a or ℒ. Here the units distinguish the unitless local derivative from the gradient in L.</p><a href="#exemple">Review the propagation rule and the product</a></li><li><h3>“As soon as I know b̄, I change b and continue the backward pass.”</h3><p>The backward pass must use the same state as the forward pass. Changing a parameter while working backwards mixes several calculation points. Finish and check the entire gradient; any subsequent change then requires a new forward pass and reinitialized sensitivities.</p><a href="#exercices">Test reinitialization in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-transmettre"><p class="repere">Exercise 1 · Local application</p>
+<h3>Pass from the output to the inputs</h3><p>In the initial model, p̄ = 2 L and ā = 2 L. Find b̄ and x̄, naming the local derivative used and the unit of the result. Should p̄ be divided between s and b?</p>
+<label for="reponse-ex-transmettre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-transmettre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-transmettre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-transmettre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-transmettre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For b, reread p = s + b with s fixed. For x, reread a = wx with w fixed.</p></details><details class="indice"><summary>Hint 2</summary><p>A contribution is the received sensitivity multiplied by the local derivative; addition has derivative 1 with respect to each of its inputs.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>∂p/∂b = 1, so b̄ = 2 × 1 = 2 L. Changing b alone by a small volume changes p by the same volume; no division between the inputs occurs.</p><p>∂a/∂x = w = 2 L. Thus x̄ = 2 × 2 = 4 L². Since x is unitless, differentiating the loss with respect to x retains the unit L². Being able to compute this sensitivity does not turn x into a parameter to train.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name the derivative of the addition and that of the product.</li><li>Obtain b̄ = 2 L and x̄ = 4 L² with their units.</li><li>Explain why addition does not divide the received sensitivity.</li></ul></details></article><article class="exercice" id="ex-partage"><p class="repere">Exercise 2 · Reconstruction on paper</p>
+<h3>Diagnose a forgotten path</h3><p>Someone computes w̄ = āx = 6 L and declares the calculation finished. Without copying the solution, reconstruct the full sensitivity to w using the graph, then check it by combining wx + w. Explain why two independent parameters would not describe the same model.</p>
+<label for="reponse-ex-partage">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-partage" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-partage" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-partage" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-partage" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Identify every occurrence of w in p = wx + w + b.</p></details><details class="indice"><summary>Hint 2</summary><p>Rewrite p as (x + 1)w + b; if w changes, both occurrences change together.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The product contributes 6 L, but s = a + w also contributes 2 L directly. Their sum is 8 L. The rule must accumulate these values on the same parameter.</p><p>Combining the terms gives ∂p/∂w = x + 1 = 4. Thus ∂ℒ/∂w = e × 4 = 8 L. This alternative expression reveals exactly the missing contribution.</p><p>If the occurrences were replaced by independent parameters u and v, each in liters, in p = ux + v + b, we would obtain two separate derivatives. Then imposing u = v = w requires adding their contributions to recover the derivative of the shared parameter; changing only u does not represent the change to w requested here.</p><p class="petit-titre">Check your reasoning</p><ul><li>Draw and count the two uses of the same parameter.</li><li>Add 6 L and 2 L.</li><li>Recover 8 L using the combined expression and distinguish sharing from independence.</li></ul></details></article><article class="exercice" id="ex-reference"><p class="repere">Exercise 3 · Transfer and diagnosis</p>
+<h3>A new reference, a new backward pass</h3><p>For the same cleaning task and the same x, w and b, replace only the reference with y = 10 L. Predict the sign of the gradient before calculating. Recompute the residual, the loss and the gradient (w̄, b̄). What would w̄ be if the program kept its old value 8 L instead of starting again from 0?</p>
+<label for="reponse-ex-reference">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reference" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reference" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reference" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reference" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The prediction p remains 9 L: the reference enters only in the final subtraction.</p></details><details class="indice"><summary>Hint 2</summary><p>The new e is negative. Multiply it by the same local derivatives, then combine the branches.</p></details><details class="indice"><summary>Hint 3</summary><p>Any intended accumulation across several examples must be stated. Here, the requested gradient is for the new example alone.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The prediction remains 9 L. The residual becomes e = 9 − 10 = -1 L. Its square is 1 L² and the loss is 1/2 L², or 0.50 L². The loss is positive despite a negative residual.</p><p>The seed remains 1 and the sensitivities start again from 0. The backward pass gives p̄ = s̄ = ā = -1 L. Towards w, the contributions are -3 L through the product and -1 L directly: w̄ = -4 L. For b, b̄ = -1 L. These signs make sense: slightly increasing either parameter brings the prediction closer to the reference here.</p><p>Keeping the old sensitivity, the program would display 8 + (-4) = 4 L. This would be the sum of two gradients, rather than the one requested. It could suit an objective explicitly defined as a sum of losses; no such sum is requested in this exercise.</p><p>Reading this solution or using a hint counts as assisted work. To test your mastery, reconstruct the path and justify the signs without support at least 2 days later; immediate success is not enough to establish an attained level.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the prediction fixed and change only the reference.</li><li>Obtain ℒ = 0.50 L² and the gradient (-4 L, -1 L).</li><li>Identify the stale gradient and explain the need for reinitialization.</li><li>Distinguish assisted calculation from an independent reconstruction after a delay.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 1</span><span>In what order is backpropagation performed, and why?</span></summary><p>After the forward pass, initialize the sensitivities to 0 and the loss sensitivity to 1. Process the operations in reverse dependency order so that each output has received all its contributions before passing them to its inputs.</p></details><details class="carte" data-carte="locale"><summary><span class="repere">Recall 2</span><span>What distinguishes the local derivative ∂a/∂w from the sensitivity w̄?</span></summary><p>The first describes only the product a = wx, with its other inputs fixed. w̄ = ∂ℒ/∂w describes the final loss: you must propagate the received sensitivity and add the contributions from all uses of w.</p></details><details class="carte" data-carte="partage"><summary><span class="repere">Recall 3</span><span>Why do the two branches of our w add up?</span></summary><p>w is a single independent variable: its two occurrences change together. The product contributes 6 L and the direct use contributes 2 L; the total derivative is 8 L.</p></details><details class="carte" data-carte="etat"><summary><span class="repere">Recall 4</span><span>Why store the forward values and reinitialize the sensitivities?</span></summary><p>The local derivatives must correspond to the same calculation point. Keeping an old gradient or changing a parameter during the backward pass mixes calculations. Accumulation across different losses must be an explicit objective.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does the backward pass produce, and what decision remains afterwards?</span></summary><p>It produces the derivatives of the loss at the current point. It chooses neither the step size for changing the parameters nor a training procedure. A computed gradient does not demonstrate better predictions on other examples.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the cleaning model, the forward pass and then the backward pass. Explain in one sentence why we multiply along a path and in another why we add at a shared parameter. Recover the gradient using the combined expression, then specify what would still need to be decided to train the model. Reading a page and giving an assisted answer do not establish any attained level.</p></div><div class="exports"><a class="bouton" download="c102-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTQ6b3JkcmUiLAogICAgICAidW5pdGUiOiAiYzEwMi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm9yZHJlLWludmVyc2UiLAogICAgICAicXVlc3Rpb24iOiAiSW4gd2hhdCBvcmRlciBpcyBiYWNrcHJvcGFnYXRpb24gcGVyZm9ybWVkLCBhbmQgd2h5PyIsCiAgICAgICJyZXBvbnNlIjogIkFmdGVyIHRoZSBmb3J3YXJkIHBhc3MsIGluaXRpYWxpemUgdGhlIHNlbnNpdGl2aXRpZXMgdG8gMCBhbmQgdGhlIGxvc3Mgc2Vuc2l0aXZpdHkgdG8gMS4gUHJvY2VzcyB0aGUgb3BlcmF0aW9ucyBpbiByZXZlcnNlIGRlcGVuZGVuY3kgb3JkZXIgc28gdGhhdCBlYWNoIG91dHB1dCBoYXMgcmVjZWl2ZWQgYWxsIGl0cyBjb250cmlidXRpb25zIGJlZm9yZSBwYXNzaW5nIHRoZW0gdG8gaXRzIGlucHV0cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMi1tNDpsb2NhbGUiLAogICAgICAidW5pdGUiOiAiYzEwMi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRlcml2ZWUtbG9jYWxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZGlzdGluZ3Vpc2hlcyB0aGUgbG9jYWwgZGVyaXZhdGl2ZSDiiIJhL+KIgncgZnJvbSB0aGUgc2Vuc2l0aXZpdHkgd8yEPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBmaXJzdCBkZXNjcmliZXMgb25seSB0aGUgcHJvZHVjdCBhID0gd3gsIHdpdGggaXRzIG90aGVyIGlucHV0cyBmaXhlZC4gd8yEID0g4oiC4oSSL+KIgncgZGVzY3JpYmVzIHRoZSBmaW5hbCBsb3NzOiB5b3UgbXVzdCBwcm9wYWdhdGUgdGhlIHJlY2VpdmVkIHNlbnNpdGl2aXR5IGFuZCBhZGQgdGhlIGNvbnRyaWJ1dGlvbnMgZnJvbSBhbGwgdXNlcyBvZiB3LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAyLW00OnBhcnRhZ2UiLAogICAgICAidW5pdGUiOiAiYzEwMi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFjY3VtdWxhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG8gdGhlIHR3byBicmFuY2hlcyBvZiBvdXIgdyBhZGQgdXA/IiwKICAgICAgInJlcG9uc2UiOiAidyBpcyBhIHNpbmdsZSBpbmRlcGVuZGVudCB2YXJpYWJsZTogaXRzIHR3byBvY2N1cnJlbmNlcyBjaGFuZ2UgdG9nZXRoZXIuIFRoZSBwcm9kdWN0IGNvbnRyaWJ1dGVzIDYgTCBhbmQgdGhlIGRpcmVjdCB1c2UgY29udHJpYnV0ZXMgMiBMOyB0aGUgdG90YWwgZGVyaXZhdGl2ZSBpcyA4IEwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTQ6ZXRhdCIsCiAgICAgICJ1bml0ZSI6ICJjMTAyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXRhdC1kdS1jYWxjdWwiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHN0b3JlIHRoZSBmb3J3YXJkIHZhbHVlcyBhbmQgcmVpbml0aWFsaXplIHRoZSBzZW5zaXRpdml0aWVzPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBsb2NhbCBkZXJpdmF0aXZlcyBtdXN0IGNvcnJlc3BvbmQgdG8gdGhlIHNhbWUgY2FsY3VsYXRpb24gcG9pbnQuIEtlZXBpbmcgYW4gb2xkIGdyYWRpZW50IG9yIGNoYW5naW5nIGEgcGFyYW1ldGVyIGR1cmluZyB0aGUgYmFja3dhcmQgcGFzcyBtaXhlcyBjYWxjdWxhdGlvbnMuIEFjY3VtdWxhdGlvbiBhY3Jvc3MgZGlmZmVyZW50IGxvc3NlcyBtdXN0IGJlIGFuIGV4cGxpY2l0IG9iamVjdGl2ZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMi1tNDpwb3J0ZWUiLAogICAgICAidW5pdGUiOiAiYzEwMi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdyYWRpZW50LWV0LW9wdGltaXNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGJhY2t3YXJkIHBhc3MgcHJvZHVjZSwgYW5kIHdoYXQgZGVjaXNpb24gcmVtYWlucyBhZnRlcndhcmRzPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IHByb2R1Y2VzIHRoZSBkZXJpdmF0aXZlcyBvZiB0aGUgbG9zcyBhdCB0aGUgY3VycmVudCBwb2ludC4gSXQgY2hvb3NlcyBuZWl0aGVyIHRoZSBzdGVwIHNpemUgZm9yIGNoYW5naW5nIHRoZSBwYXJhbWV0ZXJzIG5vciBhIHRyYWluaW5nIHByb2NlZHVyZS4gQSBjb21wdXRlZCBncmFkaWVudCBkb2VzIG5vdCBkZW1vbnN0cmF0ZSBiZXR0ZXIgcHJlZGljdGlvbnMgb24gb3RoZXIgZXhhbXBsZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c102-m4-cartes.tsv" href="data:text/tab-separated-values;base64,SW4gd2hhdCBvcmRlciBpcyBiYWNrcHJvcGFnYXRpb24gcGVyZm9ybWVkLCBhbmQgd2h5PwlBZnRlciB0aGUgZm9yd2FyZCBwYXNzLCBpbml0aWFsaXplIHRoZSBzZW5zaXRpdml0aWVzIHRvIDAgYW5kIHRoZSBsb3NzIHNlbnNpdGl2aXR5IHRvIDEuIFByb2Nlc3MgdGhlIG9wZXJhdGlvbnMgaW4gcmV2ZXJzZSBkZXBlbmRlbmN5IG9yZGVyIHNvIHRoYXQgZWFjaCBvdXRwdXQgaGFzIHJlY2VpdmVkIGFsbCBpdHMgY29udHJpYnV0aW9ucyBiZWZvcmUgcGFzc2luZyB0aGVtIHRvIGl0cyBpbnB1dHMuCXRvZGFpIGMxMDItbTQgb3JkcmUtaW52ZXJzZQpXaGF0IGRpc3Rpbmd1aXNoZXMgdGhlIGxvY2FsIGRlcml2YXRpdmUg4oiCYS/iiIJ3IGZyb20gdGhlIHNlbnNpdGl2aXR5IHfMhD8JVGhlIGZpcnN0IGRlc2NyaWJlcyBvbmx5IHRoZSBwcm9kdWN0IGEgPSB3eCwgd2l0aCBpdHMgb3RoZXIgaW5wdXRzIGZpeGVkLiB3zIQgPSDiiILihJIv4oiCdyBkZXNjcmliZXMgdGhlIGZpbmFsIGxvc3M6IHlvdSBtdXN0IHByb3BhZ2F0ZSB0aGUgcmVjZWl2ZWQgc2Vuc2l0aXZpdHkgYW5kIGFkZCB0aGUgY29udHJpYnV0aW9ucyBmcm9tIGFsbCB1c2VzIG9mIHcuCXRvZGFpIGMxMDItbTQgZGVyaXZlZS1sb2NhbGUKV2h5IGRvIHRoZSB0d28gYnJhbmNoZXMgb2Ygb3VyIHcgYWRkIHVwPwl3IGlzIGEgc2luZ2xlIGluZGVwZW5kZW50IHZhcmlhYmxlOiBpdHMgdHdvIG9jY3VycmVuY2VzIGNoYW5nZSB0b2dldGhlci4gVGhlIHByb2R1Y3QgY29udHJpYnV0ZXMgNiBMIGFuZCB0aGUgZGlyZWN0IHVzZSBjb250cmlidXRlcyAyIEw7IHRoZSB0b3RhbCBkZXJpdmF0aXZlIGlzIDggTC4JdG9kYWkgYzEwMi1tNCBhY2N1bXVsYXRpb24KV2h5IHN0b3JlIHRoZSBmb3J3YXJkIHZhbHVlcyBhbmQgcmVpbml0aWFsaXplIHRoZSBzZW5zaXRpdml0aWVzPwlUaGUgbG9jYWwgZGVyaXZhdGl2ZXMgbXVzdCBjb3JyZXNwb25kIHRvIHRoZSBzYW1lIGNhbGN1bGF0aW9uIHBvaW50LiBLZWVwaW5nIGFuIG9sZCBncmFkaWVudCBvciBjaGFuZ2luZyBhIHBhcmFtZXRlciBkdXJpbmcgdGhlIGJhY2t3YXJkIHBhc3MgbWl4ZXMgY2FsY3VsYXRpb25zLiBBY2N1bXVsYXRpb24gYWNyb3NzIGRpZmZlcmVudCBsb3NzZXMgbXVzdCBiZSBhbiBleHBsaWNpdCBvYmplY3RpdmUuCXRvZGFpIGMxMDItbTQgZXRhdC1kdS1jYWxjdWwKV2hhdCBkb2VzIHRoZSBiYWNrd2FyZCBwYXNzIHByb2R1Y2UsIGFuZCB3aGF0IGRlY2lzaW9uIHJlbWFpbnMgYWZ0ZXJ3YXJkcz8JSXQgcHJvZHVjZXMgdGhlIGRlcml2YXRpdmVzIG9mIHRoZSBsb3NzIGF0IHRoZSBjdXJyZW50IHBvaW50LiBJdCBjaG9vc2VzIG5laXRoZXIgdGhlIHN0ZXAgc2l6ZSBmb3IgY2hhbmdpbmcgdGhlIHBhcmFtZXRlcnMgbm9yIGEgdHJhaW5pbmcgcHJvY2VkdXJlLiBBIGNvbXB1dGVkIGdyYWRpZW50IGRvZXMgbm90IGRlbW9uc3RyYXRlIGJldHRlciBwcmVkaWN0aW9ucyBvbiBvdGhlciBleGFtcGxlcy4JdG9kYWkgYzEwMi1tNCBncmFkaWVudC1ldC1vcHRpbWlzYXRpb24K">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kqfhsg iidogx qwcw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lkjjfm mmjldt xtjrys gnqcvb kbdcse jhzali yvev</span></span></h3><dl><div><dt>What you understand</dt><dd>A gradient can be computed by several mechanisms. The backpropagation on this page propagates local derivatives through a graph; the name “gradient” alone in a program is not enough to identify this method.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qrntbj lxzfcq pdjvly pgjche jcvebs nfdavt hjflly gyrlps cjjtwa zpknia atjpmk mcuidz bcergz czejgq xgykzo xvzewm rwbcpo qtosxw uiwqzy culwwz lmvbqq vorbgf arlnpx ykpbbg</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 3: reconstruct the graph, local derivatives, accumulation and algebraic check without support, then explain the units and signs. Reading and assisted calculation never constitute an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hqwysa jkbcwo loqgzh cifjma kmshzb mcyzvv xuuxvx dneqxj lxlctp xqyizp pshzmk rnlqmp afvsim xzaoir fmkneg uymcye rwpsrd ymxodh xsyuom jjujke kqpkex jobyzn eyzmqa gqtajx</span></span></dd></div><div><dt>Next step</dt><dd>Redo the last exercise without support after a delay. C102·M5 will study verification using finite differences. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xdludk tokjdu gtyivj dgwrdw slqeip jwkvrq bzdtia fhdccq jdnjei jlkfrj ehpjxo rlfvhy sydxxk xa</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c102-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c102-m3.html">Previous</a> · <a href="c102-m5.html">Next</a></nav>
+<footer><p>Course book · C102·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

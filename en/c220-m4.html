@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distribute an independent computation across GPU threads and decide whether the full cost, including transfers, justifies moving it.">
+<title>C220·M4 · GPU — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lyddfp jztjhe qzll</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C220·M4</p><h1>GPU</h1><p class="objectif"><span>Your goal</span>Distribute an independent computation across GPU threads and decide whether the full cost, including transfers, justifies moving it.</p><p class="prerequis"><strong>Before you start</strong><br>c176-m5 : correlated simulation · c103-m5 : regularization · c050-m5 : conditioning · c017-m5 : reproducibility protocol · c220-m1 : profiling · c220-m2 : vectorization · c220-m3 : processes</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop checks deviations in the cuts of its panels. For each signed deviation x, in millimetres, it wants to store its square y, in square millimetres. A deviation to the left and a deviation of the same size to the right give the same square. Each panel can be processed without consulting the result for another panel.</p><p>The central processing unit, or CPU, controls the program. The graphics processing unit, or GPU, can make progress on many similar computations using different data. It is given a kernel: the small procedure to apply to each element. A GPU thread is a logical instance of this procedure, associated here with an array slot. This thread is not an independent operating system process.</p><p>The GPU groups and schedules these threads. Creating as many threads as panels does not mean having as many physical units active at the same instant. This work is suitable mainly because the threads follow the same rule and write to distinct slots. Reading neighbouring slots also makes it easier to read from memory.</p><p>The array still needs to be transferred to the GPU and the squares retrieved. Our scene assumes GPU memory separate from host memory, which is the memory the CPU uses. On a machine with shared or unified memory, data movement and its costs must be reconsidered. All deviations, transfer rates and times on this page are fictional; they support a computational model and do not describe the reader’s machine.</p><div class="schemas"><figure><svg viewBox="0 0 360 268" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same rule, separate slots</title><desc>The deviations -3, -1, 2 and 4 millimetres are assigned to distinct threads. Each thread multiplies its own input by itself. The outputs are 9, 1, 4 and 16 square millimetres, in the same order.</desc><text x="180" y="26" text-anchor="middle">x: deviations in mm</text><rect x="20" y="42" width="70" height="42" rx="7" class="cadre-prediction" /><rect x="103" y="42" width="70" height="42" rx="7" class="cadre-prediction" /><rect x="186" y="42" width="70" height="42" rx="7" class="cadre-prediction" /><rect x="269" y="42" width="70" height="42" rx="7" class="cadre-prediction" /><text x="55" y="69" text-anchor="middle">-3</text><text x="138" y="69" text-anchor="middle">-1</text><text x="221" y="69" text-anchor="middle">2</text><text x="304" y="69" text-anchor="middle">4</text><line x1="55" y1="84" x2="55" y2="112" class="trait" /><line x1="138" y1="84" x2="138" y2="112" class="trait" /><line x1="221" y1="84" x2="221" y2="112" class="trait" /><line x1="304" y1="84" x2="304" y2="112" class="trait" /><rect x="20" y="112" width="70" height="44" rx="7" class="cadre-neutre" /><rect x="103" y="112" width="70" height="44" rx="7" class="cadre-neutre" /><rect x="186" y="112" width="70" height="44" rx="7" class="cadre-neutre" /><rect x="269" y="112" width="70" height="44" rx="7" class="cadre-neutre" /><text x="55" y="140" text-anchor="middle">× self</text><text x="138" y="140" text-anchor="middle">× self</text><text x="221" y="140" text-anchor="middle">× self</text><text x="304" y="140" text-anchor="middle">× self</text><line x1="55" y1="156" x2="55" y2="184" class="trait" /><line x1="138" y1="156" x2="138" y2="184" class="trait" /><line x1="221" y1="156" x2="221" y2="184" class="trait" /><line x1="304" y1="156" x2="304" y2="184" class="trait" /><rect x="20" y="184" width="70" height="42" rx="7" class="cadre-resultat" /><rect x="103" y="184" width="70" height="42" rx="7" class="cadre-resultat" /><rect x="186" y="184" width="70" height="42" rx="7" class="cadre-resultat" /><rect x="269" y="184" width="70" height="42" rx="7" class="cadre-resultat" /><text x="55" y="211" text-anchor="middle">9</text><text x="138" y="211" text-anchor="middle">1</text><text x="221" y="211" text-anchor="middle">4</text><text x="304" y="211" text-anchor="middle">16</text><text x="180" y="254" text-anchor="middle">y: squares in mm²</text></svg><figcaption>The columns represent logical threads, not physical cores. Squaring removes the sign of the input; its position in the array is preserved.</figcaption></figure><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>The full path of the batch</title><desc>Starting from host memory: an outbound copy taking 2 milliseconds, a launch taking 1 millisecond, a kernel taking 2 milliseconds, then a return copy taking 2 milliseconds. The result is available on the host after 7 milliseconds. The box heights do not represent durations.</desc><text x="180" y="24" text-anchor="middle">Input on host</text><rect x="25" y="40" width="310" height="44" rx="7" class="cadre-neutre" /><text x="180" y="68" text-anchor="middle">Outbound copy: 2 ms</text><line x1="180" y1="84" x2="180" y2="96" class="trait" /><rect x="25" y="96" width="310" height="44" rx="7" class="cadre-neutre" /><text x="180" y="124" text-anchor="middle">Launch: 1 ms</text><line x1="180" y1="140" x2="180" y2="152" class="trait" /><rect x="25" y="152" width="310" height="44" rx="7" class="cadre-prediction" /><text x="180" y="180" text-anchor="middle">GPU kernel: 2 ms</text><line x1="180" y1="196" x2="180" y2="208" class="trait" /><rect x="25" y="208" width="310" height="44" rx="7" class="cadre-neutre" /><text x="180" y="236" text-anchor="middle">Return copy: 2 ms</text><text x="180" y="284" text-anchor="middle">Output on host: 7 ms</text></svg><figcaption>Fictional durations, with no time scale in the drawing. We add the stages because the model assumes no overlap between copying and computation.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>First check that each thread produces the correct slot; then compare the full time needed to make the same result available in the same place.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Square the deviations, then account for their transfer</h3><p>The pattern (-3, -1, 2, 4) mm is repeated 1000 times: this defines the entire batch, with N = 4 × 1000 = 4000 values. The inputs are already on the host, and we want to retrieve the entire array of squares there, without calculating their sum. The buffers are already allocated and initialization is complete.</p><ol class="etapes"><li><h3>Assign an output to each thread</h3><p>i is the integer index of a slot and has no unit; xᵢ denotes its deviation in mm and yᵢ its square in mm². N is the total number of elements. The thread with index i reads only xᵢ and writes only yᵢ. The input array remains unchanged during this computation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><msup><msub><mi>x</mi><mi>i</mi></msub><mn>2</mn></msup></mrow></math></div><p>This operation runs only if 0 ≤ i &lt; N. If the launch creates extra threads to fill its groups, those threads must neither read nor write outside the array. Distinct writes avoid contention over the same slot here. A shared sum would require another mechanism, which we do not introduce.</p></li><li><h3>Calculate and check the contents</h3><p>For the first pattern: (-3) × (-3) = 9; (-1) × (-1) = 1; 2 × 2 = 4; 4 × 4 = 16. All results are in mm².</p><p>The expected array is therefore the pattern (9, 1, 4, 16) mm² repeated 1000 times, in the same positions as the inputs. It contains 4000 outputs, as required. The squares are nonnegative; the square of each negative input equals that of its absolute value. These checks complement the comparison with a CPU reference, element by element.</p><p>We assume that the small values in this example are exactly representable in the chosen format. This does not promise numerical identity for all GPU computations: the general protocol for comparing rounding differences belongs to the next unit.</p></li><li><h3>State the cost model</h3><p>b = 4 bytes is the space occupied by an element, identical for input and output despite their different physical units. B = 8000 bytes/ms is the fictional effective transfer rate of each copy. rC = 500 values/ms is the rate of the complete reference CPU computation; rG = 2000 values/ms is the rate of the GPU kernel alone. These rates include the local memory accesses required for the computation.</p><p>L = 1 ms is the fictional fixed launch cost. T_C and T_G are the total CPU and GPU durations, in ms. Since the GPU may be asynchronous, timing must wait for its completion and for the return copy to finish; the launch call returning is not enough.</p><p>We assume constant rates for the sizes studied, sufficient memory, an available GPU and no overlap between stages. Allocations and initialization are excluded from this comparison of the two paths, which must be stated with any measurement. A compatible library and driver would be needed to run the kernel in practice.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>T</mi><mi>C</mi></msub><mo>=</mo><mfrac><mi>N</mi><msub><mi>r</mi><mi>C</mi></msub></mfrac><mo>;</mo><msub><mi>T</mi><mi>G</mi></msub><mo>=</mo><mi>L</mi><mo>+</mo><mfrac><mrow><mi>N</mi><mi>b</mi></mrow><mi>B</mi></mfrac><mo>+</mo><mfrac><mi>N</mi><msub><mi>r</mi><mi>G</mi></msub></mfrac><mo>+</mo><mfrac><mrow><mi>N</mi><mi>b</mi></mrow><mi>B</mi></mfrac></mrow></math></div><p>In the formulas, rC and rG are the same rates as r with subscripts C and G. Each fraction of bytes divided by bytes/ms is a duration in ms. The central part N/rG refers only to the kernel.</p></li><li><h3>Count the bytes and copies</h3><p>The outbound copy carries the inputs: N × b = 4000 × 4 = 16000 bytes. The return copy carries as many outputs, and therefore as many bytes. The full path moves 16000 + 16000 = 32000 bytes.</p><p>One copy takes 16000 / 8000 = 2 ms. The two directions take a total of 2 + 2 = 4 ms. The return copy must be counted because the requested result must be available on the host. If another task used it directly on the GPU, the path being compared would need to be redefined.</p></li><li><h3>Compare the full durations</h3><p>The CPU reference takes 4000 / 500 = 8 ms. The GPU kernel takes 4000 / 2000 = 2 ms. Outside the kernel, we incur 4 + 1 = 5 ms. The GPU therefore finishes in 2 + 1 + 2 + 2 = 7 ms.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>A</mi><mo>=</mo><mfrac><msub><mi>T</mi><mi>C</mi></msub><msub><mi>T</mi><mi>G</mi></msub></mfrac><mo>=</mo><mfrac><mn>8</mn><mn>7</mn></mfrac><mo>≈</mo><mn>1.14</mn></mrow></math></div><p>A is the model’s speedup factor and has no unit. Here A exceeds 1, since the GPU path takes less time. The difference is 8 − 7 = 1 ms. Comparing only the CPU and the kernel would give 8 / 2 = 4, omitting the copies and the launch.</p><p>Check using another expression: the variable GPU cost is N × (b/B + 1/rG + b/B). L is added to this. We obtain 7 ms again. This result follows from our fictional assumptions, with no claim of a real performance gain.</p></li><li><h3>Understand when batch size offsets the launch cost</h3><p>For a batch to be faster on the GPU, we need T_G &lt; T_C. Grouping the terms proportional to N gives the inequality below. δ denotes the variable time saving per element, in ms/value, after accounting for both copies.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>δ</mi><mo>=</mo><mfrac><mn>1</mn><msub><mi>r</mi><mi>C</mi></msub></mfrac><mo>−</mo><mo>(</mo><mfrac><mrow><mn>2</mn><mi>b</mi></mrow><mi>B</mi></mfrac><mo>+</mo><mfrac><mn>1</mn><msub><mi>r</mi><mi>G</mi></msub></mfrac><mo>)</mo><mo>;</mo><mi>N</mi><mi>δ</mi><mo>&gt;</mo><mi>L</mi></mrow></math></div><p>If δ is positive, increasing N can offset L: we need N &gt; L/δ. If δ is 0 or negative with positive L, increasing the batch size is never enough in this model. The decision exercise will ask you to calculate this threshold, then check it at equality.</p><p>Real rates can vary with N. We would therefore need to measure the full path against a CPU reference that has already been carefully optimized, and check the resulting contents again before choosing. We stop at this decision about where to run the computation; we develop neither the complete architecture of a GPU nor the implementation of a computing library.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Reconstruct the path of the batch and say where the input and output are at each stage. Why is a shorter kernel time not enough to choose the GPU? Also recall the reason for writing to distinct slots.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I can have all threads write to the first slot.”</h3><p>The writes would contend over a slot, while the other outputs would have no result. Assign slot i to thread i and check 0 ≤ i &lt; N. Our goal is an array of squares; a sum would require a separate operation.</p><a href="#exemple">Review the assignment of outputs at the start of the example</a></li><li><h3>“The kernel finishes quickly, so the whole program has that speedup.”</h3><p>Trace the path through to the result being available on the host: outbound copy, launch, kernel, return copy. Wait for the work to actually finish before stopping the timer. In our model, the relevant ratio is 8/7, not 8/2.</p><a href="#intuition">Review the diagram of the full path</a></li><li><h3>“Increasing the batch size is enough to make the GPU win every time.”</h3><p>First calculate δ, including transfers. If each element costs the GPU as much time or more after the copies, a larger batch size cannot offset the fixed cost L. The threshold requires positive δ and rates assumed to be constant.</p><a href="#exercices">Recall the condition and its check in the decision exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-cases"><p class="repere">Exercise 1 · Application · contents and indexing</p>
+<h3>The first pattern reaches the correct slots</h3><p>Work out the squares of the pattern (-3, -1, 2, 4) mm. However, a procedure writes every square to y[0]. Explain why the final array is incorrect, then give the writing rule and the condition for a valid index.</p>
+<label for="reponse-ex-cases">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cases" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cases" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cases" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cases" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The sign disappears when a value is squared. The element’s position must stay the same.</p></details><details class="indice"><summary>Hint 2</summary><p>Ask yourself which thread fills each slot other than y[0].</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The expected outputs are (9, 1, 4, 16) mm². For example, (-3) × (-3) = 9 mm². Each pattern in the batch must produce these outputs in this order.</p><p>With y[0] for all threads, several threads write to the same slot. No valid result for the entire array is guaranteed: these threads do not fill the other slots. You must not assume that the last element in the list will necessarily be written last.</p><p>Thread i must write yᵢ = xᵢ × xᵢ only when 0 ≤ i &lt; N. The input is read-only, each output has its owner, and extra threads do not touch the array.</p><p class="petit-titre">Check your reasoning</p><ul><li>The squares are correct, nonnegative and in mm².</li><li>The logical order of the outputs is preserved, without imposing an execution order on the threads.</li><li>The fix assigns a distinct slot and bounds the index.</li></ul></details></article><article class="exercice" id="ex-petit-lot"><p class="repere">Exercise 2 · Application · full comparison</p>
+<h3>The same pattern in a smaller batch</h3><p>Repeat the pattern only 100 times, giving N = 400 values. Keep b, B, rC, rG and L unchanged. Predict the choice, then calculate the copies, the kernel, both full durations and A. This extrapolation of rates is part of the fictional model.</p>
+<label for="reponse-ex-petit-lot">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-petit-lot" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-petit-lot" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-petit-lot" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-petit-lot" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each copy carries N × b bytes; the launch still costs L.</p></details><details class="indice"><summary>Hint 2</summary><p>A factor A below 1 means that the GPU path takes more time.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Each copy carries 400 × 4 = 1600 bytes. It takes 1600/8000 = 0.2 ms; the outbound and return copies take 0.4 ms. The kernel takes 400/2000 = 0.2 ms.</p><p>The cost outside the kernel is 0.4 + 1 = 1.4 ms. The GPU therefore takes 1.4 + 0.2 = 1.6 ms. The CPU takes 400/500 = 0.8 ms.</p><p>A = 0.8/1.6 = 0.5. The CPU finishes earlier in this model. Check: the variable terms have decreased in the same proportion as N, but L = 1 ms has not decreased. The kernel still takes less time than the CPU, which is still not enough to decide between the full paths.</p><p class="petit-titre">Check your reasoning</p><ul><li>Count both copies and keep L unchanged.</li><li>Give each duration in ms, then A with no unit.</li><li>Choose the CPU based on the full durations and state the assumptions.</li></ul></details></article><article class="exercice" id="ex-seuil"><p class="repere">Exercise 3 · Decision · justification and boundary case</p>
+<h3>At what batch size should you switch processors?</h3><p>Using the parameters from the example, calculate δ, then L/δ. Give the strict condition on N and check it by calculating both durations exactly at the boundary. Finish by explaining what would change if δ were negative.</p>
+<label for="reponse-ex-seuil">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-seuil" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-seuil" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-seuil" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-seuil" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate the CPU time for a value, then the time for its bytes to travel in both directions and the time for its GPU computation.</p></details><details class="indice"><summary>Hint 2</summary><p>Nδ &gt; L implies N &gt; L/δ only if δ is positive. At equality, neither path is faster.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The CPU uses 1/500 = 0.0020 ms/value. Each value requires 4 + 4 = 8 bytes of transfers, giving 8/8000 = 0.0010 ms/value. The kernel adds 1/2000 = 0.0005 ms/value.</p><p>The variable GPU cost is therefore 0.0015 ms/value. The saving δ is 0.0020 − 0.0015 = 0.0005 ms/value, which is positive. L/δ = 1/0.0005 = 2000 values. The GPU is strictly faster for N &gt; 2000 in this model, and only in this model.</p><p>At N = 2000, the CPU takes 2000/500 = 4 ms. The variable GPU cost is 2000 × 0.0015 = 3 ms; adding L gives 1 + 3 = 4 ms. The durations are equal, which checks the threshold.</p><p>If δ were negative, Nδ could not exceed positive L for a positive number of elements. Increasing the batch size would therefore give no GPU advantage under these assumptions. Changing the location of the data or the computation would create another path to model and verify.</p><p class="petit-titre">Check your reasoning</p><ul><li>Form δ from all variable costs and check its sign.</li><li>Obtain a threshold in values, with a strict inequality.</li><li>Check that the durations are equal at the boundary.</li><li>Limit the decision to the model and address the case of negative δ.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="fil"><summary><span class="repere">Recall 1</span><span>What does a GPU thread do when calculating the squares?</span></summary><p>Thread i runs the kernel for its slot: it reads xᵢ and writes yᵢ = xᵢ × xᵢ, only if 0 ≤ i &lt; N. It is a logical instance, with no required correspondence to a physical core.</p></details><details class="carte" data-carte="independance"><summary><span class="repere">Recall 2</span><span>Why can we process the panels without waiting for neighbouring results?</span></summary><p>Each square depends only on its own input. The input array remains unchanged and each thread writes to a distinct slot. A shared output, such as a sum, would require an additional mechanism.</p></details><details class="carte" data-carte="trajet"><summary><span class="repere">Recall 3</span><span>Which costs must be counted to obtain the squares on the host?</span></summary><p>In our sequential model: outbound copy Nb/B, launch L, kernel N/rG, return copy Nb/B. Timing must wait for the result to be complete. Allocations and initialization are explicitly excluded from this comparison.</p></details><details class="carte" data-carte="amortissement"><summary><span class="repere">Recall 4</span><span>Why does a large batch not guarantee a GPU advantage?</span></summary><p>Offsetting the launch cost requires a positive variable saving δ = 1/rC − (2b/B + 1/rG), then Nδ &gt; L. If δ is 0 or negative with positive L, increasing N is not enough in this model.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>What evidence should you request before choosing the GPU on a real machine?</span></summary><p>Compare the contents with the reference CPU result, then measure the same path through to the result being available in the same place, waiting for GPU completion and stating the measurement scope. The fictional rates and durations on this page prove no real performance.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path from deviations to squares: a common kernel, a bounded index, distinct slots, bytes in both directions, launch and computation. Then reconstruct T_C, T_G and the condition Nδ &gt; L; state separately what the content checks and timing checks establish. Reading or answering after a hint remains preparation: repeat the process without help on another day before proposing human validation.</p></div><div class="exports"><a class="bouton" download="c220-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMjAtbTQ6ZmlsIiwKICAgICAgInVuaXRlIjogImMyMjAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmaWwtZ3B1IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhIEdQVSB0aHJlYWQgZG8gd2hlbiBjYWxjdWxhdGluZyB0aGUgc3F1YXJlcz8iLAogICAgICAicmVwb25zZSI6ICJUaHJlYWQgaSBydW5zIHRoZSBrZXJuZWwgZm9yIGl0cyBzbG90OiBpdCByZWFkcyB44bWiIGFuZCB3cml0ZXMgeeG1oiA9IHjhtaIgw5cgeOG1oiwgb25seSBpZiAwIOKJpCBpIDwgTi4gSXQgaXMgYSBsb2dpY2FsIGluc3RhbmNlLCB3aXRoIG5vIHJlcXVpcmVkIGNvcnJlc3BvbmRlbmNlIHRvIGEgcGh5c2ljYWwgY29yZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIyMC1tNDppbmRlcGVuZGFuY2UiLAogICAgICAidW5pdGUiOiAiYzIyMC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVjcml0dXJlcy1kaXN0aW5jdGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gd2UgcHJvY2VzcyB0aGUgcGFuZWxzIHdpdGhvdXQgd2FpdGluZyBmb3IgbmVpZ2hib3VyaW5nIHJlc3VsdHM/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBzcXVhcmUgZGVwZW5kcyBvbmx5IG9uIGl0cyBvd24gaW5wdXQuIFRoZSBpbnB1dCBhcnJheSByZW1haW5zIHVuY2hhbmdlZCBhbmQgZWFjaCB0aHJlYWQgd3JpdGVzIHRvIGEgZGlzdGluY3Qgc2xvdC4gQSBzaGFyZWQgb3V0cHV0LCBzdWNoIGFzIGEgc3VtLCB3b3VsZCByZXF1aXJlIGFuIGFkZGl0aW9uYWwgbWVjaGFuaXNtLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjIwLW00OnRyYWpldCIsCiAgICAgICJ1bml0ZSI6ICJjMjIwLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY291dC1jb21wbGV0LWdwdSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBjb3N0cyBtdXN0IGJlIGNvdW50ZWQgdG8gb2J0YWluIHRoZSBzcXVhcmVzIG9uIHRoZSBob3N0PyIsCiAgICAgICJyZXBvbnNlIjogIkluIG91ciBzZXF1ZW50aWFsIG1vZGVsOiBvdXRib3VuZCBjb3B5IE5iL0IsIGxhdW5jaCBMLCBrZXJuZWwgTi9yRywgcmV0dXJuIGNvcHkgTmIvQi4gVGltaW5nIG11c3Qgd2FpdCBmb3IgdGhlIHJlc3VsdCB0byBiZSBjb21wbGV0ZS4gQWxsb2NhdGlvbnMgYW5kIGluaXRpYWxpemF0aW9uIGFyZSBleHBsaWNpdGx5IGV4Y2x1ZGVkIGZyb20gdGhpcyBjb21wYXJpc29uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjIwLW00OmFtb3J0aXNzZW1lbnQiLAogICAgICAidW5pdGUiOiAiYzIyMC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNldWlsLWRlLXBsYWNlbWVudCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBhIGxhcmdlIGJhdGNoIG5vdCBndWFyYW50ZWUgYSBHUFUgYWR2YW50YWdlPyIsCiAgICAgICJyZXBvbnNlIjogIk9mZnNldHRpbmcgdGhlIGxhdW5jaCBjb3N0IHJlcXVpcmVzIGEgcG9zaXRpdmUgdmFyaWFibGUgc2F2aW5nIM60ID0gMS9yQyDiiJIgKDJiL0IgKyAxL3JHKSwgdGhlbiBOzrQgPiBMLiBJZiDOtCBpcyAwIG9yIG5lZ2F0aXZlIHdpdGggcG9zaXRpdmUgTCwgaW5jcmVhc2luZyBOIGlzIG5vdCBlbm91Z2ggaW4gdGhpcyBtb2RlbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIyMC1tNDpwcmV1dmUiLAogICAgICAidW5pdGUiOiAiYzIyMC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbXBhcmFpc29uLWVxdWl0YWJsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGV2aWRlbmNlIHNob3VsZCB5b3UgcmVxdWVzdCBiZWZvcmUgY2hvb3NpbmcgdGhlIEdQVSBvbiBhIHJlYWwgbWFjaGluZT8iLAogICAgICAicmVwb25zZSI6ICJDb21wYXJlIHRoZSBjb250ZW50cyB3aXRoIHRoZSByZWZlcmVuY2UgQ1BVIHJlc3VsdCwgdGhlbiBtZWFzdXJlIHRoZSBzYW1lIHBhdGggdGhyb3VnaCB0byB0aGUgcmVzdWx0IGJlaW5nIGF2YWlsYWJsZSBpbiB0aGUgc2FtZSBwbGFjZSwgd2FpdGluZyBmb3IgR1BVIGNvbXBsZXRpb24gYW5kIHN0YXRpbmcgdGhlIG1lYXN1cmVtZW50IHNjb3BlLiBUaGUgZmljdGlvbmFsIHJhdGVzIGFuZCBkdXJhdGlvbnMgb24gdGhpcyBwYWdlIHByb3ZlIG5vIHJlYWwgcGVyZm9ybWFuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c220-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgR1BVIHRocmVhZCBkbyB3aGVuIGNhbGN1bGF0aW5nIHRoZSBzcXVhcmVzPwlUaHJlYWQgaSBydW5zIHRoZSBrZXJuZWwgZm9yIGl0cyBzbG90OiBpdCByZWFkcyB44bWiIGFuZCB3cml0ZXMgeeG1oiA9IHjhtaIgw5cgeOG1oiwgb25seSBpZiAwIOKJpCBpIDwgTi4gSXQgaXMgYSBsb2dpY2FsIGluc3RhbmNlLCB3aXRoIG5vIHJlcXVpcmVkIGNvcnJlc3BvbmRlbmNlIHRvIGEgcGh5c2ljYWwgY29yZS4JdG9kYWkgYzIyMC1tNCBmaWwtZ3B1CldoeSBjYW4gd2UgcHJvY2VzcyB0aGUgcGFuZWxzIHdpdGhvdXQgd2FpdGluZyBmb3IgbmVpZ2hib3VyaW5nIHJlc3VsdHM/CUVhY2ggc3F1YXJlIGRlcGVuZHMgb25seSBvbiBpdHMgb3duIGlucHV0LiBUaGUgaW5wdXQgYXJyYXkgcmVtYWlucyB1bmNoYW5nZWQgYW5kIGVhY2ggdGhyZWFkIHdyaXRlcyB0byBhIGRpc3RpbmN0IHNsb3QuIEEgc2hhcmVkIG91dHB1dCwgc3VjaCBhcyBhIHN1bSwgd291bGQgcmVxdWlyZSBhbiBhZGRpdGlvbmFsIG1lY2hhbmlzbS4JdG9kYWkgYzIyMC1tNCBlY3JpdHVyZXMtZGlzdGluY3RlcwpXaGljaCBjb3N0cyBtdXN0IGJlIGNvdW50ZWQgdG8gb2J0YWluIHRoZSBzcXVhcmVzIG9uIHRoZSBob3N0PwlJbiBvdXIgc2VxdWVudGlhbCBtb2RlbDogb3V0Ym91bmQgY29weSBOYi9CLCBsYXVuY2ggTCwga2VybmVsIE4vckcsIHJldHVybiBjb3B5IE5iL0IuIFRpbWluZyBtdXN0IHdhaXQgZm9yIHRoZSByZXN1bHQgdG8gYmUgY29tcGxldGUuIEFsbG9jYXRpb25zIGFuZCBpbml0aWFsaXphdGlvbiBhcmUgZXhwbGljaXRseSBleGNsdWRlZCBmcm9tIHRoaXMgY29tcGFyaXNvbi4JdG9kYWkgYzIyMC1tNCBjb3V0LWNvbXBsZXQtZ3B1CldoeSBkb2VzIGEgbGFyZ2UgYmF0Y2ggbm90IGd1YXJhbnRlZSBhIEdQVSBhZHZhbnRhZ2U/CU9mZnNldHRpbmcgdGhlIGxhdW5jaCBjb3N0IHJlcXVpcmVzIGEgcG9zaXRpdmUgdmFyaWFibGUgc2F2aW5nIM60ID0gMS9yQyDiiJIgKDJiL0IgKyAxL3JHKSwgdGhlbiBOzrQgPiBMLiBJZiDOtCBpcyAwIG9yIG5lZ2F0aXZlIHdpdGggcG9zaXRpdmUgTCwgaW5jcmVhc2luZyBOIGlzIG5vdCBlbm91Z2ggaW4gdGhpcyBtb2RlbC4JdG9kYWkgYzIyMC1tNCBzZXVpbC1kZS1wbGFjZW1lbnQKV2hhdCBldmlkZW5jZSBzaG91bGQgeW91IHJlcXVlc3QgYmVmb3JlIGNob29zaW5nIHRoZSBHUFUgb24gYSByZWFsIG1hY2hpbmU/CUNvbXBhcmUgdGhlIGNvbnRlbnRzIHdpdGggdGhlIHJlZmVyZW5jZSBDUFUgcmVzdWx0LCB0aGVuIG1lYXN1cmUgdGhlIHNhbWUgcGF0aCB0aHJvdWdoIHRvIHRoZSByZXN1bHQgYmVpbmcgYXZhaWxhYmxlIGluIHRoZSBzYW1lIHBsYWNlLCB3YWl0aW5nIGZvciBHUFUgY29tcGxldGlvbiBhbmQgc3RhdGluZyB0aGUgbWVhc3VyZW1lbnQgc2NvcGUuIFRoZSBmaWN0aW9uYWwgcmF0ZXMgYW5kIGR1cmF0aW9ucyBvbiB0aGlzIHBhZ2UgcHJvdmUgbm8gcmVhbCBwZXJmb3JtYW5jZS4JdG9kYWkgYzIyMC1tNCBjb21wYXJhaXNvbi1lcXVpdGFibGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lyddfp jztjhe qzll</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ajnlhn bkedzx tkqyms vgxitv byocrk azoiaw ffeh</span></span></h3><dl><div><dt>What you understand</dt><dd>A GPU can run suitable work, but its availability and the cost of the path matter in the decision. The workshop model and a machine load rule answer different questions: neither replaces a measurement of the real path.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cnvahc dpijgf vvxtud tcbkhr hhtnke hdbyjq ipdtdg zdyhsc vaklmu gszkou crdszu ielbss vzdksm tiuivc eqrzwj vusbdy gvjwib xczytv rbjryw vtizvm ywrzfi pffyrr cfdsbv zwqivl</span></span></dd></div><div><dt>Your level</dt><dd>To prepare at the level of this unit: justify thread independence, reconstruct the full cost, calculate the threshold and check the outputs without support. Reading the page or answering with a hint never constitutes an acquired level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zbdtdh pcfejv ozryku qrpirj lbyfnx xjcyos wpmnyl zgybdt zntmwe ttxgsq vxrlgh fidjlq fvpzhg zrzzsa yvbwkz sivtin koceol vhwlxu orsznz gvdgpk oiltwc cilwtz nirtxg ofkpqd</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the batch comparison and the threshold check without help, then move on to c220-m5 on numerical reproducibility. Real use would still require choosing an authorized path, checking its implementation and integration, then measuring the contents and the full time; this reading activates nothing.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c220-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c220-m3.html">Previous</a> · <a href="c220-m5.html">Next</a></nav>
+<footer><p>Course book · C220·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a triangular Cholesky factor, justify its conditions, and use it to solve a system without forming an inverse.">
+<title>C050·M1 · Cholesky — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tjnduz ykquvf vlqv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C050·M1</p><h1>Cholesky</h1><p class="objectif"><span>Your goal</span>Build a triangular Cholesky factor, justify its conditions, and use it to solve a system without forming an inverse.</p><p class="prerequis"><strong>Before you start</strong><br>c048-m5 : positivity · c040-m5 : least squares</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small positioning table has two settings that jointly affect its movement. Increasing the horizontal setting can also move the table vertically. To reach the requested position, we therefore need to determine the settings together, rather than divide each displacement separately by a coefficient.</p><p>We use a fictional model of this table. The settings and displacements are normalized: each number is a ratio to a fixed reference, so all quantities on this page are dimensionless. The coefficients are chosen for the calculation; they do not describe a machine that has been measured.</p><p>The matrix A contains the coupling coefficients. Cholesky decomposes it into a triangular factor L and its transpose Lᵀ. In a triangular system, one equation directly gives an unknown; we can then substitute its value into the other equation. The coupled problem thus becomes two short passes.</p><p>The first diagram shows the shape of the factors. The second follows the information during the solution process. Before reading the results, identify which equation lets you start each pass.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two corresponding triangles</title><desc>The rows of the factor L are 2, 0 and then 1, 3. Its transpose swaps rows and columns: 2, 1 and then 0, 3. The zeros are above the diagonal in L and below it in its transpose.</desc><text x="90" y="30" text-anchor="middle">L</text><text x="270" y="30" text-anchor="middle">Lᵀ</text><rect x="30" y="49" width="120" height="106" rx="8" class="cadre-prediction" /><rect x="210" y="49" width="120" height="106" rx="8" class="cadre-resultat" /><text x="65" y="86" text-anchor="middle">2</text><text x="115" y="86" text-anchor="middle">0</text><text x="65" y="132" text-anchor="middle">1</text><text x="115" y="132" text-anchor="middle">3</text><text x="245" y="86" text-anchor="middle">2</text><text x="295" y="86" text-anchor="middle">1</text><text x="245" y="132" text-anchor="middle">0</text><text x="295" y="132" text-anchor="middle">3</text><path d="M161 102h37m-6-6 6 6-6 6" class="trait" /><text x="90" y="185" text-anchor="middle" class="petite-etiquette">Lower triangle</text><text x="270" y="185" text-anchor="middle" class="petite-etiquette">Upper triangle</text><text x="180" y="221" text-anchor="middle">Transpose swaps rows and columns</text></svg><figcaption>The zeros determine the calculation order. L lets us start at the top; Lᵀ lets us start at the bottom. The entries are dimensionless.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>From requested displacement to settings</title><desc>The request b is 8, 22. Forward substitution in Ly equals b gives y equal to 4, 6. Back substitution in L transpose x equals y gives the settings 1, 2. All values are dimensionless.</desc><rect x="20" y="12" width="320" height="50" rx="7" class="cadre-neutre" /><text x="180" y="43" text-anchor="middle">Request b = (8, 22)ᵀ</text><path d="M180 63v33m-6-6 6 6 6-6" class="trait" /><rect x="20" y="98" width="320" height="66" rx="7" class="cadre-prediction" /><text x="180" y="125" text-anchor="middle">Forward substitution: Ly = b</text><text x="180" y="150" text-anchor="middle">Intermediate y = (4, 6)ᵀ</text><path d="M180 165v29m-6-6 6 6 6-6" class="trait" /><rect x="20" y="196" width="320" height="66" rx="7" class="cadre-resultat" /><text x="180" y="223" text-anchor="middle">Back substitution: Lᵀx = y</text><text x="180" y="248" text-anchor="middle">Settings x = (1, 2)ᵀ</text></svg><figcaption>The intermediate vector y is not a new reading. It connects the two triangular systems, because L(Lᵀx) = b.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For a real symmetric positive definite matrix, build A = LLᵀ with L lower triangular and its diagonal strictly positive; then solve Ly = b, followed by Lᵀx = y.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Find the table settings</h3><p>The fictional model is written Ax = b, with x = (u, v)ᵀ for the two settings. The coefficients of A are 4, 2, 2, 10, and the requested displacement b is (8, 22)ᵀ. Let us build the factor, then find the settings, keeping exact values.</p><ol class="etapes"><li><h3>Define the system and the Cholesky requirements</h3><p>x is the column of unknown settings u and v; b is the column of requested displacements. A is a real 2 × 2 matrix, assumed to represent our fictional linear model exactly. a and d denote its diagonal coefficients; c denotes the two equal off-diagonal coefficients. A is therefore symmetric: Aᵀ = A. The symbol ᵀ swaps rows and columns; parentheses followed by ᵀ express a column from a horizontal list.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>A</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>2</mn></mtd><mtd><mn>10</mn></mtd></mtr></mtable><mo>]</mo><mo>;</mo><mi>x</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>u</mi></mtd></mtr><mtr><mtd><mi>v</mi></mtd></mtr></mtable><mo>]</mo><mo>;</mo><mi>b</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>8</mn></mtd></mtr><mtr><mtd><mn>22</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>A real symmetric matrix is positive definite if zᵀAz &gt; 0 for every nonzero real column z. This condition, reviewed in the prerequisite on positivity, guarantees a unique lower triangular factor L with a strictly positive diagonal such that A = LLᵀ. Here we will also check positivity through a sum of squares. Symmetry alone does not guarantee it.</p><p>All coordinates of x, b, and the test vector z are dimensionless. The coefficients of A, L, and Lᵀ are dimensionless too. The roots below are the positive square roots in the real numbers.</p></li><li><h3>Read the product to see what to find</h3><p>Write L with three unknowns: p at the top left, q at the bottom left, and r at the bottom right. The top right entry is 0. The values p and r must be strictly positive. Multiplying a row of L by a column of Lᵀ gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mi>p</mi></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mi>q</mi></mtd><mtd><mi>r</mi></mtd></mtr></mtable><mo>]</mo><mo>;</mo><mi>L</mi><msup><mi>L</mi><mi>T</mi></msup><mo>=</mo><mo>[</mo><mtable><mtr><mtd><msup><mi>p</mi><mn>2</mn></msup></mtd><mtd><mi>p</mi><mi>q</mi></mtd></mtr><mtr><mtd><mi>p</mi><mi>q</mi></mtd><mtd><msup><mi>q</mi><mn>2</mn></msup><mo>+</mo><msup><mi>r</mi><mn>2</mn></msup></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Comparing this product with A gives these relations: the square of p equals a, the product pq equals c, and the sum of the squares of q and r equals d. They impose an order: find p, then q, then r. Squaring means multiplying a number by itself.</p></li><li><h3>Take the first positive root</h3><p>The first entry of A must be the square of p. We take its positive root to satisfy the requirements and fix the sign of the factor.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><msqrt><mi>a</mi></msqrt><mo>=</mo><msqrt><mn>4</mn></msqrt><mo>=</mo><mn>2</mn></mrow></math></div><p>Check: 2 × 2 = 4, and 2 &gt; 0. Taking the root of every entry of A would not reproduce a matrix product: the off-diagonal entry must satisfy pq = c.</p></li><li><h3>Find the coupling coefficient</h3><p>Since pq must give c and p is nonzero, division isolates q. In general, this coefficient can be negative: only the diagonal entries of L are required to be positive.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>q</mi><mo>=</mo><mfrac><mrow><mi>c</mi></mrow><mrow><mi>p</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>2</mn></mrow><mrow><mn>2</mn></mrow></mfrac><mo>=</mo><mn>1</mn></mrow></math></div><p>Check: 2 × 1 = 2, the required off-diagonal coefficient.</p></li><li><h3>Remove the part already accounted for and check positivity</h3><p>The last entry of LLᵀ adds the square of q and the square of r. The square of q is 1. Subtracting it from d leaves 10 − 1 = 9; it is this strictly positive remainder whose root we must take.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><msqrt><mi>d</mi><mo>−</mo><msup><mi>q</mi><mn>2</mn></msup></msqrt><mo>=</mo><msqrt><mn>9</mn></msqrt><mo>=</mo><mn>3</mn></mrow></math></div><p>Check: 3 × 3 = 9 and 1 + 9 = 10. The factor is now fully determined:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>To check positive definiteness without assuming the conclusion, take a test vector z = (s, t)ᵀ, with real, dimensionless s and t. Expanding zᵀAz directly gives the sum of squares below. If the sum is 0, the second square forces t to be 0; the first then forces s to be 0. The sum is therefore strictly positive for every nonzero z.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>z</mi><mi>T</mi></msup><mi>A</mi><mi>z</mi><mo>=</mo><msup><mrow><mo>(</mo><mn>2</mn><mi>s</mi><mo>+</mo><mn>1</mn><mi>t</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mn>9</mn><msup><mi>t</mi><mn>2</mn></msup></mrow></math></div></li><li><h3>Forward substitution: solve Ly = b</h3><p>Let y = (h, k)ᵀ be the dimensionless intermediate column. Since Ax = L(Lᵀx), we first solve Ly = b. The first row contains only h; the second then uses this known h.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>[</mo><mtable><mtr><mtd><mn>2</mn><mi>h</mi><mo>=</mo><mn>8</mn></mtd></mtr><mtr><mtd><mn>1</mn><mi>h</mi><mo>+</mo><mn>3</mn><mi>k</mi><mo>=</mo><mn>22</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>First row: h = 8/2 = 4. In the second row, qh = 1 × 4 = 4. Subtract this known contribution: 22 − 4 = 18, then divide by r: k = 18/3 = 6.</p><p>Check forward substitution: 2 × 4 = 8 and 4 + 3 × 6 = 22. We have y = (4, 6)ᵀ, without having found x yet.</p></li><li><h3>Back substitution: solve Lᵀx = y</h3><p>The transpose is upper triangular. Its last row contains only v: this time, start at the bottom, then substitute into the first row.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>L</mi><mi>T</mi></msup><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo><mo>;</mo><mo>[</mo><mtable><mtr><mtd><mn>2</mn><mi>u</mi><mo>+</mo><mn>1</mn><mi>v</mi><mo>=</mo><mn>4</mn></mtd></mtr><mtr><mtd><mn>3</mn><mi>v</mi><mo>=</mo><mn>6</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Last row: v = 6/3 = 2. The contribution qv is 1 × 2 = 2. First row: subtract qv from h, giving 4 − 2 = 2, then u = 2/2 = 1. The required settings are x = (1, 2)ᵀ, dimensionless.</p><p>L was built using only A: changing the displacement b does not require repeating the factorization. The second exercise reuses this same factor.</p></li><li><h3>Check the factors and settings against the original data</h3><p>Reconstructing A checks the factor independently of the substitutions. The first entry is 4, the off-diagonal entries are 2, and the last is 10: we recover every entry of A.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><msup><mi>L</mi><mi>T</mi></msup><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo><mo>[</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>2</mn></mtd><mtd><mn>10</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Returning to the original system then checks the solution. Horizontal displacement: 4 × 1 + 2 × 2 = 4 + 4 = 8. Vertical displacement: 2 × 1 + 10 × 2 = 2 + 20 = 22. These values match b; the residual Ax − b is 0.</p><p>These equalities are exact for the fictional model. They do not verify the displacement of a real table. In calculations with rounding, we would also examine the difference between A and LLᵀ as well as the residual; this page uses exact fractions.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Recover the order p, q, r from the product LLᵀ, then explain why forward substitution comes before back substitution. What do LLᵀ = A and Ax = b check separately?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“We just need to take the root of every entry.”</h3><p>Matrix multiplication involves sums of products. The off-diagonal coefficient requires q = c/p; to find r, subtract the square of q from d, then take the positive root. Start again from these identities before taking a root.</p><a href="#exemple">Reread the factor product and the remainder under the root</a></li><li><h3>“LᵀL and LLᵀ give the same matrix.”</h3><p>Taking a transpose does not let us swap the order of a product. With our L, the first entry of LᵀL is 5, whereas A starts with 4. Keep the order A = LLᵀ; the exercise on the reversed product reveals the difference.</p><a href="#exercices">Recalculate both products in the first exercise</a></li><li><h3>“The matrix is symmetric and its diagonal is positive, so Cholesky works.”</h3><p>Positivity is required in every nonzero direction. The last exercise preserves symmetry and positive diagonal entries, but makes the remainder under the root 0. A 0 diagonal entry in L violates the strict requirements and prevents the planned divisions.</p><a href="#exercices">Find the direction mapped to 0 in the limiting variant</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-ordre"><p class="repere">Exercise 1 · Warm-up · check a product</p>
+<h3>The transpose on the wrong side</h3><p>For the same table, you are given L with rows (2, 0) and (1, 3). Someone claims that LᵀL = A. Calculate LᵀL, then give the product that actually reconstructs A. Justify your answer without relying only on a memorized rule.</p>
+<label for="reponse-ex-ordre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ordre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ordre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ordre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ordre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first row of Lᵀ is (2, 1). Multiply it by the first column of L.</p></details><details class="indice"><summary>Hint 2</summary><p>An entry of a product is the sum of the products of corresponding entries from a row of the left factor and a column of the right factor.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>First entry of LᵀL: 2 × 2 + 1 × 1 = 5. Off-diagonal entry: 2 × 0 + 1 × 3 = 3. Last entry: 0 × 0 + 3 × 3 = 9. All these entries are dimensionless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>L</mi><mi>T</mi></msup><mi>L</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>5</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd><mtd><mn>9</mn></mtd></mtr></mtable><mo>]</mo><mo>≠</mo><mi>A</mi></mrow></math></div><p>With LLᵀ, the first entry is 4, the off-diagonal entry is 2, and the last is 10: we recover A. The rows and columns actually multiplied explain the difference.</p><p class="petit-titre">Check your reasoning</p><ul><li>I calculate every entry of LᵀL, including the sum in the first entry.</li><li>I show which entry differs from A and reconstruct A using LLᵀ.</li><li>I keep the same factor L and the same table model.</li></ul></details></article><article class="exercice" id="ex-reutiliser"><p class="repere">Exercise 2 · Independent application · keep fractions</p>
+<h3>Another position, the same factor</h3><p>The table and A stay the same. The requested displacement becomes b′ = (1, 2)ᵀ, dimensionless; the prime simply indicates this new request. Reuse L to calculate y′, then x′. Check the settings in Ax′ = b′, keeping exact fractions.</p>
+<label for="reponse-ex-reutiliser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reutiliser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reutiliser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reutiliser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reutiliser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In forward substitution, h′ = 1/2. Then subtract qh′ from 2 before dividing by r.</p></details><details class="indice"><summary>Hint 2</summary><p>In back substitution, v′ comes from the last row. Do not mistake y′ for the setting x′.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Forward substitution: h′ = 1/2 = 1/2. The contribution qh′ is 1/2; the remainder is 2 − 1/2 = 3/2. So k′ = (3/2)/3 = 1/2. The column y′ is (1/2, 1/2)ᵀ.</p><p>Back substitution: v′ = (1/2)/3 = 1/6. The contribution qv′ is 1/6; the remainder is h′ − qv′ = 1/3. So u′ = (1/3)/2 = 1/6. The exact setting is x′ = (1/6, 1/6)ᵀ, dimensionless, or approximately (0.167, 0.167)ᵀ for readability only.</p><p>Exact check in the original model: 4 × (1/6) + 2 × (1/6) = 1; 2 × (1/6) + 10 × (1/6) = 2. We recover b′. Fractions avoid confusing an exact equality with a rounded result.</p><p class="petit-titre">Check your reasoning</p><ul><li>I reuse L without taking new roots.</li><li>I distinguish y′ from x′ and justify the order of substitutions.</li><li>I check both coordinates of Ax′ using fractions, before any rounding.</li></ul></details></article><article class="exercice" id="ex-limite"><p class="repere">Exercise 3 · Critical transfer · examine the assumptions</p>
+<h3>A positive diagonal is not enough</h3><p>In a fictional variant of the same table, only the coefficient d is replaced by 1. A₀ therefore has rows (4, 2) and (2, 1). Can we build the factor with a strictly positive diagonal required in this lesson? Calculate the last remainder, then test the direction z = (−1, 2)ᵀ. What must we state before solving a system with this variant?</p>
+<label for="reponse-ex-limite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-limite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-limite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-limite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-limite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>p and q depend only on a and c; they stay the same. So subtract the square of q from 1.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate A₀z. If a nonzero direction is mapped to 0, strict positivity fails.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The remainder is 1 − 1 = 0. It would force r = 0, contradicting r &gt; 0. The matrix is still symmetric, and its diagonal entries 4 and 1 are positive; these facts alone were therefore insufficient.</p><p>For z = (−1, 2)ᵀ, the first coordinate of A<sub>0</sub>z is 4 × (−1) + 2 × 2 = 0, and the second is 2 × (−1) + 1 × 2 = 0. Thus zᵀA<sub>0</sub>z = 0 with nonzero z: A<sub>0</sub> is not positive definite.</p><p>We can write A<sub>0</sub> = LLᵀ with a factor that has a 0 diagonal entry, but it is not the factor with a strictly positive diagonal required here. The planned back substitution would require division by 0. We must state that this method fails under these assumptions, then examine the model and the request; do not invent a unique solution or silently change a coefficient. With a negative remainder, no real square root would be available.</p><p class="petit-titre">Check your reasoning</p><ul><li>I calculate the 0 remainder and identify the division that has become impossible.</li><li>I provide the nonzero direction and check A₀z = 0.</li><li>I limit my conclusion to the strict Cholesky requirements and identify the model as needing review.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="conditions"><summary><span class="repere">Recall 1</span><span>Which assumptions and convention make the Cholesky factor unique?</span></summary><p>A must be real, symmetric, and positive definite. We require L to be lower triangular with a strictly positive diagonal, and A = LLᵀ. A positive diagonal of A alone is not enough.</p></details><details class="carte" data-carte="construction"><summary><span class="repere">Recall 2</span><span>For A with rows (a, c), (c, d), how do you recover p, q, and r without reciting the numbers on this page?</span></summary><p>Expand LLᵀ with L having rows (p, 0), (q, r). The square of p equals a; pq equals c; the sum of the squares of q and r equals d. Take the positive p = √a, then q = c/p. Subtract the square of q from d and take the positive root for r. Check the remainders before taking roots.</p></details><details class="carte" data-carte="resolution"><summary><span class="repere">Recall 3</span><span>Why must we solve Ly = b before Lᵀx = y?</span></summary><p>Ax = b can be written L(Lᵀx) = b. The intermediate vector y equals Lᵀx. Forward substitution gives y from b; back substitution then gives x from y. L can be reused as long as A does not change.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 4</span><span>Why check LLᵀ = A and Ax = b separately?</span></summary><p>The first check examines the factor; the second examines the substitutions and the resulting settings. Our exact equalities verify the fictional model; they do not establish any real displacement of the table.</p></details><details class="carte" data-carte="reste"><summary><span class="repere">Recall 5</span><span>What does a 0 or negative final remainder mean?</span></summary><p>A 0 remainder forces a 0 diagonal entry in L and falls outside the strict requirements; the divisions needed to solve the system may become impossible. A negative remainder rules out this real root. We must reexamine the assumptions instead of silently changing the model.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking, reconstruct the process: state the assumptions on A; expand LLᵀ; find p, q, and r, justifying each operation; use forward substitution for y; use back substitution for x; check the factor, then the original system. Then explain why a 0 remainder prevents the strict requirements from being met. Reading or an assisted answer does not demonstrate an attained level: repeat the process without support on another day.</p></div><div class="exports"><a class="bouton" download="c050-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTAtbTE6Y29uZGl0aW9ucyIsCiAgICAgICJ1bml0ZSI6ICJjMDUwLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2hvbGVza3ktY29uZGl0aW9ucyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBhc3N1bXB0aW9ucyBhbmQgY29udmVudGlvbiBtYWtlIHRoZSBDaG9sZXNreSBmYWN0b3IgdW5pcXVlPyIsCiAgICAgICJyZXBvbnNlIjogIkEgbXVzdCBiZSByZWFsLCBzeW1tZXRyaWMsIGFuZCBwb3NpdGl2ZSBkZWZpbml0ZS4gV2UgcmVxdWlyZSBMIHRvIGJlIGxvd2VyIHRyaWFuZ3VsYXIgd2l0aCBhIHN0cmljdGx5IHBvc2l0aXZlIGRpYWdvbmFsLCBhbmQgQSA9IExM4bWALiBBIHBvc2l0aXZlIGRpYWdvbmFsIG9mIEEgYWxvbmUgaXMgbm90IGVub3VnaC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1MC1tMTpjb25zdHJ1Y3Rpb24iLAogICAgICAidW5pdGUiOiAiYzA1MC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNob2xlc2t5LWNvbnN0cnVjdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJGb3IgQSB3aXRoIHJvd3MgKGEsIGMpLCAoYywgZCksIGhvdyBkbyB5b3UgcmVjb3ZlciBwLCBxLCBhbmQgciB3aXRob3V0IHJlY2l0aW5nIHRoZSBudW1iZXJzIG9uIHRoaXMgcGFnZT8iLAogICAgICAicmVwb25zZSI6ICJFeHBhbmQgTEzhtYAgd2l0aCBMIGhhdmluZyByb3dzIChwLCAwKSwgKHEsIHIpLiBUaGUgc3F1YXJlIG9mIHAgZXF1YWxzIGE7IHBxIGVxdWFscyBjOyB0aGUgc3VtIG9mIHRoZSBzcXVhcmVzIG9mIHEgYW5kIHIgZXF1YWxzIGQuIFRha2UgdGhlIHBvc2l0aXZlIHAgPSDiiJphLCB0aGVuIHEgPSBjL3AuIFN1YnRyYWN0IHRoZSBzcXVhcmUgb2YgcSBmcm9tIGQgYW5kIHRha2UgdGhlIHBvc2l0aXZlIHJvb3QgZm9yIHIuIENoZWNrIHRoZSByZW1haW5kZXJzIGJlZm9yZSB0YWtpbmcgcm9vdHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTAtbTE6cmVzb2x1dGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDUwLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2hvbGVza3ktcmVzb2x1dGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgbXVzdCB3ZSBzb2x2ZSBMeSA9IGIgYmVmb3JlIEzhtYB4ID0geT8iLAogICAgICAicmVwb25zZSI6ICJBeCA9IGIgY2FuIGJlIHdyaXR0ZW4gTChM4bWAeCkgPSBiLiBUaGUgaW50ZXJtZWRpYXRlIHZlY3RvciB5IGVxdWFscyBM4bWAeC4gRm9yd2FyZCBzdWJzdGl0dXRpb24gZ2l2ZXMgeSBmcm9tIGI7IGJhY2sgc3Vic3RpdHV0aW9uIHRoZW4gZ2l2ZXMgeCBmcm9tIHkuIEwgY2FuIGJlIHJldXNlZCBhcyBsb25nIGFzIEEgZG9lcyBub3QgY2hhbmdlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUwLW0xOmNvbnRyb2xlIiwKICAgICAgInVuaXRlIjogImMwNTAtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjaG9sZXNreS1jb250cm9sZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2hlY2sgTEzhtYAgPSBBIGFuZCBBeCA9IGIgc2VwYXJhdGVseT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZmlyc3QgY2hlY2sgZXhhbWluZXMgdGhlIGZhY3RvcjsgdGhlIHNlY29uZCBleGFtaW5lcyB0aGUgc3Vic3RpdHV0aW9ucyBhbmQgdGhlIHJlc3VsdGluZyBzZXR0aW5ncy4gT3VyIGV4YWN0IGVxdWFsaXRpZXMgdmVyaWZ5IHRoZSBmaWN0aW9uYWwgbW9kZWw7IHRoZXkgZG8gbm90IGVzdGFibGlzaCBhbnkgcmVhbCBkaXNwbGFjZW1lbnQgb2YgdGhlIHRhYmxlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDUwLW0xOnJlc3RlIiwKICAgICAgInVuaXRlIjogImMwNTAtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjaG9sZXNreS1saW1pdGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGEgMCBvciBuZWdhdGl2ZSBmaW5hbCByZW1haW5kZXIgbWVhbj8iLAogICAgICAicmVwb25zZSI6ICJBIDAgcmVtYWluZGVyIGZvcmNlcyBhIDAgZGlhZ29uYWwgZW50cnkgaW4gTCBhbmQgZmFsbHMgb3V0c2lkZSB0aGUgc3RyaWN0IHJlcXVpcmVtZW50czsgdGhlIGRpdmlzaW9ucyBuZWVkZWQgdG8gc29sdmUgdGhlIHN5c3RlbSBtYXkgYmVjb21lIGltcG9zc2libGUuIEEgbmVnYXRpdmUgcmVtYWluZGVyIHJ1bGVzIG91dCB0aGlzIHJlYWwgcm9vdC4gV2UgbXVzdCByZWV4YW1pbmUgdGhlIGFzc3VtcHRpb25zIGluc3RlYWQgb2Ygc2lsZW50bHkgY2hhbmdpbmcgdGhlIG1vZGVsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c050-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hpY2ggYXNzdW1wdGlvbnMgYW5kIGNvbnZlbnRpb24gbWFrZSB0aGUgQ2hvbGVza3kgZmFjdG9yIHVuaXF1ZT8JQSBtdXN0IGJlIHJlYWwsIHN5bW1ldHJpYywgYW5kIHBvc2l0aXZlIGRlZmluaXRlLiBXZSByZXF1aXJlIEwgdG8gYmUgbG93ZXIgdHJpYW5ndWxhciB3aXRoIGEgc3RyaWN0bHkgcG9zaXRpdmUgZGlhZ29uYWwsIGFuZCBBID0gTEzhtYAuIEEgcG9zaXRpdmUgZGlhZ29uYWwgb2YgQSBhbG9uZSBpcyBub3QgZW5vdWdoLgl0b2RhaSBjMDUwLW0xIGNob2xlc2t5LWNvbmRpdGlvbnMKRm9yIEEgd2l0aCByb3dzIChhLCBjKSwgKGMsIGQpLCBob3cgZG8geW91IHJlY292ZXIgcCwgcSwgYW5kIHIgd2l0aG91dCByZWNpdGluZyB0aGUgbnVtYmVycyBvbiB0aGlzIHBhZ2U/CUV4cGFuZCBMTOG1gCB3aXRoIEwgaGF2aW5nIHJvd3MgKHAsIDApLCAocSwgcikuIFRoZSBzcXVhcmUgb2YgcCBlcXVhbHMgYTsgcHEgZXF1YWxzIGM7IHRoZSBzdW0gb2YgdGhlIHNxdWFyZXMgb2YgcSBhbmQgciBlcXVhbHMgZC4gVGFrZSB0aGUgcG9zaXRpdmUgcCA9IOKImmEsIHRoZW4gcSA9IGMvcC4gU3VidHJhY3QgdGhlIHNxdWFyZSBvZiBxIGZyb20gZCBhbmQgdGFrZSB0aGUgcG9zaXRpdmUgcm9vdCBmb3Igci4gQ2hlY2sgdGhlIHJlbWFpbmRlcnMgYmVmb3JlIHRha2luZyByb290cy4JdG9kYWkgYzA1MC1tMSBjaG9sZXNreS1jb25zdHJ1Y3Rpb24KV2h5IG11c3Qgd2Ugc29sdmUgTHkgPSBiIGJlZm9yZSBM4bWAeCA9IHk/CUF4ID0gYiBjYW4gYmUgd3JpdHRlbiBMKEzhtYB4KSA9IGIuIFRoZSBpbnRlcm1lZGlhdGUgdmVjdG9yIHkgZXF1YWxzIEzhtYB4LiBGb3J3YXJkIHN1YnN0aXR1dGlvbiBnaXZlcyB5IGZyb20gYjsgYmFjayBzdWJzdGl0dXRpb24gdGhlbiBnaXZlcyB4IGZyb20geS4gTCBjYW4gYmUgcmV1c2VkIGFzIGxvbmcgYXMgQSBkb2VzIG5vdCBjaGFuZ2UuCXRvZGFpIGMwNTAtbTEgY2hvbGVza3ktcmVzb2x1dGlvbgpXaHkgY2hlY2sgTEzhtYAgPSBBIGFuZCBBeCA9IGIgc2VwYXJhdGVseT8JVGhlIGZpcnN0IGNoZWNrIGV4YW1pbmVzIHRoZSBmYWN0b3I7IHRoZSBzZWNvbmQgZXhhbWluZXMgdGhlIHN1YnN0aXR1dGlvbnMgYW5kIHRoZSByZXN1bHRpbmcgc2V0dGluZ3MuIE91ciBleGFjdCBlcXVhbGl0aWVzIHZlcmlmeSB0aGUgZmljdGlvbmFsIG1vZGVsOyB0aGV5IGRvIG5vdCBlc3RhYmxpc2ggYW55IHJlYWwgZGlzcGxhY2VtZW50IG9mIHRoZSB0YWJsZS4JdG9kYWkgYzA1MC1tMSBjaG9sZXNreS1jb250cm9sZQpXaGF0IGRvZXMgYSAwIG9yIG5lZ2F0aXZlIGZpbmFsIHJlbWFpbmRlciBtZWFuPwlBIDAgcmVtYWluZGVyIGZvcmNlcyBhIDAgZGlhZ29uYWwgZW50cnkgaW4gTCBhbmQgZmFsbHMgb3V0c2lkZSB0aGUgc3RyaWN0IHJlcXVpcmVtZW50czsgdGhlIGRpdmlzaW9ucyBuZWVkZWQgdG8gc29sdmUgdGhlIHN5c3RlbSBtYXkgYmVjb21lIGltcG9zc2libGUuIEEgbmVnYXRpdmUgcmVtYWluZGVyIHJ1bGVzIG91dCB0aGlzIHJlYWwgcm9vdC4gV2UgbXVzdCByZWV4YW1pbmUgdGhlIGFzc3VtcHRpb25zIGluc3RlYWQgb2Ygc2lsZW50bHkgY2hhbmdpbmcgdGhlIG1vZGVsLgl0b2RhaSBjMDUwLW0xIGNob2xlc2t5LWxpbWl0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tjnduz ykquvf vlqv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize a solver and prepare to choose its method</h3><dl><div><dt>You understand</dt><dd>Cholesky uses symmetry and positive definiteness to solve a system through two substitutions. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zpkeiz gitgdq mzbtvl cudpdm dckbnb uvcbhf tjlbex sdszcm gfyzka ivhkyj jgxrcx kpufif aqkdmh bu</span></span></dd></div><div><dt>Existing code and source</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">knvntq shakpc bwpoeg eqcxxn tqnvmi lqozxa mckajr kolaqa xhaeie oysbnv hefblr abqhcb foelhz xlxsbf hjasvm cocmvm kgpnic kdxlpe yedkjq zpeblr tqdbbo cqdeuo diofns pjlxff</span></span></dd></div><div><dt>Level to prepare for</dt><dd>At the intended intermediate level, recover a factor, justify its assumptions, repeat the substitutions without help, and explain the failure case. Neither reading, consulting a solution, nor an assisted answer establishes an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">snshzq xpoybu lryaie czcgdc gpnndt fqyvay zqjjig lbifur xclkdm ifqbdo mnmchw gmiwoe zqijcs sykuul nqmulx dekcvu pytgtp hksihw zhcmjg bgxzod ltbrgk yqmfrj zxodqc vcwvng</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the exercises without support after a delay, then prepare a targeted review of the callers you are authorized to inspect: which assumptions about their matrix would actually be established? Any specialization would require its own evidence. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kdizcl fqvafa jznjwe vzwnip sfxeza frnzhc qlvreh qnsygc hjxodz ewzgta cwwuho baihoe xvfkuu ej</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c050-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c049-m5.html">Previous</a> · <a href="c050-m2.html">Next</a></nav>
+<footer><p>Course book · C050·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

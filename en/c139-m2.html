@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a density from Gaussian components, then calculate the probabilistic membership of an observation while distinguishing proportion, density, and responsibility.">
+<title>C139·M2 · Gaussian mixtures — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yfffxd wsmrfk hyxp</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C139·M2</p><h1>Gaussian mixtures</h1><p class="objectif"><span>Your goal</span>Build a density from Gaussian components, then calculate the probabilistic membership of an observation while distinguishing proportion, density, and responsibility.</p><p class="prerequis"><strong>Before you start</strong><br>c137-m5 : choosing the rank · c061-m5 : identifiability and uncertainty · c067-m5 : pipeline · c139-m1 : k-means</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop fills seed packets using 2 dosing modes. Mode A is consistent; mode B has more spread. Both aim for the same mean mass, 100 g. The packets are then mixed and the mode labels removed. You weigh a packet at 100 g: which mode did it come from?</p><p>The scene and all its parameters are fictional. We assume that the proportion of mode A is 1/4 and that of mode B is 3/4. Before weighing, B is therefore more likely. But masses very close to the centre are more concentrated in the consistent mode: the reading also provides information.</p><p>A component here is the distribution of masses produced by a mode. We represent it with a normal distribution, also called a Gaussian: a bell curve described by its mean and standard deviation. The standard deviation measures spread in grams; it is 2 g for A and 4 g for B. The variance is its square, in grams squared.</p><p>The mixture describes choosing a mode, then drawing a mass according to that mode. Each packet comes from a single mode; our knowledge of that mode may remain divided between possibilities. Clustering by centres, as in the previous unit, is insufficient here: the centres coincide, while the spreads differ. We will keep the parameters fixed to learn to interpret this model; estimating them will wait until the next unit.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>A hidden mode, a visible mass</title><desc>The model chooses A with proportion 1/4 or B with proportion 3/4. The means are 100 grams. The standard deviations are 2 and 4 grams respectively. The reading of 100 grams does not directly reveal the mode.</desc><rect x="55" y="12" width="250" height="44" rx="7" class="cadre-neutre" /><text x="180" y="40" text-anchor="middle">Choose the mode</text><path d="M180 56v16H88v22M180 72h92v22" class="trait" /><rect x="14" y="94" width="148" height="94" rx="7" class="cadre-prediction" /><text x="88" y="119" text-anchor="middle">Mode A</text><text x="88" y="147" text-anchor="middle">Proportion 1/4</text><text x="88" y="174" text-anchor="middle" class="petite-etiquette">Std dev. 2 g</text><rect x="198" y="94" width="148" height="94" rx="7" class="cadre-neutre" /><text x="272" y="119" text-anchor="middle">Mode B</text><text x="272" y="147" text-anchor="middle">Proportion 3/4</text><text x="272" y="174" text-anchor="middle" class="petite-etiquette">Std dev. 4 g</text><path d="M88 188v20h184v-20M180 208v22" class="trait" /><rect x="40" y="230" width="280" height="44" rx="7" class="cadre-resultat" /><text x="180" y="258" text-anchor="middle">Observed mass: 100 g</text><text x="180" y="295" text-anchor="middle" class="petite-etiquette">The original mode stays hidden</text></svg><figcaption>Read from top to bottom: choose a mode, produce a mass, then observe only the reading. The proportions describe the choice before observation.</figcaption></figure><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same centre, different spreads</title><desc>Qualitative shapes of the densities of each mode before weighting. A is narrower and taller; B is more spread out. At the shared centre of 100 grams, the height of A is 2 times that of B. Each curve has a total area equal to 1.</desc><text x="20" y="28">Density of each mode</text><text x="20" y="54" class="petite-etiquette">Shape before weighting</text><text x="180" y="85" text-anchor="middle" class="resultat">A: more concentrated</text><path d="M28 210C95 210 117 207 133 178C149 145 155 110 180 110C205 110 211 145 227 178C243 207 265 210 332 210" class="chemin-correction" /><path d="M28 209C71 206 93 191 119 177C143 164 161 160 180 160C199 160 217 164 241 177C267 191 289 206 332 209" class="trait" /><text x="270" y="145" text-anchor="middle" class="petite-etiquette">B: spread out</text><line x1="28" y1="218" x2="332" y2="218" class="trait" /><line x1="180" y1="212" x2="180" y2="225" class="trait" /><text x="180" y="250" text-anchor="middle">Shared centre: 100 g</text><text x="180" y="280" text-anchor="middle" class="petite-etiquette">Height at centre: A / B = 2</text></svg><figcaption>These curves show the components before multiplication by their proportions. A height describes a density, not a probability of origin. The drawing is qualitative; the ratio at the centre will be calculated exactly.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For an observation, multiply the density of each component by its proportion, add these contributions, then divide each contribution by their sum to obtain the probabilistic memberships.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Where did the packet weighed at the centre come from?</h3><p>The observed mass is x = 100 g. The modes have the shared mean μ = 100 g, standard deviations σ_A = 2 g and σ_B = 4 g, and proportions w_A = 1/4, w_B = 3/4. Let us calculate the mixture density at this mass and the probabilities of origin under this fixed model.</p><ol class="etapes"><li><h3>Separate the observable quantity, the mode, and the parameters</h3><p>X is the random mass of a packet; x is its observed value, both in grams. Z is the hidden mode label, A or B; it is not a mass. The notation P denotes a probability. For j equal to A or B, w_j = P(Z = j) is the proportion before weighing, with no unit. Here w_A + w_B = 1, and each weight is between 0 and 1.</p><p>μ_j is the mean of X given Z = j. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bfbshz gegyqw rdyhhs iqpzny ztzlcm lvysxo iynd</span></span> The variances are 4 g² for A and 16 g² for B. Equal means do not require equal spreads.</p><p>We assume a single mode per packet and a Gaussian conditional distribution of mass. The parameters are given, with no estimation uncertainty in this exercise. The reading is treated as an exact continuous observation: rounding by a scale would require calculating probabilities over an interval. A Gaussian mathematically allows negative masses; here it is an approximation around a positive target, not a physical law for all masses.</p></li><li><h3>Write the density of each component</h3><p>f_j(x) denotes the conditional density of X in mode j, in inverse grams. A density gives a probability through an area over an interval. The probability of obtaining exactly x in this continuous model is 0; f_j(x) therefore does not denote that point probability.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><mfrac><mn>1</mn><msqrt><mrow><mn>2</mn><mi>π</mi></mrow></msqrt></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mi>C</mi><msub><mi>σ</mi><mi>j</mi></msub></mfrac><mi>exp</mi><mo>(</mo><mo>−</mo><mfrac><msup><mrow><mo>(</mo><mfrac><mrow><mi>x</mi><mo>−</mo><msub><mi>μ</mi><mi>j</mi></msub></mrow><msub><mi>σ</mi><mi>j</mi></msub></mfrac><mo>)</mo></mrow><mn>2</mn></msup><mn>2</mn></mfrac><mo>)</mo></mrow></math></div><p>C is a positive constant with no unit, kept symbolic for an exact calculation. π is the usual geometric constant; exp is the exponential function, with exp(0) = 1. The quotient (x − μ_j)/σ_j, called the standardized deviation, has no unit: its square can enter the exponential. The factor C/σ_j ensures a total area equal to 1 under each bell curve.</p></li><li><h3>Mix the distributions without averaging the packets</h3><p>p(x) is the density of mass when the mode is no longer known, in the same unit as f_j(x). Modes A and B are mutually exclusive possibilities for the origin, so we add their weighted contributions.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><msub><mi>w</mi><mi>A</mi></msub><msub><mi>f</mi><mi>A</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>+</mo><msub><mi>w</mi><mi>B</mi></msub><msub><mi>f</mi><mi>B</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math></div><p>Since each density has area 1, the area of the mixture is w_A + w_B = 1. The weights apply to distributions: each packet is not made by adding fractions of masses from the modes. The sum of bell curves is generally not a single Gaussian. It may also have only a single peak, as here with this shared centre; the number of components cannot be read off by counting peaks.</p></li><li><h3>Calculate the heights at the observed mass</h3><p>In each mode, the deviation from the centre is 100 − 100 = 0 g. The standardized deviations are 0 for A and 0 for B; the exponential is therefore 1 in both cases. Division by the standard deviation remains.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>f</mi><mi>A</mi></msub><mo>(</mo><mn>100</mn><mo>)</mo><mo>=</mo><mfrac><mi>C</mi><mn>2</mn></mfrac><mtext> par gramme</mtext><mo>;</mo><msub><mi>f</mi><mi>B</mi></msub><mo>(</mo><mn>100</mn><mo>)</mo><mo>=</mo><mfrac><mi>C</mi><mn>4</mn></mfrac><mtext> par gramme</mtext></mrow></math></div><p>The coefficients of C are 1/2 and 1/4 per gram respectively. Their ratio is 2: at its centre, A has a higher density. This ratio concerns the reading given the mode; it does not yet account for how frequent the modes are.</p></li><li><h3>Apply the weights and calculate the total density</h3><p>The contribution of A is (1/4) × (1/2) × C = (1/8) × C per gram. That of B is (3/4) × (1/4) × C = (3/16) × C per gram. B is less concentrated, but its higher proportion compensates for this difference here.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>(</mo><mn>100</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>1/8</mn><mo>+</mo><mn>3/16</mn><mo>)</mo><mi>C</mi><mo>=</mo><mn>5/16</mn><mi>C</mi><mtext> par gramme</mtext></mrow></math></div><p>We keep C exact; no rounding of π or a square root is needed. This sum serves as the total density and a common reference for comparing the contributions. It is strictly positive.</p></li><li><h3>Reverse the question using responsibilities</h3><p>The responsibility γ_j(x) is the probability of mode j after observing x, under the model: γ_j(x) = P(Z = j given X = x). The symbol γ is read as “gamma”. Bayes’ formula uses densities here:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>γ</mi><mi>j</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mrow><msub><mi>w</mi><mi>j</mi></msub><msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mrow><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></mfrac></mrow></math></div><p>The denominator of this fraction is p(x). To recover this ratio without dividing by a point probability of 0, first imagine a small interval around x: Bayes compares the probabilities of this interval in each mode. As the interval shrinks, its common width cancels and the ratio of densities remains. The Gaussians are continuous and p(x) is positive, which makes this step valid here.</p><p>The numerator and denominator have the same unit: γ_j(x) has no unit. Dividing by their sum normalizes the contributions; the responsibilities sum to 1. This is a probabilistic assignment of origin, not a new mass or a physical fraction of the packet.</p></li><li><h3>Obtain and interpret the result</h3><p>The factor C and the unit cancel in each quotient. Only rational fractions remain:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>γ</mi><mi>A</mi></msub><mo>(</mo><mn>100</mn><mo>)</mo><mo>=</mo><mfrac><mn>1/8</mn><mn>5/16</mn></mfrac><mo>=</mo><mn>2/5</mn><mo>=</mo><mn>0.40</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>γ</mi><mi>B</mi></msub><mo>(</mo><mn>100</mn><mo>)</mo><mo>=</mo><mfrac><mn>3/16</mn><mn>5/16</mn></mfrac><mo>=</mo><mn>3/5</mn><mo>=</mo><mn>0.60</mn></mrow></math></div><p>The reading changes the probability of A from 0.25 before observation to 0.40 after observation. It therefore favours A relative to its starting point, while leaving B more likely. If a single label is required and we choose the highest responsibility, we choose B; we then lose the remaining uncertainty. The actual mode of this packet has not been observed.</p></li><li><h3>Check another way and limit the conclusion</h3><p>Normalization: 2/5 + 3/5 = 1. Each value is between 0 and 1. Let us also check the ratio without recalculating p(x): γ_A/γ_B = (w_A/w_B) × (f_A/f_B) = (1/4)/(3/4) × 2 = 2/3. We recover the ratio of the final responsibilities.</p><p>The result depends on the proportions AND the spreads, not just the distances to the centres. Swapping the names A and B along with all their parameters would swap the responsibilities without changing the total density: the letters have no explanatory power of their own.</p><p>We have evaluated a fixed mixture. We have neither learned its parameters nor chosen its number of components. Correct normalization does not demonstrate that these modes represent a real workshop. Estimation by alternation will be covered in C139·M3; choosing the number of groups and studying anomalies will come later.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Start again from choosing the mode and then weighing the packet, explain why multiplication must come before normalization, and recover the responsibilities. How can the reading increase the probability of A while leaving B more likely? An answer produced with the solution open remains an assisted answer.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The tallest bell curve at the observed point must give the most likely mode.”</h3><p>The height f_j(x) still has to be multiplied by w_j. Here A has a density 2 times as high at the centre, but B remains more likely after weighting. Reconstruct the contributions 1/8 × C and 3/16 × C per gram before comparing.</p><a href="#exemple">Revisit the weighting and then the responsibilities</a></li><li><h3>“Density and responsibility are the same probability.”</h3><p>f_j(x) describes the mass given the mode, in inverse grams. γ_j(x) describes the mode given the mass, with no unit. Their questions are reversed. Normalizing the weighted contributions gives the latter; an isolated height does not.</p><a href="#exemple">Reread the units and Bayes’ formula</a></li><li><h3>“A mixture of 2 Gaussians must have 2 clearly separated bumps.”</h3><p>Our components have the same centre, with different spreads. Their bell curves overlap and the mixture has only a single peak. A component is a distribution in the model; it is not a bump that would necessarily have been identified on a graph.</p><a href="#intuition">Review components with the same centre</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-dispersion"><p class="repere">Exercise 1 · Warm-up · correct the units</p>
+<h3>Variance or standard deviation?</h3><p>For the same modes, someone reads the variances 4 g² and 16 g², then reports the densities at the centre as C/4 and C/16 per gram. Correct the denominators and recover the ratio of the heights. Why would the proposed ratio be misleading?</p>
+<label for="reponse-ex-dispersion">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-dispersion" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-dispersion" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-dispersion" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-dispersion" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The formula divides by σ_j. Find the positive number whose square gives each variance.</p></details><details class="indice"><summary>Hint 2</summary><p>At the centre, the exponential is 1. The factor C cancels in the ratio of the heights.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>2 × 2 = 4: the standard deviation of A is 2 g. Likewise, 4 × 4 = 16: that of B is 4 g. We therefore obtain C/2 and C/4 per gram.</p><p>The correct ratio is (1/2)/(1/4) = 2. Using the variances directly would put a quantity in grams squared in the denominator of a density of mass. The ratio would then overestimate the advantage of A at the centre. This check comes before any weighting by the proportions.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover 2 g and 4 g from their squares.</li><li>Obtain the ratio 2 while distinguishing variance from standard deviation.</li><li>State the density unit of inverse grams.</li></ul></details></article><article class="exercice" id="ex-proportions"><p class="repere">Exercise 2 · Application · redo the normalization</p>
+<h3>The modes become equally frequent</h3><p>In the same fictional workshop, keep the means, standard deviations, and reading, but replace the proportions with w_A = w_B = 1/2. Calculate the contributions, the total density at 100 g, and the responsibilities. Does the most likely mode change?</p>
+<label for="reponse-ex-proportions">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-proportions" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-proportions" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-proportions" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-proportions" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The conditional densities do not change: they are still C/2 and C/4 per gram.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the new sum of contributions before normalizing. The old sum no longer corresponds to this model.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The contribution of A is (1/2) × (1/2) × C = (1/4) × C per gram; that of B is (1/2) × (1/4) × C = (1/8) × C per gram. The total density is therefore (3/8) × C per gram.</p><p>Divide the new coefficients by their sum: γ_A = (1/4)/(3/8) = 2/3 ≈ 0.6667, with no unit; γ_B = (1/8)/(3/8) = 1/3 ≈ 0.3333, with no unit.</p><p>Check: 2/3 + 1/3 = 1. A becomes the most likely. Changing the proportions is enough to change the chosen label, even without changing the centres, the reading, or the spreads.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the sum 3/8 instead of reusing 5/16.</li><li>Obtain 2/3 and 1/3 with a sum equal to 1.</li><li>Explain the change in assignment through the proportions.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 3 · Transfer · derive a condition</p>
+<h3>At exactly what proportion are the modes equally likely?</h3><p>Still using the packet of 100 g and the same standard deviations, let w_A vary and set w_B = 1 − w_A. What proportion of A makes the responsibilities equal? Then justify on which side of this proportion A becomes more likely. Do not assume that equal responsibilities require equal proportions.</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The responsibilities have the same positive denominator. Their equality therefore amounts to equating the contributions.</p></details><details class="indice"><summary>Hint 2</summary><p>Cancel C, then multiply w_A/σ_A = (1 − w_A)/σ_B by σ_A × σ_B and collect the terms containing w_A.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Equate w_A × C/σ_A and (1 − w_A) × C/σ_B. After cancelling C and multiplying by the positive standard deviations, we obtain w_A × σ_B = σ_A − w_A × σ_A. Therefore w_A × (σ_A + σ_B) = σ_A.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>w</mi><mi>A</mi></msub><mo>=</mo><mfrac><msub><mi>σ</mi><mi>A</mi></msub><mrow><msub><mi>σ</mi><mi>A</mi></msub><mo>+</mo><msub><mi>σ</mi><mi>B</mi></msub></mrow></mfrac><mo>=</mo><mfrac><mn>2</mn><mn>6</mn></mfrac><mo>=</mo><mn>1/3</mn></mrow></math></div><p>At the threshold, w_B = 2/3. Both contributions are (1/6) × C per gram; their sum is (1/3) × C per gram. The responsibilities are 1/2 and 1/2, and their sum is 1. They are equal despite different proportions.</p><p>A is more likely if its contribution is larger. The same operations on positive quantities give w_A &gt; 1/3. Below the threshold, B is more likely. The initial weight 1/4 is below the threshold, while the weight 1/2 from the previous exercise is above it: the results are consistent. This boundary applies to the central reading and fixed spreads in our example.</p><p class="petit-titre">Check your reasoning</p><ul><li>Start from equality of the contributions and justify cancelling C.</li><li>Find 1/3 for A and 2/3 for B, then check the responsibilities.</li><li>Justify the direction of the inequality and limit the conclusion to the case studied.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="choix-cache"><summary><span class="repere">Recall 1</span><span>How can you describe the generation of an observation in a Gaussian mixture?</span></summary><p>Choose a component according to the weights, then draw the value according to its Gaussian. The chosen mode may remain hidden. The weights are nonnegative and sum to 1; the standard deviations are strictly positive.</p></details><details class="carte" data-carte="trois-grandeurs"><summary><span class="repere">Recall 2</span><span>What do w_j, f_j(x), and γ_j(x) distinguish, and what are their units?</span></summary><p>w_j is the probability of the mode before weighing, with no unit. f_j(x) is the density of mass given the mode, in inverse grams. γ_j(x) is the probability of the mode after weighing, with no unit, under the given model.</p></details><details class="carte" data-carte="reconstruire-bayes"><summary><span class="repere">Recall 3</span><span>How can you reconstruct the calculation of a responsibility without confusing height with probability of origin?</span></summary><p>Multiply the weight of the mode by its density at the observed point; add the contributions of all modes; divide the chosen contribution by this positive sum. The resulting responsibilities sum to 1.</p></details><details class="carte" data-carte="hauteur-et-frequence"><summary><span class="repere">Recall 4</span><span>Why does mode A, which is more concentrated at the centre, not win in the initial example?</span></summary><p>Its density at the centre is 2 times that of B, but it is less frequent. The contributions are (1/8) × C and (3/16) × C per gram. After normalization, A receives 2/5 and B 3/5.</p></details><details class="carte" data-carte="composantes-et-sommets"><summary><span class="repere">Recall 5</span><span>Does the number of peaks prove the number of components or their physical reality?</span></summary><p>No. Components can overlap; ours share a centre. A mixture describes an assumption about the distribution. Even a correctly calculated responsibility proves neither the actual mode of a packet nor the relevance of the model to the workshop.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, describe choosing the mode and then weighing the packet. Reconstruct the mixture density and the responsibility formula; state the question being asked and the unit each time. Recover the central case and explain why a taller bell curve can remain in the minority. Then compare your reconstruction with the calculation. Reconstruct it again without support at least 2 days later; reading, consulting the solution, and an assisted answer never establish that a level has been achieved.</p></div><div class="exports"><a class="bouton" download="c139-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzktbTI6Y2hvaXgtY2FjaGUiLAogICAgICAidW5pdGUiOiAiYzEzOS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1lbGFuZ2UtZ2F1c3NpZW4iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB5b3UgZGVzY3JpYmUgdGhlIGdlbmVyYXRpb24gb2YgYW4gb2JzZXJ2YXRpb24gaW4gYSBHYXVzc2lhbiBtaXh0dXJlPyIsCiAgICAgICJyZXBvbnNlIjogIkNob29zZSBhIGNvbXBvbmVudCBhY2NvcmRpbmcgdG8gdGhlIHdlaWdodHMsIHRoZW4gZHJhdyB0aGUgdmFsdWUgYWNjb3JkaW5nIHRvIGl0cyBHYXVzc2lhbi4gVGhlIGNob3NlbiBtb2RlIG1heSByZW1haW4gaGlkZGVuLiBUaGUgd2VpZ2h0cyBhcmUgbm9ubmVnYXRpdmUgYW5kIHN1bSB0byAxOyB0aGUgc3RhbmRhcmQgZGV2aWF0aW9ucyBhcmUgc3RyaWN0bHkgcG9zaXRpdmUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzktbTI6dHJvaXMtZ3JhbmRldXJzIiwKICAgICAgInVuaXRlIjogImMxMzktbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb2lkcy1kZW5zaXRlLXJlc3BvbnNhYmlsaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gd19qLCBmX2ooeCksIGFuZCDOs19qKHgpIGRpc3Rpbmd1aXNoLCBhbmQgd2hhdCBhcmUgdGhlaXIgdW5pdHM/IiwKICAgICAgInJlcG9uc2UiOiAid19qIGlzIHRoZSBwcm9iYWJpbGl0eSBvZiB0aGUgbW9kZSBiZWZvcmUgd2VpZ2hpbmcsIHdpdGggbm8gdW5pdC4gZl9qKHgpIGlzIHRoZSBkZW5zaXR5IG9mIG1hc3MgZ2l2ZW4gdGhlIG1vZGUsIGluIGludmVyc2UgZ3JhbXMuIM6zX2ooeCkgaXMgdGhlIHByb2JhYmlsaXR5IG9mIHRoZSBtb2RlIGFmdGVyIHdlaWdoaW5nLCB3aXRoIG5vIHVuaXQsIHVuZGVyIHRoZSBnaXZlbiBtb2RlbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzOS1tMjpyZWNvbnN0cnVpcmUtYmF5ZXMiLAogICAgICAidW5pdGUiOiAiYzEzOS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlc3BvbnNhYmlsaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4geW91IHJlY29uc3RydWN0IHRoZSBjYWxjdWxhdGlvbiBvZiBhIHJlc3BvbnNpYmlsaXR5IHdpdGhvdXQgY29uZnVzaW5nIGhlaWdodCB3aXRoIHByb2JhYmlsaXR5IG9mIG9yaWdpbj8iLAogICAgICAicmVwb25zZSI6ICJNdWx0aXBseSB0aGUgd2VpZ2h0IG9mIHRoZSBtb2RlIGJ5IGl0cyBkZW5zaXR5IGF0IHRoZSBvYnNlcnZlZCBwb2ludDsgYWRkIHRoZSBjb250cmlidXRpb25zIG9mIGFsbCBtb2RlczsgZGl2aWRlIHRoZSBjaG9zZW4gY29udHJpYnV0aW9uIGJ5IHRoaXMgcG9zaXRpdmUgc3VtLiBUaGUgcmVzdWx0aW5nIHJlc3BvbnNpYmlsaXRpZXMgc3VtIHRvIDEuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzktbTI6aGF1dGV1ci1ldC1mcmVxdWVuY2UiLAogICAgICAidW5pdGUiOiAiYzEzOS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvbmRlcmF0aW9uLWR1LW1lbGFuZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgbW9kZSBBLCB3aGljaCBpcyBtb3JlIGNvbmNlbnRyYXRlZCBhdCB0aGUgY2VudHJlLCBub3Qgd2luIGluIHRoZSBpbml0aWFsIGV4YW1wbGU/IiwKICAgICAgInJlcG9uc2UiOiAiSXRzIGRlbnNpdHkgYXQgdGhlIGNlbnRyZSBpcyAyIHRpbWVzIHRoYXQgb2YgQiwgYnV0IGl0IGlzIGxlc3MgZnJlcXVlbnQuIFRoZSBjb250cmlidXRpb25zIGFyZSAoMS84KSDDlyBDIGFuZCAoMy8xNikgw5cgQyBwZXIgZ3JhbS4gQWZ0ZXIgbm9ybWFsaXphdGlvbiwgQSByZWNlaXZlcyAyLzUgYW5kIEIgMy81LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM5LW0yOmNvbXBvc2FudGVzLWV0LXNvbW1ldHMiLAogICAgICAidW5pdGUiOiAiYzEzOS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZXMtZHUtbWVsYW5nZSIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIHRoZSBudW1iZXIgb2YgcGVha3MgcHJvdmUgdGhlIG51bWJlciBvZiBjb21wb25lbnRzIG9yIHRoZWlyIHBoeXNpY2FsIHJlYWxpdHk/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIENvbXBvbmVudHMgY2FuIG92ZXJsYXA7IG91cnMgc2hhcmUgYSBjZW50cmUuIEEgbWl4dHVyZSBkZXNjcmliZXMgYW4gYXNzdW1wdGlvbiBhYm91dCB0aGUgZGlzdHJpYnV0aW9uLiBFdmVuIGEgY29ycmVjdGx5IGNhbGN1bGF0ZWQgcmVzcG9uc2liaWxpdHkgcHJvdmVzIG5laXRoZXIgdGhlIGFjdHVhbCBtb2RlIG9mIGEgcGFja2V0IG5vciB0aGUgcmVsZXZhbmNlIG9mIHRoZSBtb2RlbCB0byB0aGUgd29ya3Nob3AuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c139-m2-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGNhbiB5b3UgZGVzY3JpYmUgdGhlIGdlbmVyYXRpb24gb2YgYW4gb2JzZXJ2YXRpb24gaW4gYSBHYXVzc2lhbiBtaXh0dXJlPwlDaG9vc2UgYSBjb21wb25lbnQgYWNjb3JkaW5nIHRvIHRoZSB3ZWlnaHRzLCB0aGVuIGRyYXcgdGhlIHZhbHVlIGFjY29yZGluZyB0byBpdHMgR2F1c3NpYW4uIFRoZSBjaG9zZW4gbW9kZSBtYXkgcmVtYWluIGhpZGRlbi4gVGhlIHdlaWdodHMgYXJlIG5vbm5lZ2F0aXZlIGFuZCBzdW0gdG8gMTsgdGhlIHN0YW5kYXJkIGRldmlhdGlvbnMgYXJlIHN0cmljdGx5IHBvc2l0aXZlLgl0b2RhaSBjMTM5LW0yIG1lbGFuZ2UtZ2F1c3NpZW4KV2hhdCBkbyB3X2osIGZfaih4KSwgYW5kIM6zX2ooeCkgZGlzdGluZ3Vpc2gsIGFuZCB3aGF0IGFyZSB0aGVpciB1bml0cz8Jd19qIGlzIHRoZSBwcm9iYWJpbGl0eSBvZiB0aGUgbW9kZSBiZWZvcmUgd2VpZ2hpbmcsIHdpdGggbm8gdW5pdC4gZl9qKHgpIGlzIHRoZSBkZW5zaXR5IG9mIG1hc3MgZ2l2ZW4gdGhlIG1vZGUsIGluIGludmVyc2UgZ3JhbXMuIM6zX2ooeCkgaXMgdGhlIHByb2JhYmlsaXR5IG9mIHRoZSBtb2RlIGFmdGVyIHdlaWdoaW5nLCB3aXRoIG5vIHVuaXQsIHVuZGVyIHRoZSBnaXZlbiBtb2RlbC4JdG9kYWkgYzEzOS1tMiBwb2lkcy1kZW5zaXRlLXJlc3BvbnNhYmlsaXRlCkhvdyBjYW4geW91IHJlY29uc3RydWN0IHRoZSBjYWxjdWxhdGlvbiBvZiBhIHJlc3BvbnNpYmlsaXR5IHdpdGhvdXQgY29uZnVzaW5nIGhlaWdodCB3aXRoIHByb2JhYmlsaXR5IG9mIG9yaWdpbj8JTXVsdGlwbHkgdGhlIHdlaWdodCBvZiB0aGUgbW9kZSBieSBpdHMgZGVuc2l0eSBhdCB0aGUgb2JzZXJ2ZWQgcG9pbnQ7IGFkZCB0aGUgY29udHJpYnV0aW9ucyBvZiBhbGwgbW9kZXM7IGRpdmlkZSB0aGUgY2hvc2VuIGNvbnRyaWJ1dGlvbiBieSB0aGlzIHBvc2l0aXZlIHN1bS4gVGhlIHJlc3VsdGluZyByZXNwb25zaWJpbGl0aWVzIHN1bSB0byAxLgl0b2RhaSBjMTM5LW0yIHJlc3BvbnNhYmlsaXRlCldoeSBkb2VzIG1vZGUgQSwgd2hpY2ggaXMgbW9yZSBjb25jZW50cmF0ZWQgYXQgdGhlIGNlbnRyZSwgbm90IHdpbiBpbiB0aGUgaW5pdGlhbCBleGFtcGxlPwlJdHMgZGVuc2l0eSBhdCB0aGUgY2VudHJlIGlzIDIgdGltZXMgdGhhdCBvZiBCLCBidXQgaXQgaXMgbGVzcyBmcmVxdWVudC4gVGhlIGNvbnRyaWJ1dGlvbnMgYXJlICgxLzgpIMOXIEMgYW5kICgzLzE2KSDDlyBDIHBlciBncmFtLiBBZnRlciBub3JtYWxpemF0aW9uLCBBIHJlY2VpdmVzIDIvNSBhbmQgQiAzLzUuCXRvZGFpIGMxMzktbTIgcG9uZGVyYXRpb24tZHUtbWVsYW5nZQpEb2VzIHRoZSBudW1iZXIgb2YgcGVha3MgcHJvdmUgdGhlIG51bWJlciBvZiBjb21wb25lbnRzIG9yIHRoZWlyIHBoeXNpY2FsIHJlYWxpdHk/CU5vLiBDb21wb25lbnRzIGNhbiBvdmVybGFwOyBvdXJzIHNoYXJlIGEgY2VudHJlLiBBIG1peHR1cmUgZGVzY3JpYmVzIGFuIGFzc3VtcHRpb24gYWJvdXQgdGhlIGRpc3RyaWJ1dGlvbi4gRXZlbiBhIGNvcnJlY3RseSBjYWxjdWxhdGVkIHJlc3BvbnNpYmlsaXR5IHByb3ZlcyBuZWl0aGVyIHRoZSBhY3R1YWwgbW9kZSBvZiBhIHBhY2tldCBub3IgdGhlIHJlbGV2YW5jZSBvZiB0aGUgbW9kZWwgdG8gdGhlIHdvcmtzaG9wLgl0b2RhaSBjMTM5LW0yIGxpbWl0ZXMtZHUtbWVsYW5nZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yfffxd wsmrfk hyxp</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">susjma sjqeys ndluxk ldycru odgrhl hcnajc bvfh</span></span></h3><dl><div><dt>What you understand</dt><dd>A Gaussian density is a possible component of a mixture. Forming the mixture also requires normalized weights; assigning origins then requires responsibilities. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eucchc cfuafh uhmplz dzpmlf dvvuju asfwfy eggt</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jhquov qxeegk scuxoo fzgsvp huuezj banaoy rwmgwo ngyljs peyomm fzfigg cvqkqc sffztj bivkmu qivxrm jrcwjf dysvup qmrhsd hamhvh sooamk mwocdb qiyshp jddavh vtvbho tkhbak</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 2 to prepare for: distinguish weight, density, and responsibility, redo the central calculation with its units, then explain the effect of a change in proportion. Reading this page or giving an assisted answer does not validate any learning achievement.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">osrlhd ajvqoo gcbfxz dvfrpm uwmcsz fqvtfx lrbzcl ehxapk zmclsi ezxipl vnpunm ptzsge jnjztq elhcwr tyklav scmkrc uglgxs exubee lmqzta rkdedz rucskk bxmhvm mpofwk vktscj</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the normalization and the proportion threshold without support on another day, then move on to C139·M3 for estimation by alternation. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gkjuew tifkuf khmrgu skkkew fsfxox eoyymq kmajlz ibltcx pgxrih ppitqk cvlmei yhjwzc enxfsa oq</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c139-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c139-m1.html">Previous</a> · <a href="c139-m3.html">Next</a></nav>
+<footer><p>Course book · C139·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Connect the singular value decomposition of a centered matrix to principal component analysis (PCA): read the axes, variances, coordinates and proportion of variance, then check this connection using four fictional observations.">
+<title>C137·M4 · SVD and PCA — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mxmqcp xbeoyy tmoz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C137·M4</p><h1>SVD and PCA</h1><p class="objectif"><span>Your goal</span>Connect the singular value decomposition of a centered matrix to principal component analysis (PCA): read the axes, variances, coordinates and proportion of variance, then check this connection using four fictional observations.</p><p class="prerequis"><strong>Before you start</strong><br>c048-m5 : positivity · c050-m5 : conditioning · c060-m5 : approximations and assumptions · c036-m5 : annotated graphs · c137-m1 : centering · c137-m2 : covariance · c137-m3 : optimal projection</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Two sensors, A and B, record the temperatures of four rooms in a fictional building: Living Room, Kitchen, Office and Bedroom. For each room, we keep the deviation of each sensor from its own mean across the four rooms, in tenths of a degree Celsius (d°C). The values are invented to make the calculations work out exactly; they do not describe any real building.</p><p>When a room is warmer than the mean for sensor A, it almost always is for sensor B too: the four points form an elongated cloud rather than a disk. PCA seeks the direction of elongation and its size, meaning the direction of maximum variance in the cloud. There are two ways to find it: diagonalize the covariance matrix, or apply SVD directly to the matrix of deviations. This unit connects them.</p><p>The picture to keep in mind: SVD arranges the cloud into ordered layers. Each layer has a size σ, in the unit of the readings (d°C), a direction v, which is an axis with no unit, and a number for each room that tells us where it lies on that axis. The first layer is the most stretched axis; the second is perpendicular to it.</p><p>Three things are taken as given. The columns are already centered (see the unit on centering). The covariance uses the divisor n − 1: another convention would multiply the variances by a constant factor without changing either the axes or the proportions of variance. Finally, the SVD comes from a computational routine whose result we check instead of trusting it blindly.</p><p>What PCA does not tell us: what its axes mean in the building, or how many axes to keep. That choice belongs to the next unit.</p><div class="schemas"><figure><svg viewBox="0 0 440 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Four rooms in the plane of the two sensors</title><desc>Four points in the plane of sensors A and B, in d°C. The first axis, the longer one, accounts for 80 % of the variance; the perpendicular second axis accounts for the rest. The Living Room, with coordinates 2 and 11, projects to 10 on the first axis and to 5 on the second.</desc><line x1="30" y1="140" x2="430" y2="140" class="trait" /><line x1="210" y1="20" x2="210" y2="262" class="trait" /><text x="430" y="158" text-anchor="end" class="petite-etiquette">sensor A (d°C)</text><text x="204" y="16" text-anchor="end" class="petite-etiquette">sensor B</text><line x1="286" y1="39" x2="134" y2="241" class="chemin-correction" /><line x1="124" y1="75" x2="296" y2="205" class="repere-dose" /><line x1="228" y1="41" x2="264" y2="68" class="trait" /><line x1="228" y1="41" x2="174" y2="113" class="trait" /><circle cx="264" cy="68" r="4" class="resultat" /><circle cx="174" cy="113" r="4" class="resultat" /><circle cx="228" cy="41" r="5" class="point-prediction" /><circle cx="300" cy="95" r="5" class="point-prediction" /><circle cx="120" cy="185" r="5" class="point-prediction" /><circle cx="192" cy="239" r="5" class="point-prediction" /><text x="236" y="36" class="petite-etiquette">Living Room</text><text x="308" y="99" class="petite-etiquette">Kitchen</text><text x="112" y="190" text-anchor="end" class="petite-etiquette">Office</text><text x="184" y="256" text-anchor="end" class="petite-etiquette">Bedroom</text><text x="296" y="46" class="petite-etiquette">first axis</text><text x="302" y="212" class="petite-etiquette">second axis</text><text x="270" y="72" class="petite-etiquette">10</text><text x="166" y="118" text-anchor="end" class="petite-etiquette">5</text></svg><figcaption>The cloud of four rooms in the sensor plane, with its two perpendicular axes. The two lines starting at the Living Room measure its coordinates: 10 d°C on the first axis and 5 d°C on the second.</figcaption></figure><figure><svg viewBox="0 0 400 256" xmlns="http://www.w3.org/2000/svg" role="img"><title>From the centered matrix to three PCA results</title><desc>A centered matrix with 4 rows and 2 columns goes through SVD. It provides three things to read: the axes, the variances along the axes and the coordinates of the rooms.</desc><rect x="110" y="10" width="180" height="52" rx="7" class="cadre-neutre" /><text x="200" y="33" text-anchor="middle">X centered</text><text x="200" y="53" text-anchor="middle" class="petite-etiquette">4 rooms × 2 sensors</text><line x1="200" y1="62" x2="200" y2="90" class="trait" /><rect x="100" y="90" width="200" height="52" rx="7" class="cadre-prediction" /><text x="200" y="113" text-anchor="middle">SVD : X = U Σ Vᵀ</text><text x="200" y="133" text-anchor="middle" class="petite-etiquette">σ: 20 and 10 d°C</text><line x1="200" y1="142" x2="70" y2="170" class="trait" /><line x1="200" y1="142" x2="200" y2="170" class="trait" /><line x1="200" y1="142" x2="330" y2="170" class="trait" /><rect x="10" y="170" width="120" height="76" rx="7" class="cadre-resultat" /><text x="70" y="194" text-anchor="middle">Axes</text><text x="70" y="214" text-anchor="middle" class="petite-etiquette">columns of V</text><text x="70" y="233" text-anchor="middle" class="petite-etiquette">(0.6 ; 0.8)</text><rect x="140" y="170" width="120" height="76" rx="7" class="cadre-resultat" /><text x="200" y="194" text-anchor="middle">Variances</text><text x="200" y="214" text-anchor="middle" class="petite-etiquette">σ² ÷ (n − 1)</text><text x="200" y="233" text-anchor="middle" class="petite-etiquette">133.33 d°C²</text><rect x="270" y="170" width="120" height="76" rx="7" class="cadre-resultat" /><text x="330" y="194" text-anchor="middle">Coordinates</text><text x="330" y="214" text-anchor="middle" class="petite-etiquette">U Σ = X V</text><text x="330" y="233" text-anchor="middle" class="petite-etiquette">(10 ; 5)</text></svg><figcaption>From the centered table to three PCA results. SVD assumes that centering has already been done; it does not replace it.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Center the matrix X and decompose it as X = U Σ Vᵀ: the columns of V are the axes, σ² ÷ (n − 1) gives the variance along each axis, and X V gives the coordinates of each observation on those axes.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Read PCA from the SVD for four rooms</h3><p>We start with the deviations in matrix X (four rooms, two sensors, in d°C) and the SVD supplied by a routine: σ₁ = 20 d°C, σ₂ = 10 d°C. We check that the columns of V are the PCA axes, then derive variances, coordinates and the proportion of variance. All values are fictional.</p><ol class="etapes"><li><h3>Set out the quantities, units and assumptions</h3><p>X is the matrix of deviations: n = 4 rows (Living Room, Kitchen, Office, Bedroom) and p = 2 columns (sensors A then B), in d°C. The Office is the negative of the Kitchen and the Bedroom is the negative of the Living Room: each column sums to 0, so X is centered. This construction gives exact numbers and short calculations.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>11</mn></mtd></mtr><mtr><mtd><mn>10</mn></mtd><mtd><mn>5</mn></mtd></mtr><mtr><mtd><mo>−</mo><mn>10</mn></mtd><mtd><mo>−</mo><mn>5</mn></mtd></mtr><mtr><mtd><mo>−</mo><mn>2</mn></mtd><mtd><mo>−</mo><mn>11</mn></mtd></mtr></mtable><mo>)</mo><mtext> d°C</mtext></mrow></math></div><p>SVD writes X as a product of three matrices. U has 4 rows and 2 columns; V has 2 rows and 2 columns; both have columns of length one that are pairwise perpendicular, and neither has a unit. Σ is diagonal: its values σ<sub>1</sub> ≥ σ<sub>2</sub> ≥ 0 are the singular values, in d°C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>=</mo><mi>U</mi><mi>Σ</mi><msup><mi>V</mi><mi>T</mi></msup></mrow></math></div><p>For this fictional example, the routine returns σ<sub>1</sub> = 20 d°C, σ<sub>2</sub> = 10 d°C and the axes v<sub>1</sub> = (0.6 ; 0.8) and v<sub>2</sub> = (−0.8 ; 0.6), the columns of V. The assumptions: centered columns, the divisor n − 1 = 3 for the covariance matrix S, and axes defined up to a sign.</p></li><li><h3>Form XᵀX, which contains the axes and the σ² values</h3><p>Since UᵀU = I (I is the identity matrix), we obtain XᵀX = V Σ² Vᵀ. The square matrix XᵀX, of size 2 by 2, therefore has the columns of V as eigenvectors and the σ² values as eigenvalues. It also equals n − 1 times the covariance matrix S.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>X</mi><mi>T</mi></msup><mi>X</mi><mo>=</mo><mi>V</mi><msup><mi>Σ</mi><mn>2</mn></msup><msup><mi>V</mi><mi>T</mi></msup><mo>=</mo><mo>(</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo>)</mo><mi>S</mi></mrow></math></div><p>Its entries are sums of squares and products across the four rooms. The Office and Bedroom are the negatives of the Kitchen and Living Room: their squares and products are identical, so each sum is counted twice.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g₁₁</mi><mo>=</mo><mn>2</mn><mo>×</mo><mo>(</mo><msup><mn>2</mn><mn>2</mn></msup><mo>+</mo><msup><mn>10</mn><mn>2</mn></msup><mo>)</mo><mo>=</mo><mn>208</mn><mtext> d°C²</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g₂₂</mi><mo>=</mo><mn>2</mn><mo>×</mo><mo>(</mo><msup><mn>11</mn><mn>2</mn></msup><mo>+</mo><msup><mn>5</mn><mn>2</mn></msup><mo>)</mo><mo>=</mo><mn>292</mn><mtext> d°C²</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g₁₂</mi><mo>=</mo><mn>2</mn><mo>×</mo><mo>(</mo><mn>2</mn><mo>×</mo><mn>11</mn><mo>+</mo><mn>10</mn><mo>×</mo><mn>5</mn><mo>)</mo><mo>=</mo><mn>144</mn><mtext> d°C²</mtext></mrow></math></div><p>Unit check: d°C × d°C = d°C². The matrix is symmetric: g<sub>12</sub> appears twice.</p></li><li><h3>Check that an axis is an eigenvector</h3><p>If v<sub>1</sub> is indeed the axis associated with σ<sub>1</sub>, then XᵀX v<sub>1</sub> = σ<sub>1</sub>² v<sub>1</sub>. Here σ<sub>1</sub>² = 20 × 20 = 400 d°C². Let us calculate the left side row by row, then the right side.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>(</mo><msup><mi>X</mi><mi>T</mi></msup><mi>X</mi><mo>)</mo><mi>v₁</mi><mo>=</mo><mo>(</mo><mn>208</mn><mo>×</mo><mn>0.6</mn><mo>+</mo><mn>144</mn><mo>×</mo><mn>0.8</mn><mo>;</mo><mn>144</mn><mo>×</mo><mn>0.6</mn><mo>+</mo><mn>292</mn><mo>×</mo><mn>0.8</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>124.8</mn><mo>+</mo><mn>115.2</mn><mo>;</mo><mn>86.4</mn><mo>+</mo><mn>233.6</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>240</mn><mo>;</mo><mn>320</mn><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>σ₁</mi><mn>2</mn></msup><mi>v₁</mi><mo>=</mo><mo>(</mo><mn>400</mn><mo>×</mo><mn>0.6</mn><mo>;</mo><mn>400</mn><mo>×</mo><mn>0.8</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>240</mn><mo>;</mo><mn>320</mn><mo>)</mo></mrow></math></div><p>The two vectors agree: v<sub>1</sub> is an eigenvector of XᵀX for σ<sub>1</sub>². Since XᵀX is symmetric, the axis v<sub>2</sub>, perpendicular to v<sub>1</sub>, is also an eigenvector; its eigenvalue is the trace minus σ<sub>1</sub>². Check: 208 + 292 = 500 and 500 − 400 = 100, which does equal σ<sub>2</sub>² = 10 × 10. The sum of the eigenvalues, 400 + 100 = 500, equals the trace.</p></li><li><h3>Convert σ² to variance along an axis</h3><p>The covariance matrix is S = XᵀX ÷ (n − 1). Its eigenvalues are therefore the variances along the axes, μ = σ² ÷ (n − 1), in d°C². For the first axis, μ<sub>1</sub> equals 400 ÷ 3, or approximately 133.33 d°C² (exact value: the fraction 400/3).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>μ₁</mi><mo>=</mo><mfrac><msup><mi>σ₁</mi><mn>2</mn></msup><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mn>400</mn><mn>3</mn></mfrac><mo>≈</mo><mn>133.33</mn><mtext> d°C²</mtext></mrow></math></div><p>Check: the total variance, the sum of the variances of the two sensors, is the trace of S: 500 ÷ 3, or approximately 166.67 d°C². SVD redistributes it among the axes without loss or gain. The variance along the second axis is left to the first exercise. With the divisor n in place of n − 1, all variances would change by the same factor.</p></li><li><h3>Read the coordinates of the Living Room</h3><p>The coordinate of a room on an axis is the product of its row and that axis, component by component. Taken together, these are the rows of X V, and X V = U Σ since VᵀV = I. For the Living Room, with row (2 ; 11):</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z₁₁</mi><mo>=</mo><mn>2</mn><mo>×</mo><mn>0.6</mn><mo>+</mo><mn>11</mn><mo>×</mo><mn>0.8</mn><mo>=</mo><mn>1.2</mn><mo>+</mo><mn>8.8</mn><mo>=</mo><mn>10</mn><mtext> d°C</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z₁₂</mi><mo>=</mo><mn>2</mn><mo>×</mo><mo>(</mo><mo>−</mo><mn>0.8</mn><mo>)</mo><mo>+</mo><mn>11</mn><mo>×</mo><mn>0.6</mn><mo>=</mo><mo>−</mo><mn>1.6</mn><mo>+</mo><mn>6.6</mn><mo>=</mo><mn>5</mn><mtext> d°C</mtext></mrow></math></div><p>The Living Room lies at 10 d°C on the first axis and at 5 d°C on the second, as the first diagram shows. The rows for the Office and Bedroom are the negatives of those for the Kitchen and Living Room, so their coordinates are too: each column of X V sums to 0.</p></li><li><h3>Measure what a single axis retains</h3><p>The proportion of variance along the first axis is σ<sub>1</sub>² ÷ (σ<sub>1</sub>² + σ<sub>2</sub>²). The divisor n − 1 cancels: this ratio does not depend on the chosen convention.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p₁</mi><mo>=</mo><mfrac><msup><mi>σ₁</mi><mn>2</mn></msup><mrow><msup><mi>σ₁</mi><mn>2</mn></msup><mo>+</mo><msup><mi>σ₂</mi><mn>2</mn></msup></mrow></mfrac><mo>=</mo><mfrac><mn>400</mn><mn>500</mn></mfrac><mo>=</mo><mn>0.80</mn><mo>=</mo><mn>80</mn><mtext> %</mtext></mrow></math></div><p>Compression means replacing each room with its projection onto the first axis. For the Living Room, this gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>x</mi><mo>^</mo></mover><mo>=</mo><mi>z₁₁</mi><mi>v₁</mi><mo>=</mo><mn>10</mn><mo>×</mo><mo>(</mo><mn>0.6</mn><mo>;</mo><mn>0.8</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>6</mn><mo>;</mo><mn>8</mn><mo>)</mo><mtext> d°C</mtext></mrow></math></div><p>The reconstructed point differs from the measured point, whose row is (2 ; 11): we have retained part of the variance rather than all of it. The exact cost of this loss is measured in the last exercise.</p></li><li><h3>What the checks show and what they do not show</h3><p>Passed: the axis v<sub>1</sub> satisfies XᵀX v<sub>1</sub> = σ<sub>1</sub>² v<sub>1</sub>; the trace of XᵀX equals the sum of the σ² values; the units are consistent (σ in d°C, variances in d°C², proportions with no unit).</p><p>Not shown: the axis v<sub>2</sub> was not recalculated directly; it was deduced from symmetry. The cloud is symmetric by construction, with only two sensors. The physical meaning of the axes has not been established. Finally, (u, v) and (−u, −v) give the same product σ u vᵀ: the sign of an axis is a convention.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why is the variance along an axis σ² ÷ (n − 1) rather than σ, and why does the proportion of variance stay the same if we divide by n instead? Also explain why centering must come before SVD.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A singular value is the variance along the axis.”</h3><p>σ is in the unit of the data (d°C); the variance is σ² ÷ (n − 1), in d°C². Compare σ₁ = 20 d°C with the variance along the first axis, approximately 133.33 d°C²: neither the unit nor the number agrees.</p><a href="#exemple">Review the conversion to variances in the example</a></li><li><h3>“I can decompose the raw data: it amounts to the same thing.”</h3><p>Without centering, the mean becomes the dominant direction and inflates σ₁; the σ² values then mix mean and variance and are no longer variances along the axes. Center each column first, as in X here, where each column sums to 0.</p><a href="#intuition">Reread the starting assumptions</a></li><li><h3>“If my routine returns −v₁ instead of v₁, my PCA is wrong.”</h3><p>The pairs (u, v) and (−u, −v) give the same σ u vᵀ: the same σ values, the same reconstruction, and coordinates with opposite signs. Compare the axes up to a sign. In the second exercise, the negative coordinate of the Kitchen on the second axis would change sign with the other choice.</p><a href="#exercices">Recalculate the coordinates of the Kitchen</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-variance-axe-deux"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Variance and proportion along the second axis</h3><p>Using the same example (σ₂ = 10 d°C, n − 1 = 3), calculate the variance along the second axis in d°C², then its proportion of variance as a percentage. Check that the two proportions total 100 %.</p>
+<label for="reponse-ex-variance-axe-deux">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-variance-axe-deux" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-variance-axe-deux" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-variance-axe-deux" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-variance-axe-deux" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Proceed as for the first axis: first σ₂², then division by n − 1.</p></details><details class="indice"><summary>Hint 2</summary><p>The proportion is σ₂² divided by the trace 500; it does not depend on the divisor n − 1.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>σ<sub>2</sub>² = 10 × 10 = 100 d°C². Variance along the second axis: 100 ÷ 3 = 33.33 d°C² (exact value: the fraction 100/3).</p><p>Proportion: 100 ÷ 500, or 20 %. Check: 80 % + 20 % = 100 %. The variances also add up: 133.33 + 33.33 gives 166.67 d°C² up to rounding, with exact values 400/3, 100/3 and 500/3.</p><p class="petit-titre">Check your reasoning</p><ul><li>Use σ² rather than σ, with the unit d°C².</li><li>Divide by n − 1 for the variance, but not for the proportion.</li><li>Check that the two proportions total one hundred percent.</li></ul></details></article><article class="exercice" id="ex-coordonnees-cuisine"><p class="repere">Exercise 2 · Guided application</p>
+<h3>The coordinates of the Kitchen</h3><p>The Kitchen has row (10 ; 5) d°C. Calculate its coordinates on v₁ = (0.6 ; 0.8) and on v₂ = (−0.8 ; 0.6). Then check that, on each axis, the sum of the squares of the four coordinates gives σ².</p>
+<label for="reponse-ex-coordonnees-cuisine">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-coordonnees-cuisine" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-coordonnees-cuisine" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-coordonnees-cuisine" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-coordonnees-cuisine" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A coordinate is a dot product: row × axis, component by component, then sum.</p></details><details class="indice"><summary>Hint 2</summary><p>For the second axis, the first product carries the minus sign from v₂: write the sign before calculating.</p></details><details class="indice"><summary>Hint 3</summary><p>The Office and Bedroom are the negatives of the Kitchen and Living Room: their coordinates are opposite, so each square is counted twice.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>First axis: 10 × 0.6 + 5 × 0.8 = 6 + 4 = 10 d°C. Second axis: 10 × (−0.8) + 5 × 0.6 = −8 + 3 = −5 d°C.</p><p>Check for the first axis: 2 × (10² + 10²) = 400 d°C², which is σ<sub>1</sub>². Check for the second: 2 × (5² + 5²) = 100 d°C², which is σ<sub>2</sub>².</p><p>The Kitchen lies on the opposite side from the Living Room on the second axis. With the other sign for the axis, all signs in this column would reverse without changing the squares.</p><p class="petit-titre">Check your reasoning</p><ul><li>Two dot products, with the correct signs.</li><li>Check the sums of squares against σ², with unit d°C².</li><li>Mention the sign convention for an axis.</li></ul></details></article><article class="exercice" id="ex-cout-un-axe"><p class="repere">Exercise 3 · Transfer</p>
+<h3>The cost of using a single axis</h3><p>Reconstruct the Living Room using only the first axis, then measure its residual: the difference between its row and its reconstruction. Here the four rooms have residuals of the same size; use this to deduce the sum of squared residuals and compare it with σ₂². State what this check establishes and what it does not establish.</p>
+<label for="reponse-ex-cout-un-axe">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cout-un-axe" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cout-un-axe" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cout-un-axe" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cout-un-axe" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Reconstruction = coordinate on the first axis × v₁; the residual is the row minus this reconstruction.</p></details><details class="indice"><summary>Hint 2</summary><p>The residual for the Living Room contains only the second axis: its squared size must equal the square of the corresponding coordinate.</p></details><details class="indice"><summary>Hint 3</summary><p>For the Kitchen, the residual is (10 − 6 ; 5 − 8); the Office and Bedroom are the negatives. Then multiply by n.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Reconstruction of the Living Room: (6 ; 8). Residual: (2 − 6 ; 11 − 8) = (−4 ; 3) d°C.</p><p>Squared size: 4² + 3² = 16 + 9 = 25 d°C², which is the square of the Living Room coordinate 5 on the second axis.</p><p>The Kitchen has reconstruction 10 × v<sub>1</sub> = (6 ; 8) and residual (4 ; −3): the same size. The Office and Bedroom are the negatives. Total: 4 × 25 = 100 d°C², which is σ<sub>2</sub>² = 100 d°C²; the loss is therefore 20 % of the total variance.</p><p>What is established: in this example, retaining one axis leaves a residual sum of squares of exactly σ<sub>2</sub>². The general result on truncated SVD is taken as given in this unit; a single symmetric example does not prove it, nor does it tell us how many axes to keep.</p><p class="petit-titre">Check your reasoning</p><ul><li>Reconstruct using only the coordinate on the first axis.</li><li>Measure the residual in d°C² using squares.</li><li>Connect the total to σ₂² and distinguish a check on the example from a result taken as given.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="axes"><summary><span class="repere">Recall 1</span><span>What do the columns of V in X = U Σ Vᵀ contain, for a centered matrix X?</span></summary><p>The principal axes: vectors of length one, pairwise perpendicular, that are eigenvectors of XᵀX and therefore of the covariance matrix. They have no unit and are defined up to a sign.</p></details><details class="carte" data-carte="variance"><summary><span class="repere">Recall 2</span><span>How do you go from a singular value σ to the variance along the axis, and in what unit?</span></summary><p>Variance = σ² ÷ (n − 1), in the squared unit of the data. Here σ₁ = 20 d°C gives approximately 133.33 d°C².</p></details><details class="carte" data-carte="coordonnees"><summary><span class="repere">Recall 3</span><span>What does the product X V represent?</span></summary><p>The coordinates of the observations on the axes, equal to U Σ. Each column sums to 0 and its variance is that of the axis. The Living Room lies at (10 ; 5) d°C.</p></details><details class="carte" data-carte="centrage"><summary><span class="repere">Recall 4</span><span>What step must come before SVD for it to give PCA?</span></summary><p>Centering the columns. Without it, the mean contributes to the σ² values, which are no longer variances along the axes.</p></details><details class="carte" data-carte="part"><summary><span class="repere">Recall 5</span><span>What proportion of variance does the first axis retain here, and what do we lose by retaining only that axis?</span></summary><p>σ₁² ÷ (σ₁² + σ₂²) = 80 %. In this example, the sum of squared reconstruction residuals is exactly σ₂² = 100 d°C², or 20 % of the total variance.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Center X; decompose X = U Σ Vᵀ; read the columns of V as axes; calculate σ² ÷ (n − 1) as the variance along each axis, in the squared unit; read X V = U Σ as coordinates; measure the proportion as σ² divided by the sum of the σ² values; check using XᵀX v = σ² v and the trace; keep in mind the arbitrary sign of the axes, centering and the fictional nature of the example.</p></div><div class="exports"><a class="bouton" download="c137-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTQ6YXhlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTM3LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYXhlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIHRoZSBjb2x1bW5zIG9mIFYgaW4gWCA9IFUgzqMgVuG1gCBjb250YWluLCBmb3IgYSBjZW50ZXJlZCBtYXRyaXggWD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcHJpbmNpcGFsIGF4ZXM6IHZlY3RvcnMgb2YgbGVuZ3RoIG9uZSwgcGFpcndpc2UgcGVycGVuZGljdWxhciwgdGhhdCBhcmUgZWlnZW52ZWN0b3JzIG9mIFjhtYBYIGFuZCB0aGVyZWZvcmUgb2YgdGhlIGNvdmFyaWFuY2UgbWF0cml4LiBUaGV5IGhhdmUgbm8gdW5pdCBhbmQgYXJlIGRlZmluZWQgdXAgdG8gYSBzaWduLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM3LW00OnZhcmlhbmNlIiwKICAgICAgInVuaXRlIjogImMxMzctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YXJpYW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGdvIGZyb20gYSBzaW5ndWxhciB2YWx1ZSDPgyB0byB0aGUgdmFyaWFuY2UgYWxvbmcgdGhlIGF4aXMsIGFuZCBpbiB3aGF0IHVuaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiVmFyaWFuY2UgPSDPg8KyIMO3IChuIOKIkiAxKSwgaW4gdGhlIHNxdWFyZWQgdW5pdCBvZiB0aGUgZGF0YS4gSGVyZSDPg+KCgSA9IDIwIGTCsEMgZ2l2ZXMgYXBwcm94aW1hdGVseSAxMzMuMzMgZMKwQ8KyLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM3LW00OmNvb3Jkb25uZWVzIiwKICAgICAgInVuaXRlIjogImMxMzctbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb29yZG9ubmVlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIHByb2R1Y3QgWCBWIHJlcHJlc2VudD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgY29vcmRpbmF0ZXMgb2YgdGhlIG9ic2VydmF0aW9ucyBvbiB0aGUgYXhlcywgZXF1YWwgdG8gVSDOoy4gRWFjaCBjb2x1bW4gc3VtcyB0byAwIGFuZCBpdHMgdmFyaWFuY2UgaXMgdGhhdCBvZiB0aGUgYXhpcy4gVGhlIExpdmluZyBSb29tIGxpZXMgYXQgKDEwIDsgNSkgZMKwQy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzNy1tNDpjZW50cmFnZSIsCiAgICAgICJ1bml0ZSI6ICJjMTM3LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2VudHJhZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBzdGVwIG11c3QgY29tZSBiZWZvcmUgU1ZEIGZvciBpdCB0byBnaXZlIFBDQT8iLAogICAgICAicmVwb25zZSI6ICJDZW50ZXJpbmcgdGhlIGNvbHVtbnMuIFdpdGhvdXQgaXQsIHRoZSBtZWFuIGNvbnRyaWJ1dGVzIHRvIHRoZSDPg8KyIHZhbHVlcywgd2hpY2ggYXJlIG5vIGxvbmdlciB2YXJpYW5jZXMgYWxvbmcgdGhlIGF4ZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTQ6cGFydCIsCiAgICAgICJ1bml0ZSI6ICJjMTM3LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGFydCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IHByb3BvcnRpb24gb2YgdmFyaWFuY2UgZG9lcyB0aGUgZmlyc3QgYXhpcyByZXRhaW4gaGVyZSwgYW5kIHdoYXQgZG8gd2UgbG9zZSBieSByZXRhaW5pbmcgb25seSB0aGF0IGF4aXM/IiwKICAgICAgInJlcG9uc2UiOiAiz4PigoHCsiDDtyAoz4PigoHCsiArIM+D4oKCwrIpID0gODAgJS4gSW4gdGhpcyBleGFtcGxlLCB0aGUgc3VtIG9mIHNxdWFyZWQgcmVjb25zdHJ1Y3Rpb24gcmVzaWR1YWxzIGlzIGV4YWN0bHkgz4PigoLCsiA9IDEwMCBkwrBDwrIsIG9yIDIwICUgb2YgdGhlIHRvdGFsIHZhcmlhbmNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c137-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB0aGUgY29sdW1ucyBvZiBWIGluIFggPSBVIM6jIFbhtYAgY29udGFpbiwgZm9yIGEgY2VudGVyZWQgbWF0cml4IFg/CVRoZSBwcmluY2lwYWwgYXhlczogdmVjdG9ycyBvZiBsZW5ndGggb25lLCBwYWlyd2lzZSBwZXJwZW5kaWN1bGFyLCB0aGF0IGFyZSBlaWdlbnZlY3RvcnMgb2YgWOG1gFggYW5kIHRoZXJlZm9yZSBvZiB0aGUgY292YXJpYW5jZSBtYXRyaXguIFRoZXkgaGF2ZSBubyB1bml0IGFuZCBhcmUgZGVmaW5lZCB1cCB0byBhIHNpZ24uCXRvZGFpIGMxMzctbTQgYXhlcwpIb3cgZG8geW91IGdvIGZyb20gYSBzaW5ndWxhciB2YWx1ZSDPgyB0byB0aGUgdmFyaWFuY2UgYWxvbmcgdGhlIGF4aXMsIGFuZCBpbiB3aGF0IHVuaXQ/CVZhcmlhbmNlID0gz4PCsiDDtyAobiDiiJIgMSksIGluIHRoZSBzcXVhcmVkIHVuaXQgb2YgdGhlIGRhdGEuIEhlcmUgz4PigoEgPSAyMCBkwrBDIGdpdmVzIGFwcHJveGltYXRlbHkgMTMzLjMzIGTCsEPCsi4JdG9kYWkgYzEzNy1tNCB2YXJpYW5jZQpXaGF0IGRvZXMgdGhlIHByb2R1Y3QgWCBWIHJlcHJlc2VudD8JVGhlIGNvb3JkaW5hdGVzIG9mIHRoZSBvYnNlcnZhdGlvbnMgb24gdGhlIGF4ZXMsIGVxdWFsIHRvIFUgzqMuIEVhY2ggY29sdW1uIHN1bXMgdG8gMCBhbmQgaXRzIHZhcmlhbmNlIGlzIHRoYXQgb2YgdGhlIGF4aXMuIFRoZSBMaXZpbmcgUm9vbSBsaWVzIGF0ICgxMCA7IDUpIGTCsEMuCXRvZGFpIGMxMzctbTQgY29vcmRvbm5lZXMKV2hhdCBzdGVwIG11c3QgY29tZSBiZWZvcmUgU1ZEIGZvciBpdCB0byBnaXZlIFBDQT8JQ2VudGVyaW5nIHRoZSBjb2x1bW5zLiBXaXRob3V0IGl0LCB0aGUgbWVhbiBjb250cmlidXRlcyB0byB0aGUgz4PCsiB2YWx1ZXMsIHdoaWNoIGFyZSBubyBsb25nZXIgdmFyaWFuY2VzIGFsb25nIHRoZSBheGVzLgl0b2RhaSBjMTM3LW00IGNlbnRyYWdlCldoYXQgcHJvcG9ydGlvbiBvZiB2YXJpYW5jZSBkb2VzIHRoZSBmaXJzdCBheGlzIHJldGFpbiBoZXJlLCBhbmQgd2hhdCBkbyB3ZSBsb3NlIGJ5IHJldGFpbmluZyBvbmx5IHRoYXQgYXhpcz8Jz4PigoHCsiDDtyAoz4PigoHCsiArIM+D4oKCwrIpID0gODAgJS4gSW4gdGhpcyBleGFtcGxlLCB0aGUgc3VtIG9mIHNxdWFyZWQgcmVjb25zdHJ1Y3Rpb24gcmVzaWR1YWxzIGlzIGV4YWN0bHkgz4PigoLCsiA9IDEwMCBkwrBDwrIsIG9yIDIwICUgb2YgdGhlIHRvdGFsIHZhcmlhbmNlLgl0b2RhaSBjMTM3LW00IHBhcnQK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mxmqcp xbeoyy tmoz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">stkfkz ymdfak zmjjrp vueqny mbegnd gyivzw anrc</span></span></h3><dl><div><dt>What you understand</dt><dd>You connect this lesson to a concrete calculation: center and standardize columns, form a correlation matrix, extract its axes and eigenvalues, then express each variance as a percentage of the total. In our example, these eigenvalues can be recovered from the SVD of the centered data, divided by the number of rows (or that number minus one, depending on the convention).</dd></div><div><dt>Existing code and source</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nwubmh fivfrl gzpwyr bqjlew qxloyp sfkcbt nmocaq ashjoe yjjrmi hdtivr vmhjqx gawfso ghdhmc qpkfvf eyqvfb bhbjls kxuhdz ttfbrm ukuagw yauwkg jcgniu vdsbxu nnqnnt aydfjg qofgtj xsttdn mtjght vrddxt cjemaz imfvfh fajcds jdohwk qymejo msynjy okoyrn ywwiel qmxajl oc</span></span></dd></div><div><dt>Level to prepare for</dt><dd>To prepare: repeat the check XᵀX v = σ² v on a small matrix without support, convert σ to variance with units, and explain why the sign of an axis is arbitrary. Reading this lesson, or giving an assisted answer, does not certify any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dejqjt xhuzvy xtigpx qtdmdt ffjtzm xeplhh vcotdw pgxvlx eyjlxu wwmorx ctklyy tgkhmz vdrbxp iaowsz wexuab xzecmq mrzlar jmhnut jnvxiv okxkym wfwuur ixytsr xlnguw oomkde xhxiqi rrlffr gkdppt pdrxfs ebbxbc ywjtrg nfhnfr bkojug cmsyek nnqnfz effpjr tuczgr pwvflp bk</span></span></dd></div><div><dt>Next step</dt><dd>Read the next unit on choosing the number of axes, then compare the cumulative proportion of variance in the file with an explicit criterion. Before any real use, check separately how the code is connected, its assumptions and authorized data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c137-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c137-m3.html">Previous</a> · <a href="c137-m5.html">Next</a></nav>
+<footer><p>Course book · C137·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

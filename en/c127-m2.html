@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Read a planar vector field as a rule that assigns an arrow to each point, calculate the gradient of a temperature at a point, check it using centered differences, then test whether another field can be a gradient.">
+<title>C127·M2 · Fields — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xrlwfa bnjozk oeot</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C127·M2</p><h1>Fields</h1><p class="objectif"><span>Your goal</span>Read a planar vector field as a rule that assigns an arrow to each point, calculate the gradient of a temperature at a point, check it using centered differences, then test whether another field can be a gradient.</p><p class="prerequis"><strong>Before you start</strong><br>c058-m5 : change of variables · c057-m5 : Hessian · c027-m5 : complex numbers · c127-m1 : parametric curves</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>The setting is a thin plate. All values are fictional: the temperature T(x, y), in °C, depends on the position (x, y), measured in cm. We will focus on point A with coordinates (2 ; 1) cm. A scalar function such as T gives a single number at each point: its temperature.</p><p>A vector field gives something else: an arrow at each point, with a direction, a length and a unit. Imagine a small arrow attached to each point of a grid. The field is the entire rule “point → arrow”, rather than an isolated arrow. Reading the arrow at A is an evaluation of the field.</p><p>There are two fields on the plate. The first is the gradient of T: at each point, it combines the rates of change of T with respect to x and y, and its unit is °C per cm. The second is a fictional flow R that rotates around the origin O, with a velocity in cm/min. Both draw an arrow at each point, but nothing requires the second to come from a temperature.</p><p>We therefore want to calculate an arrow using its formula, check it without simply taking the formula on trust, then recognize a field that cannot be a gradient. Integration along a curve, for which parametric curves have already laid the groundwork, belongs to the unit on circulation and is not covered here.</p><div class="schemas"><figure><svg viewBox="0 0 360 262" xmlns="http://www.w3.org/2000/svg" role="img"><title>A gradient arrow at each point of the plate</title><desc>Nine points on a grid on the plate each carry an arrow for the temperature gradient. At point A with coordinates 2 and 1 centimeters, the highlighted arrow has components 7 and 10 degrees Celsius per centimeter. The arrows change in length and direction from point to point.</desc><line x1="70.0" y1="70.0" x2="94.2" y2="37.0" class="gobelet-e" /><polyline points="92.9,43.9 94.2,37.0 88.0,40.3" class="gobelet-e" /><circle cx="70" cy="70" r="4" class="point-prediction" /><line x1="170.0" y1="70.0" x2="198.6" y2="30.4" class="gobelet-e" /><polyline points="197.4,37.3 198.6,30.4 192.4,33.7" class="gobelet-e" /><circle cx="170" cy="70" r="4" class="point-prediction" /><line x1="270.0" y1="70.0" x2="303.0" y2="23.8" class="gobelet-e" /><polyline points="301.8,30.7 303.0,23.8 296.9,27.2" class="gobelet-e" /><circle cx="270" cy="70" r="4" class="point-prediction" /><line x1="70.0" y1="135.0" x2="87.6" y2="110.8" class="gobelet-e" /><polyline points="86.4,117.7 87.6,110.8 81.4,114.1" class="gobelet-e" /><circle cx="70" cy="135" r="4" class="point-prediction" /><line x1="170.0" y1="135.0" x2="192.0" y2="104.2" class="gobelet-e" /><polyline points="190.8,111.1 192.0,104.2 185.9,107.6" class="gobelet-e" /><circle cx="170" cy="135" r="4" class="point-prediction" /><line x1="270.0" y1="135.0" x2="296.4" y2="97.6" class="gobelet-e" /><polyline points="295.3,104.5 296.4,97.6 290.3,101.0" class="gobelet-e" /><circle cx="270" cy="135" r="4" class="point-prediction" /><line x1="70.0" y1="200.0" x2="81.0" y2="184.6" class="gobelet-e" /><polyline points="79.8,191.5 81.0,184.6 74.9,188.0" class="gobelet-e" /><circle cx="70" cy="200" r="4" class="point-prediction" /><line x1="170.0" y1="200.0" x2="185.4" y2="178.0" class="chemin-correction" /><polyline points="184.3,184.9 185.4,178.0 179.3,181.4" class="chemin-correction" /><circle cx="170" cy="200" r="4" class="point-prediction" /><line x1="270.0" y1="200.0" x2="289.8" y2="171.4" class="gobelet-e" /><polyline points="288.7,178.3 289.8,171.4 283.7,174.8" class="gobelet-e" /><circle cx="270" cy="200" r="4" class="point-prediction" /><text x="170" y="228" text-anchor="middle">A (2 ; 1) cm</text><text x="180" y="250" text-anchor="middle" class="petite-etiquette">∇T(A) = (7 ; 10) °C/cm</text><text x="332" y="228" text-anchor="middle" class="petite-etiquette">x (cm)</text><text x="12" y="20" class="petite-etiquette">y (cm)</text></svg><figcaption>The field gives an arrow at each point, rather than a single arrow: the arrows change in length and direction. Point A is highlighted; the plate and its values are fictional.</figcaption></figure><figure><svg viewBox="0 0 360 262" xmlns="http://www.w3.org/2000/svg" role="img"><title>The rotational flow is perpendicular to the radius</title><desc>The circle centered at O passes through A with coordinates 2 and 1 centimeters. The arrow of the flow R at A is tangent to this circle. Its dot product with the vector OA is 0.</desc><circle cx="75" cy="190" r="67.1" class="trait" /><line x1="75" y1="190" x2="135" y2="160" class="trait" /><line x1="135.0" y1="160.0" x2="117.0" y2="124.0" class="chemin-correction" /><polyline points="122.5,128.3 117.0,124.0 117.1,131.0" class="chemin-correction" /><circle cx="75" cy="190" r="4" class="point-mesure" /><circle cx="135" cy="160" r="4" class="point-prediction" /><text x="61" y="210" text-anchor="middle">O</text><text x="151" y="178" text-anchor="middle">A</text><text x="165" y="60" class="petite-etiquette">Fictional flow R</text><text x="165" y="84" class="petite-etiquette">R(A) = (−1 ; 2) cm/min</text><text x="165" y="108" class="petite-etiquette">OA = (2 ; 1) cm</text><text x="165" y="132" class="petite-etiquette">R(A) · OA = 0 cm²/min</text></svg><figcaption>The fictional flow R rotates around O. At A, its arrow is tangent to the circle through A and perpendicular to the radius OA, as confirmed by a 0 dot product.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>A field assigns a vector to each point; the gradient of a temperature combines its two partial derivatives; equality of the mixed partial derivatives is necessary for a field to be a gradient.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>One plate, two fields of arrows</h3><p>Fictional setting. The temperature of the plate is T(x, y) = a x² + b x y + c y², in °C, with a = 1 °C/cm², b = 3 °C/cm² and c = 2 °C/cm²; x and y are in cm. Point A is (2 ; 1) cm. The fictional flow is R(x, y) = (−y ; x), in cm/min, meaning a rotation with coefficient 1 min⁻¹. We calculate ∇T at A, check it, then test whether R can be a gradient.</p><ol class="etapes"><li><h3>Define the field, symbols, units and assumptions</h3><p>A planar field F assigns to each point (x, y) of a domain a vector with components P(x, y) and Q(x, y). These components carry the unit of the field: °C/cm for the gradient of T, cm/min for R.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>(</mo><mi>P</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>,</mo><mi>Q</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>)</mo></mrow></math></div><p>Here the domain is the entire plane. T is a polynomial: its partial derivatives exist, are continuous, and the order of differentiation can be interchanged. The gradient of T is the field whose components are its two partial derivatives, each calculated while holding the other variable fixed.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>∇</mo><mi>T</mi><mo>=</mo><mo>(</mo><mfrac><mrow><mo>∂</mo><mi>T</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac><mo>,</mo><mfrac><mrow><mo>∂</mo><mi>T</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac><mo>)</mo></mrow></math></div></li><li><h3>Differentiate T with respect to each variable</h3><p>To differentiate with respect to x, treat y as a constant: a x² gives 2 a x, b x y gives b y, and c y² vanishes. To differentiate with respect to y, exchange their roles.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>T</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac><mo>=</mo><mn>2</mn><mi>a</mi><mi>x</mi><mo>+</mo><mi>b</mi><mi>y</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>T</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac><mo>=</mo><mi>b</mi><mi>x</mi><mo>+</mo><mn>2</mn><mi>c</mi><mi>y</mi></mrow></math></div><p>These formulas give an arrow for each point (x, y): this is exactly the rule that defines the field.</p></li><li><h3>Evaluate the field at point A</h3><p>Evaluating means substituting the coordinates of A for x and y, while keeping the same rule. Each product retains its unit: a coefficient in °C/cm² multiplied by a length in cm gives °C/cm.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>2</mn><mo>×</mo><mn>1</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>3</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>4</mn><mo>+</mo><mn>3</mn><mo>=</mo><mn>7</mn><mtext> °C/cm</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>3</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>2</mn><mo>×</mo><mn>2</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>6</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>10</mn><mtext> °C/cm</mtext></mrow></math></div><p>The gradient at A is therefore the vector (7 ; 10) °C/cm. To first order, moving one centimeter in the x direction from A changes T by approximately 7 °C. This vector is not a temperature: only the function T is a temperature.</p></li><li><h3>Check a component using centered differences</h3><p>A program does not always have the derivative formula. It can approximate the x component using two evaluations of T on opposite sides of A, at a distance h = 1 cm:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>T</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac><mo>≈</mo><mfrac><mrow><mi>T</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>h</mi><mo>;</mo><mi>y</mi><mo>)</mo><mo>−</mo><mi>T</mi><mo>(</mo><mi>x</mi><mo>−</mo><mi>h</mi><mo>;</mo><mi>y</mi><mo>)</mo></mrow><mrow><mn>2</mn><mi>h</mi></mrow></mfrac></mrow></math></div><p>With T = x (a x + b y) + c y², we find T(3 ; 1) = 20 °C and T(1 ; 1) = 6 °C. The quotient gives the same value as the formula, which checks the calculation in the previous step for this component.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mi>T</mi><mo>(</mo><mn>3</mn><mo>;</mo><mn>1</mn><mo>)</mo><mo>−</mo><mi>T</mi><mo>(</mo><mn>1</mn><mo>;</mo><mn>1</mn><mo>)</mo></mrow><mrow><mn>2</mn><mo>×</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>20</mn><mo>−</mo><mn>6</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mn>14</mn><mn>2</mn></mfrac><mo>=</mo><mn>7</mn><mtext> °C/cm</mtext></mrow></math></div><p>This equality is exact here because T has degree two; for a more general function, the centered difference is only an approximation whose error depends on h. The y component can be checked in the same way.</p></li><li><h3>Differentiate the field itself</h3><p>Now differentiate the components P = ∂T/∂x and Q = ∂T/∂y. The matrix of these four derivatives has entries 2, 3, 3, 4: it is symmetric, because the two mixed partial derivatives both equal b, or 3 °C/cm². This is the Hessian of T, studied in the Hessian unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>(</mo><mtable><mtr><mtd><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac></mtd><mtd><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac></mtd></mtr><mtr><mtd><mfrac><mrow><mo>∂</mo><mi>Q</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac></mtd><mtd><mfrac><mrow><mo>∂</mo><mi>Q</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac></mtd></mtr></mtable><mo>)</mo><mo>=</mo><mrow><mo>(</mo><mtable><mtr><mtd><mrow><mn>2</mn><mi>a</mi></mrow></mtd><mtd><mi>b</mi></mtd></mtr><mtr><mtd><mi>b</mi></mtd><mtd><mrow><mn>2</mn><mi>c</mi></mrow></mtd></mtr></mtable><mo>)</mo></mrow><mo>=</mo><mrow><mo>(</mo><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable><mo>)</mo></mrow></mrow></math></div><p>If a field comes from a C² potential, this symmetry is required by Schwarz’s theorem. It is therefore a necessary condition for being a gradient.</p></li><li><h3>Test the rotational flow</h3><p>For R, P = −y and Q = x. The mixed partial derivatives do not agree: ∂P/∂y is −1 min⁻¹ and ∂Q/∂x is 1 min⁻¹.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac><mo>=</mo><mo>−</mo><mn>1</mn><mo>,</mo><mfrac><mrow><mo>∂</mo><mi>Q</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac><mo>=</mo><mn>1</mn><mo>,</mo><mtext> donc </mtext><mfrac><mrow><mo>∂</mo><mi>Q</mi></mrow><mrow><mo>∂</mo><mi>x</mi></mrow></mfrac><mo>−</mo><mfrac><mrow><mo>∂</mo><mi>P</mi></mrow><mrow><mo>∂</mo><mi>y</mi></mrow></mfrac><mo>=</mo><mn>1</mn><mo>−</mo><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>2</mn></mrow></math></div><p>If R were the gradient of a C² function, these two numbers would be equal. They are not: no C² potential exists for R over the entire plate. At A, R is (−1 ; 2) cm/min. Its dot product with the vector OA, with components (2 ; 1) cm, is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>R</mi><mo>(</mo><mi>A</mi><mo>)</mo><mo>·</mo><mi>OA</mi><mo>=</mo><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>×</mo><mn>2</mn><mo>+</mo><mn>2</mn><mo>×</mo><mn>1</mn><mo>=</mo><mo>−</mo><mn>2</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>0</mn><mtext> cm²/min</mtext></mrow></math></div><p>The arrow is therefore perpendicular to the radius: it is tangent to the circle centered at O and passing through A. In complex numbers z = x + i y, this field is multiplication by i; in polar coordinates, its length is the distance to O and its direction follows the increasing angle.</p></li><li><h3>Check the units and the scope of the conclusions</h3><p>The three objects must be kept distinct: T in °C, its gradient in °C/cm, and the flow R in cm/min. Adding any two of them would make no sense.</p><p>Equality of the mixed partial derivatives for ∇T only recovered the symmetry of the Hessian; it proves nothing about another field. The inequality for R is enough to rule out a C² potential. The centered difference checks one component at one point, rather than the entire field. Nothing says that these fictional values describe a real plate.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why can the two fields look like two drawings of arrows even though only one comes from a scalar function? Which equality indicates this, and exactly what does its failure prove?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A vector field is the arrow I read at a point.”</h3><p>The arrow at A is only one value of the field. The field is the rule that assigns an arrow to each point; changing the point changes the arrow, as between A and point B in the evaluation exercise.</p><a href="#intuition">Review the rule from point to arrow</a></li><li><h3>“The gradient of T at A is a temperature.”</h3><p>It is a vector of two partial derivatives, in °C/cm, rather than a number in °C. Repeat the calculation in the example, writing down the unit of each product.</p><a href="#exemple">Repeat the calculation at A</a></li><li><h3>“Every vector field is the gradient of a function.”</h3><p>For a C² potential, the mixed partial derivatives of the components are equal. The rotational flow R breaks this equality, so it cannot be a gradient. Equality alone is not a proof of existence: exhibit a potential, as in the final exercise.</p><a href="#exercices">Repeat the mixed partial derivative test</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-evaluer"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>Same gradient, different point</h3><p>Using the same fictional temperature, calculate ∇T at point B with coordinates (1 ; 2) cm. Then compare this vector with the vector at point A.</p>
+<label for="reponse-ex-evaluer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-evaluer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-evaluer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-evaluer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-evaluer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Use the two partial derivative formulas again, then substitute the coordinates of B for x and y.</p></details><details class="indice"><summary>Hint 2</summary><p>Keep the unit of each product: °C/cm.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The x component: 2 × 1 × 1 + 3 × 2 = 2 + 6 = 8 °C/cm. The y component: 3 × 1 + 2 × 2 × 2 = 3 + 8 = 11 °C/cm.</p><p>At B, the gradient is therefore (8 ; 11) °C/cm, whereas it is (7 ; 10) °C/cm at A. The same rule does give a different arrow depending on the point, which is the definition of a field.</p><p class="petit-titre">Check your reasoning</p><ul><li>Both partial derivatives are written before they are evaluated.</li><li>The result is a vector with two components, in °C/cm.</li><li>The comparison with A discusses different arrows, rather than temperatures.</li></ul></details></article><article class="exercice" id="ex-test"><p class="repere">Exercise 2 · Diagnostic</p>
+<h3>Can a flow be a gradient?</h3><p>Another fictional flow has components P = 2 y and Q = 4 x, in cm/min, with the coefficients in min⁻¹. Can it be the gradient of a C² function over the entire plane? Justify your answer using the mixed partial derivative test and state what your test proves.</p>
+<label for="reponse-ex-test">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-test" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-test" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-test" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-test" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate ∂P/∂y and ∂Q/∂x: the coefficient of y in P and the coefficient of x in Q.</p></details><details class="indice"><summary>Hint 2</summary><p>Think about what is needed for these two numbers to be equal.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Here ∂P/∂y = 2 min⁻¹ and ∂Q/∂x = 4 min⁻¹. The difference is 4 − 2 = 2 min⁻¹, which is nonzero. A gradient from a C² potential would have equal mixed partial derivatives: this flow is not one.</p><p>This test proves that it is ruled out. If the two coefficients had been equal, the test would have passed, but it would not have been enough on its own: a potential would have had to be exhibited, as in the next exercise.</p><p class="petit-titre">Check your reasoning</p><ul><li>The two mixed partial derivatives are calculated separately.</li><li>The conclusion rules out a potential and names the C² assumption.</li><li>The text does not conclude that passing the test would prove the existence of a potential.</li></ul></details></article><article class="exercice" id="ex-potentiel"><p class="repere">Exercise 3 · Construction</p>
+<h3>Recover the temperature whose gradient is the field</h3><p>A fictional field has components P = 4 x + 1 y and Q = 1 x + 6 y, in °C/cm. Show that it passes the mixed partial derivative test, then construct a function U of the form (coefficient) x² + 1 x y + (coefficient) y² whose gradient is this field. Check by differentiating U.</p>
+<label for="reponse-ex-potentiel">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-potentiel" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-potentiel" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-potentiel" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-potentiel" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The x y term in U gives 1 y in ∂U/∂x and 1 x in ∂U/∂y.</p></details><details class="indice"><summary>Hint 2</summary><p>Differentiating a term in x² multiplies its coefficient by 2: choose it to recover 4, then do the same for y².</p></details><details class="indice"><summary>Hint 3</summary><p>A potential is defined up to an additive constant.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Mixed partial derivative test: ∂P/∂y = 1 and ∂Q/∂x = 1, which are equal. The test passes, but U still needs to be constructed.</p><p>The coefficients of x² and y² are half of 4 and 6: 4 ÷ 2 = 2 and 6 ÷ 2 = 3. We therefore set U = 2 x² + 1 x y + 3 y².</p><p>Check: ∂U/∂x = 2 × 2 x + 1 y = 4 x + 1 y, and ∂U/∂y = 1 x + 2 × 3 y = 1 x + 6 y. This recovers P and Q. Adding any constant to U also works.</p><p class="petit-titre">Check your reasoning</p><ul><li>The mixed partial derivative test is written before the construction.</li><li>The coefficients are obtained by reversing the differentiation of the squared terms.</li><li>The check differentiates U in both directions.</li><li>The additive constant is mentioned.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="champ"><summary><span class="repere">Recall 1</span><span>What is a planar vector field?</span></summary><p>A rule that assigns to each point (x, y) of a domain a vector (P, Q), with a unit for its components. The arrow at a point is only one value of the field.</p></details><details class="carte" data-carte="gradient"><summary><span class="repere">Recall 2</span><span>What does the gradient of a temperature T at a point contain?</span></summary><p>Its two partial derivatives ∂T/∂x and ∂T/∂y at that point, in °C/cm if x and y are in cm. It is a vector, rather than a temperature.</p></details><details class="carte" data-carte="croise"><summary><span class="repere">Recall 3</span><span>Which test rules out a field as the gradient of a C² potential?</span></summary><p>The equality ∂P/∂y = ∂Q/∂x. For the flow R, the two numbers are −1 and 1: they differ, so R is not the gradient of a C² potential. Passing the test is not enough to prove the existence of a potential.</p></details><details class="carte" data-carte="centrees"><summary><span class="repere">Recall 4</span><span>How can you check a gradient component without a formula?</span></summary><p>Use (T(x + h ; y) − T(x − h ; y)) / (2h) for the x component. Here h = 1 cm gives 7 °C/cm, exact for a polynomial of degree two and approximate in general.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct the sequence: a planar field gives a vector at each point, with its units; the gradient of a temperature combines ∂T/∂x and ∂T/∂y; evaluate at a point while keeping the units; check a component using centered differences; test ∂P/∂y = ∂Q/∂x as a necessary condition, and conclude only that a potential is ruled out when it fails.</p></div><div class="exports"><a class="bouton" download="c127-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMjctbTI6Y2hhbXAiLAogICAgICAidW5pdGUiOiAiYzEyNy1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNoYW1wIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgYSBwbGFuYXIgdmVjdG9yIGZpZWxkPyIsCiAgICAgICJyZXBvbnNlIjogIkEgcnVsZSB0aGF0IGFzc2lnbnMgdG8gZWFjaCBwb2ludCAoeCwgeSkgb2YgYSBkb21haW4gYSB2ZWN0b3IgKFAsIFEpLCB3aXRoIGEgdW5pdCBmb3IgaXRzIGNvbXBvbmVudHMuIFRoZSBhcnJvdyBhdCBhIHBvaW50IGlzIG9ubHkgb25lIHZhbHVlIG9mIHRoZSBmaWVsZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEyNy1tMjpncmFkaWVudCIsCiAgICAgICJ1bml0ZSI6ICJjMTI3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZ3JhZGllbnQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBncmFkaWVudCBvZiBhIHRlbXBlcmF0dXJlIFQgYXQgYSBwb2ludCBjb250YWluPyIsCiAgICAgICJyZXBvbnNlIjogIkl0cyB0d28gcGFydGlhbCBkZXJpdmF0aXZlcyDiiIJUL+KIgnggYW5kIOKIglQv4oiCeSBhdCB0aGF0IHBvaW50LCBpbiDCsEMvY20gaWYgeCBhbmQgeSBhcmUgaW4gY20uIEl0IGlzIGEgdmVjdG9yLCByYXRoZXIgdGhhbiBhIHRlbXBlcmF0dXJlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTI3LW0yOmNyb2lzZSIsCiAgICAgICJ1bml0ZSI6ICJjMTI3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGVzdC1jcm9pc2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggdGVzdCBydWxlcyBvdXQgYSBmaWVsZCBhcyB0aGUgZ3JhZGllbnQgb2YgYSBDwrIgcG90ZW50aWFsPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBlcXVhbGl0eSDiiIJQL+KIgnkgPSDiiIJRL+KIgnguIEZvciB0aGUgZmxvdyBSLCB0aGUgdHdvIG51bWJlcnMgYXJlIOKIkjEgYW5kIDE6IHRoZXkgZGlmZmVyLCBzbyBSIGlzIG5vdCB0aGUgZ3JhZGllbnQgb2YgYSBDwrIgcG90ZW50aWFsLiBQYXNzaW5nIHRoZSB0ZXN0IGlzIG5vdCBlbm91Z2ggdG8gcHJvdmUgdGhlIGV4aXN0ZW5jZSBvZiBhIHBvdGVudGlhbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEyNy1tMjpjZW50cmVlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTI3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGlmZmVyZW5jZXMtY2VudHJlZXMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB5b3UgY2hlY2sgYSBncmFkaWVudCBjb21wb25lbnQgd2l0aG91dCBhIGZvcm11bGE/IiwKICAgICAgInJlcG9uc2UiOiAiVXNlIChUKHggKyBoIDsgeSkg4oiSIFQoeCDiiJIgaCA7IHkpKSAvICgyaCkgZm9yIHRoZSB4IGNvbXBvbmVudC4gSGVyZSBoID0gMSBjbSBnaXZlcyA3IMKwQy9jbSwgZXhhY3QgZm9yIGEgcG9seW5vbWlhbCBvZiBkZWdyZWUgdHdvIGFuZCBhcHByb3hpbWF0ZSBpbiBnZW5lcmFsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c127-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyBhIHBsYW5hciB2ZWN0b3IgZmllbGQ/CUEgcnVsZSB0aGF0IGFzc2lnbnMgdG8gZWFjaCBwb2ludCAoeCwgeSkgb2YgYSBkb21haW4gYSB2ZWN0b3IgKFAsIFEpLCB3aXRoIGEgdW5pdCBmb3IgaXRzIGNvbXBvbmVudHMuIFRoZSBhcnJvdyBhdCBhIHBvaW50IGlzIG9ubHkgb25lIHZhbHVlIG9mIHRoZSBmaWVsZC4JdG9kYWkgYzEyNy1tMiBjaGFtcApXaGF0IGRvZXMgdGhlIGdyYWRpZW50IG9mIGEgdGVtcGVyYXR1cmUgVCBhdCBhIHBvaW50IGNvbnRhaW4/CUl0cyB0d28gcGFydGlhbCBkZXJpdmF0aXZlcyDiiIJUL+KIgnggYW5kIOKIglQv4oiCeSBhdCB0aGF0IHBvaW50LCBpbiDCsEMvY20gaWYgeCBhbmQgeSBhcmUgaW4gY20uIEl0IGlzIGEgdmVjdG9yLCByYXRoZXIgdGhhbiBhIHRlbXBlcmF0dXJlLgl0b2RhaSBjMTI3LW0yIGdyYWRpZW50CldoaWNoIHRlc3QgcnVsZXMgb3V0IGEgZmllbGQgYXMgdGhlIGdyYWRpZW50IG9mIGEgQ8KyIHBvdGVudGlhbD8JVGhlIGVxdWFsaXR5IOKIglAv4oiCeSA9IOKIglEv4oiCeC4gRm9yIHRoZSBmbG93IFIsIHRoZSB0d28gbnVtYmVycyBhcmUg4oiSMSBhbmQgMTogdGhleSBkaWZmZXIsIHNvIFIgaXMgbm90IHRoZSBncmFkaWVudCBvZiBhIEPCsiBwb3RlbnRpYWwuIFBhc3NpbmcgdGhlIHRlc3QgaXMgbm90IGVub3VnaCB0byBwcm92ZSB0aGUgZXhpc3RlbmNlIG9mIGEgcG90ZW50aWFsLgl0b2RhaSBjMTI3LW0yIHRlc3QtY3JvaXNlCkhvdyBjYW4geW91IGNoZWNrIGEgZ3JhZGllbnQgY29tcG9uZW50IHdpdGhvdXQgYSBmb3JtdWxhPwlVc2UgKFQoeCArIGggOyB5KSDiiJIgVCh4IOKIkiBoIDsgeSkpIC8gKDJoKSBmb3IgdGhlIHggY29tcG9uZW50LiBIZXJlIGggPSAxIGNtIGdpdmVzIDcgwrBDL2NtLCBleGFjdCBmb3IgYSBwb2x5bm9taWFsIG9mIGRlZ3JlZSB0d28gYW5kIGFwcHJveGltYXRlIGluIGdlbmVyYWwuCXRvZGFpIGMxMjctbTIgZGlmZmVyZW5jZXMtY2VudHJlZXMK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xrlwfa bnjozk oeot</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · recognize a gradient computed using centered differences in code</h3><dl><div><dt>What you understand</dt><dd>A field assigns an arrow to each point. The gradient of a function of several variables is an example, and it can be approximated coordinate by coordinate using centered differences. The next unit will integrate a field along a curve.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qhyglg xkmseu kppecy hhgfnr wjhvah qtvruz vexsad gznowb qscqej bjtwtz rgjxap lwlczw nygrrf pklgsn zbjcsb vjlvab ahsutl kqzrfp dzzjwm uzbhrr jzieek hkyjik uxdkdc yhbahn jpkrog imutny sojwgm pqztxl lqmjpm iqrgka usghbc xwbiqy fjmjqv fthmnb smvlbf scijnc gmlhaz hr</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: write the gradient of a temperature at a point without support, check it using centered differences, then apply the mixed partial derivative test, stating what it establishes and what it does not establish. The presence of the code and reading the lesson do not establish that any level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jkizln qmrzvg cbvfmg bubhws dxwykn fjwboa zjnwxv gmrdsq qjicsk aubyzn sjrxuo tjzvmv ggxpkz kfmocu poxash xwyhkl epntyn qnrzyg qypfdj aqrtlc svdfpi rzojub uhvqit cgayhp</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the gradient calculation at a new point, then apply the mixed partial derivative test to a field of your choice, without support. Next, read the unit on circulation. Before any real use, separately check the system integration, the step h and the domain of validity using authorized data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c127-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c127-m1.html">Previous</a> · <a href="c127-m3.html">Next</a></nav>
+<footer><p>Course book · C127·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

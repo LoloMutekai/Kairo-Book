@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Estimate a probability by simulation, quantify its standard error, choose the number of draws, and distinguish random variation from bias.">
+<title>C176·M2 · Monte Carlo error — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nrxxga xvpacf nzev</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C176·M2</p><h1>Monte Carlo error</h1><p class="objectif"><span>Your goal</span>Estimate a probability by simulation, quantify its standard error, choose the number of draws, and distinguish random variation from bias.</p><p class="prerequis"><strong>Before you start</strong><br>c060-m5 : approximations and assumptions · c061-m5 : identifiability and uncertainty · c051-m5 : error diagnostics · c172-m5 : Euler-Maruyama · c017-m5 : reproduction protocol · c176-m1 : generators and seeds</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional trajectory simulation returns an outcome Y for each draw: 1 if the trajectory ends above a fixed threshold, 0 otherwise. We want the probability of this event and replace it with the frequency observed over n draws. The trajectory advances in small time steps, as in the Euler–Maruyama scheme from C172·M5, and the generator seed, introduced in C176·M1, fixes the sequence of draws.</p><p>Running the simulation again with another seed would give another frequency. Monte Carlo error is primarily this variation from one run to another. It is measured by the standard error, which is the standard deviation of the frequency. It does not tell us whether the simulator targets the correct value.</p><p>Two mechanisms have different effects. Random variation decreases as n increases, slowly, because it follows the inverse of the square root of n. Bias comes from the simulator: if its time step is too coarse, repeating the same calculation more often concentrates the frequency around a value that remains offset.</p><p>All values in this scenario are fictional. We even invent the exact model value so that we can check the calculation. In a real project it is unknown, and bias must be investigated in other ways, for example by comparing simulator settings, an approach related to the error diagnostics in C051·M5. The assumptions behind these calculations relate to the topics in C060·M5 and C061·M5.</p><div class="schemas"><figure><svg viewBox="0 0 400 235" xmlns="http://www.w3.org/2000/svg" role="img"><title>Interval and two fictional reference values</title><desc>On a partial axis of probabilities with no unit, the estimate is 0.20. The approximate interval runs from 0.1216 to 0.2784. The simulator mean, 0.24, is inside the interval; the fictional exact value, 0.30, is to the right and outside the interval.</desc><rect x="137" y="136" width="126" height="28" rx="6" class="cadre-resultat" /><line x1="40" y1="150" x2="360" y2="150" class="trait" /><line x1="232" y1="58" x2="232" y2="150" class="trait" /><line x1="280" y1="58" x2="280" y2="150" class="trait" /><line x1="200" y1="164" x2="200" y2="180" class="trait" /><text x="236" y="46" text-anchor="end" class="petite-etiquette">simulator 0.24</text><text x="276" y="46" class="petite-etiquette">exact 0.30</text><circle cx="232" cy="150" r="6" class="resultat" /><circle cx="280" cy="150" r="6" class="point-mesure" /><circle cx="200" cy="150" r="7" class="point-prediction" /><text x="200" y="198" text-anchor="middle">estimate 0.20</text><text x="200" y="224" text-anchor="middle" class="petite-etiquette">interval from 0.1216 to 0.2784</text></svg><figcaption>Fictional values on a partial axis with no unit. The interval built around the estimate contains the simulator mean but excludes the exact value: standard error does not detect bias.</figcaption></figure><figure><svg viewBox="0 0 400 225" xmlns="http://www.w3.org/2000/svg" role="img"><title>Standard error by number of draws</title><desc>Four horizontal bars show the standard error: 0.08 for 25 draws, 0.04 for 100, 0.02 for 400, and 0.004 for 10000. A vertical line marks the fictional bias 0.06; only the first bar extends beyond it.</desc><line x1="190" y1="40" x2="190" y2="205" class="trait" /><rect x="190" y="55" width="80" height="26" class="cadre-prediction" /><rect x="190" y="95" width="40" height="26" class="cadre-prediction" /><rect x="190" y="135" width="20" height="26" class="cadre-prediction" /><rect x="190" y="175" width="4" height="26" class="cadre-prediction" /><line x1="250" y1="32" x2="250" y2="205" class="chemin-correction" /><text x="250" y="22" text-anchor="middle" class="petite-etiquette">bias 0.06</text><text x="182" y="73" text-anchor="end" class="petite-etiquette">n = 25 · SE 0.08</text><text x="182" y="113" text-anchor="end" class="petite-etiquette">n = 100 · SE 0.04</text><text x="182" y="153" text-anchor="end" class="petite-etiquette">n = 400 · SE 0.02</text><text x="182" y="193" text-anchor="end" class="petite-etiquette">n = 10000 · SE 0.004</text></svg><figcaption>Fictional values, with the standard deviation of a draw assumed constant and all bars on the same scale. Multiplying n by 4 divides the bar length by 2; the bias line stays in place.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Estimate the frequency, estimate the standard deviation of a draw, and divide by the square root of n to obtain the standard error; observe its slow decrease as n increases; always distinguish it from bias.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A simulation with 100 draws, from frequency to error</h3><p>A fictional simulation produced 20 successes in 100 draws; these values are invented for the example and come from no real generator. Let us calculate the frequency, its standard error, and an interval, then separate random variation from a fictional bias.</p><ol class="etapes"><li><h3>Define the symbols and assumptions</h3><p>n is the number of draws, here 100. Y is the outcome of a draw, 0 or 1, with no unit. k is the number of draws equal to 1, here 20. The frequency p̂ = k / n estimates the probability that the simulation assigns to the event; it has no unit and stays between 0 and 1.</p><p>p<sub>s</sub> denotes the probability that the simulator, with its current settings, actually assigns to the event. p<sub>e</sub> denotes the probability in the exact model that the simulation aims to approximate. In a real project both values are unknown. Here we set them to 0.24 and 0.30, fictional values that allow us to check the final step.</p><p>Assumptions: the draws are independent and identically distributed, with a single declared seed for the whole sequence; the standard deviation of a draw is estimated from the draws themselves; for the interval, the frequency is approximated by a normal distribution. Without these assumptions, the formulas below are no longer guaranteed to apply.</p></li><li><h3>Estimate using the frequency</h3><p>Since Y equals 0 or 1, the mean of the draws is exactly the proportion of successes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>p</mi><mo>^</mo></mover><mo>=</mo><mfrac><mi>k</mi><mi>n</mi></mfrac><mo>=</mo><mfrac><mn>20</mn><mn>100</mn></mfrac><mo>=</mo><mn>0.20</mn></mrow></math></div><p>This value is the estimate from one run. Another seed would give another k, and therefore another frequency.</p></li><li><h3>Measure the variation of a single draw</h3><p>The error of the mean depends on the unknown standard deviation σ of a draw, which we estimate. Since Y equals 0 or 1, we have Y² = Y, so the mean of the Y² values is p̂. The empirical variance, the mean of the squares minus the square of the mean, is p̂ − p̂² = p̂ (1 − p̂).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mover><mi>σ</mi><mo>^</mo></mover><mn>2</mn></msup><mo>=</mo><mover><mi>p</mi><mo>^</mo></mover><mo>(</mo><mn>1</mn><mo>−</mo><mover><mi>p</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><mn>0.2</mn><mo>×</mo><mn>0.8</mn><mo>=</mo><mn>0.16</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>σ</mi><mo>^</mo></mover><mo>=</mo><msqrt><mn>0.16</mn></msqrt><mo>=</mo><mn>0.4</mn></mrow></math></div><p>Check: 0.4 × 0.4 = 0.16, and the alternative expression gives 0.20 − 0.04 = 0.16. Both calculations agree. The variance has no unit, like Y. We divide by n; a correction using division by n − 1 exists, but is outside the scope of this unit.</p></li><li><h3>From a draw to the mean: standard error</h3><p>The frequency is the sum of the n draws divided by n. For independent draws, the variance of a sum is the sum of the variances: the cross terms have 0 mean. The sum therefore has variance n σ². Dividing by n multiplies the variance by (1 / n)², giving the result below. The standard error SE is its square root, in the same unit as Y (none here).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mover><mi>p</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><msup><mo>(</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>)</mo><mn>2</mn></msup><mo>×</mo><mi>n</mi><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mfrac><msup><mi>σ</mi><mn>2</mn></msup><mi>n</mi></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>SE</mtext><mo>=</mo><mfrac><mover><mi>σ</mi><mo>^</mo></mover><msqrt><mi>n</mi></msqrt></mfrac><mo>=</mo><mfrac><mn>0.4</mn><msqrt><mn>100</mn></msqrt></mfrac><mo>=</mo><mfrac><mn>0.4</mn><mn>10</mn></mfrac><mo>=</mo><mn>0.04</mn></mrow></math></div><p>Check: SE² = 0.16 / 100 = 0.0016, and 0.04 × 0.04 = 0.0016. SE describes the typical difference between the frequency from a run and its own mean p<sub>s</sub>; it does not yet consider p<sub>e</sub>.</p></li><li><h3>See the effect of the number of draws</h3><p>Increase the number of draws to 400, or 4 times as many, assuming that the standard deviation of a draw stays close to 0.4.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>SE</mtext><mo>=</mo><mfrac><mn>0.4</mn><msqrt><mn>400</mn></msqrt></mfrac><mo>=</mo><mfrac><mn>0.4</mn><mn>20</mn></mfrac><mo>=</mo><mn>0.02</mn></mrow></math></div><p>The standard error changes from 0.04 to 0.02: it is divided by 2. To divide it by 2, we must multiply the number of draws by 4. Computational cost scales with n, while the improvement scales with the square root of n.</p></li><li><h3>Report an interval with its assumptions</h3><p>Under the normal approximation, we report p̂ ± z × SE with z = 49 / 25 = 1.96, the coefficient for the nominal level of 95 %. Nominal means that, over many independent runs, approximately this proportion of intervals constructed this way would contain p<sub>s</sub>, if the approximation holds. It is not the probability that this particular interval contains the true value.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>p</mi><mo>^</mo></mover><mo>±</mo><mi>z</mi><mo>×</mo><mtext>SE</mtext><mo>=</mo><mn>0.20</mn><mo>±</mo><mn>1.96</mn><mo>×</mo><mn>0.04</mn><mo>=</mo><mn>0.20</mn><mo>±</mo><mn>0.0784</mn></mrow></math></div><p>The bounds are 0.1216 and 0.2784. Check: their midpoint is indeed 0.20, and each bound is 0.0784 away from it.</p></li><li><h3>Separate random variation and bias (fictional check values)</h3><p>The total difference between the estimate and the exact model splits into two parts: the random variation p̂ − p<sub>s</sub>, and the simulator bias p<sub>s</sub> − p<sub>e</sub>.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>p</mi><mo>^</mo></mover><mo>−</mo><msub><mi>p</mi><mi>e</mi></msub><mo>=</mo><mo>(</mo><mover><mi>p</mi><mo>^</mo></mover><mo>−</mo><msub><mi>p</mi><mi>s</mi></msub><mo>)</mo><mo>+</mo><mo>(</mo><msub><mi>p</mi><mi>s</mi></msub><mo>−</mo><msub><mi>p</mi><mi>e</mi></msub><mo>)</mo><mo>⇒</mo><mn>-0.10</mn><mo>=</mo><mn>-0.04</mn><mo>+</mo><mo>(</mo><mn>-0.06</mn><mo>)</mo></mrow></math></div><p>The random component is -0.04: about one standard error in magnitude. The bias is -0.06, or 1.5 times SE in absolute value. The interval from the previous step contains p<sub>s</sub> = 0.24 but excludes p<sub>e</sub> = 0.30, since 0.2784 remains below 0.30.</p><p>With 10000 draws, a hundred times as many, SE would fall to 0.004 but the bias would remain at 0.06, or 15 times SE. The interval would become narrower while retaining the same bias. Check: -0.04 + (-0.06) = -0.10.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain in your own words why standard error decreases more slowly than the number of draws increases, then explain why it cannot reveal simulator bias.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“With enough draws, the result becomes exact.”</h3><p>More draws reduce only random variation. Simulator bias remains: with 10000 draws the standard error falls to 0.004, but the bias is still 0.06.</p><a href="#exemple">Review the separation of variation and bias</a></li><li><h3>“Standard error is the standard deviation of the draws.”</h3><p>The standard deviation of a draw, 0.4, describes the variation of an individual outcome. The standard error, 0.04, describes the variation of the frequency: it is divided by the square root of n. The code reviewed in the milestone uses the term standard error for a population standard deviation over a set of simulated errors, which is a different quantity.</p><a href="#jalon"><span class="milestone-label">Reread the distinction in the milestone</span></a></li><li><h3>“Doubling the number of draws halves the error.”</h3><p>The square root of 2 is not 2. To divide the error by 2, we need 4 times as many draws, and 16 times as many to divide it by 4, as in the sample size calculation.</p><a href="#exercices">Repeat the sample size exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-moins"><p class="repere">Exercise 1 · Worked application</p>
+<h3>A quarter as many draws</h3><p>In the same fictional scenario, only 25 draws are made and 5 equal 1. Calculate the frequency, the standard deviation of a draw, and then the standard error, and compare it with the standard error in the example.</p>
+<label for="reponse-ex-moins">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-moins" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-moins" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-moins" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-moins" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the frequency, then p̂ (1 − p̂) for the variance of a draw.</p></details><details class="indice"><summary>Hint 2</summary><p>The square root of 25 is an integer.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Frequency: 5 / 25 = 0.20. Variance of a draw: 0.2 × 0.8 = 0.16, giving standard deviation 0.4. Square root of the number of draws: 5. Standard error: 0.4 / 5 = 0.08.</p><p>In the example it was 0.04: here it is multiplied by 2, because n has been divided by 4. This error belongs to the frequency and has no unit.</p><p class="petit-titre">Check your reasoning</p><ul><li>The frequency is calculated before the standard deviation.</li><li>The square root of n appears, rather than n.</li><li>The comparison states the factor 2 and its cause.</li></ul></details></article><article class="exercice" id="ex-dimension"><p class="repere">Exercise 2 · Sample size planning</p>
+<h3>Target a specified standard error</h3><p>We want a standard error of 0.01, keeping the standard deviation of a draw at 0.4. How many draws are needed, and how many times as many as 100? What assumption is hidden in this calculation?</p>
+<label for="reponse-ex-dimension">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-dimension" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-dimension" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-dimension" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-dimension" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In SE = σ̂ / square root of n, first isolate the square root of n.</p></details><details class="indice"><summary>Hint 2</summary><p>Then square it and divide by 100.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The square root of n is σ̂ / SE = 0.4 / 0.01 = 40. Therefore n = 40 × 40 = 1600 draws, or 16 times as many as 100.</p><p>Check: 0.04 divided by 4 equals 0.01, and 4 squared is 16. Hidden assumption: the standard deviation of a draw would stay close to 0.4; we estimate it again using the new draws. Computational cost is multiplied by 16.</p><p class="petit-titre">Check your reasoning</p><ul><li>The square root of n is isolated before squaring.</li><li>The cost factor is compared with 100.</li><li>The assumption about the standard deviation is stated.</li></ul></details></article><article class="exercice" id="ex-biais"><p class="repere">Exercise 3 · Diagnosis</p>
+<h3>A colleague wants 10000 draws</h3><p>A colleague proposes 10000 draws to ensure that the interval contains the exact value. Using the fictional check values 0.24 for the simulator mean, 0.30 for the exact value, and a standard deviation of a draw of 0.4, calculate the new standard error and the half-width at 1.96 standard errors. What would the interval tell us about bias? What do you suggest?</p>
+<label for="reponse-ex-biais">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-biais" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-biais" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-biais" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-biais" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The square root of 10000 is 100.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the half-width with the absolute value of the bias, 0.06.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Standard error: 0.4 / 100 = 0.004. Half-width: 1.96 × 0.004 = 0.00784.</p><p>The absolute value of the bias is 0.06, or 15 times the standard error, far greater than the half-width: the interval, very narrow around p<sub>s</sub>, would exclude p<sub>e</sub>. More draws therefore do nothing to address this offset: we must reduce simulator bias, for example by refining its time step, then repeat the estimation with a declared seed and protocol (C017·M5).</p><p>Note: here p<sub>e</sub> is known because the scenario is fictional. In practice it is unknown: the narrow interval would give misleading confidence without revealing any bias, and this diagnosis requires another reference.</p><p class="petit-titre">Check your reasoning</p><ul><li>The standard error is recalculated using the square root of n.</li><li>Bias and half-width are compared on the same scale.</li><li>The remedy addresses the simulator, beyond simply changing n.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="formule-se"><summary><span class="repere">Recall 1</span><span>How do we calculate the standard error of a frequency over n draws?</span></summary><p>Divide the standard deviation of a draw by the square root of n, assuming independent and identically distributed draws; the standard deviation is estimated from the draws.</p></details><details class="carte" data-carte="quatre-fois"><summary><span class="repere">Recall 2</span><span>How can we divide Monte Carlo error by 2?</span></summary><p>Multiply the number of draws by 4, holding the standard deviation of a draw constant: cost scales with n, while the improvement scales with the square root of n.</p></details><details class="carte" data-carte="biais"><summary><span class="repere">Recall 3</span><span>Why does increasing n fail to correct bias?</span></summary><p>Because increasing n concentrates the frequency around the simulator mean; if that mean differs from the target value, the difference remains.</p></details><details class="carte" data-carte="intervalle"><summary><span class="repere">Recall 4</span><span>What does an interval p̂ ± z × SE cover?</span></summary><p>Under its assumptions (independence, normal approximation), it covers the simulator mean at a nominal level; it does not account for bias.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Estimate the frequency p̂; estimate the standard deviation of a draw; divide by the square root of n for the standard error under independence; state how many draws a target precision requires (4 times as many for 2 times less error); report the interval with its assumptions; investigate bias separately, because n does not reduce it.</p></div><div class="exports"><a class="bouton" download="c176-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTI6Zm9ybXVsZS1zZSIsCiAgICAgICJ1bml0ZSI6ICJjMTc2LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXJyZXVyLXN0YW5kYXJkIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB3ZSBjYWxjdWxhdGUgdGhlIHN0YW5kYXJkIGVycm9yIG9mIGEgZnJlcXVlbmN5IG92ZXIgbiBkcmF3cz8iLAogICAgICAicmVwb25zZSI6ICJEaXZpZGUgdGhlIHN0YW5kYXJkIGRldmlhdGlvbiBvZiBhIGRyYXcgYnkgdGhlIHNxdWFyZSByb290IG9mIG4sIGFzc3VtaW5nIGluZGVwZW5kZW50IGFuZCBpZGVudGljYWxseSBkaXN0cmlidXRlZCBkcmF3czsgdGhlIHN0YW5kYXJkIGRldmlhdGlvbiBpcyBlc3RpbWF0ZWQgZnJvbSB0aGUgZHJhd3MuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTI6cXVhdHJlLWZvaXMiLAogICAgICAidW5pdGUiOiAiYzE3Ni1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJhY2luZS1kZS1uIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gd2UgZGl2aWRlIE1vbnRlIENhcmxvIGVycm9yIGJ5IDI/IiwKICAgICAgInJlcG9uc2UiOiAiTXVsdGlwbHkgdGhlIG51bWJlciBvZiBkcmF3cyBieSA0LCBob2xkaW5nIHRoZSBzdGFuZGFyZCBkZXZpYXRpb24gb2YgYSBkcmF3IGNvbnN0YW50OiBjb3N0IHNjYWxlcyB3aXRoIG4sIHdoaWxlIHRoZSBpbXByb3ZlbWVudCBzY2FsZXMgd2l0aCB0aGUgc3F1YXJlIHJvb3Qgb2Ygbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Ni1tMjpiaWFpcyIsCiAgICAgICJ1bml0ZSI6ICJjMTc2LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYmlhaXMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgaW5jcmVhc2luZyBuIGZhaWwgdG8gY29ycmVjdCBiaWFzPyIsCiAgICAgICJyZXBvbnNlIjogIkJlY2F1c2UgaW5jcmVhc2luZyBuIGNvbmNlbnRyYXRlcyB0aGUgZnJlcXVlbmN5IGFyb3VuZCB0aGUgc2ltdWxhdG9yIG1lYW47IGlmIHRoYXQgbWVhbiBkaWZmZXJzIGZyb20gdGhlIHRhcmdldCB2YWx1ZSwgdGhlIGRpZmZlcmVuY2UgcmVtYWlucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Ni1tMjppbnRlcnZhbGxlIiwKICAgICAgInVuaXRlIjogImMxNzYtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbnRlcnZhbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhbiBpbnRlcnZhbCBwzIIgwrEgeiDDlyBTRSBjb3Zlcj8iLAogICAgICAicmVwb25zZSI6ICJVbmRlciBpdHMgYXNzdW1wdGlvbnMgKGluZGVwZW5kZW5jZSwgbm9ybWFsIGFwcHJveGltYXRpb24pLCBpdCBjb3ZlcnMgdGhlIHNpbXVsYXRvciBtZWFuIGF0IGEgbm9taW5hbCBsZXZlbDsgaXQgZG9lcyBub3QgYWNjb3VudCBmb3IgYmlhcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c176-m2-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHdlIGNhbGN1bGF0ZSB0aGUgc3RhbmRhcmQgZXJyb3Igb2YgYSBmcmVxdWVuY3kgb3ZlciBuIGRyYXdzPwlEaXZpZGUgdGhlIHN0YW5kYXJkIGRldmlhdGlvbiBvZiBhIGRyYXcgYnkgdGhlIHNxdWFyZSByb290IG9mIG4sIGFzc3VtaW5nIGluZGVwZW5kZW50IGFuZCBpZGVudGljYWxseSBkaXN0cmlidXRlZCBkcmF3czsgdGhlIHN0YW5kYXJkIGRldmlhdGlvbiBpcyBlc3RpbWF0ZWQgZnJvbSB0aGUgZHJhd3MuCXRvZGFpIGMxNzYtbTIgZXJyZXVyLXN0YW5kYXJkCkhvdyBjYW4gd2UgZGl2aWRlIE1vbnRlIENhcmxvIGVycm9yIGJ5IDI/CU11bHRpcGx5IHRoZSBudW1iZXIgb2YgZHJhd3MgYnkgNCwgaG9sZGluZyB0aGUgc3RhbmRhcmQgZGV2aWF0aW9uIG9mIGEgZHJhdyBjb25zdGFudDogY29zdCBzY2FsZXMgd2l0aCBuLCB3aGlsZSB0aGUgaW1wcm92ZW1lbnQgc2NhbGVzIHdpdGggdGhlIHNxdWFyZSByb290IG9mIG4uCXRvZGFpIGMxNzYtbTIgcmFjaW5lLWRlLW4KV2h5IGRvZXMgaW5jcmVhc2luZyBuIGZhaWwgdG8gY29ycmVjdCBiaWFzPwlCZWNhdXNlIGluY3JlYXNpbmcgbiBjb25jZW50cmF0ZXMgdGhlIGZyZXF1ZW5jeSBhcm91bmQgdGhlIHNpbXVsYXRvciBtZWFuOyBpZiB0aGF0IG1lYW4gZGlmZmVycyBmcm9tIHRoZSB0YXJnZXQgdmFsdWUsIHRoZSBkaWZmZXJlbmNlIHJlbWFpbnMuCXRvZGFpIGMxNzYtbTIgYmlhaXMKV2hhdCBkb2VzIGFuIGludGVydmFsIHDMgiDCsSB6IMOXIFNFIGNvdmVyPwlVbmRlciBpdHMgYXNzdW1wdGlvbnMgKGluZGVwZW5kZW5jZSwgbm9ybWFsIGFwcHJveGltYXRpb24pLCBpdCBjb3ZlcnMgdGhlIHNpbXVsYXRvciBtZWFuIGF0IGEgbm9taW5hbCBsZXZlbDsgaXQgZG9lcyBub3QgYWNjb3VudCBmb3IgYmlhcy4JdG9kYWkgYzE3Ni1tMiBpbnRlcnZhbGxlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nrxxga xvpacf nzev</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · standard deviation and resampling in the code</h3><dl><div><dt>What you understand</dt><dd>The error of a simulation estimate consists of random variation, measured by the standard error and divided by the square root of the number of draws, and bias that n does not reduce. You can identify which quantity a piece of code calls “error” before reading its value.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rkmnbd soahkg pvltdk oofhvv ytxqfi wlujoa zzutqf msxxtl skcbiu abkgqs agwedj dznhgd awukuo xeqvuh rzshvf wmutpn bndmbi pexkbg lifhbm viohrn sjzgpn lcmved yigaqi gnvqhj flpigh jfmbhi tjlcyy qteoov cfkuzg etxaya vrwyea nkydfc xcpaob aeipuk qabvyq uzoufv cqowbc ki</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: repeat the standard error calculation without support, justify the square root, choose n, and separate random variation from bias while stating the assumptions. The presence of code and reading the course do not establish any attained level; neither does an answer obtained after a hint.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tjhswg ccbxup jjjwlb xlolyl wjutax zhutkg osfxeb dmxlxs wsxfhp jgeaqo nqettb pgexdr dsqedy daznuj spknsu xlpkjw tyoqid ukvbox coigfw iktiiw tspgom ekdhwt qwxews krhqtc</span></span></dd></div><div><dt>To continue</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">opxypb pecmzo tcfyrq jxpxnu pvwoab qdkhxv buskgg gnkqyu tljnlp akddpr thbnfu zetahw oxiqwp rr</span></span> Before any real use, calculate the standard error from the same draws, declare the seed, n, and version, and compare simulator settings to investigate bias. Antithetic variates (C176·M3) will reduce variance; they will not correct bias.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c176-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c176-m1.html">Previous</a> · <a href="c176-m3.html">Next</a></nav>
+<footer><p>Course book · C176·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

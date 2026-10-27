@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Assemble a transformation and a predictor, learn their parameters on the training set, then reuse the frozen pipeline on parcels held out from training.">
+<title>C067·M5 · Pipeline — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wqavrw xqggkr vvef</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C067·M5</p><h1>Pipeline</h1><p class="objectif"><span>Your goal</span>Assemble a transformation and a predictor, learn their parameters on the training set, then reuse the frozen pipeline on parcels held out from training.</p><p class="prerequis"><strong>Before you start</strong><br>c061-m5 : identifiability and uncertainty · c066-m5 : standard errors and diagnostics · c017-m5 : reproduction protocol · c067-m1 : empirical risk · c067-m2 : training set · c067-m3 : validation · c067-m4 : data leakage</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop wants to estimate the time needed to prepare a parcel from its mass. The scales give kilograms. The model will receive a rescaled mass, then return a duration in minutes. If each new batch redefines its scale, the same number no longer has the same meaning for the model.</p><p>A pipeline, or processing chain, assembles steps in a defined order. Here, the first step learns the mass bounds from the training parcels; the next fits a straight line to their transformed masses and durations. Learning means determining parameters from data. Applying means using those parameters without recalculating them.</p><p>Validation parcels are used to examine a candidate procedure. The test parcel is reserved for the final evaluation, once the procedure has been chosen. The transformation bounds are part of what is learned: they must respect the same boundary as the model. Even without looking at test durations, learning the bounds from test masses would pass held-out information into training.</p><p>All masses and durations on this page are fictional. We follow a single workshop, with a single feature, mass. The model is deliberately small enough to repeat every operation on paper; no claim is made about the quality of real predictions.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Learn the pipeline on the permitted set</title><desc>The training parcels weigh 2 and 4 kilograms and take 8 and 12 minutes. Learn the mass bounds, transform the masses, then fit the line to these transformed values. Bounds and coefficients stay together.</desc><rect x="20" y="14" width="320" height="68" rx="7" class="cadre-neutre" /><text x="180" y="41" text-anchor="middle">Training: 2 and 4 kg</text><text x="180" y="65" text-anchor="middle">Durations: 8 and 12 min</text><path d="M180 82v30m-5-6 5 6 5-6" class="trait" /><rect x="20" y="112" width="320" height="68" rx="7" class="cadre-prediction" /><text x="180" y="139" text-anchor="middle">Min 2 kg · max 4 kg</text><text x="180" y="163" text-anchor="middle">Transform the masses</text><path d="M180 180v30m-5-6 5 6 5-6" class="trait" /><rect x="20" y="210" width="320" height="68" rx="7" class="cadre-resultat" /><text x="180" y="237" text-anchor="middle">Fit the line</text><text x="180" y="261" text-anchor="middle" class="petite-etiquette">Keep bounds and coefficients</text></svg><figcaption>The arrows show the order of learning. The model receives the masses after transformation; keeping only its coefficients would leave out part of the procedure.</figcaption></figure><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Apply the frozen pipeline to the test</title><desc>The test parcel weighs 6 kilograms. The learned bounds remain 2 and 4 kilograms. The transformed mass is 2, with no unit. The stored line returns 16 minutes. The reference duration is compared only after this prediction.</desc><rect x="20" y="14" width="320" height="68" rx="7" class="cadre-neutre" /><text x="180" y="41" text-anchor="middle">Test parcel: 6 kg</text><text x="180" y="65" text-anchor="middle" class="petite-etiquette">Its duration awaits comparison</text><path d="M180 82v30m-5-6 5 6 5-6" class="trait" /><rect x="20" y="112" width="320" height="68" rx="7" class="cadre-prediction" /><text x="180" y="139" text-anchor="middle">Bounds: 2 and 4 kg</text><text x="180" y="163" text-anchor="middle">Transformed mass: 2</text><path d="M180 180v30m-5-6 5 6 5-6" class="trait" /><rect x="20" y="210" width="320" height="68" rx="7" class="cadre-resultat" /><text x="180" y="237" text-anchor="middle">Stored line</text><text x="180" y="261" text-anchor="middle">Prediction: 16 min</text></svg><figcaption>The arrows show application, with no new learning. A transformed value greater than 1 is possible: the bounds describe the training set; they do not bound all future masses.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Split the sets before any operation that learns from data; learn the transformation and then the model on the training set; keep their parameters together and reuse them in the same order.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the scales to the duration, keeping the same coordinate system</h3><p>Assignment decided before the calculations: training A = (2 kg; 8 min) and B = (4 kg; 12 min), validation V = (3 kg; 11 min), test T = (6 kg; duration hidden until the final comparison). The procedure is fixed: scaling by the training bounds, then a straight line fitted to A and B. The reference values are preparation durations, not transport times.</p><ol class="etapes"><li><h3>Define the contract and symbols</h3><p>x is the mass of a parcel, in kilograms; y is its reference preparation duration, in minutes; ŷ, with a hat, is the predicted duration. The letters A, B, V and T identify the parcels. Their subscripts serve only to indicate which parcel a quantity belongs to.</p><p>L is the minimum and U the maximum of the training masses, in kilograms. d = U − L is their range, in kilograms; we assume d is strictly positive. g is the transformation: g(x) is the rescaled mass, written z, with no unit. f is the predictor applied to z. a is its intercept in minutes, b its slope in minutes per unit of z. Since z has no unit, b is expressed in minutes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>x</mi><mo>−</mo><mi>L</mi></mrow><mrow><mi>U</mi><mo>−</mo><mi>L</mi></mrow></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>f</mi><mo>(</mo><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>)</mo><mo>=</mo><mi>a</mi><mo>+</mo><mi>b</mi><mi>z</mi></mrow></math></div><p>Assumptions: masses are present, finite and measured in the same unit; duration has the same definition for all parcels; parcels are distinct, with no copies across sets. To discuss generalization, we also assume that the held-out parcels represent the intended use and that no change in procedure makes them incomparable. The straight line is an approximation chosen for this exercise. Our fictional values do not verify these assumptions.</p></li><li><h3>Learn the coordinate system on A and B</h3><p>The minimum is L = 2 kg and the maximum U = 4 kg, because only the masses of A and B are permitted for this learning step. The range is d = 4 − 2 = 2 kg. Subtracting L places the first bound at the origin; dividing by d expresses each difference in training ranges.</p><p>For A: 2 − 2 = 0 kg, then 0/2 = 0. For B: 4 − 2 = 2 kg, then 2/2 = 1. The ratios have no unit, since kilograms divided by kilograms cancel out.</p><p>We keep L and U. No bounds calculation consults V or T. If all training masses were identical, d would be 0: the division would be undefined. A separate rule for this constant feature would then have to be stated before using the held-out sets.</p></li><li><h3>Learn the line in this coordinate system</h3><p>The line connects the transformed points A = (0; 8 min) and B = (1; 12 min). With these distinct horizontal coordinates, fitting a line by least squares here amounts to passing exactly through these points. This small case is no proof that a straight line suits all parcels.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>b</mi><mo>=</mo><mfrac><mrow><msub><mi>y</mi><mi>B</mi></msub><mo>−</mo><msub><mi>y</mi><mi>A</mi></msub></mrow><mrow><msub><mi>z</mi><mi>B</mi></msub><mo>−</mo><msub><mi>z</mi><mi>A</mi></msub></mrow></mfrac><mo>;</mo><mi>a</mi><mo>=</mo><msub><mi>y</mi><mi>A</mi></msub><mo>−</mo><mi>b</mi><msub><mi>z</mi><mi>A</mi></msub></mrow></math></div><p>The increase in duration is 12 − 8 = 4 min. The increase in the horizontal coordinate is 1 − 0 = 1, with no unit. Thus b = 4/1 = 4 min. The contribution at A is 4 × 0 = 0 min; a = 8 − 0 = 8 min.</p><p>Check on B: b × zB = 4 × 1 = 4 min, then a + b × zB = 8 + 4 = 12 min, its reference duration. The learned pipeline now contains L, U, a and b; it also keeps the order of operations and the input units.</p></li><li><h3>Apply to validation without learning again</h3><p>For V, use the mass 3 kg and the stored coordinate system: 3 − 2 = 1 kg, then zV = 1/2 = 1/2 = 0.50, with no unit. The model receives zV; it does not receive the raw mass.</p><p>The slope contribution is 4 × 1/2 = 2 min. The prediction is 8 + 2 = 10 min. After this prediction, compare it with yV = 11 min. Define r = ŷ − y, the signed difference in minutes: rV = 10 − 11 = -1 min. The negative sign indicates an underestimate.</p><p>V is used to examine this procedure. In our example, no competing procedure is tried and no setting is changed. Such a small validation set demonstrates no reliability. If validation led to a change in procedure, that choice would have to be completed before consulting the test set.</p></li><li><h3>Freeze the pipeline, then open the test</h3><p>We freeze the procedure and its parameters. For parcel T of 6 kg, the coordinate system remains L = 2 kg and U = 4 kg. The difference from L is 6 − 2 = 4 kg; zT = 4/2 = 2, with no unit.</p><p>The value zT exceeds 1, because T is heavier than all the training parcels. We do not clip it or move U: those actions would change the procedure. The model will therefore extrapolate, meaning it will extend its line beyond the masses used to fit it. This calculation is defined; its accuracy on real parcels would require further evidence.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>y</mi><mo>^</mo></mover><mi>T</mi></msub><mo>=</mo><mn>8</mn><mo>+</mo><mn>4</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>16</mn><mtext> min</mtext></mrow></math></div><p>The product b × zT is 8 min, then the sum is 16 min. Only now do we reveal yT = 15 min: rT = 16 − 15 = 1 min. This result is a fictional comparison on this parcel, with no success rate or conclusion about a population. The test cannot then be used to adjust the procedure while retaining the same status as a final test.</p></li><li><h3>Check the pipeline and what must be kept</h3><p>Inverse check of the coordinate system: zT × d = 2 × 2 = 4 kg; adding L gives 4 + 2 = 6 kg. We recover the input mass. This check verifies the algebraic consistency of the forward and inverse operations. It does not prove that the bounds come from the correct set: a contaminated scale, inverted with its own parameters, could also pass it.</p><p>Boundary check: the masses of V and T can change the predictions made for them, but they must not change L, U, a or b learned on A and B. The transfer exercise makes this check concrete. The transformation, predictor and their parameters must stay together; an assembled pipeline guarantees this property only if its learning operations actually respect the sets.</p><p>To reproduce this small calculation, keep the A/B/V/T assignment, the fictional values used, the definition of the units, the transformation formula, the learned parameters and the order of calls. For later use, the input will again be a mass in kilograms and the same frozen pipeline will produce a duration. New training will constitute a new version of this pipeline.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Describe the path taken by the test parcel, naming what is learned and what is only applied. Then reconstruct the prediction and the inverse check. Why must the bounds travel with the line? An answer reread or obtained with a hint remains an assisted answer; it does not demonstrate an attained level.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I can learn the scale from all the masses, since I hide the test durations.”</h3><p>The held-out masses would influence the learned bounds. Our contract predicts new parcels without knowing them in advance: this information must therefore stay out of learning. Define the sets first and learn the bounds using only A and B.</p><a href="#exemple">Review learning the coordinate system on A and B</a></li><li><h3>“I keep the line, but I can recalculate the scale at test time.”</h3><p>The line learned the meaning of the horizontal coordinates in a specific coordinate system. Another coordinate system changes what it receives. Keep L and U with a and b; the diagnostic exercise quantifies the error caused by their mismatch.</p><a href="#exercices">Diagnose the change in coordinate system</a></li><li><h3>“With a pipeline, leakage is automatically impossible.”</h3><p>The name of the pipeline does not tell you which rows were used in each learning step. Check that scope and the actual order of operations. The milestone shows a source path where the indices are split after the transformations; you need to examine what these transformations learn.</p><a href="#jalon"><span class="milestone-label">Examine the source path and its scope</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-nouveau-colis"><p class="repere">Exercise 1 · Application · exact calculation</p>
+<h3>The next parcel arrives alone</h3><p>A new parcel from the same workshop weighs 5 kg. Its reference duration is not yet known. Using the frozen pipeline from the example, calculate its transformed mass and predicted duration. State which parameters you learned again, if any.</p>
+<label for="reponse-ex-nouveau-colis">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-nouveau-colis" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-nouveau-colis" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-nouveau-colis" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-nouveau-colis" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The scales give kilograms; the line expects a value with no unit.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract L = 2 kg, divide by d = 2 kg, then apply a + bz.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The difference from L is 5 − 2 = 3 kg. The transformation gives z = 3/2 = 3/2, or 1.50 with no unit. The result can exceed 1: the new mass is outside the training range.</p><p>The contribution is 4 × 3/2 = 6 min; the prediction is 8 + 6 = 14 min. No parameter was learned again. The reference duration is missing: you can report a prediction, but not a measured error on this parcel.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find z = 3/2 with no unit, then ŷ = 14 min.</li><li>Reuse the bounds and the line together, without adding clipping.</li><li>Distinguish the available prediction from the error that is still unknown.</li></ul></details></article><article class="exercice" id="ex-repere-change"><p class="repere">Exercise 2 · Diagnosis · calculation and repair</p>
+<h3>The transformation changes, the line stays</h3><p>A colleague combines A, B and parcel T to recalculate the bounds: the minimum stays 2 kg and the maximum becomes 6 kg. Yet they keep a = 8 min and b = 4 min. What prediction will they give T? Identify the problems, then propose a repair that still allows an honest final evaluation.</p>
+<label for="reponse-ex-repere-change">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-repere-change" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-repere-change" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-repere-change" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-repere-change" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Recalculate the range, then the new horizontal coordinate of T before looking at the line.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate the use of held-out information for learning from the mismatch between the transformation and the predictor.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mixed range is 6 − 2 = 4 kg. T becomes z = 4/4 = 1, with no unit. With the old line, its contribution is 4 × 1 = 4 min and its prediction 8 + 4 = 12 min, instead of 16 min. The difference between these predictions is 4 min; this is not a measure of improvement in quality.</p><p>There is leakage in learning the bounds, because the test mass is involved. There is also an inconsistency in the coordinate system: the line was not fitted in the new coordinates. Refitting the line in this contaminated coordinate system does not repair the data separation; moreover, changing scale does not necessarily change predictions if an affine model is refitted consistently.</p><p>To repair the pipeline, start again from A and B to learn the bounds and the line together, then freeze the result. This repair does not make the test already examined in this diagnosis new again: a new claim about quality following choices influenced by it requires another final set held out from those choices. V can be used to choose the procedure; this consulted test must never be presented as independent final evidence.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 12 min with the mixed coordinate system and the old line.</li><li>Name the leakage and the inconsistency between parameters separately.</li><li>Rebuild the pipeline on the training set and preserve a truly held-out set for any new final conclusion.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 3 · Transfer · checking protocol</p>
+<h3>Change the test to check the boundary</h3><p>Prepare a check without seeking a better score: keep A and B identical, then replace the test mass with 10 kg in a copy of the exercise. What should happen to L, U, a and b, to the prediction for the modified test parcel and to that for the new parcel of 5 kg? Explain what such a check can establish and what it leaves open.</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>What is learned depends on A and B. What is predicted also depends on the mass presented to the pipeline.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the new test horizontal coordinate, but change neither the bounds nor the parcel of 5 kg.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>In both copies, learning receives exactly A and B. It must therefore keep L = 2 kg, U = 4 kg, a = 8 min and b = 4 min. The modified test gives 10 − 2 = 8 kg, then z = 8/2 = 4. The contribution is 4 × 4 = 16 min; the prediction is 8 + 16 = 24 min.</p><p>The prediction for the separate parcel of 5 kg remains 14 min: neither its mass nor the learned pipeline has changed. To check an implementation, compare the learned parameters in the copies and the predictions on this common input. A change to these parameters caused by the test set alone would contradict the stated learning contract.</p><p>This check tests a specific separation for the constructed cases. Success does not demonstrate the absence of all leakage: duplicates or a feature containing the future answer could escape this check. No reference duration is provided for the modified test, so its actual error is not calculated.</p><p class="petit-titre">Check your reasoning</p><ul><li>State the unchanged parameters and explain why they are unchanged.</li><li>Find 24 min for the modified test and keep 14 min on the common input.</li><li>Describe a comparison of parameters and a limit of the check, without turning it into universal proof.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="apprendre-appliquer"><summary><span class="repere">Recall 1</span><span>What distinguishes learning a step from applying it?</span></summary><p>Learning determines its parameters from the permitted set. Applying reuses those parameters. In the workshop, the bounds and then the line are learned on A and B; the held-out parcels then pass through the same frozen pipeline.</p></details><details class="carte" data-carte="frontiere"><summary><span class="repere">Recall 2</span><span>Why split before learning the bounds, even if test durations remain hidden?</span></summary><p>The bounds depend on the masses: they are already learned parameters. Learning them on the test set would pass its information into the pipeline. For our contract of predicting new parcels, the test must stay out of this learning.</p></details><details class="carte" data-carte="etat-associe"><summary><span class="repere">Recall 3</span><span>What must be kept with the coefficients of the line?</span></summary><p>The learned bounds of the transformation, its rule, the units and the order of the steps. The coefficients are fitted to the transformed horizontal coordinates; applying them after another transformation changes their meaning.</p></details><details class="carte" data-carte="hors-bornes"><summary><span class="repere">Recall 4</span><span>Why can a transformed mass exceed 1 without the calculation being wrong?</span></summary><p>The bounds are those of the training masses. A new mass greater than their maximum gives a ratio greater than 1. The calculation remains defined; the prediction then extends the line beyond the masses used for fitting, and its reliability remains to be evaluated.</p></details><details class="carte" data-carte="controle-portee"><summary><span class="repere">Recall 5</span><span>What must a change to the test set alone preserve, and what is that insufficient to prove?</span></summary><p>It must preserve the parameters learned on A and B and the predictions on an unchanged common input. This check tests the boundary on the chosen cases; it is insufficient to rule out all other leakage or to demonstrate prediction quality.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, draw the path training → learned transformation → learned model, then the path of a new parcel through these frozen steps. Annotate the units and the parameters to keep; repeat the test prediction and its inverse check. Finish by explaining why neither the word pipeline nor an assisted answer counts as proof. Try again without support after at least 2 days; reading and immediate success are insufficient to establish an attained level.</p></div><div class="exports"><a class="bouton" download="c067-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjctbTU6YXBwcmVuZHJlLWFwcGxpcXVlciIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGlwZWxpbmUtYXBwcmVudGlzc2FnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRpc3Rpbmd1aXNoZXMgbGVhcm5pbmcgYSBzdGVwIGZyb20gYXBwbHlpbmcgaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiTGVhcm5pbmcgZGV0ZXJtaW5lcyBpdHMgcGFyYW1ldGVycyBmcm9tIHRoZSBwZXJtaXR0ZWQgc2V0LiBBcHBseWluZyByZXVzZXMgdGhvc2UgcGFyYW1ldGVycy4gSW4gdGhlIHdvcmtzaG9wLCB0aGUgYm91bmRzIGFuZCB0aGVuIHRoZSBsaW5lIGFyZSBsZWFybmVkIG9uIEEgYW5kIEI7IHRoZSBoZWxkLW91dCBwYXJjZWxzIHRoZW4gcGFzcyB0aHJvdWdoIHRoZSBzYW1lIGZyb3plbiBwaXBlbGluZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNTpmcm9udGllcmUiLAogICAgICAidW5pdGUiOiAiYzA2Ny1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBpcGVsaW5lLXNlcGFyYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHNwbGl0IGJlZm9yZSBsZWFybmluZyB0aGUgYm91bmRzLCBldmVuIGlmIHRlc3QgZHVyYXRpb25zIHJlbWFpbiBoaWRkZW4/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGJvdW5kcyBkZXBlbmQgb24gdGhlIG1hc3NlczogdGhleSBhcmUgYWxyZWFkeSBsZWFybmVkIHBhcmFtZXRlcnMuIExlYXJuaW5nIHRoZW0gb24gdGhlIHRlc3Qgc2V0IHdvdWxkIHBhc3MgaXRzIGluZm9ybWF0aW9uIGludG8gdGhlIHBpcGVsaW5lLiBGb3Igb3VyIGNvbnRyYWN0IG9mIHByZWRpY3RpbmcgbmV3IHBhcmNlbHMsIHRoZSB0ZXN0IG11c3Qgc3RheSBvdXQgb2YgdGhpcyBsZWFybmluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNTpldGF0LWFzc29jaWUiLAogICAgICAidW5pdGUiOiAiYzA2Ny1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBpcGVsaW5lLXBhcmFtZXRyZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBtdXN0IGJlIGtlcHQgd2l0aCB0aGUgY29lZmZpY2llbnRzIG9mIHRoZSBsaW5lPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBsZWFybmVkIGJvdW5kcyBvZiB0aGUgdHJhbnNmb3JtYXRpb24sIGl0cyBydWxlLCB0aGUgdW5pdHMgYW5kIHRoZSBvcmRlciBvZiB0aGUgc3RlcHMuIFRoZSBjb2VmZmljaWVudHMgYXJlIGZpdHRlZCB0byB0aGUgdHJhbnNmb3JtZWQgaG9yaXpvbnRhbCBjb29yZGluYXRlczsgYXBwbHlpbmcgdGhlbSBhZnRlciBhbm90aGVyIHRyYW5zZm9ybWF0aW9uIGNoYW5nZXMgdGhlaXIgbWVhbmluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tNTpob3JzLWJvcm5lcyIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGlwZWxpbmUtZXh0cmFwb2xhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2FuIGEgdHJhbnNmb3JtZWQgbWFzcyBleGNlZWQgMSB3aXRob3V0IHRoZSBjYWxjdWxhdGlvbiBiZWluZyB3cm9uZz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgYm91bmRzIGFyZSB0aG9zZSBvZiB0aGUgdHJhaW5pbmcgbWFzc2VzLiBBIG5ldyBtYXNzIGdyZWF0ZXIgdGhhbiB0aGVpciBtYXhpbXVtIGdpdmVzIGEgcmF0aW8gZ3JlYXRlciB0aGFuIDEuIFRoZSBjYWxjdWxhdGlvbiByZW1haW5zIGRlZmluZWQ7IHRoZSBwcmVkaWN0aW9uIHRoZW4gZXh0ZW5kcyB0aGUgbGluZSBiZXlvbmQgdGhlIG1hc3NlcyB1c2VkIGZvciBmaXR0aW5nLCBhbmQgaXRzIHJlbGlhYmlsaXR5IHJlbWFpbnMgdG8gYmUgZXZhbHVhdGVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDY3LW01OmNvbnRyb2xlLXBvcnRlZSIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGlwZWxpbmUtY29udHJvbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBtdXN0IGEgY2hhbmdlIHRvIHRoZSB0ZXN0IHNldCBhbG9uZSBwcmVzZXJ2ZSwgYW5kIHdoYXQgaXMgdGhhdCBpbnN1ZmZpY2llbnQgdG8gcHJvdmU/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgbXVzdCBwcmVzZXJ2ZSB0aGUgcGFyYW1ldGVycyBsZWFybmVkIG9uIEEgYW5kIEIgYW5kIHRoZSBwcmVkaWN0aW9ucyBvbiBhbiB1bmNoYW5nZWQgY29tbW9uIGlucHV0LiBUaGlzIGNoZWNrIHRlc3RzIHRoZSBib3VuZGFyeSBvbiB0aGUgY2hvc2VuIGNhc2VzOyBpdCBpcyBpbnN1ZmZpY2llbnQgdG8gcnVsZSBvdXQgYWxsIG90aGVyIGxlYWthZ2Ugb3IgdG8gZGVtb25zdHJhdGUgcHJlZGljdGlvbiBxdWFsaXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c067-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkaXN0aW5ndWlzaGVzIGxlYXJuaW5nIGEgc3RlcCBmcm9tIGFwcGx5aW5nIGl0PwlMZWFybmluZyBkZXRlcm1pbmVzIGl0cyBwYXJhbWV0ZXJzIGZyb20gdGhlIHBlcm1pdHRlZCBzZXQuIEFwcGx5aW5nIHJldXNlcyB0aG9zZSBwYXJhbWV0ZXJzLiBJbiB0aGUgd29ya3Nob3AsIHRoZSBib3VuZHMgYW5kIHRoZW4gdGhlIGxpbmUgYXJlIGxlYXJuZWQgb24gQSBhbmQgQjsgdGhlIGhlbGQtb3V0IHBhcmNlbHMgdGhlbiBwYXNzIHRocm91Z2ggdGhlIHNhbWUgZnJvemVuIHBpcGVsaW5lLgl0b2RhaSBjMDY3LW01IHBpcGVsaW5lLWFwcHJlbnRpc3NhZ2UKV2h5IHNwbGl0IGJlZm9yZSBsZWFybmluZyB0aGUgYm91bmRzLCBldmVuIGlmIHRlc3QgZHVyYXRpb25zIHJlbWFpbiBoaWRkZW4/CVRoZSBib3VuZHMgZGVwZW5kIG9uIHRoZSBtYXNzZXM6IHRoZXkgYXJlIGFscmVhZHkgbGVhcm5lZCBwYXJhbWV0ZXJzLiBMZWFybmluZyB0aGVtIG9uIHRoZSB0ZXN0IHNldCB3b3VsZCBwYXNzIGl0cyBpbmZvcm1hdGlvbiBpbnRvIHRoZSBwaXBlbGluZS4gRm9yIG91ciBjb250cmFjdCBvZiBwcmVkaWN0aW5nIG5ldyBwYXJjZWxzLCB0aGUgdGVzdCBtdXN0IHN0YXkgb3V0IG9mIHRoaXMgbGVhcm5pbmcuCXRvZGFpIGMwNjctbTUgcGlwZWxpbmUtc2VwYXJhdGlvbgpXaGF0IG11c3QgYmUga2VwdCB3aXRoIHRoZSBjb2VmZmljaWVudHMgb2YgdGhlIGxpbmU/CVRoZSBsZWFybmVkIGJvdW5kcyBvZiB0aGUgdHJhbnNmb3JtYXRpb24sIGl0cyBydWxlLCB0aGUgdW5pdHMgYW5kIHRoZSBvcmRlciBvZiB0aGUgc3RlcHMuIFRoZSBjb2VmZmljaWVudHMgYXJlIGZpdHRlZCB0byB0aGUgdHJhbnNmb3JtZWQgaG9yaXpvbnRhbCBjb29yZGluYXRlczsgYXBwbHlpbmcgdGhlbSBhZnRlciBhbm90aGVyIHRyYW5zZm9ybWF0aW9uIGNoYW5nZXMgdGhlaXIgbWVhbmluZy4JdG9kYWkgYzA2Ny1tNSBwaXBlbGluZS1wYXJhbWV0cmVzCldoeSBjYW4gYSB0cmFuc2Zvcm1lZCBtYXNzIGV4Y2VlZCAxIHdpdGhvdXQgdGhlIGNhbGN1bGF0aW9uIGJlaW5nIHdyb25nPwlUaGUgYm91bmRzIGFyZSB0aG9zZSBvZiB0aGUgdHJhaW5pbmcgbWFzc2VzLiBBIG5ldyBtYXNzIGdyZWF0ZXIgdGhhbiB0aGVpciBtYXhpbXVtIGdpdmVzIGEgcmF0aW8gZ3JlYXRlciB0aGFuIDEuIFRoZSBjYWxjdWxhdGlvbiByZW1haW5zIGRlZmluZWQ7IHRoZSBwcmVkaWN0aW9uIHRoZW4gZXh0ZW5kcyB0aGUgbGluZSBiZXlvbmQgdGhlIG1hc3NlcyB1c2VkIGZvciBmaXR0aW5nLCBhbmQgaXRzIHJlbGlhYmlsaXR5IHJlbWFpbnMgdG8gYmUgZXZhbHVhdGVkLgl0b2RhaSBjMDY3LW01IHBpcGVsaW5lLWV4dHJhcG9sYXRpb24KV2hhdCBtdXN0IGEgY2hhbmdlIHRvIHRoZSB0ZXN0IHNldCBhbG9uZSBwcmVzZXJ2ZSwgYW5kIHdoYXQgaXMgdGhhdCBpbnN1ZmZpY2llbnQgdG8gcHJvdmU/CUl0IG11c3QgcHJlc2VydmUgdGhlIHBhcmFtZXRlcnMgbGVhcm5lZCBvbiBBIGFuZCBCIGFuZCB0aGUgcHJlZGljdGlvbnMgb24gYW4gdW5jaGFuZ2VkIGNvbW1vbiBpbnB1dC4gVGhpcyBjaGVjayB0ZXN0cyB0aGUgYm91bmRhcnkgb24gdGhlIGNob3NlbiBjYXNlczsgaXQgaXMgaW5zdWZmaWNpZW50IHRvIHJ1bGUgb3V0IGFsbCBvdGhlciBsZWFrYWdlIG9yIHRvIGRlbW9uc3RyYXRlIHByZWRpY3Rpb24gcXVhbGl0eS4JdG9kYWkgYzA2Ny1tNSBwaXBlbGluZS1jb250cm9sZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wqavrw xqggkr vvef</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Code reading · identify what a pipeline learns</h3><dl><div><dt>What you understand</dt><dd>Assembling the steps also requires limiting the data used to learn their parameters. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qlrqpj ruzvyy bkwhdo dugoul mrlgkd naxrjw cxebxz hfmksu fpbyqh vvjwqy qjnhmr wysxus lfcjgw ob</span></span> This reading guide adds no canonical milestone to C067.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bqtjpn pxvtce dqbdxi ddckku zwhwti cyubxi oaaqaw bcfiol jvzpfb sdvjas xymdhe zauhuo mxdykz ftcsiq oacjax qjxmcg xoepvz ustvxp gobwjb gtdxht gnuanf vchejl crvsft cizhhv</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Prepare for the intermediate level of this unit: repeat the pipeline with pencil and paper, state for each step which rows are permitted for learning, and defend a separation check. Reading the page, understanding a worked answer or making an assisted attempt does not confer any attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uujqoc qfrrim xpcfnr plgcsa xgjqrw htgihk aqqliq xbmsek vyswtq zkleez bfcrhf uvjanp vrpeww unogvo sibsrb kzgeud nrsxgr iyvxln cjkxbi arvzde hmtnrf rnzaql cuxcmb mldxis yirwqw owdsci mqlzjy jriakl gjoynl yjkkbe eyiuhm bwjbcm tzjsac kkoezl mtuzgu sywhpq wtoyhk ez</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the test set change check without support. To continue examining the code, you would need to reread the configuration and its callers separately, determine what each step learns and design an isolated check of the path concerned. This page neither modifies nor activates this pipeline.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c067-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c067-m4.html">Previous</a> · <a href="c068-m1.html">Next</a></nav>
+<footer><p>Course book · C067·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

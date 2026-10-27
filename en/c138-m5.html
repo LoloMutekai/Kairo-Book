@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a meta-model that weights two base models using their out-of-fold predictions, calculate its weight on a small fictional dataset, then explain why information leakage distorts this weight.">
+<title>C138·M5 · Stacking — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">elxoes eyehwr zbxo</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C138·M5</p><h1>Stacking</h1><p class="objectif"><span>Your goal</span>Build a meta-model that weights two base models using their out-of-fold predictions, calculate its weight on a small fictional dataset, then explain why information leakage distorts this weight.</p><p class="prerequis"><strong>Before you start</strong><br>c099-m5 : probability calibration · c100-m5 : learning curves · c138-m1 : trees · c138-m2 : bagging · c138-m3 : forests · c138-m4 : boosting</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional bakery wants to predict the kilograms of bread sold on a given day. Two base models each give their own answer: a deep tree A, which closely fits the details of days already seen, and a simple trend B, which is less flexible. All values in this scene are invented for the calculation; they do not describe any real bakery.</p><p>Stacking adds a second layer. A meta-model learns to combine the answers from A and B. It does not look at the raw data: its inputs are the predictions from the base models. The main pitfall is where these predictions come from. If A saw a day’s sales during training, it can copy them almost exactly. The meta-model then concludes that A never makes a mistake, which stops being true as soon as a new day arrives.</p><p>The remedy is out-of-fold prediction. We split the 4 observations into 2 folds of 2 days. For each fold, A and B train on the other fold, then predict the fold set aside. Each day thus receives a prediction from A and one from B, both made without having seen that day. These two columns, together with the actual sales, form the training set for the meta-model.</p><p>To predict a truly new day, we retrain A and B on the whole dataset, then the meta-model applies its weight to their two answers. With so few days, this weight remains unstable. The units on learning curves and probability calibration explore two limitations of this setup further: whether more data would change the answer, and whether probabilities given to the meta-model are reliable.</p><div class="schemas"><figure><svg viewBox="0 0 360 236" xmlns="http://www.w3.org/2000/svg" role="img"><title>The out-of-fold procedure</title><desc>The dataset is split into 2 folds. Models A and B train on one fold, predict the other, then the folds swap roles. The resulting predictions become inputs to the meta-model.</desc><rect x="20" y="14" width="150" height="46" rx="7" class="cadre-resultat" /><text x="95" y="43" text-anchor="middle">Fold 1: test</text><rect x="190" y="14" width="150" height="46" rx="7" class="cadre-neutre" /><text x="265" y="43" text-anchor="middle">Fold 2: training</text><line x1="265" y1="60" x2="265" y2="90" class="trait" /><line x1="95" y1="60" x2="95" y2="90" class="trait" /><rect x="20" y="90" width="320" height="52" rx="7" class="cadre-prediction" /><text x="180" y="113" text-anchor="middle">A and B predict fold 1</text><text x="180" y="134" text-anchor="middle" class="petite-etiquette">without seeing it during training</text><line x1="180" y1="142" x2="180" y2="168" class="trait" /><text x="192" y="160" class="petite-etiquette">swap roles</text><rect x="20" y="168" width="320" height="52" rx="7" class="cadre-resultat" /><text x="180" y="191" text-anchor="middle">Out-of-fold columns a and b</text><text x="180" y="212" text-anchor="middle" class="petite-etiquette">inputs to the meta-model</text></svg><figcaption>Each day is predicted by models that have not seen it: the meta-model’s columns a and b come from this procedure, never from predictions made on the training data.</figcaption></figure><figure><svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg" role="img"><title>A combination of two models</title><desc>On a scale in kilograms, trend B predicts 50, the stacked prediction is 56, actual sales are 57 and tree A predicts 60. The differences from actual sales are 7 for B, 1 for stacking and 3 for A.</desc><line x1="40" y1="100" x2="320" y2="100" class="trait" /><circle cx="40" cy="100" r="8" class="point-mesure" /><circle cx="320" cy="100" r="8" class="point-prediction" /><circle cx="208" cy="100" r="10" class="chemin-correction" /><rect x="231" y="94" width="12" height="12" class="resultat" /><text x="40" y="72" text-anchor="middle">B: 50 kg</text><text x="190" y="72" text-anchor="middle">Stacked: 56 kg</text><text x="312" y="72" text-anchor="middle">A: 60 kg</text><text x="237" y="138" text-anchor="middle">Actual: 57 kg</text><rect x="20" y="160" width="320" height="46" rx="7" class="cadre-neutre" /><text x="180" y="180" text-anchor="middle" class="petite-etiquette">Difference from actual sales, in kg</text><text x="180" y="199" text-anchor="middle">B 7 · stacked 1 · A 3</text></svg><figcaption>Fictional check point: actual sales lie between B and A, and the weighted combination comes closer. A single point illustrates the mechanism without measuring any performance.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The meta-model learns from predictions that the base models made without seeing the answer; its weight is meaningful only under this condition.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A weight learned from four fictional days</h3><p>Four fictional days have actual sales y, an out-of-fold prediction a from tree A and an out-of-fold prediction b from trend B, all in kilograms. Day one: y = 41, a = 43, b = 40. Day two: y = 46, a = 49, b = 44. Day three: y = 51, a = 52, b = 48. Day four: y = 56, a = 57, b = 52. A fictional check point, set aside, gives y = 57, a = 60 and b = 50. We want to find A’s weight w, then test it on this point.</p><ol class="etapes"><li><h3>Define the symbols and assumptions</h3><p>The meta-model predicts sales ŷ in kilograms. It uses a weight w for A and the weight one − w for B. The weight w has no unit; it is learned, whereas a and b are inputs. The index i numbers the days, from 1 to n, with n = 4.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>w</mi><mi>a</mi><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>w</mi><mo>)</mo><mi>b</mi></mrow></math></div><p>Explicit assumptions. One: a and b are out of fold. Two: the weights are w and one − w, with no constant term; their sum is therefore 1. Three: new days resemble the training days. Four: the check point’s a and b values come from models retrained on the 4 days. Without these assumptions, the weight calculated below loses its meaning.</p></li><li><h3>Rewrite using a disagreement and a gap</h3><p>Let u = a − b be the disagreement between A and B, and d = y − b be the gap between B and actual sales, both in kilograms. Since ŷ − b = w × u, the error for the day, y − ŷ, can be written as d − w × u. The weight w therefore measures the share of the disagreement u that we follow to close the gap d.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>y</mi><mo>−</mo><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>d</mi><mo>−</mo><mi>w</mi><mi>u</mi></mrow></math></div><p>The four disagreements are 3, 5, 4 and 5 kg. The four gaps for B are 1, 2, 3 and 4 kg. On each day, actual sales lie between b and a, so d lies between 0 and u.</p></li><li><h3>Choose w using the sum of squares</h3><p>We choose the weight that minimizes the sum of squared errors. Squaring prevents errors with opposite signs from cancelling and leads to a closed-form formula. Let S(w) denote this sum over the n days.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>(</mo><mi>w</mi><mo>)</mo><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msub><mi>d</mi><mi>i</mi></msub><mo>−</mo><mi>w</mi><msub><mi>u</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>=</mo><msub><mi>S</mi><mrow><mi>u</mi><mi>u</mi></mrow></msub><msup><mi>w</mi><mn>2</mn></msup><mo>−</mo><mn>2</mn><msub><mi>S</mi><mrow><mi>u</mi><mi>d</mi></mrow></msub><mi>w</mi><mo>+</mo><msub><mi>S</mi><mrow><mi>d</mi><mi>d</mi></mrow></msub></mrow></math></div><p>Here Suu is the sum of u², Sud the sum of the products u × d and Sdd the sum of d², all over the n days. Expanding each square makes S(w) a parabola in w. For a quadratic α w² + β w + γ with positive α, the minimum occurs at w = −β divided by 2 α. Here α = Suu, which is positive as soon as at least one disagreement is nonzero, and β = −2 Sud.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>=</mo><mfrac><msub><mi>S</mi><mrow><mi>u</mi><mi>d</mi></mrow></msub><msub><mi>S</mi><mrow><mi>u</mi><mi>u</mi></mrow></msub></mfrac></mrow></math></div><p>We do not constrain w to lie between 0 and one: that methodological choice is not made here. The result simply happens to fall within this interval.</p></li><li><h3>Calculate the products, sums and weight</h3><p>The products u × d are 3, 10, 12 and 20 kg². The squares u² are 9, 25, 16 and 25 kg². We add in order: Sud passes through 13 then 25 before reaching 45 kg², and Suu passes through 34 then 50 before reaching 75 kg².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>=</mo><mfrac><mn>45</mn><mn>75</mn></mfrac><mo>=</mo><mn>0.6</mn></mrow></math></div><p>A’s weight is 3/5, or 0.6. B’s weight is one − 3/5 = 2/5, or 0.4. The squared kilograms cancel in the quotient: w has no unit.</p></li><li><h3>Check the vertex of the parabola</h3><p>At the vertex, the slope of S is 0, which is equivalent to Sud = w × Suu. Let us calculate the right-hand side: 3/5 × 75 = 45 kg². The difference from Sud is 45 − 45 = 0. The remaining error therefore has no component that follows u: changing w slightly would not reduce it.</p><p>This check verifies the solution, not the choice of criterion. It does not establish that the sum of squares is the right measure for the bakery.</p></li><li><h3>See leakage through an extreme case</h3><p>Suppose A was trained on the 4 days and memorizes them: its prediction on its own data equals y. Keep b unchanged. The disagreement u = a − b becomes y − b, that is, d, for every day. Then Sud and Suu both equal the sum of d².</p><p>The weight becomes this sum divided by itself, which is 1. The meta-model now follows only A and ignores B. On the new day, this weight caused by leakage is a bet on A’s memory, not a measure of its quality.</p></li><li><h3>Apply the weight to the check point</h3><p>The disagreement at this point is 60 − 50 = 10 kg. The weighted term is 3/5 × 10 = 6 kg. The stacked prediction is 50 + 6 = 56 kg. The fictional actual sales are 57 kg.</p><p>The differences from actual sales are 7 kg for B, 3 kg for A alone, which corresponds to the weight 1 caused by leakage, and 1 kg for the out-of-fold combination. On this particular point, the weight learned out of fold does better than either model alone.</p></li><li><h3>What the calculation does not establish</h3><p>We have 4 fictional days and one fictional point. The weight 3/5 is unstable: changing a single day would move it. The best weight on the training set cannot do worse than either model alone, because the weights 0 and 1 are among the possible choices; this says nothing about a new day. No real performance, success rate or improvement is therefore claimed.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain in your own words why predictions made on A’s training data would increase its weight, then what the weight 3/5 says about the disagreement between A and B.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The meta-model can learn from the predictions that the base models make on their own training data.”</h3><p>A flexible model copies the answer there. If A memorizes, its disagreement with B becomes the gap between B and actual sales, and its weight is 1. Use out-of-fold predictions, made without having seen the day concerned.</p><a href="#exemple">Review the step on leakage</a></li><li><h3>“Stacking guarantees a result better than the best base model.”</h3><p>On the training days, the best weight cannot do worse than either model alone, since 0 and 1 are still allowed. This guarantees nothing for a new day, and the fictional check point is only one example.</p><a href="#exemple">Reread the limits of the calculation</a></li><li><h3>“Two very similar models make the weight more reliable.”</h3><p>If their predictions are identical, the disagreement is 0 everywhere and the weight’s quotient is undefined. If they are almost identical, a little noise moves the weight a great deal. Look for models whose errors differ.</p><a href="#exercices">Do the exercise on identical models</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-jour-trois"><p class="repere">Exercise 1 · Explained application</p>
+<h3>Reconstruct day three</h3><p>Using the weight w = 3/5 from the example, calculate the stacked prediction for day 3, then its difference from actual sales, in kilograms. The data remain fictional.</p>
+<label for="reponse-ex-jour-trois">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-jour-trois" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-jour-trois" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-jour-trois" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-jour-trois" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write b + w × u, where u is the disagreement a − b for day three.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The disagreement for day 3 is 52 − 48 = 4 kg. The weighted term is 3/5 × 4 = 12/5 kg, or 2.4 kg. The prediction is 48 + 12/5 = 252/5 kg, or 50.4 kg.</p><p>The gap from actual sales is 51 − 252/5 = 3/5 kg, or 0.6 kg. Another approach: w × a + (one − w) × b gives the same prediction. This gap is a training residual, not an error on a new day.</p><p class="petit-titre">Check your reasoning</p><ul><li>Start from b and add w × u, or combine w × a and (one − w) × b.</li><li>Give the units in kilograms and a weight with no unit.</li><li>Distinguish the training residual from an error on a new day.</li></ul></details></article><article class="exercice" id="ex-protocole"><p class="repere">Exercise 2 · Explained application</p>
+<h3>Count the training runs in the procedure</h3><p>We keep 4 observations, 2 folds and 2 base models, then retrain each base model on the whole dataset for the check point. How many observations are there per fold, how many base-model training runs take place during the out-of-fold phase, and how many are there in total?</p>
+<label for="reponse-ex-protocole">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-protocole" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-protocole" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-protocole" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-protocole" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each fold is predicted by each base model trained on the other folds: count one training run per fold and per model.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Each fold contains 4 ÷ 2 = 2 observations. The out-of-fold phase requires one training run per fold and per model: 2 × 2 = 4.</p><p>The 2 retraining runs on the whole dataset bring the total to 4 + 2 = 6. Check: 2 models each have 2 out-of-fold training runs followed by one final training run, making 6 in total.</p><p class="petit-titre">Check your reasoning</p><ul><li>Separate the out-of-fold phase from final retraining.</li><li>Obtain 2 observations per fold, 4 out-of-fold training runs and 6 in total.</li><li>Do not count the meta-model’s training among the base-model training runs.</li></ul></details></article><article class="exercice" id="ex-identiques"><p class="repere">Exercise 3 · Guided transfer</p>
+<h3>Two identical models</h3><p>Replace B with an exact copy of A: for each day, b = a. What are the disagreements, the sum of squared disagreements and the weight? What can you conclude about the meta-model?</p>
+<label for="reponse-ex-identiques">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-identiques" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-identiques" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-identiques" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-identiques" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate u = a − b for one day, then the sum of u².</p></details><details class="indice"><summary>Hint 2</summary><p>Look at the denominator in the formula for the weight.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Each disagreement is a − a = 0 kg, so each square and their sum Suu equal 0. The weight is a quotient with a divisor of 0: it is undefined.</p><p>This agrees with the prediction w × a + (one − w) × a = a, which does not depend on w. The meta-model has nothing to choose: an additional model contributes something only if its predictions differ from those of the first.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find a 0 disagreement and a 0 sum of squares.</li><li>Explain why the weight’s quotient is undefined.</li><li>Connect the conclusion to the prediction’s independence from w.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="hors-pli"><summary><span class="repere">Recall 1</span><span>What does “out of fold” mean for an input to the meta-model?</span></summary><p>The prediction was produced by a base model that had not seen the corresponding observation during training.</p></details><details class="carte" data-carte="poids"><summary><span class="repere">Recall 2</span><span>What formula gives the weight w when the prediction is w × a + (one − w) × b?</span></summary><p>w = Sud / Suu, with u = a − b, d = y − b and sums over the days: this is the vertex of the parabola of squared errors.</p></details><details class="carte" data-carte="fuite"><summary><span class="repere">Recall 3</span><span>Why is the weight 1 if A memorizes its training data?</span></summary><p>Its prediction y equals the actual value, so u = d everywhere, and the sum of d² divided by itself equals 1: the meta-model ignores B.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>What does the fictional check point prove?</span></summary><p>It illustrates the mechanism with an example. With four days and one point, it measures no performance and guarantees nothing for other days.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Split the observations into folds; train the base models on the other folds; predict the fold set aside; write the disagreement u = a − b and the gap d = y − b; minimize the sum of squares to obtain w = Sud / Suu; check that the slope is 0; retrain the base models on the whole dataset to predict new observations; keep the assumptions and sample size in mind.</p></div><div class="exports"><a class="bouton" download="c138-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzgtbTU6aG9ycy1wbGkiLAogICAgICAidW5pdGUiOiAiYzEzOC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByZWRpY3Rpb24taG9ycy1wbGkiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIOKAnG91dCBvZiBmb2xk4oCdIG1lYW4gZm9yIGFuIGlucHV0IHRvIHRoZSBtZXRhLW1vZGVsPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBwcmVkaWN0aW9uIHdhcyBwcm9kdWNlZCBieSBhIGJhc2UgbW9kZWwgdGhhdCBoYWQgbm90IHNlZW4gdGhlIGNvcnJlc3BvbmRpbmcgb2JzZXJ2YXRpb24gZHVyaW5nIHRyYWluaW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW01OnBvaWRzIiwKICAgICAgInVuaXRlIjogImMxMzgtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb2lkcy1tb2luZHJlcy1jYXJyZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBmb3JtdWxhIGdpdmVzIHRoZSB3ZWlnaHQgdyB3aGVuIHRoZSBwcmVkaWN0aW9uIGlzIHcgw5cgYSArIChvbmUg4oiSIHcpIMOXIGI/IiwKICAgICAgInJlcG9uc2UiOiAidyA9IFN1ZCAvIFN1dSwgd2l0aCB1ID0gYSDiiJIgYiwgZCA9IHkg4oiSIGIgYW5kIHN1bXMgb3ZlciB0aGUgZGF5czogdGhpcyBpcyB0aGUgdmVydGV4IG9mIHRoZSBwYXJhYm9sYSBvZiBzcXVhcmVkIGVycm9ycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzOC1tNTpmdWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTM4LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZnVpdGUtaW5mb3JtYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGlzIHRoZSB3ZWlnaHQgMSBpZiBBIG1lbW9yaXplcyBpdHMgdHJhaW5pbmcgZGF0YT8iLAogICAgICAicmVwb25zZSI6ICJJdHMgcHJlZGljdGlvbiB5IGVxdWFscyB0aGUgYWN0dWFsIHZhbHVlLCBzbyB1ID0gZCBldmVyeXdoZXJlLCBhbmQgdGhlIHN1bSBvZiBkwrIgZGl2aWRlZCBieSBpdHNlbGYgZXF1YWxzIDE6IHRoZSBtZXRhLW1vZGVsIGlnbm9yZXMgQi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzOC1tNTpsaW1pdGUiLAogICAgICAidW5pdGUiOiAiYzEzOC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZS1wb2ludC1jb250cm9sZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGZpY3Rpb25hbCBjaGVjayBwb2ludCBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBpbGx1c3RyYXRlcyB0aGUgbWVjaGFuaXNtIHdpdGggYW4gZXhhbXBsZS4gV2l0aCBmb3VyIGRheXMgYW5kIG9uZSBwb2ludCwgaXQgbWVhc3VyZXMgbm8gcGVyZm9ybWFuY2UgYW5kIGd1YXJhbnRlZXMgbm90aGluZyBmb3Igb3RoZXIgZGF5cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c138-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIOKAnG91dCBvZiBmb2xk4oCdIG1lYW4gZm9yIGFuIGlucHV0IHRvIHRoZSBtZXRhLW1vZGVsPwlUaGUgcHJlZGljdGlvbiB3YXMgcHJvZHVjZWQgYnkgYSBiYXNlIG1vZGVsIHRoYXQgaGFkIG5vdCBzZWVuIHRoZSBjb3JyZXNwb25kaW5nIG9ic2VydmF0aW9uIGR1cmluZyB0cmFpbmluZy4JdG9kYWkgYzEzOC1tNSBwcmVkaWN0aW9uLWhvcnMtcGxpCldoYXQgZm9ybXVsYSBnaXZlcyB0aGUgd2VpZ2h0IHcgd2hlbiB0aGUgcHJlZGljdGlvbiBpcyB3IMOXIGEgKyAob25lIOKIkiB3KSDDlyBiPwl3ID0gU3VkIC8gU3V1LCB3aXRoIHUgPSBhIOKIkiBiLCBkID0geSDiiJIgYiBhbmQgc3VtcyBvdmVyIHRoZSBkYXlzOiB0aGlzIGlzIHRoZSB2ZXJ0ZXggb2YgdGhlIHBhcmFib2xhIG9mIHNxdWFyZWQgZXJyb3JzLgl0b2RhaSBjMTM4LW01IHBvaWRzLW1vaW5kcmVzLWNhcnJlcwpXaHkgaXMgdGhlIHdlaWdodCAxIGlmIEEgbWVtb3JpemVzIGl0cyB0cmFpbmluZyBkYXRhPwlJdHMgcHJlZGljdGlvbiB5IGVxdWFscyB0aGUgYWN0dWFsIHZhbHVlLCBzbyB1ID0gZCBldmVyeXdoZXJlLCBhbmQgdGhlIHN1bSBvZiBkwrIgZGl2aWRlZCBieSBpdHNlbGYgZXF1YWxzIDE6IHRoZSBtZXRhLW1vZGVsIGlnbm9yZXMgQi4JdG9kYWkgYzEzOC1tNSBmdWl0ZS1pbmZvcm1hdGlvbgpXaGF0IGRvZXMgdGhlIGZpY3Rpb25hbCBjaGVjayBwb2ludCBwcm92ZT8JSXQgaWxsdXN0cmF0ZXMgdGhlIG1lY2hhbmlzbSB3aXRoIGFuIGV4YW1wbGUuIFdpdGggZm91ciBkYXlzIGFuZCBvbmUgcG9pbnQsIGl0IG1lYXN1cmVzIG5vIHBlcmZvcm1hbmNlIGFuZCBndWFyYW50ZWVzIG5vdGhpbmcgZm9yIG90aGVyIGRheXMuCXRvZGFpIGMxMzgtbTUgbGltaXRlLXBvaW50LWNvbnRyb2xlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">elxoes eyehwr zbxo</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · distinguish weights learned out of fold from weights set in other ways</h3><dl><div><dt>What you understand</dt><dd>Stacking learns combination weights from out-of-fold predictions. You can now name the disagreement, the gap, out-of-fold prediction and leakage, and say why leakage pushes the weight toward a single model.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gvtfux zwxzyk ypyoyf qhylrc pjqrmp gkqumj xhwjgj qnkogs gpoqcf prhhvt uyzlxo qjwsjz zpicbv dtglkh hkssxl lnvhid ncusyr tpqmhu cjolpt udzfwt vpmaiq obwopz cghhwa ciqmaq</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: repeat the weight calculation without support on a similar fictional dataset, justify the need for out-of-fold predictions and say what a weight does not guarantee. Reading this page and giving an assisted answer do not establish that any level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">djagkc xqlcpr pvcump krczzz begemz rbkgup kltyvm bjbhwt jnlgjf huvyzy fxqtgr dszyca koawku jipfaw cpvgxa vkvwgf cijjwc booham jnmbty dhwzbd zwfedr bhojcn naxhzk pbmgdj</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the example with other fictional values. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jxddxc ijssmr dhclfy uwmebx iotmwl rxeoig ipycyt lsejgs jpdtzp cmpxab lprdgp pyqsof yyoyqq owlzij ivawko rhhdiz qcbcsb rxngpw wprdpf taqecy fgzbox ykohoh tsjhrw kpanpf</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c138-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c138-m4.html">Previous</a> · <a href="c139-m1.html">Next</a></nav>
+<footer><p>Course book · C138·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish variation within a model from disagreement between models, calculate their contributions to the variance of a mixture, and check how sensitive a conclusion is to the chosen weights.">
+<title>C261·M5 · Model uncertainty — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vqedzw yizitf ynac</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C261·M5</p><h1>Model uncertainty</h1><p class="objectif"><span>Your goal</span>Distinguish variation within a model from disagreement between models, calculate their contributions to the variance of a mixture, and check how sensitive a conclusion is to the chosen weights.</p><p class="prerequis"><strong>Before you start</strong><br>c257-m5 : frequency selection and MSE · c145-m5 : policy evaluation · c197-m5 : introduction to extreme values · c200-m5 : AR-OU correspondence · c073-m5 : interaction and repeated measures · c261-m1 : extreme values · c261-m2 : structural breaks · c261-m3 : long memory · c261-m4 : multiple testing</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An analyst needs to describe tomorrow’s loss on a single hypothetical position, in euros. The available history leaves two interpretations open: model A continues the previous regime; model B assumes that a structural break persists. Both refer to the same position and the same day. A predicts a mean loss of 20 €; B predicts 80 €.</p><p>Within each model, the possible losses stay close to its own mean. Yet the means are far apart. Reducing the uncertainty calculated within A does not settle the question “should we use A or B?”. This second question is where model uncertainty arises: several descriptions of the data remain defensible and lead to different conclusions.</p><p>To make the problem calculable by hand, A assigns equal probability to losses of 10 € and 30 €; B does the same for 70 € and 90 €. These distributions, their plausibility, and all the amounts are hypothetical assumptions. We have neither fitted them to a market nor validated them against one.</p><p>We will first give each model a weight of 1/2, then change the weights. This choice sets up a sensitivity analysis; it does not measure the probability that each model is true. The mixture keeps the disagreement visible rather than hiding it behind a single mean.</p><div class="schemas"><figure><svg viewBox="0 0 360 264" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same position, two possible descriptions</title><desc>Model A gives losses of 10 and 30 euros, with a mean of 20 euros. Model B gives 70 and 90 euros, with a mean of 80 euros. Their variances within models are identical. Each model initially receives a weight of 1/2.</desc><rect x="18" y="12" width="324" height="98" rx="7" class="cadre-prediction" /><text x="180" y="38" text-anchor="middle">A: previous regime continues</text><text x="180" y="65" text-anchor="middle">10 € or 30 € → mean 20 €</text><text x="180" y="92" text-anchor="middle">Variance: 100 €²</text><rect x="18" y="128" width="324" height="98" rx="7" class="cadre-resultat" /><text x="180" y="154" text-anchor="middle">B: persistent structural break</text><text x="180" y="181" text-anchor="middle">70 € or 90 € → mean 80 €</text><text x="180" y="208" text-anchor="middle">Variance: 100 €²</text><text x="180" y="253" text-anchor="middle" class="petite-etiquette">Initial weights: 1/2 for A and 1/2 for B</text></svg><figcaption>The amounts are predicted outcomes, not observations. The models are competing assumptions; their losses are not added together.</figcaption></figure><figure><svg viewBox="0 0 360 248" xmlns="http://www.w3.org/2000/svg" role="img"><title>Variance extends beyond each model</title><desc>With equal weights, the average variance within models is 100 square euros. Disagreement between means contributes 900 square euros. The total variance of the mixture is their sum, 1000 square euros.</desc><rect x="18" y="12" width="324" height="56" rx="7" class="cadre-neutre" /><text x="180" y="36" text-anchor="middle">Variation within models W</text><text x="180" y="58" text-anchor="middle">100 €²</text><line x1="180" y1="68" x2="180" y2="94" class="trait" /><text x="205" y="86">+</text><rect x="18" y="94" width="324" height="56" rx="7" class="cadre-prediction" /><text x="180" y="118" text-anchor="middle">Disagreement between means U</text><text x="180" y="140" text-anchor="middle">900 €²</text><line x1="180" y1="150" x2="180" y2="176" class="trait" /><text x="205" y="168">=</text><rect x="18" y="176" width="324" height="56" rx="7" class="cadre-resultat" /><text x="180" y="200" text-anchor="middle">Mixture variance V</text><text x="180" y="222" text-anchor="middle">1000 €²</text></svg><figcaption>The boxes organize the addition; their areas do not represent the values. The disagreement depends on the models included and the stated weights.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>State the models and weights; separate variation within models from disagreement between means; change the weights before calling a conclusion robust.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Tomorrow’s loss, several models today</h3><p>Let us calculate the mean and variance of the mixture with equal weights. Then let us check whether a hypothetical rule, “predicted mean loss at most 60 €”, gives the same conclusion under A and under B. This rule concerns only an expected loss.</p><ol class="etapes"><li><h3>Define what is random and what is chosen</h3><p>L denotes tomorrow’s loss, in euros, which is positive in the outcomes of our example. M is a label taking the values A or B. We define a mixture distribution: choose the label using the stated weights, then a loss according to its distribution. This mathematical construction does not mean that the market actually selects a model at random.</p><p>p is the weight of A, with no unit, between 0 and 1; the weight of B is 1 − p. The notation P(M = A) = p denotes this probability in the constructed mixture. E denotes an expectation, that is, a weighted average; Var denotes a variance, that is, an expected squared deviation. The vertical bar in E(L | M = A) means “conditional on model A”.</p><p>For a label m equal to A or B, μ<sub>m</sub> = E(L | M = m) is the mean in euros and v<sub>m</sub> = Var(L | M = m) is the variance in square euros. μ = E(L) and V = Var(L) describe the mixture. The parameters and forecast date are fixed here. The moments are finite. No independence between the predictions of A and B is required: we are mixing distributions, not adding two losses.</p></li><li><h3>Calculate what each model predicts</h3><p>Under A, the outcomes are equally probable. Their mean is (10 + 30)/2 = 40/2 = 20 €. The deviations from this mean are −10 € and +10 €. The average of their squares is 100 €².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>A</mi></msub><mo>=</mo><mfrac><mrow><msup><mrow><mo>(</mo><mo>−</mo><mn>10</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mn>10</mn><mn>2</mn></msup></mrow><mn>2</mn></mfrac><mo>=</mo><mn>100</mn><mtext> €²</mtext></mrow></math></div><p>Under B, the same method gives (70 + 90)/2 = 160/2 = 80 €. The deviations are −10 € and +10 €, so v_B = 100 €². Identical variances do not make the models equivalent: their centers differ by 60 €.</p></li><li><h3>Calculate the center of the mixture</h3><p>Weight the means using the same weights as the distributions:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>μ</mi><mo>=</mo><mi>p</mi><msub><mi>μ</mi><mi>A</mi></msub><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><msub><mi>μ</mi><mi>B</mi></msub></mrow></math></div><p>For p = 1/2, μ = (20 + 80)/2 = 100/2 = 50 €. This is the mixture mean; neither model necessarily predicts this value as a possible outcome. In our example, a loss of exactly 50 € belongs to neither of the proposed distributions.</p></li><li><h3>Derive the variance decomposition</h3><p>With model m fixed, decompose the total deviation: L − μ = (L − μ<sub>m</sub>) + (μ<sub>m</sub> − μ). The first part describes variation within the model; the second is the shift in its mean. Expanding the square gives the cross term 2(L − μ<sub>m</sub>)(μ<sub>m</sub> − μ). Its conditional mean is 0 because E(L − μ<sub>m</sub> | M = m) = 0, by the definition of μ<sub>m</sub>. This cancellation requires no additional independence assumption.</p><p>After weighting the models, W is the average of the variances within models and U is the variance of their means. W, U, and V are in square euros:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>W</mi><mo>=</mo><mi>p</mi><msub><mi>v</mi><mi>A</mi></msub><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><msub><mi>v</mi><mi>B</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>U</mi><mo>=</mo><mi>p</mi><msup><mrow><mo>(</mo><msub><mi>μ</mi><mi>A</mi></msub><mo>−</mo><mi>μ</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><msup><mrow><mo>(</mo><msub><mi>μ</mi><mi>B</mi></msub><mo>−</mo><mi>μ</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>=</mo><mi>W</mi><mo>+</mo><mi>U</mi></mrow></math></div><p>Here U represents disagreement between means within the chosen family. It does not quantify every form of model uncertainty: models can have the same mean and different tails. The conditional variances also exclude uncertainty in parameter estimation, since we have fixed the parameters.</p></li><li><h3>Apply equal weights</h3><p>The average variation within models is W = (100 + 100)/2 = 200/2 = 100 €². The addition is valid because we are combining variances in the same unit.</p><p>The shifts in the means are 20 − 50 = -30 € and 80 − 50 = 30 €. Their squares are 900 €² and 900 €². Thus U = (900 + 900)/2 = 1800/2 = 900 €².</p><p>The total variance is therefore V = 100 + 900 = 1000 €². Reporting only 100 €² as the mixture variance would omit the shifts in the centers. Adding the signed shifts directly would give 0 and lose precisely this disagreement.</p></li><li><h3>Check using all outcomes, then the limiting cases</h3><p>A second method avoids any decomposition: with equal weights, the 4 losses 10, 30, 70, and 90 € each have probability 1/4. Their mean is 50 €. Directly calculate the average of their squared deviations from 50 €:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>=</mo><mfrac><mrow><msup><mrow><mo>(</mo><mn>10</mn><mo>−</mo><mn>50</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><mn>30</mn><mo>−</mo><mn>50</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><mn>70</mn><mo>−</mo><mn>50</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><mn>90</mn><mo>−</mo><mn>50</mn><mo>)</mo></mrow><mn>2</mn></msup></mrow><mn>4</mn></mfrac><mo>=</mo><mn>1000</mn><mtext> €²</mtext></mrow></math></div><p>The same result confirms the two components. If p equals 1, only A remains and U equals 0; if p equals 0, only B remains and U again equals 0. This expresses the exclusion of the other model, not proof that it was false.</p><p>For two models, replacing μ with its definition gives the following form. The squared difference between centers is 3600 €² here. This form will let us change the weights without recalculating all the shifts.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>U</mi><mo>=</mo><mi>p</mi><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><msup><mrow><mo>(</mo><msub><mi>μ</mi><mi>A</mi></msub><mo>−</mo><msub><mi>μ</mi><mi>B</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div></li><li><h3>Examine the conclusion as well as the number</h3><p>Let μ(p) denote the mean obtained with weight p. The hypothetical rule accepts an expected loss of at most 60 €. The mixture with equal weights passes: its margin is 60 − 50 = 10 €. A also passes, with a margin of 40 €; B fails, with a margin of -20 €. The conclusion “the rule is satisfied” therefore depends on the model or the weighting.</p><p>If we require it to hold under every included model, we must look at the largest expectation, here 80 €, which exceeds 60 €. This requirement is a different rule, stated explicitly. The envelope [20 €; 80 €] contains the expectations of the possible mixtures; it is not a prediction interval for L: the losses 10 € and 90 € lie outside it.</p><p>Neither the total variance nor the envelope guarantees coverage of actual losses. A mixture of models that are all misspecified can still be misleading. To assess empirical robustness, we would still need to justify the candidates, examine other assumptions about tails or structural breaks, and compare the predictions with later observations, without selecting the preferred conclusion after the fact.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does having identical variances within the two models not justify ignoring their disagreement? Reconstruct the calculation, then distinguish a mixture mean, an envelope of expectations, and an actually observed loss.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Averaging the variances is enough.”</h3><p>This average gives W. Also center each model mean around μ, square these deviations, and weight them: this gives U, then V = W + U.</p><a href="#exemple">Review the decomposition and its direct check</a></li><li><h3>“Equal weights prove that the models are equally credible.”</h3><p>Here the weights are a calculation convention. Rework the same case favoring A, then state where justified weights would come from before giving them a probabilistic interpretation about the world.</p><a href="#exercices">Try changing the weights</a></li><li><h3>“The envelope of means contains the possible losses.”</h3><p>The envelope describes expectations. Revisit the extreme outcomes predicted by A and B: they can lie outside this envelope. A prediction interval would require the distribution of L and a stated coverage probability.</p><a href="#exemple">Review the scope of the conclusion</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-variance"><p class="repere">Exercise 1 · Application · recover the missing component</p>
+<h3>Audit a variance that is too small</h3><p>For the same hypothetical position, a report states μ = 50 € and V = 100 €² with equal weights. Find the missing component and correct V. Explain why the reported mean can be right while the variance is wrong.</p>
+<label for="reponse-ex-variance">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-variance" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-variance" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-variance" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-variance" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The average variance within models does not measure the shifts in the centers.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract μ from each model mean, then square the deviations before weighting.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mean of 50 € is correct. The centers deviate from it by -30 € and 30 €; the squares are 900 €² and 900 €². Their average is U = 900 €².</p><p>The report gave W as though it were V. The two components must be added: V = 100 + 900 = 1000 €². The signed shifts cancel in the mean, but their squares add up in the variance.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover the deviations around the common mean.</li><li>Calculate U and V with the unit €².</li><li>Explain the difference between deviations canceling and their squares adding up.</li></ul></details></article><article class="exercice" id="ex-poids"><p class="repere">Exercise 2 · Sensitivity · redo the calculation</p>
+<h3>Give more weight to the previous regime</h3><p>Keep exactly the same loss distributions. Now take p = 3/4 for A and 1/4 for B. Calculate μ, W, U, and V. Use the factored form of U below, then explain what has changed in the observed world.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>U</mi><mo>=</mo><mi>p</mi><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><msup><mrow><mo>(</mo><msub><mi>μ</mi><mi>A</mi></msub><mo>−</mo><msub><mi>μ</mi><mi>B</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div>
+<label for="reponse-ex-poids">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-poids" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-poids" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-poids" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-poids" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with the new mean. The variances within models are identical, so W stays the same.</p></details><details class="indice"><summary>Hint 2</summary><p>The product of the weights multiplies the squared difference between the centers, not the variance within models.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>μ = 3/4 × 20 + 1/4 × 80 = 15 + 20 = 35 €. W remains 100 €², because any weighted average of these identical variances gives this same value.</p><p>p(1 − p) = 3/16. Thus U = 3/16 × 3600 = 675 €² and V = 100 + 675 = 775 €².</p><p>No observation has been added. The decrease in the mean and variance reflects only a different weighting. To check it directly, each outcome of A receives probability mass 3/4 × 1/2 and each outcome of B receives probability mass 1/4 × 1/2; calculate their squared deviations around 35 €, weighting each outcome.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the mean before interpreting the deviations.</li><li>Obtain all four quantities and their units.</li><li>Attribute the change to the weights, without presenting it as measured progress.</li></ul></details></article><article class="exercice" id="ex-robustesse"><p class="repere">Exercise 3 · Transfer · establish the exact condition</p>
+<h3>Which weights make the rule pass?</h3><p>For this same position, let p vary between 0 and 1. Find the exact condition for μ(p) to be at most 60 €. Is the rule satisfied for all admissible weights? Then explain what would still need to be checked if all the models passed.</p>
+<label for="reponse-ex-robustesse">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-robustesse" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-robustesse" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-robustesse" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-robustesse" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qywwcq pjpxbn ibdj</span></span></p></details><details class="indice"><summary>Hint 2</summary><p>Move the constant term, then divide by the difference between centers, taking the direction of the inequality into account.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>μ(p) = 80 − 60p, in euros. Requiring μ(p) ≤ 60 € is equivalent to 60p ≥ 80 − 60 = 20, so p ≥ 1/3. Since the difference 60 is positive, division preserves this last direction.</p><p>The rule fails for p below 1/3, in particular p = 0, which keeps only B. Equal weights and weighting that favors A pass, but this is not enough to claim robustness to all weights. At p = 1/3, the mean is exactly 60 €: equality passes, since the rule says “at most”.</p><p>Even agreement among all candidates would establish only robustness relative to this family and this rule about the expectation. Omitted assumptions and predictive adequacy would still need to be tested against later observations. This would not demonstrate that the realized loss will be below the threshold.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain a condition on p, including the equality case.</li><li>Give an admissible weight that invalidates overall robustness.</li><li>Separate robustness to a family, empirical validation, and a guarantee about a realization.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="modele"><summary><span class="repere">Recall 1</span><span>What remains uncertain when the parameters of each model are fixed?</span></summary><p>The choice of description: several assumptions about the regime or distribution can remain plausible and produce different predictions. Variation within a model does not resolve this choice.</p></details><details class="carte" data-carte="decomposition"><summary><span class="repere">Recall 2</span><span>Which two parts make up the variance of our mixture?</span></summary><p>The weighted average W of the variances within models, followed by U, the weighted variance of the model means around the common mean. V = W + U; all these quantities are in square euros.</p></details><details class="carte" data-carte="croise"><summary><span class="repere">Recall 3</span><span>Why does the cross term disappear in the proof?</span></summary><p>With the model fixed, the deviation L − μₘ has mean 0 by definition. The shift μₘ − μ is constant for that model. Their product therefore has conditional mean 0, without additional independence.</p></details><details class="carte" data-carte="poids"><summary><span class="repere">Recall 4</span><span>Does changing the weights without a new observation demonstrate a reduction in empirical uncertainty?</span></summary><p>No. It changes the constructed mixture distribution. The weights in our exercise are conventions; interpreting their credibility would require separate justification and validation.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>Why is an envelope of expectations not a guarantee about tomorrow’s loss?</span></summary><p>It bounds the means of the included models, not the realizations of their distributions or those of the market. The family may omit an important assumption, and individual outcomes can exceed these means.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the chain models → weights → mean → variation within models → disagreement between centers → total variance. Justify the cancellation of the cross term, then state a conclusion that does or does not withstand a change in weights. Finish by stating what this family cannot establish about actual losses. An answer read or obtained after a hint remains an assisted answer; repeat the reasoning without support in a later session before claiming mastery.</p></div><div class="exports"><a class="bouton" download="c261-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjEtbTU6bW9kZWxlIiwKICAgICAgInVuaXRlIjogImMyNjEtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbmNlcnRpdHVkZS1kZS1tb2RlbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCByZW1haW5zIHVuY2VydGFpbiB3aGVuIHRoZSBwYXJhbWV0ZXJzIG9mIGVhY2ggbW9kZWwgYXJlIGZpeGVkPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjaG9pY2Ugb2YgZGVzY3JpcHRpb246IHNldmVyYWwgYXNzdW1wdGlvbnMgYWJvdXQgdGhlIHJlZ2ltZSBvciBkaXN0cmlidXRpb24gY2FuIHJlbWFpbiBwbGF1c2libGUgYW5kIHByb2R1Y2UgZGlmZmVyZW50IHByZWRpY3Rpb25zLiBWYXJpYXRpb24gd2l0aGluIGEgbW9kZWwgZG9lcyBub3QgcmVzb2x2ZSB0aGlzIGNob2ljZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MS1tNTpkZWNvbXBvc2l0aW9uIiwKICAgICAgInVuaXRlIjogImMyNjEtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YXJpYW5jZS1kZS1tZWxhbmdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIHR3byBwYXJ0cyBtYWtlIHVwIHRoZSB2YXJpYW5jZSBvZiBvdXIgbWl4dHVyZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgd2VpZ2h0ZWQgYXZlcmFnZSBXIG9mIHRoZSB2YXJpYW5jZXMgd2l0aGluIG1vZGVscywgZm9sbG93ZWQgYnkgVSwgdGhlIHdlaWdodGVkIHZhcmlhbmNlIG9mIHRoZSBtb2RlbCBtZWFucyBhcm91bmQgdGhlIGNvbW1vbiBtZWFuLiBWID0gVyArIFU7IGFsbCB0aGVzZSBxdWFudGl0aWVzIGFyZSBpbiBzcXVhcmUgZXVyb3MuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjEtbTU6Y3JvaXNlIiwKICAgICAgInVuaXRlIjogImMyNjEtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjZW50cmFnZS1jb25kaXRpb25uZWwiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgdGhlIGNyb3NzIHRlcm0gZGlzYXBwZWFyIGluIHRoZSBwcm9vZj8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIHRoZSBtb2RlbCBmaXhlZCwgdGhlIGRldmlhdGlvbiBMIOKIkiDOvOKCmCBoYXMgbWVhbiAwIGJ5IGRlZmluaXRpb24uIFRoZSBzaGlmdCDOvOKCmCDiiJIgzrwgaXMgY29uc3RhbnQgZm9yIHRoYXQgbW9kZWwuIFRoZWlyIHByb2R1Y3QgdGhlcmVmb3JlIGhhcyBjb25kaXRpb25hbCBtZWFuIDAsIHdpdGhvdXQgYWRkaXRpb25hbCBpbmRlcGVuZGVuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjEtbTU6cG9pZHMiLAogICAgICAidW5pdGUiOiAiYzI2MS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNlbnNpYmlsaXRlLWF1eC1wb2lkcyIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIGNoYW5naW5nIHRoZSB3ZWlnaHRzIHdpdGhvdXQgYSBuZXcgb2JzZXJ2YXRpb24gZGVtb25zdHJhdGUgYSByZWR1Y3Rpb24gaW4gZW1waXJpY2FsIHVuY2VydGFpbnR5PyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBJdCBjaGFuZ2VzIHRoZSBjb25zdHJ1Y3RlZCBtaXh0dXJlIGRpc3RyaWJ1dGlvbi4gVGhlIHdlaWdodHMgaW4gb3VyIGV4ZXJjaXNlIGFyZSBjb252ZW50aW9uczsgaW50ZXJwcmV0aW5nIHRoZWlyIGNyZWRpYmlsaXR5IHdvdWxkIHJlcXVpcmUgc2VwYXJhdGUganVzdGlmaWNhdGlvbiBhbmQgdmFsaWRhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MS1tNTpwb3J0ZWUiLAogICAgICAidW5pdGUiOiAiYzI2MS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJvYnVzdGVzc2UtcmVsYXRpdmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGlzIGFuIGVudmVsb3BlIG9mIGV4cGVjdGF0aW9ucyBub3QgYSBndWFyYW50ZWUgYWJvdXQgdG9tb3Jyb3figJlzIGxvc3M/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgYm91bmRzIHRoZSBtZWFucyBvZiB0aGUgaW5jbHVkZWQgbW9kZWxzLCBub3QgdGhlIHJlYWxpemF0aW9ucyBvZiB0aGVpciBkaXN0cmlidXRpb25zIG9yIHRob3NlIG9mIHRoZSBtYXJrZXQuIFRoZSBmYW1pbHkgbWF5IG9taXQgYW4gaW1wb3J0YW50IGFzc3VtcHRpb24sIGFuZCBpbmRpdmlkdWFsIG91dGNvbWVzIGNhbiBleGNlZWQgdGhlc2UgbWVhbnMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c261-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCByZW1haW5zIHVuY2VydGFpbiB3aGVuIHRoZSBwYXJhbWV0ZXJzIG9mIGVhY2ggbW9kZWwgYXJlIGZpeGVkPwlUaGUgY2hvaWNlIG9mIGRlc2NyaXB0aW9uOiBzZXZlcmFsIGFzc3VtcHRpb25zIGFib3V0IHRoZSByZWdpbWUgb3IgZGlzdHJpYnV0aW9uIGNhbiByZW1haW4gcGxhdXNpYmxlIGFuZCBwcm9kdWNlIGRpZmZlcmVudCBwcmVkaWN0aW9ucy4gVmFyaWF0aW9uIHdpdGhpbiBhIG1vZGVsIGRvZXMgbm90IHJlc29sdmUgdGhpcyBjaG9pY2UuCXRvZGFpIGMyNjEtbTUgaW5jZXJ0aXR1ZGUtZGUtbW9kZWxlCldoaWNoIHR3byBwYXJ0cyBtYWtlIHVwIHRoZSB2YXJpYW5jZSBvZiBvdXIgbWl4dHVyZT8JVGhlIHdlaWdodGVkIGF2ZXJhZ2UgVyBvZiB0aGUgdmFyaWFuY2VzIHdpdGhpbiBtb2RlbHMsIGZvbGxvd2VkIGJ5IFUsIHRoZSB3ZWlnaHRlZCB2YXJpYW5jZSBvZiB0aGUgbW9kZWwgbWVhbnMgYXJvdW5kIHRoZSBjb21tb24gbWVhbi4gViA9IFcgKyBVOyBhbGwgdGhlc2UgcXVhbnRpdGllcyBhcmUgaW4gc3F1YXJlIGV1cm9zLgl0b2RhaSBjMjYxLW01IHZhcmlhbmNlLWRlLW1lbGFuZ2UKV2h5IGRvZXMgdGhlIGNyb3NzIHRlcm0gZGlzYXBwZWFyIGluIHRoZSBwcm9vZj8JV2l0aCB0aGUgbW9kZWwgZml4ZWQsIHRoZSBkZXZpYXRpb24gTCDiiJIgzrzigpggaGFzIG1lYW4gMCBieSBkZWZpbml0aW9uLiBUaGUgc2hpZnQgzrzigpgg4oiSIM68IGlzIGNvbnN0YW50IGZvciB0aGF0IG1vZGVsLiBUaGVpciBwcm9kdWN0IHRoZXJlZm9yZSBoYXMgY29uZGl0aW9uYWwgbWVhbiAwLCB3aXRob3V0IGFkZGl0aW9uYWwgaW5kZXBlbmRlbmNlLgl0b2RhaSBjMjYxLW01IGNlbnRyYWdlLWNvbmRpdGlvbm5lbApEb2VzIGNoYW5naW5nIHRoZSB3ZWlnaHRzIHdpdGhvdXQgYSBuZXcgb2JzZXJ2YXRpb24gZGVtb25zdHJhdGUgYSByZWR1Y3Rpb24gaW4gZW1waXJpY2FsIHVuY2VydGFpbnR5PwlOby4gSXQgY2hhbmdlcyB0aGUgY29uc3RydWN0ZWQgbWl4dHVyZSBkaXN0cmlidXRpb24uIFRoZSB3ZWlnaHRzIGluIG91ciBleGVyY2lzZSBhcmUgY29udmVudGlvbnM7IGludGVycHJldGluZyB0aGVpciBjcmVkaWJpbGl0eSB3b3VsZCByZXF1aXJlIHNlcGFyYXRlIGp1c3RpZmljYXRpb24gYW5kIHZhbGlkYXRpb24uCXRvZGFpIGMyNjEtbTUgc2Vuc2liaWxpdGUtYXV4LXBvaWRzCldoeSBpcyBhbiBlbnZlbG9wZSBvZiBleHBlY3RhdGlvbnMgbm90IGEgZ3VhcmFudGVlIGFib3V0IHRvbW9ycm934oCZcyBsb3NzPwlJdCBib3VuZHMgdGhlIG1lYW5zIG9mIHRoZSBpbmNsdWRlZCBtb2RlbHMsIG5vdCB0aGUgcmVhbGl6YXRpb25zIG9mIHRoZWlyIGRpc3RyaWJ1dGlvbnMgb3IgdGhvc2Ugb2YgdGhlIG1hcmtldC4gVGhlIGZhbWlseSBtYXkgb21pdCBhbiBpbXBvcnRhbnQgYXNzdW1wdGlvbiwgYW5kIGluZGl2aWR1YWwgb3V0Y29tZXMgY2FuIGV4Y2VlZCB0aGVzZSBtZWFucy4JdG9kYWkgYzI2MS1tNSByb2J1c3Rlc3NlLXJlbGF0aXZlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vqedzw yizitf ynac</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading milestone · calculated variance and model choice</h3><dl><div><dt>What you understand</dt><dd>A variance calculated under assumptions does not automatically measure uncertainty about those assumptions. Comparing methods and quantifying their disagreement are two distinct operations.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">reqfnq nwayxt wmmryv ymiank jcfzon jvokob ikcayy rfdbws nmawtg naevjf tklrtx dpmfyv zqqjik pdiulm tcmqiw kwfxji tdxegy ghnixd xktdoq bdidoy jkpvcf hmxklu tgprgv mdrfad</span></span></dd></div><div><dt>Your level</dt><dd>Level 4 to prepare for: reconstruct the decomposition, redo a sensitivity analysis for the weights, and defend the limited scope of a conclusion. Reading, an assisted answer, and the presence of code do not establish mastery at any level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yhzfdk zbmqru mmlyyg alvwic yzsupi osxlcz kiwznj ukervv djsswy yyrpjj irwybq lbdjpo qvjneq jfwxth ugizsc ghepku qoqoga ktqijl opnfpc udqwnt ekzlxs iqewuf njnbpn ekbomx</span></span></dd></div><div><dt>To continue</dt><dd>Redo the financial case without support. For later authorized work on the project, it would then be necessary to connect a comparison to its decision question, justify the candidates and their weights, and receive separate evidence of integration and empirical validity. No project import, launch, or change has been carried out here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c261-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c261-m4.html">Previous</a> · <a href="c263-m1.html">Next</a></nav>
+<footer><p>Course book · C261·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

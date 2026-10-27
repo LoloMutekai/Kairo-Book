@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Replay an LRU cache, choose which items to evict, and check a memory budget when item sizes differ.">
+<title>C026·M3 · LRU and a memory budget — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yginzs gugvja qqex</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C026·M3</p><h1>LRU and a memory budget</h1><p class="objectif"><span>Your goal</span>Replay an LRU cache, choose which items to evict, and check a memory budget when item sizes differ.</p><p class="prerequis"><strong>Before you start</strong><br>c019-m5 : clocks and persistence · c025-m5 : O, Omega and Theta · c020-m5 : counterexamples and sensitivity · c024-m5 : measurement quality · c026-m1 : queue and priority · c026-m2 : admission and capacity</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An image viewer keeps image previews in memory so that it can retrieve them when they are opened again. This temporary store is a cache. The original images remain available: removing a preview from the cache only means that it must be recomputed if it is needed again. Our reserved cache budget is 12 KiB.</p><p>Imagine these previews arranged from left to right, from the oldest request to the most recent. After opening A, B, then C, you open A again. A becomes the most recently used preview, even though it was the first to enter the cache. If space is needed later, B will leave before A.</p><p>This policy is called LRU, for least recently used: it evicts the item whose last use was longest ago. An eviction removes an entry from the cache. The rule uses the past as a clue for its choice; it does not know the next request and does not guarantee the best choice for what follows.</p><p>All sizes are fictional. A KiB, or kibibyte, represents 1024 bytes. The stated sizes include all the space counted for each entry, including its management information. The budget covers the entries kept in the cache; computation buffers and the rest of the program need a separate memory reserve. This model does not measure the total memory of a real application.</p><div class="schemas"><figure><svg viewBox="0 0 360 282" xmlns="http://www.w3.org/2000/svg" role="img"><title>Opening again changes the order, not the space used</title><desc>From left to right, accesses run from oldest to most recent. After A, B, C, the order is A, B, C. Opening A again gives B, C, A. The sizes remain 4, 3 and 5 KiB; their total remains 12 KiB.</desc><text x="180" y="27" text-anchor="middle">Oldest request → most recent request</text><text x="18" y="62" class="petite-etiquette">After opening A, B, C</text><rect x="18" y="76" width="104" height="50" rx="7" class="cadre-neutre" /><text x="70" y="107" text-anchor="middle">A · 4 KiB</text><rect x="128" y="76" width="104" height="50" rx="7" class="cadre-neutre" /><text x="180" y="107" text-anchor="middle">B · 3 KiB</text><rect x="238" y="76" width="104" height="50" rx="7" class="cadre-neutre" /><text x="290" y="107" text-anchor="middle">C · 5 KiB</text><text x="180" y="160" text-anchor="middle" class="petite-etiquette">Open A again: move it right</text><rect x="18" y="178" width="104" height="50" rx="7" class="cadre-neutre" /><text x="70" y="209" text-anchor="middle">B · 3 KiB</text><rect x="128" y="178" width="104" height="50" rx="7" class="cadre-neutre" /><text x="180" y="209" text-anchor="middle">C · 5 KiB</text><rect x="238" y="178" width="104" height="50" rx="7" class="cadre-resultat" /><text x="290" y="209" text-anchor="middle">A · 4 KiB</text><text x="180" y="263" text-anchor="middle">Same memory: 12 KiB</text></svg><figcaption>The boxes represent entries, not blocks of equal size. A changes position without being duplicated. B becomes the next candidate for eviction.</figcaption></figure><figure><svg viewBox="0 0 360 296" xmlns="http://www.w3.org/2000/svg" role="img"><title>Make space before admitting D</title><desc>The outline of each bar represents 12 KiB. The cache uses 12 KiB at the start, 9 after evicting B, 4 after evicting C, then 11 after admitting D. The final spare capacity is 1 KiB.</desc><text x="180" y="26" text-anchor="middle">Budget: 12 KiB</text><text x="24" y="58">Start: 12 KiB</text><rect x="24" y="67" width="312" height="18" rx="3" class="cadre-neutre" /><rect x="24" y="67" width="312" height="18" rx="3" class="cadre-prediction" /><text x="24" y="115">After evicting B: 9 KiB</text><rect x="24" y="124" width="312" height="18" rx="3" class="cadre-neutre" /><rect x="24" y="124" width="234" height="18" rx="3" class="cadre-prediction" /><text x="24" y="172">After evicting C: 4 KiB</text><rect x="24" y="181" width="312" height="18" rx="3" class="cadre-neutre" /><rect x="24" y="181" width="104" height="18" rx="3" class="cadre-prediction" /><text x="24" y="229">After admitting D: 11 KiB</text><rect x="24" y="238" width="312" height="18" rx="3" class="cadre-neutre" /><rect x="24" y="238" width="286" height="18" rx="3" class="cadre-resultat" /><text x="180" y="284" text-anchor="middle" class="petite-etiquette">Spare capacity: 1 KiB</text></svg><figcaption>The lengths represent the counted sizes, all at the same scale. Removing B alone does not free enough space for D; C must also be removed before admission.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Whenever a requested entry is present, move it to the most recent end. For an absent entry that fits within the budget on its own, evict the least recently used entries until there is enough space, then insert it.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Open A, B, C, open A again, then open D</h3><p>The cache is initially empty. The immutable previews A, B, C and D use 4, 3, 5 and 7 KiB respectively. The budget is 12 KiB, or 12288 bytes. Let us replay exactly the sequence A → B → C → A → D. Each letter identifies the requested preview; every entry can be evicted.</p><ol class="etapes"><li><h3>Define what the bound counts</h3><p>b denotes the budget in KiB; s(x) denotes the counted size of the preview identified by x, in the same unit. L denotes the ordered list of identifiers kept in the cache, with no duplicates. M(L) is their total memory. The symbol ∑ asks you to add s(x) for every identifier x in L; the symbol ∈ means “belongs to”. The capital letters A, B, C and D name the previews, not amounts of memory.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>M</mi><mo>(</mo><mi>L</mi><mo>)</mo><mo>=</mo><msub><mo>∑</mo><mrow><mi>x</mi><mo>∈</mo><mi>L</mi></mrow></msub><mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>;</mo><mn>0</mn><mo>≤</mo><mi>M</mi><mo>(</mo><mi>L</mi><mo>)</mo><mo>≤</mo><mi>b</mi></mrow></math></div><p>Assume that sizes are positive, known before admission, and fixed throughout the exercise. Accesses are processed one after another: there are no simultaneous accesses or ties in their order. An entry on the left was used before those on the right. The bound must hold after every cache operation; computing a preview outside the cache uses a separate memory reserve.</p></li><li><h3>State the decision before moving entries</h3><p>If the requested preview is present, provide it and then move its identifier to the right: this is a cache hit. M(L) does not change. If it is absent, this is a cache miss. First examine its size: if s(x) exceeds b, give up keeping it without emptying the cache. The viewer can compute and display it outside the cache if its computation memory reserve allows it.</p><p>Otherwise, while M(L) + s(x) exceeds b, remove the leftmost identifier and subtract its size from M(L). Once the sum fits, insert x on the right and add its size. Testing before admission prevents the entries kept in the cache from exceeding the budget. A simple condition executed only once is not enough: several removals may be needed.</p></li><li><h3>Fill the cache from empty</h3><p>Initially, M(L) = 0 KiB. A is absent and fits on its own: keep it, using 4 KiB, in the order [A]. B is absent: 4 + 3 = 7 KiB fits within 12 KiB; the order becomes [A, B]. C is absent: 7 + 5 = 12 KiB. Matching the budget exactly is allowed, so no entry leaves.</p><p>The cache now contains 3 entries in the order [A, B, C]. Each was used when it was inserted; C is the most recent.</p></li><li><h3>Open A again and update its recency</h3><p>A is already present. Its content is provided without creating a new entry. Removing A from its position and then putting it back on the right gives [B, C, A]. Memory remains 12 KiB and the number of entries remains 3.</p><p>A was the first preview inserted, but B now has the oldest last use. Choosing by insertion order would lose this information. We are tracking accesses, including repeated ones.</p></li><li><h3>Test the arrival of D</h3><p>D is missing and its size of 7 KiB does not exceed the budget of 12 KiB: it can be admitted after some removals. Keeping it immediately would require 12 + 7 = 19 KiB, beyond the bound. This total is a trial calculation, not an allowed cache state.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>M</mi><mo>(</mo><mi>L</mi><mo>)</mo><mo>+</mo><mi>s</mi><mo>(</mo><mi>D</mi><mo>)</mo><mo>≤</mo><mi>b</mi><mo>⇔</mo><mi>M</mi><mo>(</mo><mi>L</mi><mo>)</mo><mo>≤</mo><mi>b</mi><mo>−</mo><mi>s</mi><mo>(</mo><mi>D</mi><mo>)</mo></mrow></math></div><p>The symbol ≤ means “less than or equal to”; ⇔ means that the conditions on either side are equivalent. Subtracting the size to reserve sets the target: 12 − 7 = 5 KiB at most before insertion. We will remove entries by recency until this target is met.</p></li><li><h3>Evict and retest after each removal</h3><p>B is on the left: evict it. Memory falls to 12 − 3 = 9 KiB; the order is [C, A]. This is not enough: 9 is greater than the target of 5 KiB. We can also check by reserving space for D: 9 + 7 = 16 KiB, still beyond 12 KiB.</p><p>C is now on the left: evict it in turn. Memory becomes 9 − 5 = 4 KiB; only A remains. This time, 4 KiB does not exceed 5 KiB. The loop stops. The sizes removed determine how much space is freed, not the number of removals considered on its own.</p></li><li><h3>Insert D and check by another method</h3><p>Keep D to the right of A. The result is [A, D], with 4 + 7 = 11 KiB. The spare capacity is 12 − 11 = 1 KiB. The number of entries goes from 3 to 3 − 2 + 1 = 2: the 2 removals left 1 entry before insertion.</p><p>Independent check using the remaining items: s(A) + s(D) = 4 + 7 = 11 KiB. Check by conservation: the removals free 3 + 5 = 8 KiB; 12 − 8 + 7 = 11 KiB. These methods give the same memory use, and the bound holds.</p></li><li><h3>State exactly what the result guarantees</h3><p>The final order respects the last uses of the remaining previews: A was opened again before D. Counted memory is bounded and no identifier is duplicated. If D fits on its own, the removals terminate: even if every entry left, the empty cache would leave enough room for it. Equality M(L) + s(D) = b is allowed.</p><p>The cache does not know whether the next request will be for B. Its rule proves neither a time saving nor a reduction in the total memory of the program. If actual sizes include costs that were overlooked, their accounting must be corrected before claiming an actual bound.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the walkthrough. Draw the order after opening A again, then explain why D causes B and C to leave. Reconstruct the final total both from the remaining entries and from the removals.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A entered first, so it must leave first.”</h3><p>Opening A again counts as a use. Move A to the right before choosing the next removal: [B, C, A]. LRU compares last uses; B now has the oldest request.</p><a href="#intuition">Find the movement of A in the diagram</a></li><li><h3>“An entry arrives, so I remove an entry and that is enough.”</h3><p>After removing B, 9 KiB remains; with D, 16 KiB would be needed for a budget of 12 KiB. Retest the sum and remove C as well. A loop controlled by available space is needed because the sizes differ.</p><a href="#exemple">Replay the removals and the space check</a></li><li><h3>“A limit of 3 entries guarantees our memory budget.”</h3><p>A, B, C use 12 KiB; A, C, D would use 16. These groups each have 3 entries. Without a bound on each size, an entry count does not bound their memory; add the sizes actually counted.</p><a href="#exercices">Test the limits of admission in the exercises</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-relecture"><p class="repere">Exercise 1 · Warm-up · order and memory use</p>
+<h3>A cache hit in the final cache</h3><p>Start again from the cache [A, D] obtained in the example, with 11 KiB used. The viewer requests A. Give the final order, memory use, spare capacity, and entry count. Explain whether D needs to be evicted.</p>
+<label for="reponse-ex-relecture">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-relecture" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-relecture" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-relecture" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-relecture" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First check whether A is present. Opening it again does not create another copy of A.</p></details><details class="indice"><summary>Hint 2</summary><p>The last preview used goes on the right; the sizes do not change.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A is found: it becomes the most recent and the order is [D, A]. D stays in the cache. Memory use remains s(D) + s(A) = 7 + 4 = 11 KiB, with 1 KiB of spare capacity and 2 entries.</p><p>Adding s(A) again would count a duplicate that does not exist. No admission takes place, so no removal is needed under the fixed-size assumptions.</p><p class="petit-titre">Check your reasoning</p><ul><li>The order [D, A] is explained by the request to A.</li><li>You keep 11 KiB used, 1 KiB of spare capacity, and 2 entries.</li><li>You justify the absence of eviction by a cache hit with no change in size.</li></ul></details></article><article class="exercice" id="ex-retour-b"><p class="repere">Exercise 2 · Application · repeat an admission</p>
+<h3>B returns after its eviction</h3><p>This exercise also starts from [A, D], independently of the previous exercise. B, of size 3 KiB, is requested. Work through the tests and the necessary removals, then give the order, memory use, and spare capacity after admission.</p>
+<label for="reponse-ex-retour-b">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-retour-b" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-retour-b" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-retour-b" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-retour-b" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>B is no longer in the cache. Add its size to the initial memory use, then find the oldest request.</p></details><details class="indice"><summary>Hint 2</summary><p>After a removal, repeat the space check before deciding on another removal.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>B is absent and fits on its own. The trial gives 11 + 3 = 14 KiB, beyond 12 KiB. In [A, D], A is the least recently used: remove its 4 KiB, leaving 11 − 4 = 7 KiB.</p><p>The new test gives 7 + 3 = 10 KiB, which fits. Insert B without removing D: the order is [D, B]. The spare capacity is 12 − 10 = 2 KiB.</p><p>Direct check: the remaining entries are D and B; their sizes of 7 and 3 KiB give 10 KiB again. The choice to remove A comes from the order of accesses, not its size.</p><p class="petit-titre">Check your reasoning</p><ul><li>You identify B as absent and admissible once space has been freed.</li><li>You remove A, then retest and stop before removing D.</li><li>You obtain [D, B], 10 KiB used and 2 KiB free, with a check using the remaining sizes.</li></ul></details></article><article class="exercice" id="ex-hors-budget"><p class="repere">Exercise 3 · Transfer · repair a rule</p>
+<h3>Eviction does not make every entry admissible</h3><p>Start again from [A, D]. A new preview E uses 14 KiB. Someone proposes: “Remove old entries until E fits; a cache of at most 3 entries will be enough.” Repair their admission rule and their argument about memory. Give the state to keep. To test the entry limit, also compare the groups A, B, C and A, C, D.</p>
+<label for="reponse-ex-hors-budget">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-hors-budget" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-hors-budget" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-hors-budget" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-hors-budget" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Before any removal, compare s(E) with the budget of a completely empty cache.</p></details><details class="indice"><summary>Hint 2</summary><p>An entry limit counts objects. To check KiB, add the sizes in each proposed group.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>E exceeds the budget on its own: 14 − 12 = 2 KiB too much. Even emptying the cache is not enough. The rule must check this impossibility before any evictions: do not keep E, and keep [A, D], at 11 KiB. Displaying it outside the cache remains possible only if the planned computation memory reserve allows it.</p><p>The limit of 3 entries is not proof of a memory budget: A, B, C total 4 + 3 + 5 = 12 KiB, whereas A, C, D total 4 + 5 + 7 = 16 KiB. The second group exceeds 12 KiB with the same number of entries.</p><p>The repaired rule therefore separates whether E can be admitted, the choice of removals by recency, and the check by summing sizes. It avoids losing all the previews without being able to keep the new one.</p><p class="petit-titre">Check your reasoning</p><ul><li>You refuse to keep E before removing any entry and preserve [A, D].</li><li>You justify this refusal even for an empty cache, since 14 KiB exceeds 12 KiB.</li><li>You provide the totals of 12 and 16 KiB and explain why counting 3 objects is not enough.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="recence"><summary><span class="repere">Recall 1</span><span>What does LRU order, and what changes when an entry is accessed again?</span></summary><p>LRU orders last uses. A found entry moves to the most recent end without being duplicated; with a fixed size, accessing it again does not change memory use.</p></details><details class="carte" data-carte="budget"><summary><span class="repere">Recall 2</span><span>What test decides whether an absent entry can be kept now?</span></summary><p>The sum of the memory already counted and the size of the new entry must be less than or equal to the budget, in the same unit. Otherwise, if the entry fits on its own, space must be freed.</p></details><details class="carte" data-carte="boucle"><summary><span class="repere">Recall 3</span><span>Why does the arrival of D make B and then C leave in our trace?</span></summary><p>After opening A again, the order is [B, C, A]. Removing B leaves 9 KiB; adding D would require 16 KiB, beyond the budget of 12 KiB. Removing C leaves 4 KiB; D can then be admitted for a total of 11 KiB.</p></details><details class="carte" data-carte="trop-grand"><summary><span class="repere">Recall 4</span><span>What should you do if an entry exceeds the budget on its own?</span></summary><p>Give up keeping it before any unnecessary eviction. Computing it outside the cache requires a separate memory reserve. The existing cache can be preserved; even empty, it could not keep this entry.</p></details><details class="carte" data-carte="borne"><summary><span class="repere">Recall 5</span><span>Why does a cache with a bounded entry count not prove a bound on actual memory?</span></summary><p>You also need to know or bound the entry sizes and all the costs you want to count. The sum of the retained sizes bounds this scope, without measuring temporary buffers or the rest of the program.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the example, reconstruct the trace A → B → C → A → D. Name what changes when an entry is accessed again, justify each eviction by recency and each stopping point by available space. Recover the total from the remaining entries, then explain the cases of exact equality and an oversized entry.</p></div><div class="exports"><a class="bouton" download="c026-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTM6cmVjZW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMDI2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAib3JkcmUtbHJ1IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBMUlUgb3JkZXIsIGFuZCB3aGF0IGNoYW5nZXMgd2hlbiBhbiBlbnRyeSBpcyBhY2Nlc3NlZCBhZ2Fpbj8iLAogICAgICAicmVwb25zZSI6ICJMUlUgb3JkZXJzIGxhc3QgdXNlcy4gQSBmb3VuZCBlbnRyeSBtb3ZlcyB0byB0aGUgbW9zdCByZWNlbnQgZW5kIHdpdGhvdXQgYmVpbmcgZHVwbGljYXRlZDsgd2l0aCBhIGZpeGVkIHNpemUsIGFjY2Vzc2luZyBpdCBhZ2FpbiBkb2VzIG5vdCBjaGFuZ2UgbWVtb3J5IHVzZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAyNi1tMzpidWRnZXQiLAogICAgICAidW5pdGUiOiAiYzAyNi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImJ1ZGdldC1tZW1vaXJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgdGVzdCBkZWNpZGVzIHdoZXRoZXIgYW4gYWJzZW50IGVudHJ5IGNhbiBiZSBrZXB0IG5vdz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc3VtIG9mIHRoZSBtZW1vcnkgYWxyZWFkeSBjb3VudGVkIGFuZCB0aGUgc2l6ZSBvZiB0aGUgbmV3IGVudHJ5IG11c3QgYmUgbGVzcyB0aGFuIG9yIGVxdWFsIHRvIHRoZSBidWRnZXQsIGluIHRoZSBzYW1lIHVuaXQuIE90aGVyd2lzZSwgaWYgdGhlIGVudHJ5IGZpdHMgb24gaXRzIG93biwgc3BhY2UgbXVzdCBiZSBmcmVlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAyNi1tMzpib3VjbGUiLAogICAgICAidW5pdGUiOiAiYzAyNi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV2aWN0aW9ucy1yZXBldGVlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyB0aGUgYXJyaXZhbCBvZiBEIG1ha2UgQiBhbmQgdGhlbiBDIGxlYXZlIGluIG91ciB0cmFjZT8iLAogICAgICAicmVwb25zZSI6ICJBZnRlciBvcGVuaW5nIEEgYWdhaW4sIHRoZSBvcmRlciBpcyBbQiwgQywgQV0uIFJlbW92aW5nIEIgbGVhdmVzIDkgS2lCOyBhZGRpbmcgRCB3b3VsZCByZXF1aXJlIDE2IEtpQiwgYmV5b25kIHRoZSBidWRnZXQgb2YgMTIgS2lCLiBSZW1vdmluZyBDIGxlYXZlcyA0IEtpQjsgRCBjYW4gdGhlbiBiZSBhZG1pdHRlZCBmb3IgYSB0b3RhbCBvZiAxMSBLaUIuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTM6dHJvcC1ncmFuZCIsCiAgICAgICJ1bml0ZSI6ICJjMDI2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYWRtaXNzaW9uLWltcG9zc2libGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBzaG91bGQgeW91IGRvIGlmIGFuIGVudHJ5IGV4Y2VlZHMgdGhlIGJ1ZGdldCBvbiBpdHMgb3duPyIsCiAgICAgICJyZXBvbnNlIjogIkdpdmUgdXAga2VlcGluZyBpdCBiZWZvcmUgYW55IHVubmVjZXNzYXJ5IGV2aWN0aW9uLiBDb21wdXRpbmcgaXQgb3V0c2lkZSB0aGUgY2FjaGUgcmVxdWlyZXMgYSBzZXBhcmF0ZSBtZW1vcnkgcmVzZXJ2ZS4gVGhlIGV4aXN0aW5nIGNhY2hlIGNhbiBiZSBwcmVzZXJ2ZWQ7IGV2ZW4gZW1wdHksIGl0IGNvdWxkIG5vdCBrZWVwIHRoaXMgZW50cnkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjYtbTM6Ym9ybmUiLAogICAgICAidW5pdGUiOiAiYzAyNi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvcnRlZS1ib3JuZS1tZW1vaXJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGEgY2FjaGUgd2l0aCBhIGJvdW5kZWQgZW50cnkgY291bnQgbm90IHByb3ZlIGEgYm91bmQgb24gYWN0dWFsIG1lbW9yeT8iLAogICAgICAicmVwb25zZSI6ICJZb3UgYWxzbyBuZWVkIHRvIGtub3cgb3IgYm91bmQgdGhlIGVudHJ5IHNpemVzIGFuZCBhbGwgdGhlIGNvc3RzIHlvdSB3YW50IHRvIGNvdW50LiBUaGUgc3VtIG9mIHRoZSByZXRhaW5lZCBzaXplcyBib3VuZHMgdGhpcyBzY29wZSwgd2l0aG91dCBtZWFzdXJpbmcgdGVtcG9yYXJ5IGJ1ZmZlcnMgb3IgdGhlIHJlc3Qgb2YgdGhlIHByb2dyYW0uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c026-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIExSVSBvcmRlciwgYW5kIHdoYXQgY2hhbmdlcyB3aGVuIGFuIGVudHJ5IGlzIGFjY2Vzc2VkIGFnYWluPwlMUlUgb3JkZXJzIGxhc3QgdXNlcy4gQSBmb3VuZCBlbnRyeSBtb3ZlcyB0byB0aGUgbW9zdCByZWNlbnQgZW5kIHdpdGhvdXQgYmVpbmcgZHVwbGljYXRlZDsgd2l0aCBhIGZpeGVkIHNpemUsIGFjY2Vzc2luZyBpdCBhZ2FpbiBkb2VzIG5vdCBjaGFuZ2UgbWVtb3J5IHVzZS4JdG9kYWkgYzAyNi1tMyBvcmRyZS1scnUKV2hhdCB0ZXN0IGRlY2lkZXMgd2hldGhlciBhbiBhYnNlbnQgZW50cnkgY2FuIGJlIGtlcHQgbm93PwlUaGUgc3VtIG9mIHRoZSBtZW1vcnkgYWxyZWFkeSBjb3VudGVkIGFuZCB0aGUgc2l6ZSBvZiB0aGUgbmV3IGVudHJ5IG11c3QgYmUgbGVzcyB0aGFuIG9yIGVxdWFsIHRvIHRoZSBidWRnZXQsIGluIHRoZSBzYW1lIHVuaXQuIE90aGVyd2lzZSwgaWYgdGhlIGVudHJ5IGZpdHMgb24gaXRzIG93biwgc3BhY2UgbXVzdCBiZSBmcmVlZC4JdG9kYWkgYzAyNi1tMyBidWRnZXQtbWVtb2lyZQpXaHkgZG9lcyB0aGUgYXJyaXZhbCBvZiBEIG1ha2UgQiBhbmQgdGhlbiBDIGxlYXZlIGluIG91ciB0cmFjZT8JQWZ0ZXIgb3BlbmluZyBBIGFnYWluLCB0aGUgb3JkZXIgaXMgW0IsIEMsIEFdLiBSZW1vdmluZyBCIGxlYXZlcyA5IEtpQjsgYWRkaW5nIEQgd291bGQgcmVxdWlyZSAxNiBLaUIsIGJleW9uZCB0aGUgYnVkZ2V0IG9mIDEyIEtpQi4gUmVtb3ZpbmcgQyBsZWF2ZXMgNCBLaUI7IEQgY2FuIHRoZW4gYmUgYWRtaXR0ZWQgZm9yIGEgdG90YWwgb2YgMTEgS2lCLgl0b2RhaSBjMDI2LW0zIGV2aWN0aW9ucy1yZXBldGVlcwpXaGF0IHNob3VsZCB5b3UgZG8gaWYgYW4gZW50cnkgZXhjZWVkcyB0aGUgYnVkZ2V0IG9uIGl0cyBvd24/CUdpdmUgdXAga2VlcGluZyBpdCBiZWZvcmUgYW55IHVubmVjZXNzYXJ5IGV2aWN0aW9uLiBDb21wdXRpbmcgaXQgb3V0c2lkZSB0aGUgY2FjaGUgcmVxdWlyZXMgYSBzZXBhcmF0ZSBtZW1vcnkgcmVzZXJ2ZS4gVGhlIGV4aXN0aW5nIGNhY2hlIGNhbiBiZSBwcmVzZXJ2ZWQ7IGV2ZW4gZW1wdHksIGl0IGNvdWxkIG5vdCBrZWVwIHRoaXMgZW50cnkuCXRvZGFpIGMwMjYtbTMgYWRtaXNzaW9uLWltcG9zc2libGUKV2h5IGRvZXMgYSBjYWNoZSB3aXRoIGEgYm91bmRlZCBlbnRyeSBjb3VudCBub3QgcHJvdmUgYSBib3VuZCBvbiBhY3R1YWwgbWVtb3J5PwlZb3UgYWxzbyBuZWVkIHRvIGtub3cgb3IgYm91bmQgdGhlIGVudHJ5IHNpemVzIGFuZCBhbGwgdGhlIGNvc3RzIHlvdSB3YW50IHRvIGNvdW50LiBUaGUgc3VtIG9mIHRoZSByZXRhaW5lZCBzaXplcyBib3VuZHMgdGhpcyBzY29wZSwgd2l0aG91dCBtZWFzdXJpbmcgdGVtcG9yYXJ5IGJ1ZmZlcnMgb3IgdGhlIHJlc3Qgb2YgdGhlIHByb2dyYW0uCXRvZGFpIGMwMjYtbTMgcG9ydGVlLWJvcm5lLW1lbW9pcmUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yginzs gugvja qqex</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare to read an eviction based on recency</h3><dl><div><dt>What you understand</dt><dd>You can distinguish the order of last uses, the counted size, and the decision to keep an entry. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nlmqer eztnwf ltnhdo tkbbcn jnvgnl rlsptt mmkh</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zhcnax zdzupr lgpwiv qvnmgg bfvchv dxfdvk ovgwso pbneek xtqhqt kshhxa wtfrqp pqfqzd eqfmyq omkboz zizeyk fbmpyd pdujrz mnoxmp fwstfk opdlmw dkegzb svnixr nfdhcs bqbbcy</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: replay the order and removals without help, explain why several evictions are necessary, and distinguish a route limit from a budget in bytes. Reading the page or answering after a hint does not establish any attained level. The canonical milestones for this chapter come after C026·M5.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gvwlaw qjxjrl mcswzl fmpljv nludxx hdnzbq ibdtgt ipczvc ptpldx daiuvf ubdwys gdpjzi wghoef gwrbig qdjuaz lrpmwj pyptng gjpinl spkhzj wtbyve mquzrx ozkfox xgvazq bnatvu ajioqd etfymu ykiaen zrgufc mvsszv hmsnsz qtmrwi vwhizq uweuty rhyrjt gqsutb vidddk dlaakc ui</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the trace and its checks on another day, without support, then continue with C026·M4. To relate the bound to actual memory, the counted costs will need to be defined, and evidence of integration and behavior along an authorized execution path will need to be received separately. This unit does not replace that evidence review.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c026-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c026-m2.html">Previous</a> · <a href="c026-m4.html">Next</a></nav>
+<footer><p>Course book · C026·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

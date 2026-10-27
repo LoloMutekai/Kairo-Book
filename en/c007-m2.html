@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Inspect the characters in a text file, split it into lines and fields, then decide whether a strict CSV reader can read it, without relying on the filename suffix alone.">
+<title>C007·M2 · Text formats — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mfspnx xeszrx ihxj</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 0 <span>·</span> C007·M2</p><h1>Text formats</h1><p class="objectif"><span>Your goal</span>Inspect the characters in a text file, split it into lines and fields, then decide whether a strict CSV reader can read it, without relying on the filename suffix alone.</p><p class="prerequis"><strong>Before you start</strong><br>C002·M4 : correcting errors · C007·M1 : paths</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In the fictional workshop from C007·M1, the path /atelier/recettes/granola.txt leads to your granola recipe card. It lists 2 portions of oats and 1 portion of nuts: fictional quantities chosen for the example, with no nutritional advice. The example keeps the literal labels avoine (oats), noix (nuts), and doses (portions) so the character counts stay the same. A colleague wants to give this card to a table reader that only accepts CSV format. They suggest renaming it granola.csv. Is that enough?</p><p>A text file is a sequence of characters. Some are visible: letters, digits, colons, commas. Others organize the page, such as spaces or line endings. In our card, each line ending is the LF character, short for line feed. We draw it as ↵ to make it visible; in the file, it has no visible symbol.</p><p>A format is a convention that says how to interpret these characters. On each line, the text card writes an ingredient name, a colon, a space, then a quantity. You can read it easily, but a program is under no obligation to understand it. CSV format, short for comma-separated values, arranges data in columns: a comma separates two fields on the same line, and a first line, the header, can name the columns.</p><p>The suffix is the end of the name after the last dot: .txt or .csv. Think of the label stuck on a cardboard folder: changing it does not rewrite any of the sheets inside. Renaming changes the name and leaves every character in place. To know whether a reader will find its columns, you must look at the separators actually written in the file.</p><p>The reader on this page is deliberately strict and limited. It requires the exact header ingredient,doses first, then exactly one comma on each line. CSV files found elsewhere have more features: quotation marks, a comma inside a field, semicolons in some local conventions, line endings made up of two characters. These variants are outside this unit; another reader would have a different contract to review.</p><div class="schemas"><figure><svg viewBox="0 0 360 344" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two sheets for the same card</title><desc>At the top, granola.txt, one box per character: avoine, colon, space, 2, line ending; then noix, colon, space, 1, line ending. This gives 18 characters, 2 line endings and 0 commas. At the bottom, granola.csv: the header line ingredient,doses followed by 2 data lines, 1 comma per line, giving 2 fields.</desc><text x="8" y="18" class="petite-etiquette">granola.txt · 18 characters</text><rect x="4" y="26" width="352" height="96" rx="7" class="cadre-neutre" /><rect x="14" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="29" y="57" text-anchor="middle">a</text><rect x="46" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="61" y="57" text-anchor="middle">v</text><rect x="78" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="93" y="57" text-anchor="middle">o</text><rect x="110" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="125" y="57" text-anchor="middle">i</text><rect x="142" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="157" y="57" text-anchor="middle">n</text><rect x="174" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="189" y="57" text-anchor="middle">e</text><rect x="206" y="36" width="30" height="30" rx="4" class="repere-dose" /><text x="221" y="57" text-anchor="middle">:</text><rect x="238" y="36" width="30" height="30" rx="4" class="repere-dose" /><text x="253" y="57" text-anchor="middle">␣</text><rect x="270" y="36" width="30" height="30" rx="4" class="cadre-neutre" /><text x="285" y="57" text-anchor="middle">2</text><rect x="302" y="36" width="30" height="30" rx="4" class="repere-dose" /><text x="317" y="57" text-anchor="middle">↵</text><rect x="14" y="80" width="30" height="30" rx="4" class="cadre-neutre" /><text x="29" y="101" text-anchor="middle">n</text><rect x="46" y="80" width="30" height="30" rx="4" class="cadre-neutre" /><text x="61" y="101" text-anchor="middle">o</text><rect x="78" y="80" width="30" height="30" rx="4" class="cadre-neutre" /><text x="93" y="101" text-anchor="middle">i</text><rect x="110" y="80" width="30" height="30" rx="4" class="cadre-neutre" /><text x="125" y="101" text-anchor="middle">x</text><rect x="142" y="80" width="30" height="30" rx="4" class="repere-dose" /><text x="157" y="101" text-anchor="middle">:</text><rect x="174" y="80" width="30" height="30" rx="4" class="repere-dose" /><text x="189" y="101" text-anchor="middle">␣</text><rect x="206" y="80" width="30" height="30" rx="4" class="cadre-neutre" /><text x="221" y="101" text-anchor="middle">1</text><rect x="238" y="80" width="30" height="30" rx="4" class="repere-dose" /><text x="253" y="101" text-anchor="middle">↵</text><text x="8" y="146" class="petite-etiquette">Bold boxes: separators. ↵ = LF.</text><text x="8" y="182" class="petite-etiquette">granola.csv · 33 characters</text><rect x="4" y="190" width="250" height="118" rx="7" class="cadre-neutre" /><text x="16" y="218">ingredient<tspan class="mesure">,</tspan>doses<tspan class="mesure">↵</tspan></text><line x1="12" y1="232" x2="246" y2="232" class="trait" /><text x="16" y="260">avoine<tspan class="mesure">,</tspan>2<tspan class="mesure">↵</tspan></text><text x="16" y="292">noix<tspan class="mesure">,</tspan>1<tspan class="mesure">↵</tspan></text><path d="M262 200 h8 v26 h-8" class="trait" /><text x="278" y="218" class="petite-etiquette">header</text><path d="M262 240 h8 v58 h-8" class="trait" /><text x="278" y="262" class="petite-etiquette">data</text><text x="278" y="282" class="petite-etiquette">2 lines</text><text x="8" y="334" class="petite-etiquette">1 comma per line: 2 fields.</text></svg><figcaption>The same recipe, written in two ways. At the top, each box is a character; the bold boxes mark the separators, and in the colon box only that symbol belongs to the file. At the bottom, commas and line endings are lavender, with one brace marking the header and another marking the data lines. The symbol ↵ is a drawing: the file contains an invisible LF character.</figcaption></figure><figure><svg viewBox="0 0 360 336" xmlns="http://www.w3.org/2000/svg" role="img"><title>Renaming is not conversion</title><desc>The text content of 18 characters follows two paths. Renamed to granola.csv, it keeps 18 characters, a difference of 0, and the strict reader rejects it: incompatible structure, 1 field out of 2. Converted, it has 33 characters, a difference of 15, and the reader reads 2 records of 2 fields.</desc><rect x="50" y="6" width="260" height="62" rx="7" class="cadre-neutre" /><text x="180" y="32" text-anchor="middle">granola.txt</text><text x="180" y="55" text-anchor="middle" class="petite-etiquette">18 characters, commas: 0</text><line x1="130" y1="68" x2="92" y2="100" class="trait" /><line x1="230" y1="68" x2="268" y2="100" class="trait" /><rect x="8" y="100" width="168" height="84" rx="7" class="cadre-prediction" /><text x="92" y="126" text-anchor="middle">Rename</text><text x="92" y="150" text-anchor="middle" class="petite-etiquette">18 characters</text><text x="92" y="172" text-anchor="middle" class="petite-etiquette">difference: 0</text><rect x="184" y="100" width="168" height="84" rx="7" class="cadre-prediction" /><text x="268" y="126" text-anchor="middle">Convert</text><text x="268" y="150" text-anchor="middle" class="petite-etiquette">33 characters</text><text x="268" y="172" text-anchor="middle" class="petite-etiquette">difference: 15</text><line x1="92" y1="184" x2="92" y2="222" class="trait" /><line x1="268" y1="184" x2="268" y2="222" class="trait" /><text x="180" y="208" text-anchor="middle" class="petite-etiquette">strict reader</text><rect x="8" y="222" width="168" height="86" rx="7" class="cadre-neutre" /><text x="92" y="250" text-anchor="middle">Rejected</text><text x="92" y="274" text-anchor="middle" class="petite-etiquette">incompatible structure</text><text x="92" y="296" text-anchor="middle" class="petite-etiquette">1 field of 2</text><rect x="184" y="222" width="168" height="86" rx="7" class="cadre-resultat" /><text x="268" y="250" text-anchor="middle">Read</text><text x="268" y="274" text-anchor="middle" class="petite-etiquette">2 records</text><text x="268" y="296" text-anchor="middle" class="petite-etiquette">2 fields each</text><text x="180" y="330" text-anchor="middle" class="petite-etiquette">The reader checks characters, not names.</text></svg><figcaption>Pink: the two possible actions. Gold: what the reader could extract. Renaming keeps exactly the same characters, so the structure stays the same; only conversion writes the expected header and commas.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Inspect the characters before the name: split at line endings, set the header aside, and count the separators on each line. The suffix is only a clue; renaming does not convert anything.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Read granola.csv, then the text that was only renamed</h3><p>The converted file contains exactly the characters ingredient,doses↵avoine,2↵noix,1↵, where ↵ denotes LF. Let us count its lines, records and fields, check by a second method, then give the same reader the text card renamed without conversion.</p><ol class="etapes"><li><h3>Name the quantities and the reader’s contract</h3><p>A physical line is a sequence of characters ending in an LF. A record is a line that carries a data item, here an ingredient. A field is a part of a line between two separators, or between the edge of the line and a separator.</p><p>Let L be the number of physical lines, h the number of header lines, N the number of records, v the number of commas on a line and c the number of fields on that line. These are integer counts; their units are lines, commas and fields, never bytes.</p><p>Assumptions for the strict reader: the file ends with an LF; nothing follows this final LF; the first line is the exact header ingredient,doses; each line has the same number of commas; there are no quotation marks or commas inside fields. The following two relations hold only under these assumptions.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><mi>L</mi><mo>−</mo><mi>h</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>c</mi><mo>=</mo><mi>v</mi><mo>+</mo><mn>1</mn></mrow></math></div><p>The first subtracts the header from the lines counted. The second says that one more cut gives one more piece: one comma makes two fields, while no comma leaves the whole line as a single field.</p></li><li><h3>Count the physical lines</h3><p>Reason: the reader splits at LF, and each LF closes a line. We go through the characters, placing a marker at each ↵: after doses, after 2, after 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mtext>nombre de LF</mtext><mo>=</mo><mn>3</mn><mtext> lignes</mtext></mrow></math></div><p>The position after the last LF does not start a line: no characters are written there. An editor sometimes places the cursor there; counting that position as a line would mean counting an empty space.</p></li><li><h3>Set the header aside</h3><p>Reason: the first line names the columns; it does not describe an ingredient. The reader checks that it is exactly ingredient,doses, then removes it from the count.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><mi>L</mi><mo>−</mo><mi>h</mi><mo>=</mo><mn>3</mn><mo>−</mo><mn>1</mn><mo>=</mo><mn>2</mn><mtext> enregistrements</mtext></mrow></math></div><p>Result: avoine and noix. Sense check: the text card also described 2 ingredients, one line each.</p></li><li><h3>Split each line into fields</h3><p>Reason: the comma is the only field separator in the contract. On the line avoine,2, we find v = 1 comma.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>c</mi><mo>=</mo><mi>v</mi><mo>+</mo><mn>1</mn><mo>=</mo><mn>1</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>2</mn><mtext> champs</mtext></mrow></math></div><p>The first field is avoine; the second contains the character 2. The reader extracts characters. Deciding that this second field represents a number is a separate step, which is not covered here.</p></li><li><h3>Check by a second method</h3><p>All the lines have c = 2 fields. The file therefore contains L × c = 3 × 2 = 6 fields, including the header.</p><p>Second method, without using the field relation: we count 3 commas in the whole file, and each line has one more field than it has commas. We get 3 + 3 = 6 fields. The two counts agree.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>×</mo><mi>c</mi><mo>=</mo><mi>L</mi><mo>×</mo><mi>v</mi><mo>+</mo><mi>L</mi></mrow></math></div><p>The data occupy N × c = 2 × 2 = 4 fields. That leaves 6 − 4 = 2 for the header: ingredient and doses, which is what we see written.</p></li><li><h3>Give the renamed text to the same reader</h3><p>Let us rename granola.txt to granola.csv without changing anything else. The content remains: avoine, colon, space, 2, LF, then noix, colon, space, 1, LF. Before: 18 characters. After: 18.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>écart</mtext><mo>=</mo><mn>18</mn><mo>−</mo><mn>18</mn><mo>=</mo><mn>0</mn><mtext> caractère</mtext></mrow></math></div><p>The reader applies its contract. The first line is not ingredient,doses. It contains 0 commas, so c = 0 + 1 = 1 field: 1 is missing. Verdict: rejected, with the reason “incompatible structure”. The reader did not consult the name; it read characters.</p><p>Check: the reader is not faulty. With the file that was actually converted, the same rule read 2 records in the previous steps.</p></li><li><h3>What this calculation does not establish</h3><p>We have counted characters, not bytes: converting between them depends on an encoding, which is not studied here. The quantities remain fictional and are never added together as a recipe; only lines and fields are counted. A less strict reader, or one configured for semicolons, would have a different contract: we would have to count again using its rules.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain aloud why the same reader accepts the converted granola.csv and rejects the renamed granola.csv. Which exact character determines how the fields are split, and why does the position after the last LF not count as a line?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Changing the suffix converts the file.”</h3><p>Renaming only changes the name stored in the directory. The 18 characters stay identical, with a difference of 0, and no commas appear. Converting means rewriting the content: the header, then a comma in place of the colon and space.</p><a href="#exemple">Work through the example again up to the renamed text</a></li><li><h3>“Every line must be a data item.”</h3><p>In granola.csv, the first line names the columns. Count 3 physical lines, then subtract the header: 2 records remain. Before counting data, ask what each line describes.</p><a href="#exemple">Review the removal of the header in the example</a></li><li><h3>“A text file never has any structure.”</h3><p>A text file opens in a simple editor, but its characters can follow a precise convention: line endings, separators, a header. CSV is one example. Being readable by you does not mean there are no rules for a program.</p><a href="#intuition">Review the two sheets</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-raisins"><p class="repere">Exercise 1 · Guided practice</p>
+<h3>One more line on the card</h3><p>We add the fictional line raisins,3 followed by an LF to the end of granola.csv. Give L, N, the number of data fields and the total number of fields, including the header. Check this total using the commas.</p>
+<label for="reponse-ex-raisins">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-raisins" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-raisins" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-raisins" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-raisins" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A line ending in an LF adds exactly one physical line.</p></details><details class="indice"><summary>Hint 2</summary><p>The header does not change, and each line keeps a single comma.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Lines: 3 + 1 = 4. Records: 4 − 1 = 3, namely avoine, noix and raisins.</p><p>Data fields: 3 × 2 = 6. Total: 4 × 2 = 8. Check: 4 lines with 1 comma each make 4 commas; with one more field per line, 4 + 4 = 8.</p><p>The quantity of raisins is fictional and does not enter any of the counts: only the presence of the line matters.</p><p class="petit-titre">Check your reasoning</p><ul><li>L includes the header; N does not.</li><li>The total is checked by a second method, using the commas.</li><li>The answers are exact integers, with no tolerance.</li></ul></details></article><article class="exercice" id="ex-diagnostic"><p class="repere">Exercise 2 · Written diagnosis</p>
+<h3>Is the reader faulty?</h3><p>A colleague has renamed granola.txt to granola.csv. The strict reader replies “incompatible structure”, and the colleague concludes that the reader is faulty. Write your diagnosis: what you inspect, your counts, your verdict and the repair.</p>
+<label for="reponse-ex-diagnostic">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-diagnostic" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-diagnostic" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-diagnostic" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-diagnostic" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare what the reader expects on the first line with what is written there.</p></details><details class="indice"><summary>Hint 2</summary><p>Count the commas on each line, then deduce the number of fields.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Inspect the raw content, not the name. The first line is avoine, colon, space, 2: it is not the header ingredient,doses.</p><p>Commas per line: 0, so 0 + 1 = 1 field instead of 2. Characters: 18 before renaming, 18 after; renaming has changed nothing.</p><p>Verdict: the rejection is consistent with the contract, and the same reader reads 2 records in the converted file. Repair: convert the content, not just the name.</p><p class="petit-titre">Check your reasoning</p><ul><li>The diagnosis cites characters actually present in the file.</li><li>It distinguishes the suffix from the structure.</li><li>It tries the reader on a file that meets the requirements before blaming it.</li></ul></details></article><article class="exercice" id="ex-conversion"><p class="repere">Exercise 3 · Notebook challenge</p>
+<h3>Convert by hand and measure the change</h3><p>Rewrite the text card in the fixture’s CSV format, marking each LF with ↵. Then count the characters before and after, and explain the difference without recounting the whole file.</p>
+<label for="reponse-ex-conversion">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-conversion" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-conversion" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-conversion" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-conversion" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First write the line that names the fields: ingredient, then doses.</p></details><details class="indice"><summary>Hint 2</summary><p>On each ingredient line, the colon and space become a single comma.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Expected content: ingredient,doses↵avoine,2↵noix,1↵, with no space after the comma and with the final LF kept.</p><p>Before: 10 + 8 = 18 characters. After: 17 for the header, then 9 + 7 = 16 for the data, giving 17 + 16 = 33.</p><p>Direct difference: 33 − 18 = 15. Explanation: the header adds 17 characters; each ingredient line loses one, giving 18 − 16 = 2 in total. Thus 17 − 2 = 15: the two methods agree. Renaming, by contrast, gave a difference of 0.</p><p class="petit-titre">Check your reasoning</p><ul><li>Exact header, one comma per line, final LF kept.</li><li>Difference obtained directly, then explained by a second method that agrees.</li><li>Conclusion: conversion changes the content; renaming does not change it.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="texte"><summary><span class="repere">Recall 1</span><span>What does a text file contain?</span></summary><p>A sequence of characters, including line endings; on the card, each line ending is the LF character.</p></details><details class="carte" data-carte="format"><summary><span class="repere">Recall 2</span><span>What is a text file format for?</span></summary><p>It specifies how to interpret the characters: where lines end, which character separates fields, what the first line describes.</p></details><details class="carte" data-carte="champs"><summary><span class="repere">Recall 3</span><span>In the CSV fixture, how do we get from commas to fields?</span></summary><p>Each comma splits the line: a line has one more field than it has commas, since there are no quotation marks or commas inside fields.</p></details><details class="carte" data-carte="entete"><summary><span class="repere">Recall 4</span><span>Why do we count N = L − h records?</span></summary><p>The header names the columns without describing an ingredient; we subtract it from the physical lines to count the data.</p></details><details class="carte" data-carte="suffixe"><summary><span class="repere">Recall 5</span><span>Does renaming granola.txt to granola.csv make it readable by the strict reader?</span></summary><p>No. The suffix is a clue; the characters stay the same. You must inspect the content and convert it if necessary.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>A text file is a sequence of characters and line endings. A format says how to interpret them: split at LF, set the header aside, split each line at the comma. We count L lines, N = L − h records, one more field than commas per line, then check using the total number of commas. The suffix indicates a format without proving it: renaming keeps the same characters; only conversion changes the structure.</p></div><div class="exports"><a class="bouton" download="c007-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMDctbTI6dGV4dGUiLAogICAgICAidW5pdGUiOiAiYzAwNy1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZpY2hpZXItdGV4dGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGEgdGV4dCBmaWxlIGNvbnRhaW4/IiwKICAgICAgInJlcG9uc2UiOiAiQSBzZXF1ZW5jZSBvZiBjaGFyYWN0ZXJzLCBpbmNsdWRpbmcgbGluZSBlbmRpbmdzOyBvbiB0aGUgY2FyZCwgZWFjaCBsaW5lIGVuZGluZyBpcyB0aGUgTEYgY2hhcmFjdGVyLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDA3LW0yOmZvcm1hdCIsCiAgICAgICJ1bml0ZSI6ICJjMDA3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZm9ybWF0IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgYSB0ZXh0IGZpbGUgZm9ybWF0IGZvcj8iLAogICAgICAicmVwb25zZSI6ICJJdCBzcGVjaWZpZXMgaG93IHRvIGludGVycHJldCB0aGUgY2hhcmFjdGVyczogd2hlcmUgbGluZXMgZW5kLCB3aGljaCBjaGFyYWN0ZXIgc2VwYXJhdGVzIGZpZWxkcywgd2hhdCB0aGUgZmlyc3QgbGluZSBkZXNjcmliZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMDctbTI6Y2hhbXBzIiwKICAgICAgInVuaXRlIjogImMwMDctbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzZXBhcmF0ZXVyIiwKICAgICAgInF1ZXN0aW9uIjogIkluIHRoZSBDU1YgZml4dHVyZSwgaG93IGRvIHdlIGdldCBmcm9tIGNvbW1hcyB0byBmaWVsZHM/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBjb21tYSBzcGxpdHMgdGhlIGxpbmU6IGEgbGluZSBoYXMgb25lIG1vcmUgZmllbGQgdGhhbiBpdCBoYXMgY29tbWFzLCBzaW5jZSB0aGVyZSBhcmUgbm8gcXVvdGF0aW9uIG1hcmtzIG9yIGNvbW1hcyBpbnNpZGUgZmllbGRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDA3LW0yOmVudGV0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDA3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZW4tdGV0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG8gd2UgY291bnQgTiA9IEwg4oiSIGggcmVjb3Jkcz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgaGVhZGVyIG5hbWVzIHRoZSBjb2x1bW5zIHdpdGhvdXQgZGVzY3JpYmluZyBhbiBpbmdyZWRpZW50OyB3ZSBzdWJ0cmFjdCBpdCBmcm9tIHRoZSBwaHlzaWNhbCBsaW5lcyB0byBjb3VudCB0aGUgZGF0YS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAwNy1tMjpzdWZmaXhlIiwKICAgICAgInVuaXRlIjogImMwMDctbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzdWZmaXhlIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgcmVuYW1pbmcgZ3Jhbm9sYS50eHQgdG8gZ3Jhbm9sYS5jc3YgbWFrZSBpdCByZWFkYWJsZSBieSB0aGUgc3RyaWN0IHJlYWRlcj8iLAogICAgICAicmVwb25zZSI6ICJOby4gVGhlIHN1ZmZpeCBpcyBhIGNsdWU7IHRoZSBjaGFyYWN0ZXJzIHN0YXkgdGhlIHNhbWUuIFlvdSBtdXN0IGluc3BlY3QgdGhlIGNvbnRlbnQgYW5kIGNvbnZlcnQgaXQgaWYgbmVjZXNzYXJ5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c007-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgdGV4dCBmaWxlIGNvbnRhaW4/CUEgc2VxdWVuY2Ugb2YgY2hhcmFjdGVycywgaW5jbHVkaW5nIGxpbmUgZW5kaW5nczsgb24gdGhlIGNhcmQsIGVhY2ggbGluZSBlbmRpbmcgaXMgdGhlIExGIGNoYXJhY3Rlci4JdG9kYWkgYzAwNy1tMiBmaWNoaWVyLXRleHRlCldoYXQgaXMgYSB0ZXh0IGZpbGUgZm9ybWF0IGZvcj8JSXQgc3BlY2lmaWVzIGhvdyB0byBpbnRlcnByZXQgdGhlIGNoYXJhY3RlcnM6IHdoZXJlIGxpbmVzIGVuZCwgd2hpY2ggY2hhcmFjdGVyIHNlcGFyYXRlcyBmaWVsZHMsIHdoYXQgdGhlIGZpcnN0IGxpbmUgZGVzY3JpYmVzLgl0b2RhaSBjMDA3LW0yIGZvcm1hdApJbiB0aGUgQ1NWIGZpeHR1cmUsIGhvdyBkbyB3ZSBnZXQgZnJvbSBjb21tYXMgdG8gZmllbGRzPwlFYWNoIGNvbW1hIHNwbGl0cyB0aGUgbGluZTogYSBsaW5lIGhhcyBvbmUgbW9yZSBmaWVsZCB0aGFuIGl0IGhhcyBjb21tYXMsIHNpbmNlIHRoZXJlIGFyZSBubyBxdW90YXRpb24gbWFya3Mgb3IgY29tbWFzIGluc2lkZSBmaWVsZHMuCXRvZGFpIGMwMDctbTIgc2VwYXJhdGV1cgpXaHkgZG8gd2UgY291bnQgTiA9IEwg4oiSIGggcmVjb3Jkcz8JVGhlIGhlYWRlciBuYW1lcyB0aGUgY29sdW1ucyB3aXRob3V0IGRlc2NyaWJpbmcgYW4gaW5ncmVkaWVudDsgd2Ugc3VidHJhY3QgaXQgZnJvbSB0aGUgcGh5c2ljYWwgbGluZXMgdG8gY291bnQgdGhlIGRhdGEuCXRvZGFpIGMwMDctbTIgZW4tdGV0ZQpEb2VzIHJlbmFtaW5nIGdyYW5vbGEudHh0IHRvIGdyYW5vbGEuY3N2IG1ha2UgaXQgcmVhZGFibGUgYnkgdGhlIHN0cmljdCByZWFkZXI/CU5vLiBUaGUgc3VmZml4IGlzIGEgY2x1ZTsgdGhlIGNoYXJhY3RlcnMgc3RheSB0aGUgc2FtZS4gWW91IG11c3QgaW5zcGVjdCB0aGUgY29udGVudCBhbmQgY29udmVydCBpdCBpZiBuZWNlc3NhcnkuCXRvZGFpIGMwMDctbTIgc3VmZml4ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mfspnx xeszrx ihxj</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tdyuor rmiyxs xplr</span></span> · read what is written before making connections</h3><dl><div><dt>What you understand</dt><dd>A reader interprets characters according to a contract, and a filename does not guarantee that contract. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hqrxrv kiaqcr tfcjay azhnzz ifvdnx vouvpo bcwtdl sixzyv wdhoez kemfuu rjvbmd vimmlu rhywll aa</span></span> This unit prepares only the first step: reading what is actually written before drawing a conclusion.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">muzgww dzyzfy uyacwe lmnzfu qwxvdh xcuzjj hiyomo muxazv lqwafj uvqqyt xgxysf wecxms nngjvm kvmwlv qnxgwn mydwyq qrjegy qhhksl cxkqql iszbez cjsapn ssrzrb scydxo qapkhs swnxaw mketxm cvrtwx mznadu waskxq bubuqz izzxfw qrtyza nzkuul pmbido tjmnyc xzvckr diyuqd rn</span></span></dd></div><div><dt>Your level</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pgzklk bxoxsa btumgg mctvpg nuyhlr vnaksk tttgnd kkmudy xzpdff nnmtrj clwfcq ughxib joqhpe yl</span></span> Reading this page and giving an assisted answer do not award any level; mastery requires reconstruction without hints at least two days later, validated separately.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rsrglw fmpxal gdzuii cqwyye ezxdpd wdbhqm alqpvx lxsfft qhdjaz ibpmll akabek lncjpk ragyyx abpgte qzldbs uqugfj kyldka nskjpz qnxeol wwjkjb gbjckg vugxig iyadxb gijkid</span></span></dd></div><div><dt>To continue</dt><dd>On another day, reconstruct without support how granola.csv is split and why the renamed text is rejected. Next unit: C007·M3, the terminal. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gkjkag ktfvlt ojzeph pwycmk tnqoyq sacfpn kvlfny sgqfuf mltrhw unfqbj guuffw cdfjtj drmwtp iw</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c007-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c007-m1.html">Previous</a> · <a href="c007-m3.html">Next</a></nav>
+<footer><p>Course book · C007·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

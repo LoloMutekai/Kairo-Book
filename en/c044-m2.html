@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Read a next-token distribution for a fixed prefix, check its sum and distinguish the probability of a continuation from the truth of the text.">
+<title>C044·M2 · Next-token distribution — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">twbyqg twqyuk pxxy</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C044·M2</p><h1>Next-token distribution</h1><p class="objectif"><span>Your goal</span>Read a next-token distribution for a fixed prefix, check its sum and distinguish the probability of a continuation from the truth of the text.</p><p class="prerequis"><strong>Before you start</strong><br>c029-m5 : Bayes · c030-m5 : Poisson · c010-m5 : Logarithmic scales · c018-m5 : Contract tests and test doubles · c021-m5 : Origin, authentication and authorization · c044-m1 : Tokens and text tokenization</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You see a cup and start a sentence: “The tea is”. Before writing the continuation, a language model assigns probabilities to the tokens that could come next. A distribution is this complete list of possibilities together with their probabilities. It exists before a token is selected.</p><p>To see the idea without a huge vocabulary, let us invent a miniature model whose only possible tokens at the next position are ␠hot, ␠cold and ␠lukewarm. The ␠ symbol makes the leading space included in each token visible; the symbol will not be written in the sentence. This tokenization and these values are fictional and have no connection to the vocabulary of any particular model.</p><p>The bar for ␠hot is the longest: this token receives the highest individual probability. Yet the other possibilities together have just as much probability. “Most probable” therefore does not mean “certain”. The rule that decides which token is written will be studied separately.</p><p>The distribution concerns the continuation of the text, rather than the cup itself. Even if the text becomes “The tea is hot”, these probabilities do not give the actual temperature of the tea. Finding that out would require an appropriate observation.</p><div class="schemas"><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>A distribution before selection</title><desc>For the prefix The tea is, the miniature model assigns 0.50 to space hot, 0.30 to space cold and 0.20 to space lukewarm. The lengths use the same scale. The sum is 1.</desc><text x="16" y="28">Prefix: The tea is</text><text x="16" y="62">␠hot</text><rect x="16" y="74" width="150" height="18" rx="3" class="cadre-resultat" /><text x="342" y="91" text-anchor="end">0.50</text><text x="16" y="126">␠cold</text><rect x="16" y="138" width="90" height="18" rx="3" class="cadre-prediction" /><text x="342" y="155" text-anchor="end">0.30</text><text x="16" y="190">␠lukewarm</text><rect x="16" y="202" width="60" height="18" rx="3" class="cadre-neutre" /><text x="342" y="219" text-anchor="end">0.20</text><text x="180" y="261" text-anchor="middle">Sum: 1 · dimensionless</text></svg><figcaption>The list contains 3 tokens and covers the entire vocabulary of our miniature model. The bars use the same scale; the exact numbers are given again in the calculation. A real vocabulary also contains other types of tokens.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>A possibility becomes text</title><desc>The distribution concerns The tea is. Suppose the token space cold is selected. The text becomes The tea is cold. The next position will have a new prefix, for which probabilities are not provided here.</desc><rect x="16" y="12" width="328" height="62" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">For “The tea is”</text><text x="180" y="61" text-anchor="middle">hot · cold · lukewarm</text><path d="M180 74v28m-5-5 5 5 5-5" class="trait" /><rect x="16" y="106" width="328" height="62" rx="7" class="cadre-prediction" /><text x="180" y="132" text-anchor="middle">Assume a selection</text><text x="180" y="155" text-anchor="middle">Selected token: ␠cold</text><path d="M180 168v28m-5-5 5 5 5-5" class="trait" /><rect x="16" y="200" width="328" height="66" rx="7" class="cadre-resultat" /><text x="180" y="226" text-anchor="middle">The tea is cold</text><text x="180" y="251" text-anchor="middle" class="petite-etiquette">New prefix for what follows</text></svg><figcaption>The selection of ␠cold is an assumption used to follow the sequence. It is not deduced from the distribution alone. Once this token has been added, the old probabilities no longer describe the next position.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For the same prefix and the same model, read all the possibilities, check their sum, then specify the event being discussed. A written token does not reveal the whole distribution.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Read the whole distribution after “The tea is”</h3><p>Keep the prefix “The tea is” and the miniature model fixed. Its fictional distribution assigns 5/10 to ␠hot, 3/10 to ␠cold and 2/10 to ␠lukewarm. Let us check this distribution, then calculate the probability that the next token is ␠hot or ␠lukewarm under this distribution.</p><ol class="etapes"><li><h3>Define the object being predicted</h3><p>c denotes the prefix, meaning the sequence of tokens already available before the next position. V denotes the fixed vocabulary of the miniature model: the set {␠hot, ␠cold, ␠lukewarm}. v denotes any token in this set. These are textual objects with no physical unit.</p><p>T is the random variable “next token” under the model’s distribution. p(v | c) is the probability that T equals v, given c; the vertical bar is read as “given”. The model and the tokenization are held fixed. All probabilities are dimensionless: they are neither degrees nor numbers of tokens.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>(</mo><mi>v</mi><mo>|</mo><mi>c</mi><mo>)</mo><mo>=</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mi>v</mi><mo>|</mo><mi>c</mi><mo>)</mo></mrow></math></div><p>P denotes the probability of an event under this distribution. The rule that will produce the written token has not yet been specified: it can change how these probabilities are used. No training calculation or automatic selection is needed to read the given distribution.</p></li><li><h3>Put the values in a readable form</h3><p>The fractions are the data supplied in the exercise. Divide each numerator by the common denominator to obtain a decimal representation of the same probability. These numerators are not frequencies measured in a corpus.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mtable><mtr><mtd><mtext>Token</mtext></mtd><mtd><mtext>Probabilité sans unité</mtext></mtd></mtr><mtr><mtd><mtext>␠chaud</mtext></mtd><mtd><mrow><mfrac><mn>5</mn><mn>10</mn></mfrac><mo>=</mo><mn>0.50</mn></mrow></mtd></mtr><mtr><mtd><mtext>␠froid</mtext></mtd><mtd><mrow><mfrac><mn>3</mn><mn>10</mn></mfrac><mo>=</mo><mn>0.30</mn></mrow></mtd></mtr><mtr><mtd><mtext>␠tiède</mtext></mtd><mtd><mrow><mfrac><mn>2</mn><mn>10</mn></mfrac><mo>=</mo><mn>0.20</mn></mrow></mtd></mtr></mtable></math></div><p>The reduced fractions are 1/2, 3/10 and 1/5, respectively. The decimals displayed here are exact; keeping the fractions lets you check the operations without rounding.</p></li><li><h3>Check that the list forms a distribution</h3><p>Each probability must be between 0 and 1, including both bounds. The sum over all possibilities must equal 1. The symbol ∑ means “add up”; v ∈ V means “for each token v in vocabulary V”.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>0</mn><mo>≤</mo><mi>p</mi><mo>(</mo><mi>v</mi><mo>|</mo><mi>c</mi><mo>)</mo><mo>≤</mo><mn>1</mn><mo>;</mo><msub><mo>∑</mo><mrow><mi>v</mi><mo>∈</mo><mi>V</mi></mrow></msub><mi>p</mi><mo>(</mo><mi>v</mi><mo>|</mo><mi>c</mi><mo>)</mo><mo>=</mo><mn>1</mn></mrow></math></div><p>Here, 0.50 + 0.30 = 0.80, then 0.80 + 0.20 = 1.00. An independent check using fractions: the sum of the numerators 5 + 3 + 2 equals the denominator 10. The sum is therefore indeed 1.</p><p>This check requires an exhaustive list. In a real model, all tokens in the vocabulary must be counted, including tokens that mark the end of a sequence when they are part of that vocabulary. A list containing only the highest-ranked candidates can have a sum below 1 without the full distribution being incorrect.</p></li><li><h3>Combine the requested possibilities</h3><p>Call A the event “T is ␠hot or ␠lukewarm”. At this position, T cannot be both tokens at once. The events are disjoint: their probabilities add up. A concerns the text, without any judgment about what would be a pleasant temperature.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>(</mo><mi>A</mi><mo>|</mo><mi>c</mi><mo>)</mo><mo>=</mo><mfrac><mn>5</mn><mn>10</mn></mfrac><mo>+</mo><mfrac><mn>2</mn><mn>10</mn></mfrac><mo>=</mo><mn>0.70</mn></mrow></math></div><p>The exact result is 7/10, or 0.70, with no unit. We add because these are alternatives at the same position; no assumption of independence between successive positions is involved.</p></li><li><h3>Check using the complement</h3><p>Our vocabulary contains no other tokens. Not belonging to A therefore means being ␠cold. Its probability is 0.30. Subtracting this possibility from the total gives 1 − 0.30 = 0.70 again.</p><p>Another check: 0.70 + 0.30 = 1.00. If this equality failed, we would need to look for a possibility that was omitted, counted more than once or associated with another prefix. The completeness of the vocabulary is what allows reasoning by complement.</p></li><li><h3>State exactly what the result allows us to conclude</h3><p>The token ␠hot is individually the most probable, because 0.50 exceeds 0.30 and 0.20. It is not certain under the distribution: its probability is below 1. Group A reaches 0.70, but this group is not itself a token to be written.</p><p>If ␠cold is selected, the result is “The tea is cold”. Continuing after this text will require a distribution conditioned on this new prefix. The previous table does not provide the probabilities at that next position. Nor does it let us deduce the actual temperature of the tea.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the table. Reconstruct the fractions and justify the addition that gives the probability of A, then the check using its complement. Why would the appearance of ␠cold allow you neither to recover the whole table nor to measure the tea’s temperature?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The most probable token will definitely be written.”</h3><p>Here the highest probability is 0.50, below 1. The distribution still includes other possibilities; the output also depends on the selection rule. Looking only at the ranking does not establish a certain selection.</p><a href="#exemple">Reread the interpretation of the result</a></li><li><h3>“0.50 means that the tea has this probability of actually being hot.”</h3><p>The variable T denotes a text token. The distribution is neither a reading of the cup’s temperature nor a probability that the whole sentence is true. Naming the object being predicted prevents us from changing the question along the way.</p><a href="#intuition">Return to the cup scene</a></li><li><h3>“If I display only the best tokens, their probabilities must already sum to 1.”</h3><p>The sum is 1 over the complete vocabulary. Omitting ␠lukewarm leaves 0.80. Rescaling the remaining values to sum to 1 would describe a restricted distribution, which must be identified as such.</p><a href="#exercices">Audit the incomplete table</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-complement"><p class="repere">Exercise 1 · Reading followed by calculation</p>
+<h3>The next token is not ␠hot</h3><p>Keep the distribution and prefix from the example. Give the probability that T is not ␠hot. Find it again using another operation, then explain why this result does not promise regular alternation between tokens.</p>
+<label for="reponse-ex-complement">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-complement" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-complement" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-complement" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-complement" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The total is 1. Subtract the probability of ␠hot.</p></details><details class="indice"><summary>Hint 2</summary><p>The only other possibilities are ␠cold and ␠lukewarm. You can add their probabilities.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>By complement: 1 − 0.50 = 0.50. By addition: 0.30 + 0.20 = 0.50. The methods agree because the vocabulary is complete and the alternatives are disjoint.</p><p>A probability does not impose an alternating order of outcomes. Moreover, no procedure for repeated selection has been specified here. We have calculated a property of the distribution at a fixed prefix, without predicting a particular sequence.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain 1/2, with no unit, by complement and by addition.</li><li>You justify that the excluded and retained tokens together cover V.</li><li>You do not turn the probability into an output schedule.</li></ul></details></article><article class="exercice" id="ex-objet-predit"><p class="repere">Exercise 2 · Reasoning about an event</p>
+<h3>Distinguish the sentence from the cup</h3><p>Someone calculates the probability that the token is ␠hot or ␠lukewarm and concludes: “This probability proves that the tea is not cold.” Redo the calculation, check it another way and correct the conclusion precisely.</p>
+<label for="reponse-ex-objet-predit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-objet-predit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-objet-predit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-objet-predit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-objet-predit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The addition concerns possible tokens at the same position.</p></details><details class="indice"><summary>Hint 2</summary><p>To check the result, find which token remains outside the group. What variable would be needed to discuss the cup itself?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The probability of the group is 0.50 + 0.20 = 0.70, or exactly 7/10. The check using the complement gives 1 − 0.30 = 0.70.</p><p>The correct conclusion is: under the given distribution and after “The tea is”, the next token belongs to the group {␠hot, ␠lukewarm} with this probability. No distribution of actual temperature has been given. The cup can be cold even if the generated text contains ␠hot; an appropriate observation and model would be needed to connect the two.</p><p class="petit-titre">Check your reasoning</p><ul><li>You justify the addition using disjoint events.</li><li>You check the result using the sole complementary token.</li><li>You state the conclusion with its prefix and its object: the next token.</li></ul></details></article><article class="exercice" id="ex-tableau-incomplet"><p class="repere">Exercise 3 · Audit and conditioning</p>
+<h3>The table no longer shows ␠lukewarm</h3><p>A display keeps only ␠hot: 0.50 and ␠cold: 0.30, for the same prefix. What probability mass is missing? To obtain a sum equal to 1, someone divides each displayed value by their sum. Calculate the new values and explain what has changed. Could either table be reused after “The tea is cold”?</p>
+<label for="reponse-ex-tableau-incomplet">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-tableau-incomplet" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-tableau-incomplet" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-tableau-incomplet" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-tableau-incomplet" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add the visible values, then subtract their sum from the total of the full distribution.</p></details><details class="indice"><summary>Hint 2</summary><p>Dividing the values by their sum describes the proportions among only the retained tokens. To discuss the next position, you must also check the prefix.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The visible sum is 0.50 + 0.30 = 0.80. The missing mass is 1 − 0.80 = 0.20, or 1/5. In this miniature vocabulary, it belongs to ␠lukewarm.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mn>0.50</mn><mn>0.80</mn></mfrac><mo>=</mo><mfrac><mn>5</mn><mrow><mn>5</mn><mo>+</mo><mn>3</mn></mrow></mfrac><mo>=</mo><mn>0.625</mn><mo>;</mo><mfrac><mn>0.30</mn><mn>0.80</mn></mfrac><mo>=</mo><mn>0.375</mn></mrow></math></div><p>The new values give 0.625 + 0.375 = 1.000. Call B the event “T is one of ␠hot and ␠cold”. We are now describing the distribution conditioned on B, still for prefix c: the proportion of ␠hot among the possibilities in B is 5/8. This quantity is not its initial probability 1/2 over all of V.</p><p>After “The tea is cold”, the prefix has changed. Neither the initial table nor its restriction provides the distribution at the new position. A correct sum is not enough: we must also state the vocabulary or selected event and the prefix to which the distribution applies.</p><p class="petit-titre">Check your reasoning</p><ul><li>You recover the missing mass 1/5 without treating it as an error in the full distribution.</li><li>You obtain 5/8 and 3/8 and check their sum 1.</li><li>You name the additional conditioning on B.</li><li>You reject applying the same probabilities to another prefix without new information.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="loi-conditionnelle"><summary><span class="repere">Recall 1</span><span>What does p(v | c) describe, and what must be kept fixed to read this quantity?</span></summary><p>The probability the model assigns to the next token v given prefix c. The model, tokenization and vocabulary are fixed; a different sequence already written requires a new distribution.</p></details><details class="carte" data-carte="controle-complet"><summary><span class="repere">Recall 2</span><span>What checks are needed before interpreting the list as a complete distribution?</span></summary><p>Each probability is between 0 and 1, and the sum over the entire vocabulary is 1. A partial display can sum to less; you must know which possibilities are missing.</p></details><details class="carte" data-carte="alternatives"><summary><span class="repere">Recall 3</span><span>Why add the probabilities of ␠hot and ␠lukewarm, and how can you check the result?</span></summary><p>These tokens are disjoint alternatives at the same position. Their sum is 7/10; the complement gives 1 − 3/10 = 7/10, since only ␠cold remains outside the group in our miniature vocabulary.</p></details><details class="carte" data-carte="probable-et-vrai"><summary><span class="repere">Recall 4</span><span>Why does the highest probability prove neither which token is ultimately written nor the temperature of the tea?</span></summary><p>The individual maximum 1/2 remains below 1 and the selection rule is not specified. The distribution concerns a textual continuation; the actual temperature requires a separate observation.</p></details><details class="carte" data-carte="liste-restreinte"><summary><span class="repere">Recall 5</span><span>What changes if we divide the probabilities of the displayed tokens by their sum?</span></summary><p>We obtain the conditional proportions among only the displayed tokens, with the prefix unchanged and provided their sum is positive. We do not recover their initial probabilities over the complete vocabulary.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the table, state the prefix and possibilities again, then reconstruct the checks for a complete distribution. Explain how to calculate the probability of a group by addition and by complement. Finish by distinguishing the model’s distribution, the written token and the actual temperature; specify what changes when the prefix or retained set changes.</p></div><div class="exports"><a class="bouton" download="c044-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTI6bG9pLWNvbmRpdGlvbm5lbGxlIiwKICAgICAgInVuaXRlIjogImMwNDQtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJkaXN0cmlidXRpb24tcHJvY2hhaW4tdG9rZW4iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHAodiB8IGMpIGRlc2NyaWJlLCBhbmQgd2hhdCBtdXN0IGJlIGtlcHQgZml4ZWQgdG8gcmVhZCB0aGlzIHF1YW50aXR5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBwcm9iYWJpbGl0eSB0aGUgbW9kZWwgYXNzaWducyB0byB0aGUgbmV4dCB0b2tlbiB2IGdpdmVuIHByZWZpeCBjLiBUaGUgbW9kZWwsIHRva2VuaXphdGlvbiBhbmQgdm9jYWJ1bGFyeSBhcmUgZml4ZWQ7IGEgZGlmZmVyZW50IHNlcXVlbmNlIGFscmVhZHkgd3JpdHRlbiByZXF1aXJlcyBhIG5ldyBkaXN0cmlidXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTI6Y29udHJvbGUtY29tcGxldCIsCiAgICAgICJ1bml0ZSI6ICJjMDQ0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibm9ybWFsaXNhdGlvbi1kaXNjcmV0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNoZWNrcyBhcmUgbmVlZGVkIGJlZm9yZSBpbnRlcnByZXRpbmcgdGhlIGxpc3QgYXMgYSBjb21wbGV0ZSBkaXN0cmlidXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBwcm9iYWJpbGl0eSBpcyBiZXR3ZWVuIDAgYW5kIDEsIGFuZCB0aGUgc3VtIG92ZXIgdGhlIGVudGlyZSB2b2NhYnVsYXJ5IGlzIDEuIEEgcGFydGlhbCBkaXNwbGF5IGNhbiBzdW0gdG8gbGVzczsgeW91IG11c3Qga25vdyB3aGljaCBwb3NzaWJpbGl0aWVzIGFyZSBtaXNzaW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQ0LW0yOmFsdGVybmF0aXZlcyIsCiAgICAgICJ1bml0ZSI6ICJjMDQ0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXZlbmVtZW50cy1kaXNqb2ludHMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGFkZCB0aGUgcHJvYmFiaWxpdGllcyBvZiDikKBob3QgYW5kIOKQoGx1a2V3YXJtLCBhbmQgaG93IGNhbiB5b3UgY2hlY2sgdGhlIHJlc3VsdD8iLAogICAgICAicmVwb25zZSI6ICJUaGVzZSB0b2tlbnMgYXJlIGRpc2pvaW50IGFsdGVybmF0aXZlcyBhdCB0aGUgc2FtZSBwb3NpdGlvbi4gVGhlaXIgc3VtIGlzIDcvMTA7IHRoZSBjb21wbGVtZW50IGdpdmVzIDEg4oiSIDMvMTAgPSA3LzEwLCBzaW5jZSBvbmx5IOKQoGNvbGQgcmVtYWlucyBvdXRzaWRlIHRoZSBncm91cCBpbiBvdXIgbWluaWF0dXJlIHZvY2FidWxhcnkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTI6cHJvYmFibGUtZXQtdnJhaSIsCiAgICAgICJ1bml0ZSI6ICJjMDQ0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAib2JqZXQtZGUtbGEtcHJlZGljdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyB0aGUgaGlnaGVzdCBwcm9iYWJpbGl0eSBwcm92ZSBuZWl0aGVyIHdoaWNoIHRva2VuIGlzIHVsdGltYXRlbHkgd3JpdHRlbiBub3IgdGhlIHRlbXBlcmF0dXJlIG9mIHRoZSB0ZWE/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGluZGl2aWR1YWwgbWF4aW11bSAxLzIgcmVtYWlucyBiZWxvdyAxIGFuZCB0aGUgc2VsZWN0aW9uIHJ1bGUgaXMgbm90IHNwZWNpZmllZC4gVGhlIGRpc3RyaWJ1dGlvbiBjb25jZXJucyBhIHRleHR1YWwgY29udGludWF0aW9uOyB0aGUgYWN0dWFsIHRlbXBlcmF0dXJlIHJlcXVpcmVzIGEgc2VwYXJhdGUgb2JzZXJ2YXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTI6bGlzdGUtcmVzdHJlaW50ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDQ0LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29uZGl0aW9ubmVtZW50LXBhci1yZXN0cmljdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNoYW5nZXMgaWYgd2UgZGl2aWRlIHRoZSBwcm9iYWJpbGl0aWVzIG9mIHRoZSBkaXNwbGF5ZWQgdG9rZW5zIGJ5IHRoZWlyIHN1bT8iLAogICAgICAicmVwb25zZSI6ICJXZSBvYnRhaW4gdGhlIGNvbmRpdGlvbmFsIHByb3BvcnRpb25zIGFtb25nIG9ubHkgdGhlIGRpc3BsYXllZCB0b2tlbnMsIHdpdGggdGhlIHByZWZpeCB1bmNoYW5nZWQgYW5kIHByb3ZpZGVkIHRoZWlyIHN1bSBpcyBwb3NpdGl2ZS4gV2UgZG8gbm90IHJlY292ZXIgdGhlaXIgaW5pdGlhbCBwcm9iYWJpbGl0aWVzIG92ZXIgdGhlIGNvbXBsZXRlIHZvY2FidWxhcnkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c044-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHAodiB8IGMpIGRlc2NyaWJlLCBhbmQgd2hhdCBtdXN0IGJlIGtlcHQgZml4ZWQgdG8gcmVhZCB0aGlzIHF1YW50aXR5PwlUaGUgcHJvYmFiaWxpdHkgdGhlIG1vZGVsIGFzc2lnbnMgdG8gdGhlIG5leHQgdG9rZW4gdiBnaXZlbiBwcmVmaXggYy4gVGhlIG1vZGVsLCB0b2tlbml6YXRpb24gYW5kIHZvY2FidWxhcnkgYXJlIGZpeGVkOyBhIGRpZmZlcmVudCBzZXF1ZW5jZSBhbHJlYWR5IHdyaXR0ZW4gcmVxdWlyZXMgYSBuZXcgZGlzdHJpYnV0aW9uLgl0b2RhaSBjMDQ0LW0yIGRpc3RyaWJ1dGlvbi1wcm9jaGFpbi10b2tlbgpXaGF0IGNoZWNrcyBhcmUgbmVlZGVkIGJlZm9yZSBpbnRlcnByZXRpbmcgdGhlIGxpc3QgYXMgYSBjb21wbGV0ZSBkaXN0cmlidXRpb24/CUVhY2ggcHJvYmFiaWxpdHkgaXMgYmV0d2VlbiAwIGFuZCAxLCBhbmQgdGhlIHN1bSBvdmVyIHRoZSBlbnRpcmUgdm9jYWJ1bGFyeSBpcyAxLiBBIHBhcnRpYWwgZGlzcGxheSBjYW4gc3VtIHRvIGxlc3M7IHlvdSBtdXN0IGtub3cgd2hpY2ggcG9zc2liaWxpdGllcyBhcmUgbWlzc2luZy4JdG9kYWkgYzA0NC1tMiBub3JtYWxpc2F0aW9uLWRpc2NyZXRlCldoeSBhZGQgdGhlIHByb2JhYmlsaXRpZXMgb2Yg4pCgaG90IGFuZCDikKBsdWtld2FybSwgYW5kIGhvdyBjYW4geW91IGNoZWNrIHRoZSByZXN1bHQ/CVRoZXNlIHRva2VucyBhcmUgZGlzam9pbnQgYWx0ZXJuYXRpdmVzIGF0IHRoZSBzYW1lIHBvc2l0aW9uLiBUaGVpciBzdW0gaXMgNy8xMDsgdGhlIGNvbXBsZW1lbnQgZ2l2ZXMgMSDiiJIgMy8xMCA9IDcvMTAsIHNpbmNlIG9ubHkg4pCgY29sZCByZW1haW5zIG91dHNpZGUgdGhlIGdyb3VwIGluIG91ciBtaW5pYXR1cmUgdm9jYWJ1bGFyeS4JdG9kYWkgYzA0NC1tMiBldmVuZW1lbnRzLWRpc2pvaW50cwpXaHkgZG9lcyB0aGUgaGlnaGVzdCBwcm9iYWJpbGl0eSBwcm92ZSBuZWl0aGVyIHdoaWNoIHRva2VuIGlzIHVsdGltYXRlbHkgd3JpdHRlbiBub3IgdGhlIHRlbXBlcmF0dXJlIG9mIHRoZSB0ZWE/CVRoZSBpbmRpdmlkdWFsIG1heGltdW0gMS8yIHJlbWFpbnMgYmVsb3cgMSBhbmQgdGhlIHNlbGVjdGlvbiBydWxlIGlzIG5vdCBzcGVjaWZpZWQuIFRoZSBkaXN0cmlidXRpb24gY29uY2VybnMgYSB0ZXh0dWFsIGNvbnRpbnVhdGlvbjsgdGhlIGFjdHVhbCB0ZW1wZXJhdHVyZSByZXF1aXJlcyBhIHNlcGFyYXRlIG9ic2VydmF0aW9uLgl0b2RhaSBjMDQ0LW0yIG9iamV0LWRlLWxhLXByZWRpY3Rpb24KV2hhdCBjaGFuZ2VzIGlmIHdlIGRpdmlkZSB0aGUgcHJvYmFiaWxpdGllcyBvZiB0aGUgZGlzcGxheWVkIHRva2VucyBieSB0aGVpciBzdW0/CVdlIG9idGFpbiB0aGUgY29uZGl0aW9uYWwgcHJvcG9ydGlvbnMgYW1vbmcgb25seSB0aGUgZGlzcGxheWVkIHRva2Vucywgd2l0aCB0aGUgcHJlZml4IHVuY2hhbmdlZCBhbmQgcHJvdmlkZWQgdGhlaXIgc3VtIGlzIHBvc2l0aXZlLiBXZSBkbyBub3QgcmVjb3ZlciB0aGVpciBpbml0aWFsIHByb2JhYmlsaXRpZXMgb3ZlciB0aGUgY29tcGxldGUgdm9jYWJ1bGFyeS4JdG9kYWkgYzA0NC1tMiBjb25kaXRpb25uZW1lbnQtcGFyLXJlc3RyaWN0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">twbyqg twqyuk pxxy</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wthjtb kikvpr axwh</span></span> · read generation before the chapter review</h3><dl><div><dt>What you understand</dt><dd>A distribution assigns probabilities to possible continuations; the resulting text retains only one outcome. Receiving a sentence is not enough to reconstruct this distribution or verify what the sentence claims.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">exdwjr sknnxm qbnylf kirjwg nhfpdd bpgatv bcamzt xlqnuj prmnur wpnfgw rmqnae pjjtmg urqghk nbglux uqexbd nfsadp vkwxua gqttwh hnzxsr xfcjul plxhax whiejo amqvha bdxkwk</span></span></dd></div><div><dt>Your level</dt><dd>Prepare at this unit’s level: explain the distribution at a fixed prefix, check its normalization and defend the distinction between continuation and truth. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bofkvg uejmrp tohltq tytgwo ywfarq hkhkxx duqj</span></span> Reading or producing an assisted answer never constitutes an attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nllkxq dbswmh tacxot ffcrhi avnyhy ozcjsh aoirzc klmtzz aommdu utolyw ciwdbw gllksi ycxibe gdfkkq jutibq rjvoek puakjk mvafeh ntdwaj opccdi xjsyau kyhqgo wfsvtn sbdfvd bckdqm rkiayp vooygf gjzarj wugdyw dwxahq hfkoub yhphxh ygoqdi xmsihb gimkyp ffiyrh lqaqjy dd</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the calculations and the objection about the incomplete table without support on another day. Then study C044·M3 on softmax, temperature and sampling before the chapter review. To connect the distribution to real generation, it will still be necessary to identify the client, its contract for exposing probabilities and authorized end-to-end evidence. None of these actions has been performed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c044-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c044-m1.html">Previous</a> · <a href="c044-m3.html">Next</a></nav>
+<footer><p>Course book · C044·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

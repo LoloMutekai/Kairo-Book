@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Describe a transcription call, check its audio input and decide what to do with its result, including when no usable text comes back.">
+<title>C077·M3 · Transcription as a service — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yagixg tswtbh neoq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C077·M3</p><h1>Transcription as a service</h1><p class="objectif"><span>Your goal</span>Describe a transcription call, check its audio input and decide what to do with its result, including when no usable text comes back.</p><p class="prerequis"><strong>Before you start</strong><br>c027-m5 : complex numbers · c011-m5 : binomial · c036-m5 : annotated graphs · c021-m5 : origin, authentication and authorization · c077-m1 : sample, frequency and PCM · c077-m2 : window and time measurement</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You record a voice memo: “Bring the blue lamp.” The application now has audio. To display proposed text, it sends this audio to a transcription service. If the engine is missing or processing fails, it must also be able to explain this.</p><p>Here, a service is a capability called through a contract: what the caller supplies, what processing accepts and what it returns in each situation. The caller is the part of the program that requests transcription; the engine is the part that recognizes speech. The service organizes their exchange. It can stay entirely within the same program: the word service does not require a remote connection.</p><p>The contract protects the application from a confusion: receiving a reply does not mean receiving a sentence, and receiving a sentence does not prove that it reproduces the memo exactly. The output is a proposal to present; it does not carry out what the voice requests.</p><p>The memo, its bytes, its times and the results described on this page are fictional. We follow a completed recording, processed as a single block. We study neither the recognition algorithm, nor speech synthesis, nor a quality measurement campaign.</p><div class="schemas"><figure><svg viewBox="0 0 360 294" xmlns="http://www.w3.org/2000/svg" role="img"><title>The memo passes through a contract</title><desc>The caller supplies the memo and its format. The service checks the input, then calls the engine. The result carries a status, optional text and a reason. The transcription does not control the lamp.</desc><rect x="20" y="12" width="320" height="70" rx="7" class="cadre-prediction" /><text x="180" y="39" text-anchor="middle">Memo + declared format</text><text x="180" y="65" text-anchor="middle" class="petite-etiquette">48000 bytes; 16000 Hz</text><path d="M180 82v27m-5-6 5 6 5-6" class="trait" /><rect x="40" y="112" width="280" height="62" rx="7" class="cadre-neutre" /><text x="180" y="137" text-anchor="middle">Transcription service</text><text x="180" y="160" text-anchor="middle" class="petite-etiquette">Check, then call the engine</text><path d="M180 174v27m-5-6 5 6 5-6" class="trait" /><rect x="20" y="204" width="320" height="72" rx="7" class="cadre-resultat" /><text x="180" y="232" text-anchor="middle">Status + optional text + reason</text><text x="180" y="258" text-anchor="middle" class="petite-etiquette">To present to the caller</text></svg><figcaption>The arrows describe a data exchange. The result can report text, no text, unavailability or an error; no branch carries out the spoken request.</figcaption></figure><figure><svg viewBox="0 0 360 294" xmlns="http://www.w3.org/2000/svg" role="img"><title>What the caller’s wait covers</title><desc>After recording, processing the memo takes 120 milliseconds before the engine, 600 milliseconds in the engine and 80 milliseconds after it. The total is 800 milliseconds. The boxes do not represent a time scale.</desc><text x="180" y="30" text-anchor="middle">After the memo ends</text><rect x="35" y="48" width="290" height="46" rx="6" class="cadre-neutre" /><text x="180" y="77" text-anchor="middle">Before engine: 120 ms</text><path d="M180 94v20m-5-6 5 6 5-6" class="trait" /><rect x="35" y="116" width="290" height="46" rx="6" class="cadre-prediction" /><text x="180" y="145" text-anchor="middle">Engine: 600 ms</text><path d="M180 162v20m-5-6 5 6 5-6" class="trait" /><rect x="35" y="184" width="290" height="46" rx="6" class="cadre-neutre" /><text x="180" y="213" text-anchor="middle">After engine: 80 ms</text><text x="180" y="263" text-anchor="middle" class="resultat">Total: 800 ms</text></svg><figcaption>The wait for the service covers the whole call. The recorded duration of the memo, 1.50 s, is a different quantity. The boxes show the stages, with no proportional lengths.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Supply the audio with its format; wait for an explicit outcome; examine status, text and reason together; keep the transcription as a proposal.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the “blue lamp” memo to a usable result</h3><p>The application sends the memo identified as “memo-lampe”: signed 16-bit PCM, least significant byte first, 1 channel, frequency 16000 Hz, 48000 bytes of audio without a header. The requested language is English. The declared duration is 1500 ms. The fictional contract expects a result no later than 1000 ms after the call.</p><ol class="etapes"><li><h3>Write down what crosses the boundary</h3><p>The request contains the memo identifier, the bytes, the audio format, the requested language and the time budget. The identifier links the result to the correct memo; it does not describe the audio. PCM means that the bytes directly encode the samples. The language is a hint for the engine, not proof that the content is English.</p><p>The result in our contract contains the identifier, a status, optional text and an explanatory reason. The statuses are “proposed text”, “no text”, “unavailable”, “input rejected”, “error” and “timed out”. This teaching contract is a choice for the scene; the fields in the actual code will be examined at the milestone.</p></li><li><h3>Check that the bytes describe the declared memo</h3><p>Let B be the number of audio bytes; b the number of bits per sample per channel; c the number of channels; f the frequency in frames per second, numerically in Hz. A frame groups the simultaneous samples from all channels. A byte contains 8 bits. The size of a frame is therefore c × b / 8 bytes.</p><p>Here, 16 / 8 = 2 bytes per sample, then 1 × 2 = 2 bytes per frame. Dividing the total size by the size of a frame counts the frames: 48000 / 2 = 24000. The count is an integer; no frame is cut off.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><mfrac><mi>B</mi><mrow><mi>f</mi><mo>×</mo><mi>c</mi><mo>×</mo><mo>(</mo><mi>b</mi><mo>/</mo><mn>8</mn><mo>)</mo></mrow></mfrac><mo>=</mo><mfrac><mn>24000</mn><mn>16000</mn></mfrac><mo>=</mo><mn>1.50</mn><mtext> s</mtext></mrow></math></div><p>D is the duration of the audio, in seconds. The units cancel: frames divided by frames per second give seconds. Since a second contains 1000 ms, D equals 1.50 × 1000 = 1500 ms: the declaration agrees. This formula assumes uncompressed PCM of fixed width, no header counted in B, and a constant frequency. It does not apply directly to a compressed file.</p></li><li><h3>Decide whether the engine can be called</h3><p>The service checks that the memo is nonempty and complete, that the format is accepted and that the declared duration agrees with the content. The fictional engine accepts exactly the given format. Incompatible input receives “input rejected”, with a reason; changing only a format label does not convert the bytes.</p><p>The service then selects the available engine. An engine is a concrete implementation of processing; the application can keep the same contract if this implementation changes. If no engine is usable, the result reports “unavailable”. No substitute sentence is invented.</p></li><li><h3>Track the call on a single clock</h3><p>The memo has already been recorded. The following time markers are expressed in milliseconds since the call: start at 0 ms, engine start at 120 ms, engine finish at 720 ms, result received at 800 ms. We assume a single monotonic clock: it measures durations without moving backwards when civil time is corrected. The stages are sequential, with no overlap.</p><p>Before the engine: 120 − 0 = 120 ms to check, prepare and wait. Engine: 720 − 120 = 600 ms. After the engine: 800 − 720 = 80 ms to prepare and then return the result.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mn>120</mn><mo>+</mo><mn>600</mn><mo>+</mo><mn>80</mn><mo>=</mo><mn>800</mn><mtext> ms</mtext></mrow></math></div><p>L denotes the caller’s total wait. The recognition stage alone takes 600 ms; the contract must handle the whole wait, 800 ms. The audio duration D is not added here: our starting point is after recording.</p></li><li><h3>Apply the time budget</h3><p>Let T be the budget, in milliseconds. Our rule accepts a result that arrives when L ≤ T. Here, 800 ≤ 1000: the result arrives in time. The margin is T − L = 1000 − 800 = 200 ms. Equality would still be accepted under this specific contract.</p><p>The budget is an application rule, not a promise that the engine will finish in time. If the time limit expires, the application reports “timed out” and discards a late return for this request. Stopping the wait does not prove that computation has been interrupted: actual cancellation would require a separate mechanism.</p></li><li><h3>Interpret the outcome instead of blindly displaying a string</h3><p>The fictional return matches “memo-lampe”, arrives in time and contains “Bring the blue lamp.” The service returns “proposed text”; the application can present it for review. The punctuation and words remain the engine’s hypothesis. No instruction to bring the lamp is carried out.</p><p>An empty return must come with an outcome: “no text” means that processing finished without producing words; this does not demonstrate acoustic silence. “Unavailable” means that processing could not be provided. “Error” signals a processing failure. The application preserves these differences and displays the useful reason; it does not infer status from text length alone.</p></li><li><h3>Check another way and define the scope</h3><p>Audio check: 16000 × 2 = 32000 bytes per second; multiplied by 1.50 s, this gives 48000 bytes again. Wait check: 800 − 0 = 800 ms, as does the sum 720 + 80 = 800 ms. The two checks concern different quantities.</p><p>We have checked input consistency and compliance with the budget for this fictional trace. We have not demonstrated the text’s accuracy: it would need to be compared with the audio. A local call and a remote call can share this contract; the presence of a service therefore demonstrates neither a network, nor actual availability, nor correct words.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Reconstruct the request, the checks and the outcomes. Why do audio duration, the caller’s wait and transcript accuracy require separate checks?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Changing the declared frequency is enough to adapt the memo to the engine.”</h3><p>The frequency indicates how to read the frames. Changing this information alone changes the interpreted duration; resampling requires samples to be recalculated. First check the format actually produced by the recording.</p><a href="#exercices">Solve the exercise on the incorrectly declared frequency</a></li><li><h3>“The engine finishes within the budget, so the caller receives the result in time.”</h3><p>The budget runs from the call to the return. It also includes preparation, waiting before the engine and output processing. Compare the return with the limit set by the contract, using the same clock.</p><a href="#exemple">Review the stages of the wait calculation</a></li><li><h3>“The return has no error: the memo must have been understood.”</h3><p>A return without an error can be empty or signal unavailability. Nonempty text can also be wrong. Examine status, text and reason together, then distinguish completed processing from accuracy relative to the audio.</p><a href="#jalon"><span class="milestone-label">Examine the actual case of the unavailable return</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-format"><p class="repere">Exercise 1 · Warm-up · check the input</p>
+<h3>The incorrectly declared frequency</h3><p>The same memo still contains 48000 bytes, with 1 channel and 16 bits. Someone changes only the declared frequency to 32000 Hz, although the recording was actually made at 16000 Hz. What duration does the service calculate? Is it consistent with the declared 1500 ms? Propose a repair.</p>
+<label for="reponse-ex-format">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-format" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-format" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-format" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-format" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The frame size stays the same; only their declared number per second changes.</p></details><details class="indice"><summary>Hint 2</summary><p>Divide the 24000 frames by the new frequency. To repair this, distinguish incorrect metadata from actual audio conversion.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The service still counts 24000 frames. With the 32000 Hz label, it calculates 24000 / 32000 = 0.75 s, or 750 ms. This contradicts the declared 1500 ms.</p><p>The contract in the scene rejects this inconsistency before the engine. Since the actual recording frequency is known, restoring the 16000 Hz metadata repairs the label. If another engine required a different frequency, the audio would need to be converted through resampling; renaming the format would not be enough.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate 0.75 s while keeping the units.</li><li>Identify the contradiction with the declared duration.</li><li>Justify the repair using the actual recording frequency.</li></ul></details></article><article class="exercice" id="ex-budget"><p class="repere">Exercise 2 · Application · track the whole call</p>
+<h3>The result arrives after the limit</h3><p>The same memo and the same budget of 1000 ms are kept. The engine still starts at 120 ms, but finishes at 1020 ms; the application receives the result at 1100 ms. Calculate the engine duration, the output duration and the total wait. Which outcome should apply, and what do we know about stopping computation?</p>
+<label for="reponse-ex-budget">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-budget" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-budget" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-budget" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-budget" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtract consecutive time markers; the total wait starts at 0 ms.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the return time with the budget before examining the words. An expired wait and a cancelled computation are two separate facts.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Engine: 1020 − 120 = 900 ms. Output: 1100 − 1020 = 80 ms. Total wait: 120 + 900 + 80 = 1100 ms, confirmed by 1100 − 0.</p><p>The budget is exceeded by 1100 − 1000 = 100 ms. The outcome is “timed out” as soon as the budget expires; this late result is not presented as a new success for the request. Yet the engine worked for only 900 ms, less than the budget: its duration alone was not enough to decide.</p><p>We know that the caller must stop waiting for this request. We do not know that cancellation interrupted the engine; the contract would need to define this cancellation separately if it were necessary.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 900 ms, 80 ms and 1100 ms while naming each duration.</li><li>State the overrun of 100 ms and discard the late return according to the given rule.</li><li>Do not infer cancellation from the expiry of the wait.</li></ul></details></article><article class="exercice" id="ex-issue"><p class="repere">Exercise 3 · Transfer · repair the interpretation</p>
+<h3>A reassuring indicator and no words</h3><p>In a variant of the return for the same memo, the library provides a “no error” indicator, empty text and the reason “no engine available”. The application displays “You said nothing”. Explain the defect, propose the result to return and describe a different case that must remain distinct. No result arrived after the budget.</p>
+<label for="reponse-ex-issue">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-issue" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-issue" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-issue" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-issue" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>What does the reason say about the processing that was actually possible?</p></details><details class="indice"><summary>Hint 2</summary><p>Compare recognition completed without words with recognition that was impossible because no engine was available.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The application interpreted the absence of words as an observation of the audio. But the reason indicates that recognition was not provided. The result must report “unavailable”, keep the reason and the memo identifier, then offer another attempt when the engine is usable. It must neither claim silence nor invent text.</p><p>An available engine that finishes without producing words belongs to “no text”. Even in this case, silence cannot be asserted: speech that is inaudible to the engine or poorly recognized remains possible. An error reported during processing receives yet another outcome. The contract relies on explicit information from processing, not on an inference from the empty string.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify unavailability from the reason, without equating the indicator with successful transcription.</li><li>Preserve the link to the memo and a useful explanation.</li><li>Distinguish unavailability, a result without words and a processing error.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="contrat"><summary><span class="repere">Recall 1</span><span>What does the contract of a transcription service define?</span></summary><p>The audio input and its format, the accepted conditions, the outcomes returned with text and a reason, and the waiting rule. It allows the caller to use a capability without depending on the engine’s details.</p></details><details class="carte" data-carte="format"><summary><span class="repere">Recall 2</span><span>Why are bytes not enough to describe the memo?</span></summary><p>Their interpretation depends on the encoding, sample width, channels and frequency. For our PCM, duration is the number of bytes divided by the byte rate. Changing the declared frequency does not resample the audio.</p></details><details class="carte" data-carte="vide"><summary><span class="repere">Recall 3</span><span>Why does empty text not allow us to conclude that nobody spoke?</span></summary><p>It can accompany recognition without words, unavailability or an error. The outcome and its reason must be read. Even recognition completed without words does not constitute certain detection of silence.</p></details><details class="carte" data-carte="delai"><summary><span class="repere">Recall 4</span><span>Which interval does the budget cover, and what does its expiry imply?</span></summary><p>In our contract, it covers the call through to the return, after the memo has been recorded. Its expiry produces a timeout outcome and causes the late return to be discarded. It does not prove that the engine’s computation was cancelled.</p></details><details class="carte" data-carte="fidelite"><summary><span class="repere">Recall 5</span><span>Does text received in time demonstrate its accuracy and execution of the spoken request?</span></summary><p>It demonstrates only an output received according to the contract. Comparing the text with the audio is a separate check. Transcribing “Bring the blue lamp” brings no lamp and authorizes no action.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the diagram, reconstruct the memo’s path: bytes and format checked, engine called if available, result linked to the request, budget applied, outcome interpreted with text and reason. Then explain what an empty string and a plausible sentence still leave unknown.</p></div><div class="exports"><a class="bouton" download="c077-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTM6Y29udHJhdCIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJhdC10cmFuc2NyaXB0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgY29udHJhY3Qgb2YgYSB0cmFuc2NyaXB0aW9uIHNlcnZpY2UgZGVmaW5lPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBhdWRpbyBpbnB1dCBhbmQgaXRzIGZvcm1hdCwgdGhlIGFjY2VwdGVkIGNvbmRpdGlvbnMsIHRoZSBvdXRjb21lcyByZXR1cm5lZCB3aXRoIHRleHQgYW5kIGEgcmVhc29uLCBhbmQgdGhlIHdhaXRpbmcgcnVsZS4gSXQgYWxsb3dzIHRoZSBjYWxsZXIgdG8gdXNlIGEgY2FwYWJpbGl0eSB3aXRob3V0IGRlcGVuZGluZyBvbiB0aGUgZW5naW5l4oCZcyBkZXRhaWxzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc3LW0zOmZvcm1hdCIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZW50cmVlLWF1ZGlvIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBhcmUgYnl0ZXMgbm90IGVub3VnaCB0byBkZXNjcmliZSB0aGUgbWVtbz8iLAogICAgICAicmVwb25zZSI6ICJUaGVpciBpbnRlcnByZXRhdGlvbiBkZXBlbmRzIG9uIHRoZSBlbmNvZGluZywgc2FtcGxlIHdpZHRoLCBjaGFubmVscyBhbmQgZnJlcXVlbmN5LiBGb3Igb3VyIFBDTSwgZHVyYXRpb24gaXMgdGhlIG51bWJlciBvZiBieXRlcyBkaXZpZGVkIGJ5IHRoZSBieXRlIHJhdGUuIENoYW5naW5nIHRoZSBkZWNsYXJlZCBmcmVxdWVuY3kgZG9lcyBub3QgcmVzYW1wbGUgdGhlIGF1ZGlvLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc3LW0zOnZpZGUiLAogICAgICAidW5pdGUiOiAiYzA3Ny1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImlzc3VlLXRyYW5zY3JpcHRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgZW1wdHkgdGV4dCBub3QgYWxsb3cgdXMgdG8gY29uY2x1ZGUgdGhhdCBub2JvZHkgc3Bva2U/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgY2FuIGFjY29tcGFueSByZWNvZ25pdGlvbiB3aXRob3V0IHdvcmRzLCB1bmF2YWlsYWJpbGl0eSBvciBhbiBlcnJvci4gVGhlIG91dGNvbWUgYW5kIGl0cyByZWFzb24gbXVzdCBiZSByZWFkLiBFdmVuIHJlY29nbml0aW9uIGNvbXBsZXRlZCB3aXRob3V0IHdvcmRzIGRvZXMgbm90IGNvbnN0aXR1dGUgY2VydGFpbiBkZXRlY3Rpb24gb2Ygc2lsZW5jZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ny1tMzpkZWxhaSIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYnVkZ2V0LWFwcGVsIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIGludGVydmFsIGRvZXMgdGhlIGJ1ZGdldCBjb3ZlciwgYW5kIHdoYXQgZG9lcyBpdHMgZXhwaXJ5IGltcGx5PyIsCiAgICAgICJyZXBvbnNlIjogIkluIG91ciBjb250cmFjdCwgaXQgY292ZXJzIHRoZSBjYWxsIHRocm91Z2ggdG8gdGhlIHJldHVybiwgYWZ0ZXIgdGhlIG1lbW8gaGFzIGJlZW4gcmVjb3JkZWQuIEl0cyBleHBpcnkgcHJvZHVjZXMgYSB0aW1lb3V0IG91dGNvbWUgYW5kIGNhdXNlcyB0aGUgbGF0ZSByZXR1cm4gdG8gYmUgZGlzY2FyZGVkLiBJdCBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoZSBlbmdpbmXigJlzIGNvbXB1dGF0aW9uIHdhcyBjYW5jZWxsZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTM6ZmlkZWxpdGUiLAogICAgICAidW5pdGUiOiAiYzA3Ny1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInRleHRlLXByb3Bvc2UiLAogICAgICAicXVlc3Rpb24iOiAiRG9lcyB0ZXh0IHJlY2VpdmVkIGluIHRpbWUgZGVtb25zdHJhdGUgaXRzIGFjY3VyYWN5IGFuZCBleGVjdXRpb24gb2YgdGhlIHNwb2tlbiByZXF1ZXN0PyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGRlbW9uc3RyYXRlcyBvbmx5IGFuIG91dHB1dCByZWNlaXZlZCBhY2NvcmRpbmcgdG8gdGhlIGNvbnRyYWN0LiBDb21wYXJpbmcgdGhlIHRleHQgd2l0aCB0aGUgYXVkaW8gaXMgYSBzZXBhcmF0ZSBjaGVjay4gVHJhbnNjcmliaW5nIOKAnEJyaW5nIHRoZSBibHVlIGxhbXDigJ0gYnJpbmdzIG5vIGxhbXAgYW5kIGF1dGhvcml6ZXMgbm8gYWN0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c077-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBjb250cmFjdCBvZiBhIHRyYW5zY3JpcHRpb24gc2VydmljZSBkZWZpbmU/CVRoZSBhdWRpbyBpbnB1dCBhbmQgaXRzIGZvcm1hdCwgdGhlIGFjY2VwdGVkIGNvbmRpdGlvbnMsIHRoZSBvdXRjb21lcyByZXR1cm5lZCB3aXRoIHRleHQgYW5kIGEgcmVhc29uLCBhbmQgdGhlIHdhaXRpbmcgcnVsZS4gSXQgYWxsb3dzIHRoZSBjYWxsZXIgdG8gdXNlIGEgY2FwYWJpbGl0eSB3aXRob3V0IGRlcGVuZGluZyBvbiB0aGUgZW5naW5l4oCZcyBkZXRhaWxzLgl0b2RhaSBjMDc3LW0zIGNvbnRyYXQtdHJhbnNjcmlwdGlvbgpXaHkgYXJlIGJ5dGVzIG5vdCBlbm91Z2ggdG8gZGVzY3JpYmUgdGhlIG1lbW8/CVRoZWlyIGludGVycHJldGF0aW9uIGRlcGVuZHMgb24gdGhlIGVuY29kaW5nLCBzYW1wbGUgd2lkdGgsIGNoYW5uZWxzIGFuZCBmcmVxdWVuY3kuIEZvciBvdXIgUENNLCBkdXJhdGlvbiBpcyB0aGUgbnVtYmVyIG9mIGJ5dGVzIGRpdmlkZWQgYnkgdGhlIGJ5dGUgcmF0ZS4gQ2hhbmdpbmcgdGhlIGRlY2xhcmVkIGZyZXF1ZW5jeSBkb2VzIG5vdCByZXNhbXBsZSB0aGUgYXVkaW8uCXRvZGFpIGMwNzctbTMgZW50cmVlLWF1ZGlvCldoeSBkb2VzIGVtcHR5IHRleHQgbm90IGFsbG93IHVzIHRvIGNvbmNsdWRlIHRoYXQgbm9ib2R5IHNwb2tlPwlJdCBjYW4gYWNjb21wYW55IHJlY29nbml0aW9uIHdpdGhvdXQgd29yZHMsIHVuYXZhaWxhYmlsaXR5IG9yIGFuIGVycm9yLiBUaGUgb3V0Y29tZSBhbmQgaXRzIHJlYXNvbiBtdXN0IGJlIHJlYWQuIEV2ZW4gcmVjb2duaXRpb24gY29tcGxldGVkIHdpdGhvdXQgd29yZHMgZG9lcyBub3QgY29uc3RpdHV0ZSBjZXJ0YWluIGRldGVjdGlvbiBvZiBzaWxlbmNlLgl0b2RhaSBjMDc3LW0zIGlzc3VlLXRyYW5zY3JpcHRpb24KV2hpY2ggaW50ZXJ2YWwgZG9lcyB0aGUgYnVkZ2V0IGNvdmVyLCBhbmQgd2hhdCBkb2VzIGl0cyBleHBpcnkgaW1wbHk/CUluIG91ciBjb250cmFjdCwgaXQgY292ZXJzIHRoZSBjYWxsIHRocm91Z2ggdG8gdGhlIHJldHVybiwgYWZ0ZXIgdGhlIG1lbW8gaGFzIGJlZW4gcmVjb3JkZWQuIEl0cyBleHBpcnkgcHJvZHVjZXMgYSB0aW1lb3V0IG91dGNvbWUgYW5kIGNhdXNlcyB0aGUgbGF0ZSByZXR1cm4gdG8gYmUgZGlzY2FyZGVkLiBJdCBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoZSBlbmdpbmXigJlzIGNvbXB1dGF0aW9uIHdhcyBjYW5jZWxsZWQuCXRvZGFpIGMwNzctbTMgYnVkZ2V0LWFwcGVsCkRvZXMgdGV4dCByZWNlaXZlZCBpbiB0aW1lIGRlbW9uc3RyYXRlIGl0cyBhY2N1cmFjeSBhbmQgZXhlY3V0aW9uIG9mIHRoZSBzcG9rZW4gcmVxdWVzdD8JSXQgZGVtb25zdHJhdGVzIG9ubHkgYW4gb3V0cHV0IHJlY2VpdmVkIGFjY29yZGluZyB0byB0aGUgY29udHJhY3QuIENvbXBhcmluZyB0aGUgdGV4dCB3aXRoIHRoZSBhdWRpbyBpcyBhIHNlcGFyYXRlIGNoZWNrLiBUcmFuc2NyaWJpbmcg4oCcQnJpbmcgdGhlIGJsdWUgbGFtcOKAnSBicmluZ3Mgbm8gbGFtcCBhbmQgYXV0aG9yaXplcyBubyBhY3Rpb24uCXRvZGFpIGMwNzctbTMgdGV4dGUtcHJvcG9zZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yagixg tswtbh neoq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dxhqsd feoxut jgwf</span></span></h3><dl><div><dt>You understand</dt><dd>A service can return a result object without having produced words. The contract links the memo, its format, processing and an explicit outcome. Our scene proposes a teaching contract; it does not claim to describe the entire actual interface.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lccikg fwqisk znfoqz bisswj puspsp tfyzhf doywbi uonxhd jjjstv vyveiy ejktdm xdrndu xpwsir yzisjc swxdsk gcdzzp cghdyo dufrph gfxkbm twwepj ssodvo hiccvz chbstj gmgyfl</span></span></dd></div><div><dt>Your level to prepare for</dt><dd>Level 2 to prepare for: reconstruct the request and outcomes without support, justify the calculation’s units and answer the empty text case without confusing unavailability with silence. Reading this page or succeeding with a hint does not award any achieved level.</dd></div><div><dt>Evidence and scope</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dhzfdz pzmvgv ppujis ojtdeo skwuxq lavvkw iagvuw jlxaxn bejxsg saqiow svmpwz vzmtkc zvrchx isjwxc ckuaer yjaert zginzx aldfby gmktzf wtunwb kqbgsd yguglk jnemgz xpgrdv haojie qvvcsf odixms bjavyx umzqdd dldavz nglwfu eknrbq ljjoii tfwzlr dptzjh nqsidl baamjt tz</span></span></dd></div><div><dt>Next step</dt><dd>On another day, reconstruct the contract and its failure cases before rereading. To connect the course to an actual application, the caller, result reception and failure behavior will still need to be traced separately in an authorized setting. The next unit moves on to speech synthesis and its asynchronous playback; evaluation of error and delays comes afterwards.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c077-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c077-m2.html">Previous</a> · <a href="c077-m4.html">Next</a></nav>
+<footer><p>Course book · C077·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

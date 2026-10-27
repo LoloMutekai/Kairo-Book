@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Follow a rewording task from source to output, distinguish encoder and decoder attention, then identify answer leakage during training.">
+<title>C105·M4 · Encoder and decoder — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bakdjn ndgwfa obpz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C105·M4</p><h1>Encoder and decoder</h1><p class="objectif"><span>Your goal</span>Follow a rewording task from source to output, distinguish encoder and decoder attention, then identify answer leakage during training.</p><p class="prerequis"><strong>Before you start</strong><br>c104-m5 : temporal validation · c102-m5 : finite difference checking · c050-m5 : conditioning · c105-m1 : queries, keys and values · c105-m2 : multi-head attention · c105-m3 : positions</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small display receives the message “door open” and must reword it as “entry allowed”. In this fictional scene, the exercise convention associates these messages; an actually open door would not be enough to establish permission to enter. We follow only the production of the text.</p><p>Imagine someone reading the whole note and setting out notes in front of them, then writing the reworded message one word at a time. The encoder prepares the notes about the source. The decoder consults what it has already written and returns to those notes to choose what comes next. These are calculations on representations, with no human reader hidden inside the machine.</p><p>At the point we are studying, “entry” has already been produced. The decoder must now choose between “allowed” and “denied”. It can consult “door” and “open”, both received before it began. It cannot consult the output word it is supposed to predict.</p><p>Self-attention connects positions within the same sequence. In the encoder on this page, the entire source is visible. In the decoder, a causal mask prevents it from looking at future output positions. Cross-attention then connects the decoder to the source representations. This difference in visibility explains the roles of the blocks, even when their attention operations are similar.</p><div class="schemas"><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two paths that meet</title><desc>The source door open enters the encoder and provides a source memory. The prefix start entry enters the causal self-attention of the decoder. Both paths meet at cross-attention before the word allowed is chosen.</desc><rect x="12" y="16" width="160" height="48" rx="7" class="cadre-prediction" /><text x="92" y="37" text-anchor="middle">Entire source</text><text x="92" y="56" text-anchor="middle" class="petite-etiquette">door · open</text><rect x="188" y="16" width="160" height="48" rx="7" class="cadre-neutre" /><text x="268" y="37" text-anchor="middle">Output prefix</text><text x="268" y="56" text-anchor="middle" class="petite-etiquette">start · entry</text><path d="M92 64v24m-4-5 4 5 4-5M268 64v24m-4-5 4 5 4-5" class="trait" /><rect x="12" y="88" width="160" height="62" rx="7" class="cadre-prediction" /><text x="92" y="112" text-anchor="middle">Encoder</text><text x="92" y="135" text-anchor="middle" class="petite-etiquette">self-attention</text><rect x="188" y="88" width="160" height="62" rx="7" class="cadre-neutre" /><text x="268" y="112" text-anchor="middle">Decoder</text><text x="268" y="135" text-anchor="middle" class="petite-etiquette">causal self-attention</text><path d="M92 150v54h28m-5-4 5 4-5 4M268 150v30m-4-5 4 5 4-5" class="trait" /><text x="12" y="176" class="petite-etiquette">Source memory</text><rect x="120" y="180" width="228" height="52" rx="7" class="cadre-resultat" /><text x="234" y="202" text-anchor="middle">Cross-attention</text><text x="234" y="222" text-anchor="middle" class="petite-etiquette">in the decoder</text><path d="M234 232v26m-4-5 4 5 4-5" class="trait" /><rect x="120" y="258" width="228" height="54" rx="7" class="cadre-resultat" /><text x="234" y="280" text-anchor="middle">Scores then choice</text><text x="234" y="301" text-anchor="middle">allowed</text></svg><figcaption>The path on the left carries a representation for each source position. The path on the right depends on the text already available in the output. Cross-attention belongs to the decoder; it lets the decoder consult the source.</figcaption></figure><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>What the decoder is allowed to see</title><desc>Self-attention permission table during training. The start row, which predicts entry, sees only start. The entry row, which predicts allowed, sees start and entry. Yes means a permitted position, not an attention weight.</desc><text x="180" y="25" text-anchor="middle">Decoder self-attention</text><text x="221" y="59" text-anchor="middle">start</text><text x="306" y="59" text-anchor="middle">entry</text><text x="12" y="99" class="petite-etiquette">start → entry</text><text x="12" y="153" class="petite-etiquette">entry → allowed</text><rect x="180" y="76" width="82" height="44" rx="5" class="cadre-resultat" /><rect x="266" y="76" width="82" height="44" rx="5" class="cadre-neutre" /><rect x="180" y="130" width="82" height="44" rx="5" class="cadre-resultat" /><rect x="266" y="130" width="82" height="44" rx="5" class="cadre-resultat" /><text x="221" y="104" text-anchor="middle">yes</text><text x="307" y="104" text-anchor="middle">no</text><text x="221" y="158" text-anchor="middle">yes</text><text x="307" y="158" text-anchor="middle">yes</text><text x="180" y="207" text-anchor="middle" class="petite-etiquette">Row: input → word to predict</text><text x="180" y="232" text-anchor="middle" class="petite-etiquette">Columns: available inputs</text><text x="180" y="257" text-anchor="middle" class="petite-etiquette">The full source is separately available.</text></svg><figcaption>Shifting makes the input word different from the expected word on the same row. The mask blocks the input “entry” on the row that must predict “entry”. The permissions are not averaging coefficients.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The encoder contextualizes the available source; the decoder combines the permitted output prefix and the encoded source to predict the next token.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Produce the word after “entry” from “door open”</h3><p>The data are entirely fictional. The chosen tokenization gives 2 source tokens, “door” and “open”. The available prefix is “start, entry”, where “start” is a technical marker with no displayed word. We calculate only the choice of the next word; the initial choice of “entry” is assumed to have already been made.</p><ol class="etapes"><li><h3>Define the visibility rules</h3><p>x is the source sequence of length n; y is the output sequence. A token is an element of the text tokenization; here, each chosen word forms a token. t denotes the position to predict. y&lt;t denotes the output words strictly before t, to which we add the start marker. In our calculation step, t = 2 and the only word already produced is “entry”.</p><p>H is the array of contextualized source representations: n rows, each of width d. Each row retains a source position. The encoder in this architecture uses noncausal self-attention: “door” can incorporate “open”, and vice versa. The entire source is available before generation. Any padding positions added to align sequences must be excluded from attention.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>H</mi><mo>=</mo><mi>Encodeur</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>;</mo><msub><mi>z</mi><mi>t</mi></msub><mo>=</mo><mi>Décodeur</mi><mo>(</mo><msub><mi>y</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo>,</mo><mi>H</mi><mo>)</mo></mrow></math></div><p>z<sub>t</sub> denotes the decoder state used to predict at position t. The array H can be reused while generating this output; the decoder states depend on the growing prefix. This notation describes the encoder–decoder architecture being studied: some models use only an encoder or only a decoder, without this pair of blocks.</p></li><li><h3>State the simplifications and the data</h3><p>To follow the paths with pencil and paper, take d = 1 component per representation. e<sub>p</sub> = 2 represents “door”, e<sub>o</sub> = 6 represents “open”, e_b = 0 represents the start marker and e<sub>a</sub> = 4 represents “entry”. The letters p, o, b and a are only labels. All these representations, states and scores have no physical unit; the lengths n and d count tokens and components.</p><p>Position information is assumed to be included in these inputs already. Over the visible positions, the attention weights are prescribed, positive and sum to 1: 1/2 and 1/2 in the encoder; 1/4 and 3/4 for self-attention over the prefix being studied, then the same weights for its cross-attention reading of the source. These last two pairs are chosen to be equal for this exercise; they come from separate calculations in a trained model.</p><p>A residual addition adds the input of a sub-block to its output. We retain these additions and use identity value projections, which leave the numbers to be mixed unchanged. We omit normalization, intermediate transformation networks and the stacking of layers. The values are not learned parameters: this toy model isolates the flow of information and does not reproduce a complete Transformer.</p></li><li><h3>Encode the entire source without reducing it to a single number</h3><p>Our encoder self-attention takes the same average on each row. Multiply each source value by its weight: 1/2 × 2 = 1 and 1/2 × 6 = 3. The shared average is therefore 1 + 3 = 4, with no unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>p</mi></msub><mo>=</mo><msub><mi>e</mi><mi>p</mi></msub><mo>+</mo><mn>4</mn><mo>=</mo><mn>6</mn><mo>;</mo><msub><mi>h</mi><mi>o</mi></msub><mo>=</mo><msub><mi>e</mi><mi>o</mi></msub><mo>+</mo><mn>4</mn><mo>=</mo><mn>10</mn></mrow></math></div><p>h<sub>p</sub> and h<sub>o</sub> are the final representations of these positions in the toy model. Adding the average to each input gives 2 + 4 = 6 and 6 + 4 = 10. H therefore retains the 2 rows, 6 then 10. It does not require the sentence to be compressed into a single vector.</p><p>Check: the weights sum to 1 and the average 4 lies between 2 and 6. The states after residual addition can fall outside this interval: they are no longer simple averages of the inputs.</p></li><li><h3>Read only the permitted prefix in the decoder</h3><p>Here the decoder processes the inputs “start, entry” to predict the word after “entry”. Its self-attention uses queries, keys and values from this same prefix. The causal mask allows a row to consult its own input and previous inputs; shifting ensures that its own input is not the expected answer on that row.</p><p>The prefix average is 1/4 × 0 + 3/4 × 4 = 0 + 3 = 3. Add the current input e<sub>a</sub> to obtain u, the state after this sub-block:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>u</mi><mo>=</mo><msub><mi>e</mi><mi>a</mi></msub><mo>+</mo><mn>3</mn><mo>=</mo><mn>4</mn><mo>+</mo><mn>3</mn><mo>=</mo><mn>7</mn></mrow></math></div><p>Check: the weights sum to 1, and 3 lies between 0 and 4. The word “allowed” has supplied no input to this calculation. During generation, it is not yet known.</p></li><li><h3>Connect the decoder query to the source memory</h3><p>In cross-attention, the query comes from u; the keys and values come from H. A query indicates what the decoder is looking for, keys are used to compare source positions, and values carry what will be mixed. Learned projections normally transform these representations. Here the values remain h<sub>p</sub> and h<sub>o</sub>; the weights are provided, so we do not recalculate the comparisons between the query and keys.</p><p>Consulting “door” contributes 1/4 × 6 = 3/2, or 1.50 with no unit. Consulting “open” contributes 3/4 × 10 = 15/2, or 7.50. Add them to obtain c, the source context for this step:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>c</mi><mo>=</mo><mn>1/4</mn><mo>×</mo><mn>6</mn><mo>+</mo><mn>3/4</mn><mo>×</mo><mn>10</mn><mo>=</mo><mn>9</mn><mo>;</mo><mi>z</mi><mo>=</mo><mi>u</mi><mo>+</mo><mi>c</mi><mo>=</mo><mn>16</mn></mrow></math></div><p>z denotes z<sub>t</sub> at the step being studied. The source and prefix meet through the addition 7 + 9 = 16. Independent check of the average: c = h<sub>p</sub> + 3/4 × (h<sub>o</sub> − h<sub>p</sub>), so 6 + 3/4 × (10 − 6) = 9. c does lie between 6 and 10.</p><p>Consulting “open” does not violate causality: it is a word in the source already received. The causal mask concerns the future of the output. Confusing these two sequences would remove information that the task permits the model to consult.</p></li><li><h3>Go from the state to scores, then to the word</h3><p>An output head transforms the state into a score for each candidate. For this step alone, the vocabulary is deliberately limited to “allowed” and “denied”. We define s<sub>a</sub> = z − b and sᵣ = b − z, with b = 12, a constant with no unit. The subscripts a and r label the candidates here. This rule is chosen for the exercise; it is not a general rule for language decoding.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>a</mi></msub><mo>=</mo><mn>16</mn><mo>−</mo><mn>12</mn><mo>=</mo><mn>4</mn><mo>;</mo><msub><mi>s</mi><mi>r</mi></msub><mo>=</mo><mn>12</mn><mo>−</mo><mn>16</mn><mo>=</mo><mn>-4</mn></mrow></math></div><p>Choose the candidate with the highest score: 4 exceeds -4, so the next word is “allowed”. The margin, defined as s<sub>a</sub> − sᵣ, is 8, with no unit. Check: the scores are opposites, as their definition requires. These are ranking scores, not probabilities or proof that the sentence is true.</p><p>In a language model, normalization can convert scores into token probabilities. A selection rule then chooses a token, which joins the prefix for the next step. Here, producing the end marker would require another step and an output head that allows this marker; we have not calculated it.</p></li><li><h3>Distinguish parallel training from stepwise generation</h3><p>During training, the known target is “entry, allowed, end”. The decoder is given “start, entry, allowed” and is expected to produce “entry, allowed, end”, respectively. Providing the true preceding words is called teacher forcing. Shifting and masking must work together: on the row expecting “allowed”, the current input is “entry” and the future input “allowed” remains inaccessible.</p><p>The rows of an example can then be calculated in parallel, because the reference inputs are known and each row has its own visibility restriction. The answers are not all available during generation: after each choice, the prefix grows. An incorrect word can therefore affect later steps. The mask does not replace an evaluation of the sequence actually generated.</p><p>Final dependency check: if only the target word to predict changes, while the source, prefix and parameters stay fixed, the state z of this row must remain identical. The expected answer can change, but it must not enter the calculation that predicts it. The last exercise asks you to trace the path of a leak.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Draw where queries, keys and values come from in each attention mechanism. Explain why “open” is visible while “allowed” is not yet visible. Then reconstruct the source representations, u, c and the final choice.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The encoder must produce a single vector, which the decoder then translates.”</h3><p>In the encoder–decoder Transformer being studied, H retains a row for each source position. The decoder can weight these rows differently at each step. In the toy model, rows 6 and 10 remain distinct despite the shared average.</p><a href="#exemple">Revisit the construction of H and the cross-attention reading</a></li><li><h3>“A causal decoder must also hide “open” to predict the next word.”</h3><p>The entire source has already been received. What must remain hidden is the rest of the output. First identify which sequence each position belongs to, then apply the permissions in the diagram.</p><a href="#intuition">Review the paths and the visibility table</a></li><li><h3>“During training, the target is known: the mask becomes unnecessary.”</h3><p>Without a mask, the row predicting “entry” could consult the future input “entry”. It would read its answer, information absent at the same point during generation. Shifting alone does not block this path; also check every self-attention layer in the decoder.</p><a href="#exercices">Diagnose the leak in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-trajets"><p class="repere">Exercise 1 · Reasoned identification</p>
+<h3>What does each block consult?</h3><p>When completing “entry”, identify the sequence supplying keys and values in encoder self-attention, decoder self-attention and cross-attention. In each case, specify whether “open” and the target word “allowed” can contribute. Give more than just the block names.</p>
+<label for="reponse-ex-trajets">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-trajets" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-trajets" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-trajets" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-trajets" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Self-attention stays within a sequence; cross-attention changes sequence between the query and the keys and values.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate the source “door open” from the prefix “start, entry”. “Allowed” is still an expected answer.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Encoder: keys and values come from the source “door open”; “open” is visible, “allowed” is not an encoder input. Decoder self-attention: they come from the prefix “start, entry”; neither “open” nor the future output word “allowed” is an input to this sub-block.</p><p>Cross-attention: the query comes from the decoder state, the keys and values from H. “Open” can therefore influence the prediction through its encoded representation, while the target word “allowed” remains inaccessible. After this sub-block, the decoder state has indeed received source information.</p><p class="petit-titre">Check your reasoning</p><ul><li>Assign each attention mechanism its sequence of keys and values.</li><li>Place the cross-attention query on the decoder side.</li><li>Justify the permissions by the availability of information.</li></ul></details></article><article class="exercice" id="ex-poids"><p class="repere">Exercise 2 · Calculation and checking</p>
+<h3>The decoder consults the same source differently</h3><p>Keep H, u = 7 and the output head from the example. Change only the cross-attention weights: 3/4 for the “door” position, 1/4 for “open”. First predict the direction of the change in the source context, then calculate this context, the new state, the scores and the margin. Does the word choice change?</p>
+<label for="reponse-ex-poids">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-poids" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-poids" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-poids" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-poids" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The weight increases on the smaller of the representations 6 and 10. The context should therefore decrease.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the new source average before adding u. Then retain the rules z − b and b − z.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The contribution of “door” becomes 3/4 × 6 = 9/2, or 4.50 with no unit. The contribution of “open” becomes 1/4 × 10 = 5/2, or 2.50. The context is 9/2 + 5/2 = 7, less than 9 as predicted.</p><p>The state is 7 + 7 = 14. Score for “allowed”: 14 − 12 = 2; score for “denied”: 12 − 14 = -2. The margin is 2 − (-2) = 4. The scores have no unit; “allowed” remains the choice under the highest score rule, with a smaller margin.</p><p>Check using another expression: 10 + 3/4 × (6 − 10) = 7, between 6 and 10. H does not change: we have changed how it is consulted, not how it is encoded. The same chosen word can therefore conceal different states and margins.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict the decrease before calculating and retain the representations in H.</li><li>Recover 7, 14 and the opposite scores.</li><li>Explain why an unchanged choice does not mean an unchanged calculation.</li></ul></details></article><article class="exercice" id="ex-fuite"><p class="repere">Exercise 3 · Diagnosis and repair</p>
+<h3>Training that reads its own answer</h3><p>For the same rewording task, a program receives “start, entry, allowed” and expects “entry, allowed, end”. It removes all causal masks from the decoder, claiming that shifting is enough. Describe a precise leakage path to the row predicting “entry”, repair the permissions, then propose a dependency check on the row predicting “allowed”. Explain what this check would establish and what would still need to be evaluated.</p>
+<label for="reponse-ex-fuite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fuite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fuite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fuite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fuite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>An input on the next row already contains the word expected on the current row.</p></details><details class="indice"><summary>Hint 2</summary><p>To test a forbidden dependency, keep the source and the permitted prefix; change only a future input. The parameters must remain fixed, with no randomness in the calculation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>On the “start” input row, “entry” is expected. Without a mask, its query can read the key and value of the next input, “entry”: the expected answer flows back into the state that must predict it. On the “entry” input row, “allowed” is expected and the next input already contains this word. Shifting has placed the answer elsewhere; it has not made it inaccessible.</p><p>Repair: each decoder self-attention row consults only its own input and previous inputs, in every layer. The “start” row sees only “start”; the “entry” row sees “start, entry”. Cross-attention keys and values still come from the source, without injecting the targets into it.</p><p>Proposed check: with fixed parameters and no randomness, keep “door open” and “start, entry”, then replace the future input “allowed” with “denied”. The scores on the “entry” input row must be identical before and after. In our toy model, the formulas always give z = 16, s<sub>a</sub> = 4 and sᵣ = -4, because this future input does not appear in them.</p><p>A difference would reveal a forbidden dependency in this case. A single equality would not be enough to prove that all masks work: some weights could cancel out the leak. It would also be necessary to inspect the dependencies of every layer and vary the cases. Finally, even correct masking does not prove the quality of the generated texts; that requires evaluation during generation, with the prefixes actually chosen. None of these tests on a real model is run on this page.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name the row, the future input and the answer this input reveals.</li><li>Keep shifting and restore the mask in all affected layers.</li><li>Define what changes, what stays fixed and the expected invariance.</li><li>Distinguish a counterexample revealing leakage, a general proof of causality and a quality evaluation.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="memoire-source"><summary><span class="repere">Recall 1</span><span>What does the encoder pass to the decoder in the architecture being studied?</span></summary><p>An array H of contextualized representations, with a row for each source position. Cross-attention can consult these rows differently at each step. This array is not necessarily a single sentence vector.</p></details><details class="carte" data-carte="origines"><summary><span class="repere">Recall 2</span><span>Where do queries, keys and values come from in cross-attention?</span></summary><p>Queries come from the decoder states; keys and values are projections of the source representations H. Self-attention constructs these three objects from the same sequence.</p></details><details class="carte" data-carte="causalite"><summary><span class="repere">Recall 3</span><span>Why is “open” visible while “allowed” must remain hidden at the step being studied?</span></summary><p>“Open” belongs to the source received in full before generation. “Allowed” is the output word to predict. The available prefix contains only the start marker and “entry”. Causality concerns the future of the output.</p></details><details class="carte" data-carte="decalage"><summary><span class="repere">Recall 4</span><span>Why must targets be shifted and the future masked during training?</span></summary><p>Shifting pairs each input with the expected next word. Without a mask, this expected word remains readable in a future input. The mask prevents this leakage in every decoder self-attention layer. The rows can then be calculated in parallel over the reference prefixes.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>What check can reveal that a row is reading a future input?</span></summary><p>With the source, permitted prefix and parameters fixed, and no randomness, change only a future input: the scores on the row must remain identical. A difference reveals a forbidden dependency; equality in a single case does not prove general causality or generation quality.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the paths from “door open” to the choice after “entry”. Recall what H retains, what the prefix permits, then the origins of the cross-attention queries, keys and values. Finally, reconstruct the input–target pairs and explain why shifting and masking are both necessary. Reading or an assisted answer does not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c105-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTQ6bWVtb2lyZS1zb3VyY2UiLAogICAgICAidW5pdGUiOiAiYzEwNS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVuY29kZXVyLWRlY29kZXVyIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgZW5jb2RlciBwYXNzIHRvIHRoZSBkZWNvZGVyIGluIHRoZSBhcmNoaXRlY3R1cmUgYmVpbmcgc3R1ZGllZD8iLAogICAgICAicmVwb25zZSI6ICJBbiBhcnJheSBIIG9mIGNvbnRleHR1YWxpemVkIHJlcHJlc2VudGF0aW9ucywgd2l0aCBhIHJvdyBmb3IgZWFjaCBzb3VyY2UgcG9zaXRpb24uIENyb3NzLWF0dGVudGlvbiBjYW4gY29uc3VsdCB0aGVzZSByb3dzIGRpZmZlcmVudGx5IGF0IGVhY2ggc3RlcC4gVGhpcyBhcnJheSBpcyBub3QgbmVjZXNzYXJpbHkgYSBzaW5nbGUgc2VudGVuY2UgdmVjdG9yLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW00Om9yaWdpbmVzIiwKICAgICAgInVuaXRlIjogImMxMDUtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhdHRlbnRpb24tY3JvaXNlZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGVyZSBkbyBxdWVyaWVzLCBrZXlzIGFuZCB2YWx1ZXMgY29tZSBmcm9tIGluIGNyb3NzLWF0dGVudGlvbj8iLAogICAgICAicmVwb25zZSI6ICJRdWVyaWVzIGNvbWUgZnJvbSB0aGUgZGVjb2RlciBzdGF0ZXM7IGtleXMgYW5kIHZhbHVlcyBhcmUgcHJvamVjdGlvbnMgb2YgdGhlIHNvdXJjZSByZXByZXNlbnRhdGlvbnMgSC4gU2VsZi1hdHRlbnRpb24gY29uc3RydWN0cyB0aGVzZSB0aHJlZSBvYmplY3RzIGZyb20gdGhlIHNhbWUgc2VxdWVuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTQ6Y2F1c2FsaXRlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtYXNxdWUtY2F1c2FsIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyDigJxvcGVu4oCdIHZpc2libGUgd2hpbGUg4oCcYWxsb3dlZOKAnSBtdXN0IHJlbWFpbiBoaWRkZW4gYXQgdGhlIHN0ZXAgYmVpbmcgc3R1ZGllZD8iLAogICAgICAicmVwb25zZSI6ICLigJxPcGVu4oCdIGJlbG9uZ3MgdG8gdGhlIHNvdXJjZSByZWNlaXZlZCBpbiBmdWxsIGJlZm9yZSBnZW5lcmF0aW9uLiDigJxBbGxvd2Vk4oCdIGlzIHRoZSBvdXRwdXQgd29yZCB0byBwcmVkaWN0LiBUaGUgYXZhaWxhYmxlIHByZWZpeCBjb250YWlucyBvbmx5IHRoZSBzdGFydCBtYXJrZXIgYW5kIOKAnGVudHJ54oCdLiBDYXVzYWxpdHkgY29uY2VybnMgdGhlIGZ1dHVyZSBvZiB0aGUgb3V0cHV0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW00OmRlY2FsYWdlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJkZWNhbGFnZS1kZXMtY2libGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBtdXN0IHRhcmdldHMgYmUgc2hpZnRlZCBhbmQgdGhlIGZ1dHVyZSBtYXNrZWQgZHVyaW5nIHRyYWluaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlNoaWZ0aW5nIHBhaXJzIGVhY2ggaW5wdXQgd2l0aCB0aGUgZXhwZWN0ZWQgbmV4dCB3b3JkLiBXaXRob3V0IGEgbWFzaywgdGhpcyBleHBlY3RlZCB3b3JkIHJlbWFpbnMgcmVhZGFibGUgaW4gYSBmdXR1cmUgaW5wdXQuIFRoZSBtYXNrIHByZXZlbnRzIHRoaXMgbGVha2FnZSBpbiBldmVyeSBkZWNvZGVyIHNlbGYtYXR0ZW50aW9uIGxheWVyLiBUaGUgcm93cyBjYW4gdGhlbiBiZSBjYWxjdWxhdGVkIGluIHBhcmFsbGVsIG92ZXIgdGhlIHJlZmVyZW5jZSBwcmVmaXhlcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNS1tNDpjb250cm9sZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJvbGUtZGUtY2F1c2FsaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgY2hlY2sgY2FuIHJldmVhbCB0aGF0IGEgcm93IGlzIHJlYWRpbmcgYSBmdXR1cmUgaW5wdXQ/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCB0aGUgc291cmNlLCBwZXJtaXR0ZWQgcHJlZml4IGFuZCBwYXJhbWV0ZXJzIGZpeGVkLCBhbmQgbm8gcmFuZG9tbmVzcywgY2hhbmdlIG9ubHkgYSBmdXR1cmUgaW5wdXQ6IHRoZSBzY29yZXMgb24gdGhlIHJvdyBtdXN0IHJlbWFpbiBpZGVudGljYWwuIEEgZGlmZmVyZW5jZSByZXZlYWxzIGEgZm9yYmlkZGVuIGRlcGVuZGVuY3k7IGVxdWFsaXR5IGluIGEgc2luZ2xlIGNhc2UgZG9lcyBub3QgcHJvdmUgZ2VuZXJhbCBjYXVzYWxpdHkgb3IgZ2VuZXJhdGlvbiBxdWFsaXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c105-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBlbmNvZGVyIHBhc3MgdG8gdGhlIGRlY29kZXIgaW4gdGhlIGFyY2hpdGVjdHVyZSBiZWluZyBzdHVkaWVkPwlBbiBhcnJheSBIIG9mIGNvbnRleHR1YWxpemVkIHJlcHJlc2VudGF0aW9ucywgd2l0aCBhIHJvdyBmb3IgZWFjaCBzb3VyY2UgcG9zaXRpb24uIENyb3NzLWF0dGVudGlvbiBjYW4gY29uc3VsdCB0aGVzZSByb3dzIGRpZmZlcmVudGx5IGF0IGVhY2ggc3RlcC4gVGhpcyBhcnJheSBpcyBub3QgbmVjZXNzYXJpbHkgYSBzaW5nbGUgc2VudGVuY2UgdmVjdG9yLgl0b2RhaSBjMTA1LW00IGVuY29kZXVyLWRlY29kZXVyCldoZXJlIGRvIHF1ZXJpZXMsIGtleXMgYW5kIHZhbHVlcyBjb21lIGZyb20gaW4gY3Jvc3MtYXR0ZW50aW9uPwlRdWVyaWVzIGNvbWUgZnJvbSB0aGUgZGVjb2RlciBzdGF0ZXM7IGtleXMgYW5kIHZhbHVlcyBhcmUgcHJvamVjdGlvbnMgb2YgdGhlIHNvdXJjZSByZXByZXNlbnRhdGlvbnMgSC4gU2VsZi1hdHRlbnRpb24gY29uc3RydWN0cyB0aGVzZSB0aHJlZSBvYmplY3RzIGZyb20gdGhlIHNhbWUgc2VxdWVuY2UuCXRvZGFpIGMxMDUtbTQgYXR0ZW50aW9uLWNyb2lzZWUKV2h5IGlzIOKAnG9wZW7igJ0gdmlzaWJsZSB3aGlsZSDigJxhbGxvd2Vk4oCdIG11c3QgcmVtYWluIGhpZGRlbiBhdCB0aGUgc3RlcCBiZWluZyBzdHVkaWVkPwnigJxPcGVu4oCdIGJlbG9uZ3MgdG8gdGhlIHNvdXJjZSByZWNlaXZlZCBpbiBmdWxsIGJlZm9yZSBnZW5lcmF0aW9uLiDigJxBbGxvd2Vk4oCdIGlzIHRoZSBvdXRwdXQgd29yZCB0byBwcmVkaWN0LiBUaGUgYXZhaWxhYmxlIHByZWZpeCBjb250YWlucyBvbmx5IHRoZSBzdGFydCBtYXJrZXIgYW5kIOKAnGVudHJ54oCdLiBDYXVzYWxpdHkgY29uY2VybnMgdGhlIGZ1dHVyZSBvZiB0aGUgb3V0cHV0Lgl0b2RhaSBjMTA1LW00IG1hc3F1ZS1jYXVzYWwKV2h5IG11c3QgdGFyZ2V0cyBiZSBzaGlmdGVkIGFuZCB0aGUgZnV0dXJlIG1hc2tlZCBkdXJpbmcgdHJhaW5pbmc/CVNoaWZ0aW5nIHBhaXJzIGVhY2ggaW5wdXQgd2l0aCB0aGUgZXhwZWN0ZWQgbmV4dCB3b3JkLiBXaXRob3V0IGEgbWFzaywgdGhpcyBleHBlY3RlZCB3b3JkIHJlbWFpbnMgcmVhZGFibGUgaW4gYSBmdXR1cmUgaW5wdXQuIFRoZSBtYXNrIHByZXZlbnRzIHRoaXMgbGVha2FnZSBpbiBldmVyeSBkZWNvZGVyIHNlbGYtYXR0ZW50aW9uIGxheWVyLiBUaGUgcm93cyBjYW4gdGhlbiBiZSBjYWxjdWxhdGVkIGluIHBhcmFsbGVsIG92ZXIgdGhlIHJlZmVyZW5jZSBwcmVmaXhlcy4JdG9kYWkgYzEwNS1tNCBkZWNhbGFnZS1kZXMtY2libGVzCldoYXQgY2hlY2sgY2FuIHJldmVhbCB0aGF0IGEgcm93IGlzIHJlYWRpbmcgYSBmdXR1cmUgaW5wdXQ/CVdpdGggdGhlIHNvdXJjZSwgcGVybWl0dGVkIHByZWZpeCBhbmQgcGFyYW1ldGVycyBmaXhlZCwgYW5kIG5vIHJhbmRvbW5lc3MsIGNoYW5nZSBvbmx5IGEgZnV0dXJlIGlucHV0OiB0aGUgc2NvcmVzIG9uIHRoZSByb3cgbXVzdCByZW1haW4gaWRlbnRpY2FsLiBBIGRpZmZlcmVuY2UgcmV2ZWFscyBhIGZvcmJpZGRlbiBkZXBlbmRlbmN5OyBlcXVhbGl0eSBpbiBhIHNpbmdsZSBjYXNlIGRvZXMgbm90IHByb3ZlIGdlbmVyYWwgY2F1c2FsaXR5IG9yIGdlbmVyYXRpb24gcXVhbGl0eS4JdG9kYWkgYzEwNS1tNCBjb250cm9sZS1kZS1jYXVzYWxpdGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bakdjn ndgwfa obpz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Preparatory checkpoint · distinguish an interface from the model architecture</h3><dl><div><dt>What you understand</dt><dd>You can follow the encoded source, the causal prefix and their cross-attention connection. A call named encode is not enough to identify a Transformer encoder, and a text response is not enough to identify a decoder with cross-attention.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vjokgb rxapxg mjmvfb yfgyjd hznhdi kiuveo mszjhs vnnwzr zgitgq eysnwo lfzqva jctzcy vuzjep mkbohb awwbhh ectzhr jekuuj xkuufr pbrbwv dkbxpq xrakln bnpsdc wsuloh oiazyb</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Teaching target: Level 3, able to calculate the toy model, assign each attention mechanism its inputs and diagnose target leakage. The catalogue gives no milestone scenario specific to this unit. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">aqievz tdypbz peazvz xbvsnu egztfj ezptae yrua</span></span> Reading and an assisted answer do not establish any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xpfrzw gtbknq ichzlm pivuwr pftbwg ejzqmz bucekp csnyqt lfocjy dveojm xhuyxn kucwfr fwmsyh pgdrcy bufxbw kawcfz gcfplh fegbxl cicvpd dboiwp svbmap btihfh hufowd klxkpi</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises and the diagram without support on another day. Continue with C105·M5 for cost and limitations. To then connect these roles to the models actually used, a source describing their architecture will be needed and, under a separate assignment, evidence of wiring and execution; these interfaces alone do not provide it.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c105-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c105-m3.html">Previous</a> · <a href="c105-m5.html">Next</a></nav>
+<footer><p>Course book · C105·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

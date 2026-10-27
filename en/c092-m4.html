@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Resolve a recorded forecast, recalculate its Brier score and CRPS, then explain what these scores allow us to conclude.">
+<title>C092·M4 · CRPS, Brier and forecast resolution — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rygpdg mxokmr jpmc</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C092·M4</p><h1>CRPS, Brier and forecast resolution</h1><p class="objectif"><span>Your goal</span>Resolve a recorded forecast, recalculate its Brier score and CRPS, then explain what these scores allow us to conclude.</p><p class="prerequis"><strong>Before you start</strong><br>c035-m5 : finite covariance and conditioning · c060-m5 : approximations and assumptions · c090-m5 : stationarity · c053-m5 : proxy, construct and validity · c062-m5 : auditing priors and sensitivity · c092-m1 : physical clock and content counter · c092-m2 : preregistration and horizon · c092-m3 : density, CDF and quantile</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop is waiting for a delivery. Before departure, a forecast of its duration is recorded: a probability mass of 1/4 at 10 min and a mass of 3/4 at 30 min. These masses add up to 1. The model is deliberately coarse: it gives weight only to these durations, without claiming that other durations would be physically impossible. The entire scene and all its values are fictional.</p><p>The parcel arrives after 20 min. Was the forecast any good? For the question “delivered within 20 min”, it stated a probability of 1/4, and the event occurred. The Brier score measures the difference between this probability and the binary outcome. To assess the duration as a whole, the CRPS examines the questions “arrived by this threshold?” across the entire duration scale.</p><p>Resolving this forecast means linking the observed duration to the correct recorded forecast, according to the measurement rule already set. Resolution follows observation; it preserves the original forecast. Replacing the forecast with certainty after arrival would remove the very object we want to evaluate.</p><p>Here a score is a loss: the smaller it is, the better the forecast agrees with the outcome. Calibration means agreement, over a series of cases, between stated probabilities and observed frequencies. An isolated result demonstrates neither this calibration nor a general ability to anticipate outcomes. The units and the question being evaluated must accompany the number.</p><div class="schemas"><figure><svg viewBox="0 0 360 248" xmlns="http://www.w3.org/2000/svg" role="img"><title>A forecast preserved until resolution</title><desc>Before departure, the parcel forecast assigns 1/4 to 10 minutes and 3/4 to 30 minutes. After arrival, the observed duration of 20 minutes is attached to this same forecast to calculate the scores.</desc><rect x="18" y="16" width="324" height="82" rx="7" class="cadre-prediction" /><text x="180" y="42" text-anchor="middle">Forecast before departure</text><text x="180" y="67" text-anchor="middle">10 min : 1/4 · 30 min : 3/4</text><text x="180" y="87" text-anchor="middle" class="petite-etiquette">Same parcel, same measurement rule</text><line x1="180" y1="98" x2="180" y2="137" class="trait" /><text x="195" y="124" class="petite-etiquette">Observed arrival</text><rect x="18" y="137" width="324" height="90" rx="7" class="cadre-resultat" /><text x="180" y="163" text-anchor="middle">Resolve with y = 20 min</text><text x="180" y="188" text-anchor="middle">Keep the forecast</text><text x="180" y="212" text-anchor="middle">Calculate Brier and CRPS</text></svg><figcaption>The boxes separate the forecast from its comparison with the outcome. The score requires both pieces of information; arrival alone does not recreate a forecast.</figcaption></figure><figure><svg viewBox="0 0 360 248" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two step functions to compare all thresholds</title><desc>The forecast CDF F equals 0 before 10 minutes, 1/4 between 10 and 30 minutes, then 1. The observed step function H equals 0 before 20 minutes, then 1. The CRPS integrates their squared difference over thresholds t.</desc><text x="18" y="24" class="resultat">F: forecast</text><text x="187" y="24" class="mesure">H: observation</text><line x1="49" y1="52" x2="49" y2="188" class="trait" /><line x1="49" y1="180" x2="335" y2="180" class="trait" /><text x="37" y="184" text-anchor="end" class="petite-etiquette">0</text><text x="37" y="151" text-anchor="end" class="petite-etiquette">1/4</text><text x="37" y="64" text-anchor="end" class="petite-etiquette">1</text><path d="M49 180 H90 V150 H290 V60 H335" class="chemin-correction" /><path d="M49 180 H190 V60 H335" class="repere-dose" /><circle cx="90" cy="150" r="4" class="resultat" /><circle cx="290" cy="60" r="4" class="resultat" /><circle cx="190" cy="60" r="4" class="point-mesure" /><text x="90" y="211" text-anchor="middle">10</text><text x="190" y="211" text-anchor="middle">20</text><text x="290" y="211" text-anchor="middle">30</text><text x="180" y="237" text-anchor="middle" class="petite-etiquette">Threshold t in minutes</text></svg><figcaption>The thick line represents F and the thin line H. The CRPS uses their squared vertical difference, multiplied by the width of each interval; it is not the raw area between the lines. The points mark the values after each jump.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep the forecast intact, establish the outcome, then calculate: Brier for a defined event; CRPS for the full distribution of an ordered quantity.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Score the parcel forecast without rewriting it</h3><p>Fictional forecast fixed before departure: probability 1/4 at 10 min and 3/4 at 30 min. Duration is measured from departure to handover of the parcel, in minutes, with an observation assumed to be exact in this exercise. The outcome is y = 20 min. The threshold a = 20 min and the rule “by this time”, including the boundary, were chosen before arrival.</p><ol class="etapes"><li><h3>Establish the outcome and the symbols</h3><p>Y is the future delivery duration; y is its observed value. The variable threshold t, the chosen threshold a and the durations Y and y are in minutes. F(t) is the stated probability that Y is less than or equal to t. F describes the forecast, rather than a true distribution whose accuracy we have proved.</p><p>Hᵧ(t) is the observation step function: it equals 0 if t is less than y, and 1 if t is greater than or equal to y. F and H are dimensionless. For the event Y ≤ a, we write p = F(a) for the stated probability and o = Hᵧ(a) for the binary outcome. Here p = 1/4 and o = 1, since arrival at 20 min meets the inclusive boundary of 20 min.</p><p>The name q will refer only to the complementary mass 3/4 at 30 min. The masses are positive and their sum is 1. The delivery is uniquely identified; if no outcome is available or the measurement is ambiguous, the forecast remains pending, with no final score.</p></li><li><h3>Calculate the Brier score for the chosen event</h3><p>B(p, o) denotes the Brier loss of probability p for outcome o of the same event.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>B</mi><mo>(</mo><mi>p</mi><mo>,</mo><mi>o</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mi>p</mi><mo>−</mo><mi>o</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>Subtract the outcome from the probability to measure the difference: 1/4 − 1 = -3/4. Square this difference to obtain a nonnegative loss: B = -3/4 × -3/4 = 9/16 = 0.5625, with no unit.</p><p>Independent check by expanding the square: 1 − 2 × 1/4 + 1/16 = 9/16. The value lies between 0 and 1, the bounds for this binary Brier score. We use the convention for a single event; we do not add the loss for its complement a second time.</p></li><li><h3>Define the CRPS as a sum over thresholds</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>CRPS</mi><mo>(</mo><mi>F</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><msubsup><mo>∫</mo><mrow><mo>−</mo><mi>∞</mi></mrow><mi>∞</mi></msubsup><msup><mrow><mo>(</mo><mi>F</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>−</mo><msub><mi>H</mi><mi>y</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>)</mo></mrow><mn>2</mn></msup><mtext> d</mtext><mi>t</mi></mrow></math></div><p>The integral sign adds contributions over thresholds t; the bounds −∞ and +∞ indicate that all real thresholds are included. Here the element dt carries the unit minute. At each threshold, the square is the Brier score for the question Y ≤ t. The CRPS therefore has the unit of Y, the minute. It remains defined for our discrete distribution even though the measured quantity can take other values. We assume a finite first absolute moment: the average of the absolute values of the durations under the forecast distribution must be finite, which its finite support guarantees here.</p><p>No complicated integration is needed: F and H are constant on intervals. Before 10 min, both equal 0; from 30 min onward, both equal 1. The only contributions come from intervals between these bounds. The value taken exactly at a jump does not change the integral.</p></li><li><h3>Calculate the contributions of each interval</h3><p>From 10 min inclusive to 20 min exclusive, the forecast gives F = 1/4, while the observed arrival time has not yet been reached: H = 0. The squared difference is 1/16. The width is 20 − 10 = 10 min; the contribution is 10 × 1/16 = 5/8 min.</p><p>From 20 min inclusive to 30 min exclusive, F remains 1/4, but H equals 1. The squared difference is now 9/16. The width is 30 − 20 = 10 min; the contribution is 10 × 9/16 = 45/8 min.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>CRPS</mi><mo>=</mo><mn>10</mn><mo>×</mo><mn>1/16</mn><mo>+</mo><mn>10</mn><mo>×</mo><mn>9/16</mn><mo>=</mo><mn>25/4</mn><mtext> min</mtext></mrow></math></div><p>The exact result is 25/4 min, or 6.25 min. Do not forget the widths or simply square the error of a mean duration. The Brier score 0.5625 concerned a single threshold; the CRPS adds the losses over all thresholds.</p></li><li><h3>Check using distances between draws</h3><p>Another expression for the same CRPS lets us check the interval calculation. X and X′ are two independent draws from the forecast distribution, in minutes; the prime distinguishes the second draw. E means the weighted average under this distribution, and the bars | | mean absolute distance. These draws are calculation tools, rather than additional observed deliveries.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>CRPS</mi><mo>(</mo><mi>F</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>E</mi><mo>|</mo><mi>X</mi><mo>−</mo><mi>y</mi><mo>|</mo><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>E</mi><mo>|</mo><mi>X</mi><mo>−</mo><msup><mi>X</mi><mo>′</mo></msup><mo>|</mo></mrow></math></div><p>Distance to the outcome: |10 − 20| = 10 min and |30 − 20| = 10 min. The weighted average is therefore 1/4 × 10 + 3/4 × 10 = 5/2 + 15/2 = 10 min.</p><p>Between draws, identical pairs have 0 distance. The short–long pair has probability 1/4 × 3/4 = 3/16 and distance 20 min. The long–short pair contributes the same amount: E|X − X′| = 2 × 3/16 × 20 = 15/2 min.</p><p>Subtract half of this average: 10 − 1/2 × 15/2 = 10 − 15/4 = 25/4 min. Both methods give exactly 6.25 min. The subtracted term depends on the forecast dispersion; it prevents the score from reducing to a simple average distance to the outcome.</p></li><li><h3>Interpret the score and complete the resolution</h3><p>The resolution preserves the parcel identifier, the original forecast, its date, the definitions of departure and arrival, the observed duration, its provenance and the date when it became known. It then records Brier = 0.5625 with no unit for the chosen threshold and CRPS = 6.25 min for the duration. Measurement quality is part of this evidence; the calculation does not guarantee it.</p><p>These scores are proper: under a given true distribution, forecasting that distribution minimizes the expected average loss. This does not mean that every realization favors the correct forecast. For the Brier score, if π denotes the true probability of the event, the following expansion shows the penalty added by a p different from π. The expectation E is then over the actual outcomes o; π and p are dimensionless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mi>B</mi><mo>(</mo><mi>p</mi><mo>,</mo><mi>o</mi><mo>)</mo><mo>=</mo><mi>π</mi><mo>(</mo><mn>1</mn><mo>−</mo><mi>π</mi><mo>)</mo><mo>+</mo><msup><mrow><mo>(</mo><mi>p</mi><mo>−</mo><mi>π</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>The first term does not depend on the forecast; the second is minimized when p = π. The same principle of minimization in expectation holds for the CRPS on distributions with a finite first moment. A single parcel cannot establish this true distribution or calibration. Comparing forecasts with a reference on cases defined in advance belongs to the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without reading the formulas, explain why the Brier score has no unit and why the CRPS is in minutes. Then describe what must be preserved when resolving the parcel forecast.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Since the parcel arrived, its probability was certain.”</h3><p>The outcome is 1 for the event, but the forecast remains p = 1/4. A probability describes what was stated before the result. Keep both: the Brier score uses their difference, rather than a probability rewritten afterward.</p><a href="#exemple">Review p, o and forecast resolution</a></li><li><h3>“The CRPS is the sum of the differences at the thresholds I choose.”</h3><p>It adds the squared CDF differences across the entire scale. With our step functions, each square is multiplied by the exact width of its interval. An arbitrary selection of thresholds without widths does not reproduce this integral.</p><a href="#exemple">Repeat the calculation interval by interval</a></li><li><h3>“A Brier score smaller than the CRPS proves that the first model is better.”</h3><p>The dimensionless Brier score 0.5625 and the CRPS 6.25 min concern different objects. Converting minutes to hours changes the CRPS number without improving the forecast. Check the object, the unit and the observed cases before comparing numbers.</p><a href="#exercices">Examine the delivery report</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-brier"><p class="repere">Exercise 1 · Direct application</p>
+<h3>The same forecast, a later arrival</h3><p>For a fictional variant of this delivery, keep the forecast and the threshold a = 20 min. The outcome is now y = 30 min. Determine o, then recalculate the Brier score. Must the score increase because the duration is longer?</p>
+<label for="reponse-ex-brier">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-brier" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-brier" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-brier" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-brier" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The event remains “arrived by 20 min”. Start by deciding whether it occurred.</p></details><details class="indice"><summary>Hint 2</summary><p>Keep p = 1/4 and calculate its difference from the new binary outcome.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Arrival at 30 min exceeds 20 min: o = 0. The difference is 1/4 − 0 = 1/4, so B = 1/4 × 1/4 = 1/16 = 0.0625, with no unit.</p><p>The score has decreased: the forecast assigned a low probability to arrival by the boundary, and that event did not occur. The Brier score assesses the probabilistic forecast; it does not measure whether the delay suits the workshop. Check: for a 0 outcome, the Brier score is simply the square of p.</p><p class="petit-titre">Check your reasoning</p><ul><li>I obtain o = 0 without turning the duration into a probability.</li><li>I keep p unchanged and find 0.0625 with no unit.</li><li>I distinguish the quality of a forecast from the desirability of the outcome.</li></ul></details></article><article class="exercice" id="ex-crps"><p class="repere">Exercise 2 · Reconstructing the calculation</p>
+<h3>Recalculate the step functions after this arrival</h3><p>With the same variant y = 30 min, calculate the CRPS by identifying all intervals where F and H differ. Then check your result using distances between draws; the forecast does not change.</p>
+<label for="reponse-ex-crps">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-crps" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-crps" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-crps" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-crps" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Before 30 min, H equals 0. The threshold 20 min is no longer a jump in H.</p></details><details class="indice"><summary>Hint 2</summary><p>Between 10 and 30 min, F equals 1/4. For the check, the average distance between draws remains the same as in the example.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Before 10 min, F = H = 0. From 10 min inclusive to 30 min exclusive, F = 1/4 and H = 0. From 30 min onward, F = H = 1. This leaves one interval of width 30 − 10 = 20 min, with squared difference 1/16.</p><p>The CRPS is 20 × 1/16 = 5/4 min = 1.25 min. If you keep a division at 20 min, both parts give the same square and combine into this interval.</p><p>Another method: E|X − y| = 1/4 × 20 + 3/4 × 0 = 5 min. Half the distance between draws remains 15/4 min. We find 5 − 15/4 = 5/4 min, identical to the step function calculation.</p><p class="petit-titre">Check your reasoning</p><ul><li>I redraw H according to the new outcome.</li><li>I justify the 0 contributions and the width of 20 min.</li><li>Both methods give 1.25 min without changing the forecast.</li></ul></details></article><article class="exercice" id="ex-audit"><p class="repere">Exercise 3 · Diagnosis and justification</p>
+<h3>Review a resolution report</h3><p>Return to the initial outcome y = 20 min. The report preserves the scores from the example. One person converts the CRPS to hours and claims an improvement because the number is smaller. Another proposes recalculating p after arrival. Finally, the handover time of another parcel has not been established. Correct these proposals and identify the information needed to resolve a forecast properly.</p>
+<label for="reponse-ex-audit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-audit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-audit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-audit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-audit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>An hour contains 60 minutes: convert the unit of the score, then ask whether the information in the forecast has changed.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish the fixed forecast, the known outcome with its provenance, and a forecast still pending.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The converted CRPS is 25/4 ÷ 60 = 5/48 h, or approximately 0.1042 h. This is the same loss as 6.25 min. The decrease in the number comes solely from the unit: no improvement in the forecast has been established. The Brier score remains 0.5625, with no unit.</p><p>Recalculating p after arrival would replace the forecast being evaluated with another forecast. Preserve the identifier, date, original masses and durations, then attach the outcome according to the departure–handover rule set earlier, its provenance and the resolution date.</p><p>For the parcel whose handover time is unknown, do not invent a duration or a 0 score. Its forecast remains pending until an outcome is established. A score calculated for the first parcel does not demonstrate general performance or replace the missing evidence for the second.</p><p class="petit-titre">Check your reasoning</p><ul><li>I convert the unit and refuse to treat this conversion as an improvement.</li><li>I preserve p = 1/4 and distinguish forecast, outcome and score.</li><li>I name the information needed for resolution and leave the unknown outcome pending.</li><li>I state the limit of a conclusion drawn from a single case.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="brier"><summary><span class="repere">Recall 1</span><span>What does the binary Brier score compare, and in what unit?</span></summary><p>The stated probability p and the outcome o, which equals 0 or 1, for the same event. Their difference is squared. The score has no unit; smaller means a lower loss.</p></details><details class="carte" data-carte="crps"><summary><span class="repere">Recall 2</span><span>How can you reconstruct the CRPS from questions about thresholds?</span></summary><p>Compare the forecast CDF F with the observation step function H, square the difference and integrate it over all thresholds. For step functions, multiply each square by the width of its interval. The unit is that of the forecast quantity.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 3</span><span>What other method can check the CRPS?</span></summary><p>Take the average distance from a draw from the forecast distribution to the outcome, then subtract half the average distance between two independent draws from that same distribution. Keep the units of the quantity.</p></details><details class="carte" data-carte="resolution"><summary><span class="repere">Recall 4</span><span>What changes, and what is preserved during resolution?</span></summary><p>The established outcome, its provenance and the resolution date are attached to the identified, fixed forecast. The original probabilities remain intact. Without an established outcome, the forecast remains pending.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>Why is a good score for this parcel insufficient to conclude that forecasts are good in general?</span></summary><p>Proper scores favor the true distribution on average, without guaranteeing the ranking for every outcome. An isolated case proves neither calibration nor quality on other cases; the measurement and evaluation conditions must also be established.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>With the course closed, reconstruct the parcel’s journey: dated and fixed forecast, measurement rule, established outcome, resolution. Recover the Brier score at the chosen threshold, then the CRPS over the intervals and its check using distances. Explain their units and the limit of an isolated score. Reading or an assisted answer does not count as an attained level; try again without support on another day.</p></div><div class="exports"><a class="bouton" download="c092-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTItbTQ6YnJpZXIiLAogICAgICAidW5pdGUiOiAiYzA5Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImJyaWVyLWJpbmFpcmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBiaW5hcnkgQnJpZXIgc2NvcmUgY29tcGFyZSwgYW5kIGluIHdoYXQgdW5pdD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc3RhdGVkIHByb2JhYmlsaXR5IHAgYW5kIHRoZSBvdXRjb21lIG8sIHdoaWNoIGVxdWFscyAwIG9yIDEsIGZvciB0aGUgc2FtZSBldmVudC4gVGhlaXIgZGlmZmVyZW5jZSBpcyBzcXVhcmVkLiBUaGUgc2NvcmUgaGFzIG5vIHVuaXQ7IHNtYWxsZXIgbWVhbnMgYSBsb3dlciBsb3NzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDkyLW00OmNycHMiLAogICAgICAidW5pdGUiOiAiYzA5Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNycHMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB5b3UgcmVjb25zdHJ1Y3QgdGhlIENSUFMgZnJvbSBxdWVzdGlvbnMgYWJvdXQgdGhyZXNob2xkcz8iLAogICAgICAicmVwb25zZSI6ICJDb21wYXJlIHRoZSBmb3JlY2FzdCBDREYgRiB3aXRoIHRoZSBvYnNlcnZhdGlvbiBzdGVwIGZ1bmN0aW9uIEgsIHNxdWFyZSB0aGUgZGlmZmVyZW5jZSBhbmQgaW50ZWdyYXRlIGl0IG92ZXIgYWxsIHRocmVzaG9sZHMuIEZvciBzdGVwIGZ1bmN0aW9ucywgbXVsdGlwbHkgZWFjaCBzcXVhcmUgYnkgdGhlIHdpZHRoIG9mIGl0cyBpbnRlcnZhbC4gVGhlIHVuaXQgaXMgdGhhdCBvZiB0aGUgZm9yZWNhc3QgcXVhbnRpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTItbTQ6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzA5Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlLXBhci1kaXN0YW5jZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBvdGhlciBtZXRob2QgY2FuIGNoZWNrIHRoZSBDUlBTPyIsCiAgICAgICJyZXBvbnNlIjogIlRha2UgdGhlIGF2ZXJhZ2UgZGlzdGFuY2UgZnJvbSBhIGRyYXcgZnJvbSB0aGUgZm9yZWNhc3QgZGlzdHJpYnV0aW9uIHRvIHRoZSBvdXRjb21lLCB0aGVuIHN1YnRyYWN0IGhhbGYgdGhlIGF2ZXJhZ2UgZGlzdGFuY2UgYmV0d2VlbiB0d28gaW5kZXBlbmRlbnQgZHJhd3MgZnJvbSB0aGF0IHNhbWUgZGlzdHJpYnV0aW9uLiBLZWVwIHRoZSB1bml0cyBvZiB0aGUgcXVhbnRpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTItbTQ6cmVzb2x1dGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDkyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVzb2x1dGlvbi1wcmV2aXNpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBjaGFuZ2VzLCBhbmQgd2hhdCBpcyBwcmVzZXJ2ZWQgZHVyaW5nIHJlc29sdXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGVzdGFibGlzaGVkIG91dGNvbWUsIGl0cyBwcm92ZW5hbmNlIGFuZCB0aGUgcmVzb2x1dGlvbiBkYXRlIGFyZSBhdHRhY2hlZCB0byB0aGUgaWRlbnRpZmllZCwgZml4ZWQgZm9yZWNhc3QuIFRoZSBvcmlnaW5hbCBwcm9iYWJpbGl0aWVzIHJlbWFpbiBpbnRhY3QuIFdpdGhvdXQgYW4gZXN0YWJsaXNoZWQgb3V0Y29tZSwgdGhlIGZvcmVjYXN0IHJlbWFpbnMgcGVuZGluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5Mi1tNDpsaW1pdGUiLAogICAgICAidW5pdGUiOiAiYzA5Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZS1zY29yZS1pc29sZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgaXMgYSBnb29kIHNjb3JlIGZvciB0aGlzIHBhcmNlbCBpbnN1ZmZpY2llbnQgdG8gY29uY2x1ZGUgdGhhdCBmb3JlY2FzdHMgYXJlIGdvb2QgaW4gZ2VuZXJhbD8iLAogICAgICAicmVwb25zZSI6ICJQcm9wZXIgc2NvcmVzIGZhdm9yIHRoZSB0cnVlIGRpc3RyaWJ1dGlvbiBvbiBhdmVyYWdlLCB3aXRob3V0IGd1YXJhbnRlZWluZyB0aGUgcmFua2luZyBmb3IgZXZlcnkgb3V0Y29tZS4gQW4gaXNvbGF0ZWQgY2FzZSBwcm92ZXMgbmVpdGhlciBjYWxpYnJhdGlvbiBub3IgcXVhbGl0eSBvbiBvdGhlciBjYXNlczsgdGhlIG1lYXN1cmVtZW50IGFuZCBldmFsdWF0aW9uIGNvbmRpdGlvbnMgbXVzdCBhbHNvIGJlIGVzdGFibGlzaGVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c092-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBiaW5hcnkgQnJpZXIgc2NvcmUgY29tcGFyZSwgYW5kIGluIHdoYXQgdW5pdD8JVGhlIHN0YXRlZCBwcm9iYWJpbGl0eSBwIGFuZCB0aGUgb3V0Y29tZSBvLCB3aGljaCBlcXVhbHMgMCBvciAxLCBmb3IgdGhlIHNhbWUgZXZlbnQuIFRoZWlyIGRpZmZlcmVuY2UgaXMgc3F1YXJlZC4gVGhlIHNjb3JlIGhhcyBubyB1bml0OyBzbWFsbGVyIG1lYW5zIGEgbG93ZXIgbG9zcy4JdG9kYWkgYzA5Mi1tNCBicmllci1iaW5haXJlCkhvdyBjYW4geW91IHJlY29uc3RydWN0IHRoZSBDUlBTIGZyb20gcXVlc3Rpb25zIGFib3V0IHRocmVzaG9sZHM/CUNvbXBhcmUgdGhlIGZvcmVjYXN0IENERiBGIHdpdGggdGhlIG9ic2VydmF0aW9uIHN0ZXAgZnVuY3Rpb24gSCwgc3F1YXJlIHRoZSBkaWZmZXJlbmNlIGFuZCBpbnRlZ3JhdGUgaXQgb3ZlciBhbGwgdGhyZXNob2xkcy4gRm9yIHN0ZXAgZnVuY3Rpb25zLCBtdWx0aXBseSBlYWNoIHNxdWFyZSBieSB0aGUgd2lkdGggb2YgaXRzIGludGVydmFsLiBUaGUgdW5pdCBpcyB0aGF0IG9mIHRoZSBmb3JlY2FzdCBxdWFudGl0eS4JdG9kYWkgYzA5Mi1tNCBjcnBzCldoYXQgb3RoZXIgbWV0aG9kIGNhbiBjaGVjayB0aGUgQ1JQUz8JVGFrZSB0aGUgYXZlcmFnZSBkaXN0YW5jZSBmcm9tIGEgZHJhdyBmcm9tIHRoZSBmb3JlY2FzdCBkaXN0cmlidXRpb24gdG8gdGhlIG91dGNvbWUsIHRoZW4gc3VidHJhY3QgaGFsZiB0aGUgYXZlcmFnZSBkaXN0YW5jZSBiZXR3ZWVuIHR3byBpbmRlcGVuZGVudCBkcmF3cyBmcm9tIHRoYXQgc2FtZSBkaXN0cmlidXRpb24uIEtlZXAgdGhlIHVuaXRzIG9mIHRoZSBxdWFudGl0eS4JdG9kYWkgYzA5Mi1tNCBjb250cm9sZS1wYXItZGlzdGFuY2VzCldoYXQgY2hhbmdlcywgYW5kIHdoYXQgaXMgcHJlc2VydmVkIGR1cmluZyByZXNvbHV0aW9uPwlUaGUgZXN0YWJsaXNoZWQgb3V0Y29tZSwgaXRzIHByb3ZlbmFuY2UgYW5kIHRoZSByZXNvbHV0aW9uIGRhdGUgYXJlIGF0dGFjaGVkIHRvIHRoZSBpZGVudGlmaWVkLCBmaXhlZCBmb3JlY2FzdC4gVGhlIG9yaWdpbmFsIHByb2JhYmlsaXRpZXMgcmVtYWluIGludGFjdC4gV2l0aG91dCBhbiBlc3RhYmxpc2hlZCBvdXRjb21lLCB0aGUgZm9yZWNhc3QgcmVtYWlucyBwZW5kaW5nLgl0b2RhaSBjMDkyLW00IHJlc29sdXRpb24tcHJldmlzaW9uCldoeSBpcyBhIGdvb2Qgc2NvcmUgZm9yIHRoaXMgcGFyY2VsIGluc3VmZmljaWVudCB0byBjb25jbHVkZSB0aGF0IGZvcmVjYXN0cyBhcmUgZ29vZCBpbiBnZW5lcmFsPwlQcm9wZXIgc2NvcmVzIGZhdm9yIHRoZSB0cnVlIGRpc3RyaWJ1dGlvbiBvbiBhdmVyYWdlLCB3aXRob3V0IGd1YXJhbnRlZWluZyB0aGUgcmFua2luZyBmb3IgZXZlcnkgb3V0Y29tZS4gQW4gaXNvbGF0ZWQgY2FzZSBwcm92ZXMgbmVpdGhlciBjYWxpYnJhdGlvbiBub3IgcXVhbGl0eSBvbiBvdGhlciBjYXNlczsgdGhlIG1lYXN1cmVtZW50IGFuZCBldmFsdWF0aW9uIGNvbmRpdGlvbnMgbXVzdCBhbHNvIGJlIGVzdGFibGlzaGVkLgl0b2RhaSBjMDkyLW00IGxpbWl0ZS1zY29yZS1pc29sZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rygpdg mxokmr jpmc</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uzqqtp bclzuw jwnl</span></span> · recalculate the scores and explain the role of resolution</h3><dl><div><dt>What you understand</dt><dd>Resolution links an outcome to a preserved earlier forecast. The Brier score evaluates an event, and the CRPS a distribution over an ordered quantity. Calculating them demonstrates neither measurement accuracy nor a subjective experience of anticipation.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">depwnl lykxta yvynbw svzcik fdehbi qrpkcn fzbdjn wrsgnh ldjdly vdfxld zvsmcb nyvicy vqawpk uryeca zquihj mhqtzq olxpdj nyjkdr wdkahg tngtxu ftiqhp dhguto jyzblk acgtws qmtsjk cykryo jgyrgb qdezvp uosuhy uoboms yyuclb pfwqtw eqpoyd lunbgq emxjtf euuwfh qushkr yu</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wlsqvl qtosrr vytowd ldkhie fjhhuz qdgrgi yvtyct szgltm yhrube zltyzl inqeog fwfbdh phvmuc js</span></span> The Level 2 label on this page indicates its difficulty. Neither reading, consulting a correction nor an assisted answer awards an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ubkgcc rzebtg hkcaxu rlmzyp pgzfhw kljalx ktfwxr xgjwgr joxqry jqmkge dkcney qyujyx rfcqtp pkqezc ownxjl rfgbij bcfgfo jpilql utdkbz exoyge qbbsbd cphzmx lmuewl kxizzl</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the calculations on another day without help and explain the information needed for resolution. To prepare for level c, continue with C092·M5 on comparison with a reference and ablation, then C075·M5 on human decision making and rollback. Wiring and actual effects would require separate evidence within an appropriate mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c092-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c092-m3.html">Previous</a> · <a href="c092-m5.html">Next</a></nav>
+<footer><p>Course book · C092·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

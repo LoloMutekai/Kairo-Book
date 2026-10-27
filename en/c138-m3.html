@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Explain variable sampling in a random forest and reconstruct its prediction by averaging the outputs of the leaves reached.">
+<title>C138·M3 · Forests — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mwjnen zjywte gvnb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C138·M3</p><h1>Forests</h1><p class="objectif"><span>Your goal</span>Explain variable sampling in a random forest and reconstruct its prediction by averaging the outputs of the leaves reached.</p><p class="prerequis"><strong>Before you start</strong><br>c099-m5 : probability calibration · c100-m5 : learning curves · c138-m1 : trees · c138-m2 : bagging</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A depot wants to predict the duration of the final leg of a parcel’s journey. A tree can ask questions about distance, mass and departure time, then give a duration. Bagging trains several trees on samples drawn from the historical records with replacement: a parcel that has been drawn remains available and can therefore appear several times.</p><p>But if distance dominates the other variables, many trees may start with the same question and make similar errors. A random forest adds variable sampling at each split: the tree searches for its question using only the candidate variables at that node. At the next node, sampling starts again.</p><p>We will follow 3 small trees. Each receives 4 positions sampled from the same historical records. Of the 3 available variables, we offer only 1 at each split. Variables that are not selected remain available for a later draw. After training, the new parcel passes through all the trees and their predicted durations are averaged.</p><p>The parcels, durations and samples on this page are entirely fictional. The scene illustrates a forest for regression: its output is a duration in minutes. It does not measure any improvement in a delivery service.</p><div class="schemas"><figure><svg viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" role="img"><title>Sample parcels, then a candidate variable</title><desc>The historical records contain parcels A, B, C and D. Each tree receives 4 positions sampled with replacement. For the root, alpha receives A B C C and distance; beta A B C D and mass; gamma B B C D and departure time. Another node would require a new draw of variables.</desc><rect x="16" y="12" width="328" height="50" rx="7" class="cadre-neutre" /><text x="180" y="43" text-anchor="middle">History: A B C D</text><line x1="180" y1="62" x2="180" y2="68" class="trait" /><text x="180" y="85" text-anchor="middle" class="petite-etiquette">Sampling with replacement</text><rect x="16" y="98" width="328" height="64" rx="7" class="cadre-prediction" /><text x="180" y="123" text-anchor="middle">α : A B C C</text><text x="180" y="147" text-anchor="middle" class="petite-etiquette">At the root: distance</text><rect x="16" y="174" width="328" height="64" rx="7" class="cadre-prediction" /><text x="180" y="199" text-anchor="middle">β : A B C D</text><text x="180" y="223" text-anchor="middle" class="petite-etiquette">At the root: mass</text><rect x="16" y="250" width="328" height="64" rx="7" class="cadre-prediction" /><text x="180" y="275" text-anchor="middle">γ : B B C D</text><text x="180" y="299" text-anchor="middle" class="petite-etiquette">At the root: time</text><text x="180" y="343" text-anchor="middle" class="petite-etiquette">New node → new draw</text></svg><figcaption>Repeated letters are occurrences of the same parcel in the tree’s training sample. Sampling parcels and sampling 1 variable from 3 are separate operations. Here, the trees stop after their root split.</figcaption></figure><figure><svg viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same parcel receives several estimates</title><desc>The parcel travelling 4 kilometres, weighing 3 kilograms and leaving at 11 hours reaches leaves with outputs of 12, 18 and 14 minutes. Their average is exactly 44/3 minutes, or approximately 14.67 minutes.</desc><text x="180" y="29" text-anchor="middle">4 km · 3 kg · 11 h</text><rect x="16" y="52" width="328" height="50" rx="7" class="cadre-neutre" /><text x="180" y="83" text-anchor="middle">α : distance ≤ 6 km → 12 min</text><rect x="16" y="118" width="328" height="50" rx="7" class="cadre-neutre" /><text x="180" y="149" text-anchor="middle">β : mass &gt; 2 kg → 18 min</text><rect x="16" y="184" width="328" height="50" rx="7" class="cadre-neutre" /><text x="180" y="215" text-anchor="middle">γ : time ≤ 12 h → 14 min</text><line x1="180" y1="234" x2="180" y2="240" class="trait" /><text x="180" y="259" text-anchor="middle" class="petite-etiquette">Average all outputs</text><rect x="16" y="274" width="328" height="68" rx="7" class="cadre-resultat" /><text x="180" y="302" text-anchor="middle">44 / 3 min</text><text x="180" y="328" text-anchor="middle" class="resultat">≈ 14.67 min</text></svg><figcaption>Each line describes a path through a separate tree; the parcel enters all the trees. The outputs are durations to be averaged with equal weights, rather than votes for a class.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Sample parcels with replacement for each tree; sample candidate variables at each node; learn questions using those candidates; average the trees’ predictions for the same new parcel.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the parcel to the average of the leaf outputs</h3><p>The parcel whose duration we want to predict travels 4 km, weighs 3 kg and leaves at 11 h. Follow the samples and splits provided below. Each tree has a single split followed by terminal leaves: this forest is deliberately small and shallow.</p><ol class="etapes"><li><h3>Specify the data and when they are available</h3><p>Each historical parcel provides a distance in kilometres, a mass in kilograms, a departure time in hours within the same day, and an observed duration in minutes. Distance, mass and departure time are known at departure; duration is the target to be learned and must not become an input variable.</p><p>A: 2 km; 1 kg; 9 h; duration 10 min.</p><p>B: 4 km; 3 kg; 10 h; duration 14 min.</p><p>C: 8 km; 1 kg; 14 h; duration 18 min.</p><p>D: 10 km; 3 kg; 15 h; duration 22 min.</p><p>x denotes a parcel’s variables, ordered as distance, mass, departure time; y denotes its actual duration. For the new parcel, x is known and y remains hidden during the calculation. A regression tree returns the average duration of the training occurrences that reach its leaf.</p></li><li><h3>Build trees that do not all examine the same candidates</h3><p>n = 4 is the number of historical parcels and of positions sampled with replacement for each tree; p = 3 is the number of available variables. T = 3 is the number of trees; m = 1 is the number of candidate variables sampled without replacement at a split. These counts have no physical unit, with 1 ≤ m ≤ p and T ≥ 1.</p><p>For each tree, draw its sample of parcels. At each node where a split is allowed, sample m variables from p, then search their admissible thresholds for the one that most reduces the sum of squared deviations from the leaf averages. Here, an admissible threshold leaves at least 1 occurrence on each side. If no split is admissible, the node remains a leaf. The stopping rule determines whether to continue. Variable sampling starts again at each node; it does not choose a permanent variable for the whole tree.</p><p>Here is a provided fictional outcome: α receives A, B, C, C and distance at its root, with threshold 6 km. β receives A, B, C, D and mass, with threshold 2 kg. γ receives B, B, C, D and departure time, with threshold 12 h. In this small model, each tree stops after this split. Searching for thresholds belongs to the unit on trees; here, they are given.</p><p>The draws for individual trees can be made independently, but they all use the same historical records: this does not make their errors independent. Variable sampling aims to diversify the possible questions, without guaranteeing that all learned questions will differ.</p></li><li><h3>Find the leaves reached</h3><p>In α, 4 ≤ 6 km: the parcel joins A and B. Their average duration is (10 + 14) / 2 = 24 / 2 = 12 min. The occurrences of C belong to the other leaf.</p><p>In β, 3 &gt; 2 kg: the parcel joins B and D. The leaf returns (14 + 22) / 2 = 36 / 2 = 18 min.</p><p>In γ, 11 ≤ 12 h: the parcel joins the 2 occurrences of B. The leaf returns (14 + 14) / 2 = 28 / 2 = 14 min. A repetition counts in this tree’s training, but it does not provide a newly observed delivery.</p></li><li><h3>Average the predictions for this same x</h3><p>j is a tree’s index, from 1 to T. fⱼ(x) is the duration predicted by that tree for parcel x, in minutes. F(x) is the forest’s prediction, also in minutes. The symbol Σ means to add the outputs of all the trees; the inputs x are identical for every term.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>T</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>T</mi></msubsup><msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math></div><p>All trees have the same weight. First add 12 + 18 = 30 min, then 30 + 14 = 44 min. Divide by the number of trees, because each output estimates the same duration.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>12</mn><mo>+</mo><mn>18</mn><mo>+</mo><mn>14</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>44</mn><mn>3</mn></mfrac><mo>≈</mo><mn>14.67</mn><mtext> min</mtext></mrow></math></div><p>The fraction 44/3 min is exact; 14.67 min is a rounded value. Neither distance nor mass is averaged with the minutes.</p></li><li><h3>Check the average another way</h3><p>An average with equal weights must remain between the smallest and largest outputs: 12 min ≤ F(x) ≤ 18 min. Our fraction satisfies this bound.</p><p>Also check that the deviations of the outputs from the average balance out. For α: 12 − 44/3 = -8/3 min. For β: 18 − 44/3 = 10/3 min. For γ: 14 − 44/3 = -2/3 min.</p><p>The first deviations add up to 2/3 min; adding the deviation for γ gives 0 min. This check uses the exact fraction, before any rounding. It checks the calculation of the average, rather than the accuracy of the forecast for a future delivery.</p></li><li><h3>Distinguish diversity, correct calculation and predictive quality</h3><p>With m less than p, a dominant variable may be absent from a node. The trees then have more opportunities to learn different questions; averaging may reduce their variability. But depriving a node of a useful variable may also weaken its tree. This trade-off must be checked on parcels separate from those used for training.</p><p>Increasing T removes neither a shared offset in the predictions nor future information that has slipped into the inputs. The number of candidate variables and the depth are tuned using separate validation; the test set remains reserved for evaluating the fixed choice. A single delivery allows an error to be calculated, but does not establish general superiority.</p><p>Our forest deliberately uses very short trees. A forest can contain deeper trees: the rule of drawing variables again then applies to their other splits. Averaging the outputs remains the same operation.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the diagrams. Describe what is sampled for a tree, then for a node. Reconstruct the occurrences in the leaves reached and their average. Explain why independent draws do not imply independent errors.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I draw the variable once, and this tree will only examine that variable.”</h3><p>Candidate variables are sampled at the node. If the tree continues, another draw may offer a different variable or the same one again. Our trees stop at the root only to keep the calculation short.</p><a href="#exemple">Reread the construction and its stopping rule</a></li><li><h3>“The forest must choose the duration that receives the most votes.”</h3><p>Here, each output is a quantity in minutes: take their average. The average duration may differ from every individual output. Always state whether the target is a quantity or a class before choosing the aggregation.</p><a href="#exemple">Find the average and its units again</a></li><li><h3>“Adding more trees is enough to make the forecast good.”</h3><p>Copies of the same tree retain exactly its output and its error. Different trees can also share an error. Calculate the case with copies, then distinguish an error on a single parcel from an evaluation on parcels held out.</p><a href="#exercices">Try the predictive quality diagnosis</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-noeud"><p class="repere">Exercise 1 · Recognize the mechanism</p>
+<h3>If the tree were to continue</h3><p>Extend tree α beyond its root, keeping m = 1 and p = 3. Someone proposes requiring distance at all its nodes because it was drawn at the root. Describe the next draw specified by our forest. Can distance be a candidate again?</p>
+<label for="reponse-ex-noeud">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-noeud" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-noeud" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-noeud" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-noeud" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Distinguish the parcel sample, which is kept for this tree, from variable sampling, which belongs to each split.</p></details><details class="indice"><summary>Hint 2</summary><p>A variable that is not selected at a node is not permanently removed from the available list.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sample A, B, C, C remains α’s sample. At the next node that the stopping rule allows to split, draw 1 variable again from distance, mass and departure time. Then search for an admissible threshold on this candidate using the occurrences that reached this node.</p><p>Distance may be drawn again. Mass or departure time may also be offered. The forest diversifies the opportunities to build questions; it does not require every node to use a different variable. The extension is hypothetical: the trees in the example still stop after their root split.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the tree’s sample of parcels.</li><li>Draw candidate variables again at the node.</li><li>Allow distance to return and mention the stopping rule.</li></ul></details></article><article class="exercice" id="ex-leger"><p class="repere">Exercise 2 · Calculation and traversal</p>
+<h3>The parcel becomes lighter</h3><p>Without retraining the trees, change only the mass of the parcel whose duration we want to predict to 1 kg. The distance remains 4 km and the departure time 11 h. Find the leaves, calculate the exact prediction, then its rounded value. By how much does it decrease?</p>
+<label for="reponse-ex-leger">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-leger" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-leger" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-leger" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-leger" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Only the tree that asks a question about mass can change leaves in our small ensemble.</p></details><details class="indice"><summary>Hint 2</summary><p>The light parcel leaf in β contains A and C. Their average becomes β’s new output.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>α stays at 12 min and γ at 14 min. In β, 1 ≤ 2 kg leads to A and C: (10 + 18) / 2 = 28 / 2 = 14 min.</p><p>Add 12 + 14 = 26 min, then 26 + 14 = 40 min. The new average is exactly 40/3 min, or approximately 13.33 min.</p><p>The exact decrease is 44/3 − 40/3 = 4/3 min. Check: only β has changed; dividing the decrease in its output by T also gives (18 − 14) / 3 = 4/3 min. The new average remains between 12 and 14 min.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate the light parcel leaf output from the durations of A and C.</li><li>Keep the other trees’ outputs and divide their sum by T.</li><li>Distinguish the exact fraction, the rounded value and the check of the decrease.</li></ul></details></article><article class="exercice" id="ex-preuve"><p class="repere">Exercise 3 · Reasoned diagnosis</p>
+<h3>Is a smaller error enough?</h3><p>Return to the original parcel of 3 kg. After its fictional delivery, its duration is revealed: 16 min. Calculate the squared errors of the forest and of β alone. Someone then replaces the forest with 3 exact copies of β: calculate this average. What do these results establish, and what evidence is missing for choosing a delivery model?</p>
+<label for="reponse-ex-preuve">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-preuve" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-preuve" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-preuve" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-preuve" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A signed error is the prediction minus the observed duration; its square is expressed in square minutes.</p></details><details class="indice"><summary>Hint 2</summary><p>Averaging identical copies does not change their output. A single parcel does not represent the whole distribution of journeys.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For the forest, the signed error is 44/3 − 16 = -4/3 min. Its square is 16/9 min². For β: 18 − 16 = 2 min, then 4 min². For this particular parcel, the forest’s squared error is smaller.</p><p>The copies of β first give 18 + 18 = 36 min, then 36 + 18 = 54 min. Their average 54 / 3 = 18 min remains β’s output; the squared error remains 4 min².</p><p>These calculations establish a local comparison and show that copying a tree adds no diversity. Choosing a model requires comparing errors on several parcels reserved for validation, with inputs that are actually available at departure. Once the settings are fixed, a separate test evaluates that choice. No success rate or general improvement follows from our fictional delivery.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the signed errors before squaring them and state min².</li><li>Show that the copies have the same average and the same error as β.</li><li>Limit the verdict to this parcel and distinguish validation for tuning from a separate test.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="tirages"><summary><span class="repere">Recall 1</span><span>Which sampling operations must we distinguish in our forest?</span></summary><p>Sample parcels with replacement for each tree, then sample candidate variables without replacement at each node where a split is attempted. Variable sampling starts again at the next node.</p></details><details class="carte" data-carte="feuille"><summary><span class="repere">Recall 2</span><span>What does a regression leaf return, and how should a repeated parcel be treated?</span></summary><p>The average duration of the training occurrences that reached that leaf, in minutes. A repeated parcel counts with its multiplicity in that tree; it is not a new independent observation.</p></details><details class="carte" data-carte="moyenne"><summary><span class="repere">Recall 3</span><span>How can we reconstruct our forest’s output and check its calculation?</span></summary><p>Pass the same parcel through all the trees, add their outputs, then divide by T. The output retains the unit of the durations and lies between their extremes. The deviations of the outputs from the exact average must add up to 0 min.</p></details><details class="carte" data-carte="diversite"><summary><span class="repere">Recall 4</span><span>Why restrict candidate variables without promising better predictions?</span></summary><p>This gives trees opportunities to ask different questions and may reduce their shared variability. But a useful variable may be missing, and the errors remain linked through the same historical records. The trade-off requires separate validation.</p></details><details class="carte" data-carte="evaluation"><summary><span class="repere">Recall 5</span><span>What is still missing after a smaller error on our fictional parcel?</span></summary><p>A comparison on several parcels reserved for validation to fix the settings, followed by evaluation on a separate test. A smaller local error does not prove a general improvement; reading or an assisted answer does not demonstrate an acquired skill either.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the full path: available historical records, parcel sampling per tree, variable sampling per node, splitting and stopping rules, the leaf reached by the same new parcel, the average and its check. Finish by explaining why diversity and separate evaluation remain necessary. If you consulted help, repeat this reconstruction without support another day; reading does not establish any attained level.</p></div><div class="exports"><a class="bouton" download="c138-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzgtbTM6dGlyYWdlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTM4LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGlyYWdlcy1kZS1sYS1mb3JldCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBzYW1wbGluZyBvcGVyYXRpb25zIG11c3Qgd2UgZGlzdGluZ3Vpc2ggaW4gb3VyIGZvcmVzdD8iLAogICAgICAicmVwb25zZSI6ICJTYW1wbGUgcGFyY2VscyB3aXRoIHJlcGxhY2VtZW50IGZvciBlYWNoIHRyZWUsIHRoZW4gc2FtcGxlIGNhbmRpZGF0ZSB2YXJpYWJsZXMgd2l0aG91dCByZXBsYWNlbWVudCBhdCBlYWNoIG5vZGUgd2hlcmUgYSBzcGxpdCBpcyBhdHRlbXB0ZWQuIFZhcmlhYmxlIHNhbXBsaW5nIHN0YXJ0cyBhZ2FpbiBhdCB0aGUgbmV4dCBub2RlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0zOmZldWlsbGUiLAogICAgICAidW5pdGUiOiAiYzEzOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZldWlsbGUtZGUtcmVncmVzc2lvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSByZWdyZXNzaW9uIGxlYWYgcmV0dXJuLCBhbmQgaG93IHNob3VsZCBhIHJlcGVhdGVkIHBhcmNlbCBiZSB0cmVhdGVkPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBhdmVyYWdlIGR1cmF0aW9uIG9mIHRoZSB0cmFpbmluZyBvY2N1cnJlbmNlcyB0aGF0IHJlYWNoZWQgdGhhdCBsZWFmLCBpbiBtaW51dGVzLiBBIHJlcGVhdGVkIHBhcmNlbCBjb3VudHMgd2l0aCBpdHMgbXVsdGlwbGljaXR5IGluIHRoYXQgdHJlZTsgaXQgaXMgbm90IGEgbmV3IGluZGVwZW5kZW50IG9ic2VydmF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0zOm1veWVubmUiLAogICAgICAidW5pdGUiOiAiYzEzOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1veWVubmUtZGUtbGEtZm9yZXQiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB3ZSByZWNvbnN0cnVjdCBvdXIgZm9yZXN04oCZcyBvdXRwdXQgYW5kIGNoZWNrIGl0cyBjYWxjdWxhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJQYXNzIHRoZSBzYW1lIHBhcmNlbCB0aHJvdWdoIGFsbCB0aGUgdHJlZXMsIGFkZCB0aGVpciBvdXRwdXRzLCB0aGVuIGRpdmlkZSBieSBULiBUaGUgb3V0cHV0IHJldGFpbnMgdGhlIHVuaXQgb2YgdGhlIGR1cmF0aW9ucyBhbmQgbGllcyBiZXR3ZWVuIHRoZWlyIGV4dHJlbWVzLiBUaGUgZGV2aWF0aW9ucyBvZiB0aGUgb3V0cHV0cyBmcm9tIHRoZSBleGFjdCBhdmVyYWdlIG11c3QgYWRkIHVwIHRvIDAgbWluLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0zOmRpdmVyc2l0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTM4LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGl2ZXJzaXRlLWRlcy1hcmJyZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHJlc3RyaWN0IGNhbmRpZGF0ZSB2YXJpYWJsZXMgd2l0aG91dCBwcm9taXNpbmcgYmV0dGVyIHByZWRpY3Rpb25zPyIsCiAgICAgICJyZXBvbnNlIjogIlRoaXMgZ2l2ZXMgdHJlZXMgb3Bwb3J0dW5pdGllcyB0byBhc2sgZGlmZmVyZW50IHF1ZXN0aW9ucyBhbmQgbWF5IHJlZHVjZSB0aGVpciBzaGFyZWQgdmFyaWFiaWxpdHkuIEJ1dCBhIHVzZWZ1bCB2YXJpYWJsZSBtYXkgYmUgbWlzc2luZywgYW5kIHRoZSBlcnJvcnMgcmVtYWluIGxpbmtlZCB0aHJvdWdoIHRoZSBzYW1lIGhpc3RvcmljYWwgcmVjb3Jkcy4gVGhlIHRyYWRlLW9mZiByZXF1aXJlcyBzZXBhcmF0ZSB2YWxpZGF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0zOmV2YWx1YXRpb24iLAogICAgICAidW5pdGUiOiAiYzEzOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZS1kZS1sYS1jb21wYXJhaXNvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHN0aWxsIG1pc3NpbmcgYWZ0ZXIgYSBzbWFsbGVyIGVycm9yIG9uIG91ciBmaWN0aW9uYWwgcGFyY2VsPyIsCiAgICAgICJyZXBvbnNlIjogIkEgY29tcGFyaXNvbiBvbiBzZXZlcmFsIHBhcmNlbHMgcmVzZXJ2ZWQgZm9yIHZhbGlkYXRpb24gdG8gZml4IHRoZSBzZXR0aW5ncywgZm9sbG93ZWQgYnkgZXZhbHVhdGlvbiBvbiBhIHNlcGFyYXRlIHRlc3QuIEEgc21hbGxlciBsb2NhbCBlcnJvciBkb2VzIG5vdCBwcm92ZSBhIGdlbmVyYWwgaW1wcm92ZW1lbnQ7IHJlYWRpbmcgb3IgYW4gYXNzaXN0ZWQgYW5zd2VyIGRvZXMgbm90IGRlbW9uc3RyYXRlIGFuIGFjcXVpcmVkIHNraWxsIGVpdGhlci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c138-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hpY2ggc2FtcGxpbmcgb3BlcmF0aW9ucyBtdXN0IHdlIGRpc3Rpbmd1aXNoIGluIG91ciBmb3Jlc3Q/CVNhbXBsZSBwYXJjZWxzIHdpdGggcmVwbGFjZW1lbnQgZm9yIGVhY2ggdHJlZSwgdGhlbiBzYW1wbGUgY2FuZGlkYXRlIHZhcmlhYmxlcyB3aXRob3V0IHJlcGxhY2VtZW50IGF0IGVhY2ggbm9kZSB3aGVyZSBhIHNwbGl0IGlzIGF0dGVtcHRlZC4gVmFyaWFibGUgc2FtcGxpbmcgc3RhcnRzIGFnYWluIGF0IHRoZSBuZXh0IG5vZGUuCXRvZGFpIGMxMzgtbTMgdGlyYWdlcy1kZS1sYS1mb3JldApXaGF0IGRvZXMgYSByZWdyZXNzaW9uIGxlYWYgcmV0dXJuLCBhbmQgaG93IHNob3VsZCBhIHJlcGVhdGVkIHBhcmNlbCBiZSB0cmVhdGVkPwlUaGUgYXZlcmFnZSBkdXJhdGlvbiBvZiB0aGUgdHJhaW5pbmcgb2NjdXJyZW5jZXMgdGhhdCByZWFjaGVkIHRoYXQgbGVhZiwgaW4gbWludXRlcy4gQSByZXBlYXRlZCBwYXJjZWwgY291bnRzIHdpdGggaXRzIG11bHRpcGxpY2l0eSBpbiB0aGF0IHRyZWU7IGl0IGlzIG5vdCBhIG5ldyBpbmRlcGVuZGVudCBvYnNlcnZhdGlvbi4JdG9kYWkgYzEzOC1tMyBmZXVpbGxlLWRlLXJlZ3Jlc3Npb24KSG93IGNhbiB3ZSByZWNvbnN0cnVjdCBvdXIgZm9yZXN04oCZcyBvdXRwdXQgYW5kIGNoZWNrIGl0cyBjYWxjdWxhdGlvbj8JUGFzcyB0aGUgc2FtZSBwYXJjZWwgdGhyb3VnaCBhbGwgdGhlIHRyZWVzLCBhZGQgdGhlaXIgb3V0cHV0cywgdGhlbiBkaXZpZGUgYnkgVC4gVGhlIG91dHB1dCByZXRhaW5zIHRoZSB1bml0IG9mIHRoZSBkdXJhdGlvbnMgYW5kIGxpZXMgYmV0d2VlbiB0aGVpciBleHRyZW1lcy4gVGhlIGRldmlhdGlvbnMgb2YgdGhlIG91dHB1dHMgZnJvbSB0aGUgZXhhY3QgYXZlcmFnZSBtdXN0IGFkZCB1cCB0byAwIG1pbi4JdG9kYWkgYzEzOC1tMyBtb3llbm5lLWRlLWxhLWZvcmV0CldoeSByZXN0cmljdCBjYW5kaWRhdGUgdmFyaWFibGVzIHdpdGhvdXQgcHJvbWlzaW5nIGJldHRlciBwcmVkaWN0aW9ucz8JVGhpcyBnaXZlcyB0cmVlcyBvcHBvcnR1bml0aWVzIHRvIGFzayBkaWZmZXJlbnQgcXVlc3Rpb25zIGFuZCBtYXkgcmVkdWNlIHRoZWlyIHNoYXJlZCB2YXJpYWJpbGl0eS4gQnV0IGEgdXNlZnVsIHZhcmlhYmxlIG1heSBiZSBtaXNzaW5nLCBhbmQgdGhlIGVycm9ycyByZW1haW4gbGlua2VkIHRocm91Z2ggdGhlIHNhbWUgaGlzdG9yaWNhbCByZWNvcmRzLiBUaGUgdHJhZGUtb2ZmIHJlcXVpcmVzIHNlcGFyYXRlIHZhbGlkYXRpb24uCXRvZGFpIGMxMzgtbTMgZGl2ZXJzaXRlLWRlcy1hcmJyZXMKV2hhdCBpcyBzdGlsbCBtaXNzaW5nIGFmdGVyIGEgc21hbGxlciBlcnJvciBvbiBvdXIgZmljdGlvbmFsIHBhcmNlbD8JQSBjb21wYXJpc29uIG9uIHNldmVyYWwgcGFyY2VscyByZXNlcnZlZCBmb3IgdmFsaWRhdGlvbiB0byBmaXggdGhlIHNldHRpbmdzLCBmb2xsb3dlZCBieSBldmFsdWF0aW9uIG9uIGEgc2VwYXJhdGUgdGVzdC4gQSBzbWFsbGVyIGxvY2FsIGVycm9yIGRvZXMgbm90IHByb3ZlIGEgZ2VuZXJhbCBpbXByb3ZlbWVudDsgcmVhZGluZyBvciBhbiBhc3Npc3RlZCBhbnN3ZXIgZG9lcyBub3QgZGVtb25zdHJhdGUgYW4gYWNxdWlyZWQgc2tpbGwgZWl0aGVyLgl0b2RhaSBjMTM4LW0zIGxpbWl0ZS1kZS1sYS1jb21wYXJhaXNvbgo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mwjnen zjywte gvnb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading milestone · recognize a forest candidate</h3><dl><div><dt>What you understand</dt><dd>A forest for regression combines the durations from the leaves reached by the same parcel. Variable sampling at each split aims for a diversity of questions; it certifies neither independent errors nor an actual improvement.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">glkvxi ouxvpf eqwijm pfqybf ssybii suzbnq cijwgq pqituo ztjrmu dlqfcu gslvqx smgvwa lwwlwo vdfprk dugnrg dxveom zixfgo qkqgpw jixipt gztokv lgmmwp cufpfb vdtntk hseysz</span></span></dd></div><div><dt>Your level</dt><dd>Level 2 to prepare for: distinguish the sampling operations, find the leaves and their exact average, then limit the conclusion of a comparison. Reproducing this reasoning without support during delayed recall remains to be demonstrated. Reading a page or giving an assisted answer does not establish any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">grwdgk naxncl czotwf npjkgd usvjhe pjsoiw jxhkmi ynuvuf gqbvvy nlnyrz gplumc vtjcjh pxjrzf tigwyv uckozc qcklpi wgdoxb oelqzw tcwfqk onqamm fhcmkx mjlplo ehvkbs mmjcfj</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the parcel’s path and the case with copies another day without help. Before any real use, further targeted reading must establish the effective configuration of variable sampling and the call path, then a separate authorized evaluation must assess predictive quality. The next unit in the chapter introduces boosting.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c138-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c138-m2.html">Previous</a> · <a href="c138-m4.html">Next</a></nav>
+<footer><p>Course book · C138·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

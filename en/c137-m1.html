@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Center a table of readings by subtracting each column’s mean from its values, and check what this operation preserves (differences, dispersion, units) and what it removes (the position of the point cloud relative to the origin).">
+<title>C137·M1 · Centering — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xbflsp gykjwi egih</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C137·M1</p><h1>Centering</h1><p class="objectif"><span>Your goal</span>Center a table of readings by subtracting each column’s mean from its values, and check what this operation preserves (differences, dispersion, units) and what it removes (the position of the point cloud relative to the origin).</p><p class="prerequis"><strong>Before you start</strong><br>c048-m5 : positivity · c050-m5 : conditioning · c060-m5 : approximations and assumptions · c036-m5 : annotated graphs</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional sensor takes 3 readings of the temperature t, in degrees Celsius, and relative humidity h, in percent, in a room. Each reading is a point in a plane: a number on the t axis and a number on the h axis. The values are invented for the exercise; they do not describe any real room.</p><p>In the first diagram, the three points A, B and C are close to one another but very far from the origin O, the point where t and h equal 0. This origin is a choice of coordinate system, rather than a property of the room: changing the temperature scale would move O without changing anything in the room. The point cloud is described by its center G (the means of t and h) and how the points spread out around G.</p><p>Centering shifts the coordinate system: we subtract each column’s mean from its values, and G becomes the origin, as in the second diagram. Nothing rotates or stretches: the points keep their differences from one another and their units. Only the position of the point cloud relative to O is removed.</p><p>This position gets in the way when we want to discuss spread. Measuring dispersion from the origin combines two pieces of information: the distance from the center to O, and the spread around the center. Later units in this chapter will examine how this spread is distributed; here, we prepare for that work through centering and its checks.</p><p>The figures follow the rule for annotated graphs (c036-m5): named axes, units, reference points and a common scale. As in c060-m5, each calculation states its assumptions before using them.</p><div class="schemas"><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>Three readings far from the origin</title><desc>A plane with temperature t on the horizontal axis and humidity h on the vertical axis. Readings A, B and C, with coordinates (17 ; 57), (23 ; 45) and (26 ; 48), form a small point cloud far from the origin O, which is 0 °C and 0 %. The center G of the point cloud is at (22 ; 50).</desc>
+<line x1="40" y1="200" x2="345" y2="200" class="trait" /><line x1="40" y1="200" x2="40" y2="12" class="trait" />
+<line x1="40" y1="200" x2="282" y2="50" class="trait" />
+<circle cx="40" cy="200" r="5" class="resultat" />
+<circle cx="227" cy="29" r="5" class="point-mesure" /><circle cx="293" cy="65" r="5" class="point-mesure" /><circle cx="326" cy="56" r="5" class="point-mesure" />
+<circle cx="282" cy="50" r="6" class="point-prediction" />
+<text x="48" y="218" class="petite-etiquette">O</text><text x="345" y="218" text-anchor="end" class="petite-etiquette">t (°C)</text><text x="48" y="16" class="petite-etiquette">h (%)</text>
+<text x="214" y="34" text-anchor="end">A</text><text x="293" y="86" text-anchor="middle">B</text><text x="338" y="62">C</text><text x="282" y="36" text-anchor="middle">G</text>
+<text x="130" y="168" class="petite-etiquette">The cloud is far from O</text><text x="130" y="186" class="petite-etiquette">G = (22 ; 50)</text></svg><figcaption>Before: the point cloud ABC is small, but its center G is far from the origin O of the plane. Interpretation: measuring from O mainly describes the position of G.</figcaption></figure><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same point cloud centered on G</title><desc>After subtracting the means, the center G is the origin of the plane. Points A′, B′ and C′ have coordinates (-5 ; 7), (1 ; -5) and (4 ; -2). The scale is the same as in the previous diagram: the shape of the point cloud has not changed.</desc>
+<line x1="20" y1="115" x2="345" y2="115" class="trait" /><line x1="180" y1="12" x2="180" y2="218" class="trait" />
+<circle cx="125" cy="94" r="5" class="point-mesure" /><circle cx="191" cy="130" r="5" class="point-mesure" /><circle cx="224" cy="121" r="5" class="point-mesure" />
+<circle cx="180" cy="115" r="6" class="point-prediction" />
+<text x="125" y="80" text-anchor="middle">A′</text><text x="191" y="152" text-anchor="middle">B′</text><text x="234" y="134">C′</text><text x="172" y="106" text-anchor="end">G</text>
+<text x="345" y="104" text-anchor="end" class="petite-etiquette">t − 22 (°C)</text><text x="188" y="16" class="petite-etiquette">h − 50 (%)</text>
+<text x="192" y="190" class="petite-etiquette">Same shape,</text><text x="192" y="208" class="petite-etiquette">new origin G</text></svg><figcaption>After: the same point cloud and the same scale, with the coordinate system shifted to G. Differences between points and units are preserved.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Centering subtracts each column’s mean from its values: the point cloud shifts without changing shape, the columns then have a mean of 0, and dispersion around the center does not change.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Center three sensor readings</h3><p>The fictional sensor recorded three readings: A (17 °C ; 57 %), B (23 °C ; 45 %) and C (26 °C ; 48 %). We center both columns, check the result, then compare dispersion around the center and around the origin.</p><ol class="etapes"><li><h3>Define the quantities, units and assumptions</h3><p>The table has n = 3 rows (the readings) and two columns: t, temperature, in °C; h, relative humidity, in %. The mean of t is written m<sub>t</sub> and the mean of h is written m<sub>h</sub>: these are the coordinates of the center G. The centered value of a reading is written with a prime: t′ for temperature, h′ for humidity. The variance of t is v<sub>t</sub>, and that of h is v<sub>h</sub>.</p><p>Assumptions for this unit: each column is numerical, with no missing values; all readings have equal weight; variance is calculated by dividing by n (the population variance of the 3 readings, with no inference beyond them). Units follow the column: °C and % for centered values, °C² and %² for variances. A variance is a sum of squares divided by n: it is never negative, applying the same positivity check as in c048-m5.</p></li><li><h3>Calculate the means</h3><p>The mean of a column is the sum of its values divided by n. For t, with readings indexed by i:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>t</mi><mi>i</mi></msub></mrow></math></div><p>With our data, we find the sum in two additions: 17 + 23 = 40, then 40 + 26 = 66.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>t</mi></msub><mo>=</mo><mfrac><mrow><mn>17</mn><mo>+</mo><mn>23</mn><mo>+</mo><mn>26</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>66</mn><mn>3</mn></mfrac><mo>=</mo><mn>22</mn><mtext> °C</mtext></mrow></math></div><p>For h: 57 + 45 = 102, then 102 + 48 = 150, so:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>h</mi></msub><mo>=</mo><mfrac><mrow><mn>57</mn><mo>+</mo><mn>45</mn><mo>+</mo><mn>48</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>150</mn><mn>3</mn></mfrac><mo>=</mo><mn>50</mn><mtext> %</mtext></mrow></math></div><p>The center is therefore G = (22 °C ; 50 %).</p></li><li><h3>Subtract each column’s mean</h3><p>Subtract the mean of each value’s own column from that value. The operation never mixes t and h, and it keeps the units:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>t</mi><mi>i</mi><mo>′</mo></msubsup><mo>=</mo><msub><mi>t</mi><mi>i</mi></msub><mo>−</mo><msub><mi>m</mi><mi>t</mi></msub><mtext>   et   </mtext><msubsup><mi>h</mi><mi>i</mi><mo>′</mo></msubsup><mo>=</mo><msub><mi>h</mi><mi>i</mi></msub><mo>−</mo><msub><mi>m</mi><mi>h</mi></msub></mrow></math></div><p>For t: A gives 17 − 22 = -5 °C, B gives 23 − 22 = 1 °C, C gives 26 − 22 = 4 °C. For h: A gives 57 − 50 = 7 %, B gives 45 − 50 = -5 %, C gives 48 − 50 = -2 %.</p><p>The centered points are A′ (-5 ; 7), B′ (1 ; -5) and C′ (4 ; -2). The center G is now at the origin, as in the second diagram.</p></li><li><h3>Check: the sum of deviations is 0</h3><p>Correct centering leaves a mean of 0 in each column. This is no coincidence: by definition, n times the mean is the sum of the values.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msubsup><mi>t</mi><mi>i</mi><mo>′</mo></msubsup><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>t</mi><mi>i</mi></msub><mo>−</mo><mi>n</mi><msub><mi>m</mi><mi>t</mi></msub><mo>=</mo><mn>0</mn></mrow></math></div><p>For t: we add the centered values in two stages.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>-5</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>-4</mn><mtext> ; </mtext><mn>-4</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>0</mn><mtext> °C</mtext></mrow></math></div><p>Repeat the same check for h; you should get 0 %. A nonzero result indicates an addition error or an incorrectly calculated mean. Keep this result: it will be used two steps later.</p></li><li><h3>Measure dispersion around the center</h3><p>Variance is the mean of the squared deviations from the mean. The centered values are exactly these deviations:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msub><mi>t</mi><mi>i</mi></msub><mo>−</mo><msub><mi>m</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>For t: the squares are 25, 1 and 16, their sum is 42, and:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>t</mi></msub><mo>=</mo><mfrac><mrow><mn>25</mn><mo>+</mo><mn>1</mn><mo>+</mo><mn>16</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>42</mn><mn>3</mn></mfrac><mo>=</mo><mn>14</mn><mtext> °C²</mtext></mrow></math></div><p>For h: the squares are 49, 25 and 4, their sum is 78, and:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>h</mi></msub><mo>=</mo><mfrac><mrow><mn>49</mn><mo>+</mo><mn>25</mn><mo>+</mo><mn>4</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>78</mn><mn>3</mn></mfrac><mo>=</mo><mn>26</mn><mtext> %²</mtext></mrow></math></div><p>These variances are the same before and after centering: centering changes only the origin. They still have different units, °C² and %², so comparing 14 with 26 as two numbers of the same kind would be a misinterpretation.</p></li><li><h3>Separate position and spread</h3><p>What would happen if we measured the spread of t from the origin by taking the mean of the squares of the raw values? The squares are 289, 529 and 676, their sum is 1494, and their mean is 498 °C². This value is different from the variance 14 °C². To see why, write each value as t′ + m<sub>t</sub> and expand the square:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msubsup><mi>t</mi><mi>i</mi><mn>2</mn></msubsup><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msubsup><mi>t</mi><mi>i</mi><mo>′</mo></msubsup><mo>+</mo><msub><mi>m</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msubsup><mi>t</mi><mi>i</mi><mrow><mo>′</mo><mn>2</mn></mrow></msubsup><mo>+</mo><mn>2</mn><msub><mi>m</mi><mi>t</mi></msub><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msubsup><mi>t</mi><mi>i</mi><mo>′</mo></msubsup><mo>+</mo><mi>n</mi><msubsup><mi>m</mi><mi>t</mi><mn>2</mn></msubsup></mrow></math></div><p>The middle term contains the sum of deviations, which is 0 according to the previous step. This leaves the following decomposition:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msubsup><mi>t</mi><mi>i</mi><mn>2</mn></msubsup><mo>=</mo><msubsup><mi>m</mi><mi>t</mi><mn>2</mn></msubsup><mo>+</mo><msub><mi>v</mi><mi>t</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mn>289</mn><mo>+</mo><mn>529</mn><mo>+</mo><mn>676</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mn>498</mn><mtext> °C²</mtext><mtext> ; </mtext><msup><mn>22</mn><mn>2</mn></msup><mo>+</mo><mn>14</mn><mo>=</mo><mn>484</mn><mo>+</mo><mn>14</mn><mo>=</mo><mn>498</mn><mtext> °C²</mtext></mrow></math></div><p>Of 498 °C², the part 484 °C² comes from the position of the center, and the part 14 °C² comes only from the spread. Centering removes the first part and leaves the second.</p></li><li><h3>Recognize the limits of the calculation</h3><p>Centering does not make the columns comparable: the units and scales remain, and dividing each column by its standard deviation is a separate operation that this unit does not cover. Centering is also insufficient to analyze the point cloud: how t and h vary together will be the subject of covariance in C137·M2.</p><p>The means we subtract are those of these 3 readings. For a new reading, we reuse these same means (see the exercise on the additional reading). Finally, this calculation describes the supplied data; it says nothing about a real room and does not choose a variance convention for you.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain in your own words why the sum of deviations from the mean is 0, then why this property makes the middle term disappear in the decomposition of the mean of squares. Which part of 498 °C² does centering remove?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Centering brings values to the same scale or makes them comparable.”</h3><p>Centering only subtracts a constant from each column: the origin moves, while differences between readings and units remain. In the example, the variance of t is still 14 °C² and that of h is still 26 %². Changing the scale is a separate operation, which is not covered here.</p><a href="#exemple">Review the step on dispersion around the center</a></li><li><h3>“For a new reading, I recalculate a mean and subtract it.”</h3><p>The mean belongs to the reference data and is kept in memory. In the exercise, the additional reading becomes (2 ; -9) with the means 22 and 50. If centered using its own value, it would be 0 everywhere and would lose its position relative to the point cloud.</p><a href="#exercices">Redo the exercise on the additional reading</a></li><li><h3>“The mean of squares around the origin already measures spread.”</h3><p>It combines the position of the center and the spread: 498 = 484 + 14 in °C². Only the part 14 describes spread; the rest depends on the choice of origin, as the offset exercise showed.</p><a href="#intuition">Return to the image of the point cloud far from the origin</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-mesure-supplementaire"><p class="repere">Exercise 1 · Explained application</p>
+<h3>One more reading</h3><p>The fictional sensor records a fourth reading D: 24 °C and 41 %. Give its centered position using the means from the example, then explain why it should not be centered using its own value.</p>
+<label for="reponse-ex-mesure-supplementaire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-mesure-supplementaire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-mesure-supplementaire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-mesure-supplementaire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-mesure-supplementaire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Which means were used to center A, B and C? They are kept for D.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract the mean of t from the temperature, and the mean of h from the humidity, keeping the sign.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Temperature: 24 − 22 = 2 °C. Humidity: 41 − 50 = -9 %. The centered reading is therefore D′ (2 ; -9).</p><p>If D were centered using its own value, both its coordinates would be 0: its position relative to A′, B′ and C′ would be lost. If we recalculated the means using all four readings, the first three centered points would also change, and the coordinate system would no longer be the one in the diagrams.</p><p class="petit-titre">Check your reasoning</p><ul><li>The means from the example are reused without recalculation.</li><li>Each coordinate keeps its unit and sign.</li><li>The reason for rejecting centering a reading using its own value is given: its relative position would be lost.</li></ul></details></article><article class="exercice" id="ex-decalage"><p class="repere">Exercise 2 · Guided transfer</p>
+<h3>A thermometer with an offset</h3><p>Fictional variation: the thermometer adds 10 °C to every temperature (a fault invented for the exercise), while humidity is unchanged. For column t, give the new mean, the centered values, the variance, then the mean of squares around the origin. What changes and what stays the same?</p>
+<label for="reponse-ex-decalage">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-decalage" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-decalage" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-decalage" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-decalage" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Adding a constant to every value adds the same constant to the mean.</p></details><details class="indice"><summary>Hint 2</summary><p>For the last question, use the decomposition into position plus spread, with the new mean.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new mean is 22 + 10 = 32 °C. For A, the deviation becomes (17 + 10) − 32 = -5: the deviations, and therefore the three centered values -5, 1 and 4, are identical to those in the example, and the variance is still 14 °C².</p><p>However, the mean of squares around the origin becomes 32² + 14 = 1024 + 14 = 1038 °C², instead of 498 °C². Centering has absorbed the offset; the origin has not.</p><p class="petit-titre">Check your reasoning</p><ul><li>The mean changes by exactly the added constant.</li><li>The finding is stated: centered values and variance are unchanged.</li><li>The decomposition into position plus spread explains the new number, with its units.</li></ul></details></article><article class="exercice" id="ex-humidite"><p class="repere">Exercise 3 · Written reasoning</p>
+<h3>Predict without recalculating</h3><p>Without squaring the raw humidity values, predict the mean of their squares from mₕ and vₕ. Then check on paper using the three raw values, and explain why the prediction works using the sum of deviations.</p>
+<label for="reponse-ex-humidite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-humidite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-humidite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-humidite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-humidite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Reuse the decomposition from the step on position and spread, replacing t with h.</p></details><details class="indice"><summary>Hint 2</summary><p>For the check, square each raw humidity value, add the results, then divide by n.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The square of the mean is 50² = 2500 %², the variance is 26 %², so the prediction is 2500 + 26 = 2526 %².</p><p>Check: squaring 57, 45 and 48, adding the results, then dividing by 3 gives 2526 %² again. The formula works because, when h is written as h′ + m<sub>h</sub>, the cross term contains the sum of deviations, which is 0 by construction. Here position contributes 2500 compared with 26 for spread: measured from the origin, dispersion would mainly describe where the center is.</p><p class="petit-titre">Check your reasoning</p><ul><li>The prediction uses the square of the mean plus the variance, without recalculating the raw squares.</li><li>The units are %² and the manual check is attempted.</li><li>The explanation cites the fact that deviations sum to 0.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="centrage"><summary><span class="repere">Recall 1</span><span>What does centering a column of readings do?</span></summary><p>It subtracts the column’s mean from each value: the mean becomes 0, differences and units are preserved, and only the origin changes.</p></details><details class="carte" data-carte="moyenne-conservee"><summary><span class="repere">Recall 2</span><span>Which mean should be subtracted from a new reading?</span></summary><p>The mean of the reference data, kept in memory; do not recalculate a mean using the new reading alone.</p></details><details class="carte" data-carte="position-etalement"><summary><span class="repere">Recall 3</span><span>What is the mean of squares around the origin in terms of the mean and variance?</span></summary><p>The square of the mean plus the variance: the cross term disappears because the sum of deviations from the mean is 0.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>Does centering make columns with different units comparable?</span></summary><p>No: it keeps units and scales. It only removes the position of the point cloud relative to the origin.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct: a table of readings, one column at a time; the column’s mean; subtraction of this mean from each value; a check that the deviations sum to 0; unchanged variance, because it does not depend on the origin; the mean of squares around the origin equals the square of the mean plus the variance; a new reading centered using the stored means; limits: units, scales and stated assumptions.</p></div><div class="exports"><a class="bouton" download="c137-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTE6Y2VudHJhZ2UiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNlbnRyYWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBjZW50ZXJpbmcgYSBjb2x1bW4gb2YgcmVhZGluZ3MgZG8/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgc3VidHJhY3RzIHRoZSBjb2x1bW7igJlzIG1lYW4gZnJvbSBlYWNoIHZhbHVlOiB0aGUgbWVhbiBiZWNvbWVzIDAsIGRpZmZlcmVuY2VzIGFuZCB1bml0cyBhcmUgcHJlc2VydmVkLCBhbmQgb25seSB0aGUgb3JpZ2luIGNoYW5nZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTE6bW95ZW5uZS1jb25zZXJ2ZWUiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5vdXZlbGxlLW1lc3VyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBtZWFuIHNob3VsZCBiZSBzdWJ0cmFjdGVkIGZyb20gYSBuZXcgcmVhZGluZz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiBvZiB0aGUgcmVmZXJlbmNlIGRhdGEsIGtlcHQgaW4gbWVtb3J5OyBkbyBub3QgcmVjYWxjdWxhdGUgYSBtZWFuIHVzaW5nIHRoZSBuZXcgcmVhZGluZyBhbG9uZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzNy1tMTpwb3NpdGlvbi1ldGFsZW1lbnQiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRlY29tcG9zaXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBpcyB0aGUgbWVhbiBvZiBzcXVhcmVzIGFyb3VuZCB0aGUgb3JpZ2luIGluIHRlcm1zIG9mIHRoZSBtZWFuIGFuZCB2YXJpYW5jZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc3F1YXJlIG9mIHRoZSBtZWFuIHBsdXMgdGhlIHZhcmlhbmNlOiB0aGUgY3Jvc3MgdGVybSBkaXNhcHBlYXJzIGJlY2F1c2UgdGhlIHN1bSBvZiBkZXZpYXRpb25zIGZyb20gdGhlIG1lYW4gaXMgMC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzNy1tMTpsaW1pdGUiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZXMiLAogICAgICAicXVlc3Rpb24iOiAiRG9lcyBjZW50ZXJpbmcgbWFrZSBjb2x1bW5zIHdpdGggZGlmZmVyZW50IHVuaXRzIGNvbXBhcmFibGU/IiwKICAgICAgInJlcG9uc2UiOiAiTm86IGl0IGtlZXBzIHVuaXRzIGFuZCBzY2FsZXMuIEl0IG9ubHkgcmVtb3ZlcyB0aGUgcG9zaXRpb24gb2YgdGhlIHBvaW50IGNsb3VkIHJlbGF0aXZlIHRvIHRoZSBvcmlnaW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c137-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGNlbnRlcmluZyBhIGNvbHVtbiBvZiByZWFkaW5ncyBkbz8JSXQgc3VidHJhY3RzIHRoZSBjb2x1bW7igJlzIG1lYW4gZnJvbSBlYWNoIHZhbHVlOiB0aGUgbWVhbiBiZWNvbWVzIDAsIGRpZmZlcmVuY2VzIGFuZCB1bml0cyBhcmUgcHJlc2VydmVkLCBhbmQgb25seSB0aGUgb3JpZ2luIGNoYW5nZXMuCXRvZGFpIGMxMzctbTEgY2VudHJhZ2UKV2hpY2ggbWVhbiBzaG91bGQgYmUgc3VidHJhY3RlZCBmcm9tIGEgbmV3IHJlYWRpbmc/CVRoZSBtZWFuIG9mIHRoZSByZWZlcmVuY2UgZGF0YSwga2VwdCBpbiBtZW1vcnk7IGRvIG5vdCByZWNhbGN1bGF0ZSBhIG1lYW4gdXNpbmcgdGhlIG5ldyByZWFkaW5nIGFsb25lLgl0b2RhaSBjMTM3LW0xIG5vdXZlbGxlLW1lc3VyZQpXaGF0IGlzIHRoZSBtZWFuIG9mIHNxdWFyZXMgYXJvdW5kIHRoZSBvcmlnaW4gaW4gdGVybXMgb2YgdGhlIG1lYW4gYW5kIHZhcmlhbmNlPwlUaGUgc3F1YXJlIG9mIHRoZSBtZWFuIHBsdXMgdGhlIHZhcmlhbmNlOiB0aGUgY3Jvc3MgdGVybSBkaXNhcHBlYXJzIGJlY2F1c2UgdGhlIHN1bSBvZiBkZXZpYXRpb25zIGZyb20gdGhlIG1lYW4gaXMgMC4JdG9kYWkgYzEzNy1tMSBkZWNvbXBvc2l0aW9uCkRvZXMgY2VudGVyaW5nIG1ha2UgY29sdW1ucyB3aXRoIGRpZmZlcmVudCB1bml0cyBjb21wYXJhYmxlPwlObzogaXQga2VlcHMgdW5pdHMgYW5kIHNjYWxlcy4gSXQgb25seSByZW1vdmVzIHRoZSBwb3NpdGlvbiBvZiB0aGUgcG9pbnQgY2xvdWQgcmVsYXRpdmUgdG8gdGhlIG9yaWdpbi4JdG9kYWkgYzEzNy1tMSBsaW1pdGVzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xbflsp gykjwi egih</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · recognize centering and means in an analysis script</h3><dl><div><dt>What you understand</dt><dd>Centering a column subtracts its mean from its values; dispersion around the center is preserved and the position relative to the origin is removed. A new reading is centered using the means already calculated.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">oxdgxl zoylsq mukieo daksqm qivvcr zwpmgi jfemvi qenmks fnyyrp dldcwr arzynk skvvas nmmawb ueyvhp irwrej izifqy zadszz xhydkj qcdyjr pjtmez dxzldc bibfif yjkzsx uyttek</span></span></dd></div><div><dt>Your level</dt><dd>Prepare to center a column by hand, justify why the deviations sum to 0, present the decomposition into position plus spread, and state which mean to reuse for a new reading. Reading the course and the code does not establish that any level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">oewvsz eywvpg jelmij evxopf jvpzty umpqfs phjlty jmyygo kcvcqj appjza kxqgmp szntbq qthdgj unwznx pgsslu wzujpj efldzx rovgnt bvcado qkcawo mfqmba obqckk hrypcr ujplpy</span></span></dd></div><div><dt>To continue</dt><dd>Redo the centering and decomposition without support, then read the unit on covariance (C137·M2). Before any real use, the connections, division convention and authorized data will need to be checked separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c137-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c135-m5.html">Previous</a> · <a href="c137-m2.html">Next</a></nav>
+<footer><p>Course book · C137·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

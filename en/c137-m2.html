@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate and interpret a covariance from paired measurements, then construct their matrix while keeping the units and the division convention explicit.">
+<title>C137·M2 · Covariance — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hnbspj xdbamb hivu</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C137·M2</p><h1>Covariance</h1><p class="objectif"><span>Your goal</span>Calculate and interpret a covariance from paired measurements, then construct their matrix while keeping the units and the division convention explicit.</p><p class="prerequis"><strong>Before you start</strong><br>c048-m5 : positivity · c050-m5 : conditioning · c060-m5 : approximations and assumptions · c036-m5 : annotated graphs · c137-m1 : centering</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>On a workshop table, you compare 4 empty pouches, labeled A, B, C and D. For each one, you record its width in centimeters and its mass in grams. The measurements are fictional: they help explain the calculation and do not describe a real product.</p><p>Is a pouch that is wider than the mean also heavier than the mean? To answer, look at each pair of deviations. If the deviations have the same sign, their product is positive; if they have opposite signs, it is negative. The covariance is the mean of these signed products.</p><p>In the scatter plot, A is below both means and D is above both. These pouches contribute positively. C is wider but lighter than the means: it goes against this trend. B is exactly at the mean mass and contributes nothing to the product.</p><p>This interpretation uses the means as reference points, rather than alphabetical order or the passage of time. A positive result does not require every pair to contribute positively. It also does not prove that width causes mass: materials and manufacturing are not studied here.</p><div class="schemas"><figure><svg viewBox="0 0 360 315" xmlns="http://www.w3.org/2000/svg" role="img"><title>Width and mass of the pouches</title><desc>A: 10 cm and 20 g; B: 12 cm and 30 g; C: 14 cm and 25 g; D: 16 cm and 45 g. The gold lines intersect at the means, 13 cm and 30 g. A and D are on the same side of both means; C is on opposite sides; B is at the mean mass.</desc><text x="16" y="26">Mass (g)</text><line x1="45" y1="55" x2="45" y2="250" class="trait" /><line x1="45" y1="250" x2="325" y2="250" class="trait" /><line x1="180" y1="70" x2="180" y2="250" class="chemin-correction" /><line x1="45" y1="180" x2="325" y2="180" class="chemin-correction" /><text x="180" y="58" text-anchor="middle" class="petite-etiquette">Mean: 13 cm</text><text x="37" y="95" text-anchor="end" class="petite-etiquette">45</text><text x="37" y="185" text-anchor="end" class="petite-etiquette">30</text><text x="37" y="245" text-anchor="end" class="petite-etiquette">20</text><circle cx="60" cy="240" r="5" class="point-prediction" /><circle cx="140" cy="180" r="5" class="point-prediction" /><circle cx="220" cy="210" r="5" class="point-mesure" /><circle cx="300" cy="90" r="5" class="point-prediction" /><text x="72" y="234">A</text><text x="124" y="164">B</text><text x="233" y="232">C</text><text x="283" y="77">D</text><text x="60" y="273" text-anchor="middle" class="petite-etiquette">10</text><text x="140" y="273" text-anchor="middle" class="petite-etiquette">12</text><text x="220" y="273" text-anchor="middle" class="petite-etiquette">14</text><text x="300" y="273" text-anchor="middle" class="petite-etiquette">16</text><text x="180" y="303" text-anchor="middle">Width (cm)</text></svg><figcaption>Each point represents a single pouch. The axes are linear and begin at the edges of the drawing, without requiring a 0 origin. The gold lines mark 13 cm and 30 g; the letter identifies the point even when the colors cannot be distinguished.</figcaption></figure><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>The sign comes from the deviations</title><desc>Above the mean mass, a width below the mean gives a negative product and a width above it gives a positive product. Below the mean mass, the signs are reversed. At a mean, one deviation is 0 and the product is 0.</desc><text x="95" y="26" text-anchor="middle">Width −</text><text x="265" y="26" text-anchor="middle">Width +</text><rect x="15" y="43" width="160" height="67" rx="7" class="cadre-neutre" /><rect x="185" y="43" width="160" height="67" rx="7" class="cadre-resultat" /><rect x="15" y="122" width="160" height="67" rx="7" class="cadre-resultat" /><rect x="185" y="122" width="160" height="67" rx="7" class="cadre-neutre" /><text x="95" y="69" text-anchor="middle">Mass +</text><text x="95" y="94" text-anchor="middle">Negative product</text><text x="265" y="69" text-anchor="middle">Mass +</text><text x="265" y="94" text-anchor="middle">Positive product</text><text x="95" y="148" text-anchor="middle">Mass −</text><text x="95" y="173" text-anchor="middle">Positive product</text><text x="265" y="148" text-anchor="middle">Mass −</text><text x="265" y="173" text-anchor="middle">Negative product</text><text x="180" y="221" text-anchor="middle">At a mean: product 0</text></svg><figcaption>The signs + and − mean “above” and “below” the mean of the relevant column. The pouches themselves all have positive widths and masses.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep the pairs, center each column, multiply the deviations for the same pouch, then take their mean. State the divisor and the product unit.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From paired measurements to the covariance matrix</h3><p>Here is the complete fictional dataset: A = (10 cm; 20 g), B = (12 cm; 30 g), C = (14 cm; 25 g), D = (16 cm; 45 g). We describe these 4 pouches with the same weight for each. No values are missing, and the two measurements in a row refer to the same pouch.</p><ol class="etapes"><li><h3>Choose exactly what to calculate</h3><p>n is the number of pouches and has no unit. The index i identifies a row in the dataset; xᵢ is its width in cm and yᵢ its mass in g. The bar in x̄ and ȳ denotes the column mean. Let aᵢ = xᵢ − x̄ be the width deviation, in cm, and bᵢ = yᵢ − ȳ the mass deviation, in g.</p><p>c<sub>x</sub>ᵧ denotes the descriptive covariance here, in cm·g. The symbol ∑ means to add the indicated term over all rows, from i = 1 to i = n. The product aᵢbᵢ keeps the pairing through i.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>c</mi><mrow><mi>x</mi><mi>y</mi></mrow></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msub><mi>a</mi><mi>i</mi></msub><msub><mi>b</mi><mi>i</mi></msub></mrow></math></div><p>We divide by n to describe the complete dataset with equal weights. This definition requires neither a normal distribution nor independence between rows. Estimating a population covariance from a sample is a different question: in that context, the divisor n − 1 is commonly used. Results must use the same convention to be compared; we keep n throughout this page.</p></li><li><h3>Calculate the means to use as origins</h3><p>For width: 10 + 12 = 22 cm and 14 + 16 = 30 cm; the sum is 52 cm. The mean is therefore 52 ÷ 4 = 13 cm.</p><p>For mass: 20 + 30 = 50 g and 25 + 45 = 70 g; the sum is 120 g. The mean is 120 ÷ 4 = 30 g. These separate origins allow us to compare relative positions despite the different units.</p></li><li><h3>Center each measurement while keeping the pairs</h3><p>For A: a = 10 − 13 = -3 cm ; b = 20 − 30 = -10 g. For B: a = 12 − 13 = -1 cm ; b = 30 − 30 = 0 g.</p><p>For C: a = 14 − 13 = 1 cm ; b = 25 − 30 = -5 g. For D: a = 16 − 13 = 3 cm ; b = 45 − 30 = 15 g.</p><p>Check the centering: -3 + (-1) + 1 + 3 = 0 cm and -10 + 0 + (-5) + 15 = 0 g. A nonzero sum of deviations here would signal a mean calculation or subtraction that needs to be checked.</p></li><li><h3>Form the signed products row by row</h3><p>The contribution of A is (-3) × (-10) = 30 cm·g: it is below both means. B gives (-1) × 0 = 0 cm·g, since its mass is exactly at the mean.</p><p>C gives 1 × (-5) = -5 cm·g: width above the mean, mass below. D gives 3 × 15 = 45 cm·g: both deviations are positive.</p><p>Keep the sign. Taking the absolute value of the product for C would remove precisely the opposition that the covariance must account for. Multiplying all the widths together would not measure their relationship with mass.</p></li><li><h3>Take the mean and state exactly what the result describes</h3><p>First add A and B: 30 + 0 = 30 cm·g. Then C and D: (-5) + 45 = 40 cm·g. The sum of all contributions is 70 cm·g.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>c</mi><mrow><mi>x</mi><mi>y</mi></mrow></msub><mo>=</mo><mfrac><mn>70</mn><mn>4</mn></mfrac><mo>=</mo><mn>17.5</mn><mtext> cm·g</mtext></mrow></math></div><p>The mean of the products is positive: in this dataset, contributions from deviations with the same sign outweigh contributions from deviations with opposite signs. C remains a visible exception. The result says neither how many grams to add per centimeter nor how a new pouch would behave.</p><p>A 0 covariance would mean that the sum of centered products is 0. Opposing contributions can cancel each other out: that would not be enough to conclude that the quantities are independent.</p></li><li><h3>Place the variances and covariance in a matrix</h3><p>A descriptive variance is the mean of the squared deviations in a single column. For x, the squares of the extreme deviations are each 9 cm² and the others are each 1 cm². Their sum is 2 × (9 + 1) = 2 × 10 = 20 cm². Therefore c<sub>xx</sub> = 20 ÷ 4 = 5 cm².</p><p>For y, the squares are 100, 0, 25 and 225 g². The contributions of A and C give 125 g²; with that of D and the 0 square for B, the sum is 350 g². Thus cᵧᵧ = 350 ÷ 4 = 87.5 g².</p><p>The matrix C orders the columns as width, mass. The entries c<sub>xx</sub> and cᵧᵧ are the variances; the off-diagonal entries c<sub>x</sub>ᵧ and cᵧ<sub>x</sub> are equal because aᵢbᵢ = bᵢaᵢ in every row. This equality is called the symmetry of C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><msub><mi>c</mi><mrow><mi>x</mi><mi>x</mi></mrow></msub></mtd><mtd><msub><mi>c</mi><mrow><mi>x</mi><mi>y</mi></mrow></msub></mtd></mtr><mtr><mtd><msub><mi>c</mi><mrow><mi>y</mi><mi>x</mi></mrow></msub></mtd><mtd><msub><mi>c</mi><mrow><mi>y</mi><mi>y</mi></mrow></msub></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>5</mn></mtd><mtd><mn>17.5</mn></mtd></mtr><mtr><mtd><mn>17.5</mn></mtd><mtd><mn>87.5</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The matrix has no single common unit: the width entry is in cm², the mass entry in g², and the off-diagonal entries in cm·g. The displayed numbers assume these fixed units.</p></li><li><h3>Check the consistency of the matrix</h3><p>A covariance matrix constructed from the same rows and the same weights is positive semidefinite: the variance of any linear combination of the columns remains nonnegative. Indeed, for fixed coefficients u and v, this variance is the mean of the squares of the sums u aᵢ + v bᵢ. The units of u and v must make the two terms compatible for addition.</p><p>For our symmetric 2 × 2 matrix, check the diagonal entries and the determinant. The diagonal entries 5 and 87.5 are positive. The determinant, written det(C), is the product of the diagonal entries minus the product of the off-diagonal entries:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>det</mtext><mo>(</mo><mi>C</mi><mo>)</mo><mo>=</mo><mn>5</mn><mo>×</mo><mn>87.5</mn><mo>−</mo><msup><mn>17.5</mn><mn>2</mn></msup><mo>=</mo><mn>437.50</mn><mo>−</mo><mn>306.25</mn><mo>=</mo><mn>131.25</mn></mrow></math></div><p>Its unit is cm²·g². With a positive first diagonal entry and this positive determinant, the matrix is even positive definite in these coordinates. A negative determinant would contradict an exact covariance matrix constructed in this way. A 0 determinant, however, could be valid.</p><p>These checks detect some calculation errors; they do not prove that the measurements were correctly paired. The evidence for the pairing remains the label on each pouch, retained from the original dataset.</p></li><li><h3>Connect the scale of the numbers to the scale of the units</h3><p>Now express the same masses in kilograms. Since 1 kg = 1000 g, each mass and each mass deviation is divided by 1000. The width deviations remain in centimeters; each cross product is therefore divided by the same factor.</p><p>The covariance becomes 35/2 ÷ 1000 = 7/400 cm·kg, or exactly 0.0175 cm·kg. Its numerical value changes without any change to the pouches or their relationship. A covariance therefore does not measure a strength that can be compared across all units.</p><p>The matrix brings together the dispersions and joint variations that PCA will use later. Choosing an optimal projection belongs to the next unit; this calculation does not yet choose any axis or perform any compression.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the results. Explain why A contributes positively despite its two negative deviations, why C contributes negatively, and why B contributes nothing. Then reconstruct the matrix, naming the unit of each entry.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The widths and masses are positive, so the covariance must be positive.”</h3><p>The deviations from the means are what we multiply. Those of C have opposite signs and give -5 cm·g. Repeating the centering prevents confusion between the mean of the raw products and the covariance.</p><a href="#exemple">Review the centering and signed contributions</a></li><li><h3>“I can sort the widths and masses separately before calculating.”</h3><p>Sorting the columns separately can pair the mass of one pouch with the width of another. The means would be preserved, but the cross products would no longer describe the dataset. If you reorder the data, always move the entire row with its label.</p><a href="#intuition">Identify the pouches behind the points in the scatter plot</a></li><li><h3>“A numerically larger covariance proves a stronger relationship.”</h3><p>The same pouches give 17.5 cm·g or 0.0175 cm·kg depending on the mass unit. Start by checking the units, centering and divisor before making any comparison. Covariance is not a coefficient without units.</p><a href="#exercices">Test the change of units in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-contribution"><p class="repere">Exercise 1 · Read, then calculate</p>
+<h3>The pouch that goes against the trend</h3><p>Without rereading the calculation, find the deviations for C from its width 14 cm, its mass 25 g and the means 13 cm and 30 g. Calculate its contribution. Why is the contribution of B, with mass 30 g, different?</p>
+<label for="reponse-ex-contribution">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-contribution" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-contribution" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-contribution" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-contribution" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtract the mean of the correct column from each measurement for C.</p></details><details class="indice"><summary>Hint 2</summary><p>The product keeps the signs. For B, first examine the mass deviation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>C has deviations 14 − 13 = 1 cm and 25 − 30 = -5 g. Their product is -5 cm·g. A width above the mean accompanies a mass below the mean here: its contribution is negative.</p><p>B has a mass deviation of 30 − 30 = 0 g. Its product is therefore 0 cm·g, even though its width deviation -1 cm is nonzero. Neither C alone nor B alone gives the covariance of the dataset: all contributions must be averaged.</p><p class="petit-titre">Check your reasoning</p><ul><li>Subtract the means before multiplying.</li><li>Obtain -5 cm·g for C and 0 cm·g for B, explaining the signs.</li><li>Distinguish a single contribution from the mean of all contributions.</li></ul></details></article><article class="exercice" id="ex-matrice"><p class="repere">Exercise 2 · Reconstruction on paper</p>
+<h3>Reconstruct the table of dispersions</h3><p>Using only the dataset A = (10 cm; 20 g), B = (12 cm; 30 g), C = (14 cm; 25 g), D = (16 cm; 45 g), recalculate the means, the deviations, then the covariance matrix with the divisor n = 4. Justify the equality of the off-diagonal entries and check the sign of the determinant.</p>
+<label for="reponse-ex-matrice">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-matrice" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-matrice" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-matrice" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-matrice" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each diagonal entry averages the squares of a centered column; each other entry averages the products of the two centered columns.</p></details><details class="indice"><summary>Hint 2</summary><p>To check the determinant, multiply the diagonal entries and subtract the square of the covariance between the columns.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The means are 13 cm and 30 g. The width deviations, in the order A, B, C, D, are -3, -1, 1, 3 cm; the mass deviations are -10, 0, -5, 15 g.</p><p>The sums of squares are 20 cm² and 350 g². Dividing by 4 gives the diagonal entries 5 cm² and 87.5 g². The cross products total 70 cm·g, so the off-diagonal entries are 17.5 cm·g.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>5</mn></mtd><mtd><mn>17.5</mn></mtd></mtr><mtr><mtd><mn>17.5</mn></mtd><mtd><mn>87.5</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The order of the factors does not change any product: the off-diagonal entries are equal. The determinant is 437.50 − 306.25 = 131.25 cm²·g², which is strictly positive. These checks are consistent with a covariance; keeping the labels remains necessary to verify the pairs.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover the means and check that the deviations in each column sum to 0.</li><li>Divide all sums by the same number of pouches, 4.</li><li>Place each variance in the correct diagonal entry and name the units of the off-diagonal entries.</li><li>Justify the symmetry and calculate the determinant without treating rounded values as data.</li></ul></details></article><article class="exercice" id="ex-unites"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>Do the pouches change when the unit changes?</h3><p>A colleague expresses the masses of the same pouches in kg and keeps the widths in cm. They announce: “The covariance has decreased, so the relationship has become weaker.” Predict the sign, calculate the new covariance and answer the objection. Then explain whether adding the same constant to all widths would change the covariance.</p>
+<label for="reponse-ex-unites">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-unites" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-unites" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-unites" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-unites" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The mean mass and each mass deviation are divided by 1000.</p></details><details class="indice"><summary>Hint 2</summary><p>When a constant is added to a column, its mean increases by the same constant: examine what remains in the subtraction.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The conversion factor is positive: the sign stays positive. Each cross product and their mean are divided by 1000. The covariance is therefore 35/2 ÷ 1000 = 7/400 cm·kg, or 0.0175 cm·kg exactly.</p><p>The number has changed because the unit has changed. It describes the same pairs of measurements for the pouches; no change in their relationship has been established. The units must be stated and made consistent before comparing covariances.</p><p>Let h be the constant added to all widths, in cm. The new mean is x̄ + h. The deviation (xᵢ + h) − (x̄ + h) is still xᵢ − x̄: the products and covariance are preserved. Shifting the origin by addition and changing the scale by multiplication therefore have different effects.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict that the sign stays the same and justify the conversion factor.</li><li>Give 0.0175 cm·kg with its unit.</li><li>Answer the objection without attributing a physical change to the pouches.</li><li>Show how the added constant cancels in the centered deviation.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="appariement"><summary><span class="repere">Recall 1</span><span>Why must the two columns stay paired?</span></summary><p>Each product must pair the width and mass of the same pouch. Sorting one column alone changes these pairings, even if the means stay the same.</p></details><details class="carte" data-carte="definition"><summary><span class="repere">Recall 2</span><span>How do you reconstruct our covariance, and which convention must you state?</span></summary><p>Subtract the mean of each column, multiply the deviations in each row, then average these signed products. We divide by n to describe the dataset with equal weights; the divisor n − 1 belongs to another convention that must be made explicit.</p></details><details class="carte" data-carte="signe"><summary><span class="repere">Recall 3</span><span>What does a positive covariance mean, and what does it fail to prove?</span></summary><p>The sum of centered products is positive: contributions from deviations with the same sign outweigh those from deviations with opposite signs. This does not make all contributions positive and does not prove any causality.</p></details><details class="carte" data-carte="matrice"><summary><span class="repere">Recall 4</span><span>What do the diagonal and off-diagonal entries of C contain? Why is it symmetric?</span></summary><p>The diagonal entries are means of squared deviations, so they are variances. The off-diagonal entries are covariances; they are equal because the order of the factors does not change the products in a row. The units depend on the entry.</p></details><details class="carte" data-carte="echelle"><summary><span class="repere">Recall 5</span><span>Why does switching from grams to kilograms change the covariance, while adding a constant to the widths preserves it?</span></summary><p>The conversion divides all mass deviations and all products by 1000. A constant added to the width is also added to its mean and cancels during centering. The covariance carries the product unit cm·g or cm·kg, rather than a universal strength without units.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the formulas, reconstruct the process: identify the pairs and their units; fix the weights and divisor; calculate the means; center; form and then average the signed products; place variances and covariances in C; check symmetry and consistency; limit the interpretation to the dataset and its units.</p></div><div class="exports"><a class="bouton" download="c137-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTI6YXBwYXJpZW1lbnQiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvdmFyaWFuY2UtYXBwYXJpZW1lbnQiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IG11c3QgdGhlIHR3byBjb2x1bW5zIHN0YXkgcGFpcmVkPyIsCiAgICAgICJyZXBvbnNlIjogIkVhY2ggcHJvZHVjdCBtdXN0IHBhaXIgdGhlIHdpZHRoIGFuZCBtYXNzIG9mIHRoZSBzYW1lIHBvdWNoLiBTb3J0aW5nIG9uZSBjb2x1bW4gYWxvbmUgY2hhbmdlcyB0aGVzZSBwYWlyaW5ncywgZXZlbiBpZiB0aGUgbWVhbnMgc3RheSB0aGUgc2FtZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzNy1tMjpkZWZpbml0aW9uIiwKICAgICAgInVuaXRlIjogImMxMzctbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb3ZhcmlhbmNlLWRlc2NyaXB0aXZlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkbyB5b3UgcmVjb25zdHJ1Y3Qgb3VyIGNvdmFyaWFuY2UsIGFuZCB3aGljaCBjb252ZW50aW9uIG11c3QgeW91IHN0YXRlPyIsCiAgICAgICJyZXBvbnNlIjogIlN1YnRyYWN0IHRoZSBtZWFuIG9mIGVhY2ggY29sdW1uLCBtdWx0aXBseSB0aGUgZGV2aWF0aW9ucyBpbiBlYWNoIHJvdywgdGhlbiBhdmVyYWdlIHRoZXNlIHNpZ25lZCBwcm9kdWN0cy4gV2UgZGl2aWRlIGJ5IG4gdG8gZGVzY3JpYmUgdGhlIGRhdGFzZXQgd2l0aCBlcXVhbCB3ZWlnaHRzOyB0aGUgZGl2aXNvciBuIOKIkiAxIGJlbG9uZ3MgdG8gYW5vdGhlciBjb252ZW50aW9uIHRoYXQgbXVzdCBiZSBtYWRlIGV4cGxpY2l0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM3LW0yOnNpZ25lIiwKICAgICAgInVuaXRlIjogImMxMzctbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb3ZhcmlhbmNlLXNpZ25lIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhIHBvc2l0aXZlIGNvdmFyaWFuY2UgbWVhbiwgYW5kIHdoYXQgZG9lcyBpdCBmYWlsIHRvIHByb3ZlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBzdW0gb2YgY2VudGVyZWQgcHJvZHVjdHMgaXMgcG9zaXRpdmU6IGNvbnRyaWJ1dGlvbnMgZnJvbSBkZXZpYXRpb25zIHdpdGggdGhlIHNhbWUgc2lnbiBvdXR3ZWlnaCB0aG9zZSBmcm9tIGRldmlhdGlvbnMgd2l0aCBvcHBvc2l0ZSBzaWducy4gVGhpcyBkb2VzIG5vdCBtYWtlIGFsbCBjb250cmlidXRpb25zIHBvc2l0aXZlIGFuZCBkb2VzIG5vdCBwcm92ZSBhbnkgY2F1c2FsaXR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM3LW0yOm1hdHJpY2UiLAogICAgICAidW5pdGUiOiAiYzEzNy1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1hdHJpY2UtY292YXJpYW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIHRoZSBkaWFnb25hbCBhbmQgb2ZmLWRpYWdvbmFsIGVudHJpZXMgb2YgQyBjb250YWluPyBXaHkgaXMgaXQgc3ltbWV0cmljPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBkaWFnb25hbCBlbnRyaWVzIGFyZSBtZWFucyBvZiBzcXVhcmVkIGRldmlhdGlvbnMsIHNvIHRoZXkgYXJlIHZhcmlhbmNlcy4gVGhlIG9mZi1kaWFnb25hbCBlbnRyaWVzIGFyZSBjb3ZhcmlhbmNlczsgdGhleSBhcmUgZXF1YWwgYmVjYXVzZSB0aGUgb3JkZXIgb2YgdGhlIGZhY3RvcnMgZG9lcyBub3QgY2hhbmdlIHRoZSBwcm9kdWN0cyBpbiBhIHJvdy4gVGhlIHVuaXRzIGRlcGVuZCBvbiB0aGUgZW50cnkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzctbTI6ZWNoZWxsZSIsCiAgICAgICJ1bml0ZSI6ICJjMTM3LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY292YXJpYW5jZS11bml0ZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgc3dpdGNoaW5nIGZyb20gZ3JhbXMgdG8ga2lsb2dyYW1zIGNoYW5nZSB0aGUgY292YXJpYW5jZSwgd2hpbGUgYWRkaW5nIGEgY29uc3RhbnQgdG8gdGhlIHdpZHRocyBwcmVzZXJ2ZXMgaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGNvbnZlcnNpb24gZGl2aWRlcyBhbGwgbWFzcyBkZXZpYXRpb25zIGFuZCBhbGwgcHJvZHVjdHMgYnkgMTAwMC4gQSBjb25zdGFudCBhZGRlZCB0byB0aGUgd2lkdGggaXMgYWxzbyBhZGRlZCB0byBpdHMgbWVhbiBhbmQgY2FuY2VscyBkdXJpbmcgY2VudGVyaW5nLiBUaGUgY292YXJpYW5jZSBjYXJyaWVzIHRoZSBwcm9kdWN0IHVuaXQgY23Ct2cgb3IgY23Ct2tnLCByYXRoZXIgdGhhbiBhIHVuaXZlcnNhbCBzdHJlbmd0aCB3aXRob3V0IHVuaXRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c137-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IG11c3QgdGhlIHR3byBjb2x1bW5zIHN0YXkgcGFpcmVkPwlFYWNoIHByb2R1Y3QgbXVzdCBwYWlyIHRoZSB3aWR0aCBhbmQgbWFzcyBvZiB0aGUgc2FtZSBwb3VjaC4gU29ydGluZyBvbmUgY29sdW1uIGFsb25lIGNoYW5nZXMgdGhlc2UgcGFpcmluZ3MsIGV2ZW4gaWYgdGhlIG1lYW5zIHN0YXkgdGhlIHNhbWUuCXRvZGFpIGMxMzctbTIgY292YXJpYW5jZS1hcHBhcmllbWVudApIb3cgZG8geW91IHJlY29uc3RydWN0IG91ciBjb3ZhcmlhbmNlLCBhbmQgd2hpY2ggY29udmVudGlvbiBtdXN0IHlvdSBzdGF0ZT8JU3VidHJhY3QgdGhlIG1lYW4gb2YgZWFjaCBjb2x1bW4sIG11bHRpcGx5IHRoZSBkZXZpYXRpb25zIGluIGVhY2ggcm93LCB0aGVuIGF2ZXJhZ2UgdGhlc2Ugc2lnbmVkIHByb2R1Y3RzLiBXZSBkaXZpZGUgYnkgbiB0byBkZXNjcmliZSB0aGUgZGF0YXNldCB3aXRoIGVxdWFsIHdlaWdodHM7IHRoZSBkaXZpc29yIG4g4oiSIDEgYmVsb25ncyB0byBhbm90aGVyIGNvbnZlbnRpb24gdGhhdCBtdXN0IGJlIG1hZGUgZXhwbGljaXQuCXRvZGFpIGMxMzctbTIgY292YXJpYW5jZS1kZXNjcmlwdGl2ZQpXaGF0IGRvZXMgYSBwb3NpdGl2ZSBjb3ZhcmlhbmNlIG1lYW4sIGFuZCB3aGF0IGRvZXMgaXQgZmFpbCB0byBwcm92ZT8JVGhlIHN1bSBvZiBjZW50ZXJlZCBwcm9kdWN0cyBpcyBwb3NpdGl2ZTogY29udHJpYnV0aW9ucyBmcm9tIGRldmlhdGlvbnMgd2l0aCB0aGUgc2FtZSBzaWduIG91dHdlaWdoIHRob3NlIGZyb20gZGV2aWF0aW9ucyB3aXRoIG9wcG9zaXRlIHNpZ25zLiBUaGlzIGRvZXMgbm90IG1ha2UgYWxsIGNvbnRyaWJ1dGlvbnMgcG9zaXRpdmUgYW5kIGRvZXMgbm90IHByb3ZlIGFueSBjYXVzYWxpdHkuCXRvZGFpIGMxMzctbTIgY292YXJpYW5jZS1zaWduZQpXaGF0IGRvIHRoZSBkaWFnb25hbCBhbmQgb2ZmLWRpYWdvbmFsIGVudHJpZXMgb2YgQyBjb250YWluPyBXaHkgaXMgaXQgc3ltbWV0cmljPwlUaGUgZGlhZ29uYWwgZW50cmllcyBhcmUgbWVhbnMgb2Ygc3F1YXJlZCBkZXZpYXRpb25zLCBzbyB0aGV5IGFyZSB2YXJpYW5jZXMuIFRoZSBvZmYtZGlhZ29uYWwgZW50cmllcyBhcmUgY292YXJpYW5jZXM7IHRoZXkgYXJlIGVxdWFsIGJlY2F1c2UgdGhlIG9yZGVyIG9mIHRoZSBmYWN0b3JzIGRvZXMgbm90IGNoYW5nZSB0aGUgcHJvZHVjdHMgaW4gYSByb3cuIFRoZSB1bml0cyBkZXBlbmQgb24gdGhlIGVudHJ5Lgl0b2RhaSBjMTM3LW0yIG1hdHJpY2UtY292YXJpYW5jZQpXaHkgZG9lcyBzd2l0Y2hpbmcgZnJvbSBncmFtcyB0byBraWxvZ3JhbXMgY2hhbmdlIHRoZSBjb3ZhcmlhbmNlLCB3aGlsZSBhZGRpbmcgYSBjb25zdGFudCB0byB0aGUgd2lkdGhzIHByZXNlcnZlcyBpdD8JVGhlIGNvbnZlcnNpb24gZGl2aWRlcyBhbGwgbWFzcyBkZXZpYXRpb25zIGFuZCBhbGwgcHJvZHVjdHMgYnkgMTAwMC4gQSBjb25zdGFudCBhZGRlZCB0byB0aGUgd2lkdGggaXMgYWxzbyBhZGRlZCB0byBpdHMgbWVhbiBhbmQgY2FuY2VscyBkdXJpbmcgY2VudGVyaW5nLiBUaGUgY292YXJpYW5jZSBjYXJyaWVzIHRoZSBwcm9kdWN0IHVuaXQgY23Ct2cgb3IgY23Ct2tnLCByYXRoZXIgdGhhbiBhIHVuaXZlcnNhbCBzdHJlbmd0aCB3aXRob3V0IHVuaXRzLgl0b2RhaSBjMTM3LW0yIGNvdmFyaWFuY2UtdW5pdGVzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hnbspj xdbamb hivu</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading milestone · recognize a covariance in a correlation calculation</h3><dl><div><dt>What you understand</dt><dd>A covariance describes joint deviations while preserving the pairs, convention and units. The matrix brings together these covariances and the variances. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">klrooe aqhmuy ezwtfc exsqmg xjfdtd uxppft axaf</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gsswyb rxiwoo evrnhm lmxnwr bhxmnn ygfsrd ahxejw ovypgf agdtbw lkncak cmehjn dhxmmz oehwkx ygxqpz hvnphw qzsfei xxbqyt qbhetx gahkqq qgjvet jfphzm liegvr xanpns uowrtk</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 2 to prepare for: repeat the calculation and the matrix, justify the units and identify the pairing in the index used in the code. Reading a page, recognizing a worked answer or answering after a hint never establishes that a level has been achieved.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jbdmqc yekkmo coqrxa blldzh wfdrrw vccopw vtagdm buzbwi dgygjz usgjou qiutyv thgwxa vbiswd gbzszk zajyhd caovwa qsqjeq wesjgi rezyxs ebfybg aijeyi klribm zuayfb jucvus</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the calculation on another day without the lesson or hints, then explain the effect of switching to kilograms. Continue to c137-m3, optimal projection. To assess the use of this code, a separate step will need the provenance of the pairs, the call path and evidence of authorized execution; none of that is executed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c137-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c137-m1.html">Previous</a> · <a href="c137-m3.html">Next</a></nav>
+<footer><p>Course book · C137·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

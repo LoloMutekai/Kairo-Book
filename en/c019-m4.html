@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Track requests in a queue, calculate the waiting time that builds up, and explain how a limit on queue slots affects saturation.">
+<title>C019·M4 · Queues and saturation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">agiqyl mjrjqc jdvl</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C019·M4</p><h1>Queues and saturation</h1><p class="objectif"><span>Your goal</span>Track requests in a queue, calculate the waiting time that builds up, and explain how a limit on queue slots affects saturation.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c007-m5 : execution traces · c012-m5 : counterexamples · c019-m1 : processes and memory space · c019-m2 : threads and races · c019-m3 : locks and semaphores</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At a community centre, people send their documents to the same printer. Instead of competing for the machine, their requests wait in a queue: a list where new requests are added at the end and the oldest request is taken to start the work. The order “first in, first out” is often called FIFO. Being taken from the queue and having finished printing remain separate events.</p><p>In our fictional scene, 5 requests arrive at the start of each 60 s interval. The printer can complete 3 during that interval. Before the first batch is sent, 2 requests are already waiting. Before calculating anything, predict the direction of change: the printer can work without a break and still leave more and more requests behind.</p><p>A queue absorbs a difference in timing between submission and processing. If arrivals exceed processing capacity over a sustained period, the excess builds up as long as every request is accepted. This is sustained overload. A bounded queue also has storage saturation: it is full and a new request can no longer enter under the usual rule.</p><p>The diagrams follow the same printer. We first count with enough slots to accept everything, then replay the same submissions with a limit of 8 waiting requests. All the data are invented for the calculations; no actual machine throughput is measured here.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Accept requests, then print</title><desc>With enough slots, 2 older requests and 5 new ones make 7 requests. The printer completes 3 in 60 seconds; 4 are still waiting. Older requests go before new ones.</desc><text x="180" y="26" text-anchor="middle">Enough slots</text><rect x="20" y="45" width="320" height="58" rx="7" class="cadre-neutre" /><text x="180" y="69" text-anchor="middle">2 older + 5 new</text><text x="180" y="92" text-anchor="middle" class="petite-etiquette">New requests join the end</text><path d="M180 103v25m-5-5 5 5 5-5" class="trait" /><rect x="20" y="133" width="320" height="46" rx="7" class="cadre-prediction" /><text x="180" y="162" text-anchor="middle">Before processing: 7 requests</text><path d="M180 179v32m-5-5 5 5 5-5" class="trait" /><text x="198" y="202" class="petite-etiquette">3 completed</text><rect x="20" y="220" width="320" height="46" rx="7" class="cadre-resultat" /><text x="180" y="249" text-anchor="middle">After 60 s: 4 waiting</text><text x="180" y="290" text-anchor="middle" class="petite-etiquette">The queue stores requests</text></svg><figcaption>The first interval leaves 4 requests, compared with 2 at the start. The 3 completed requests are no longer part of the remaining work.</figcaption></figure><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same batch at a bounded queue</title><desc>In the second interval, 4 older requests and 5 new ones would need 9 slots. The limit of 8 slots forces 1 rejection. The printer completes 3 requests and leaves 5 requests waiting.</desc><text x="180" y="26" text-anchor="middle">Second interval, limit 8</text><rect x="20" y="45" width="320" height="58" rx="7" class="cadre-neutre" /><text x="180" y="70" text-anchor="middle">4 older + 5 new</text><text x="180" y="93" text-anchor="middle" class="petite-etiquette">9 slots needed</text><path d="M180 103v25m-5-5 5 5 5-5" class="trait" /><rect x="20" y="133" width="192" height="46" rx="7" class="cadre-prediction" /><text x="116" y="162" text-anchor="middle">8 queued</text><path d="M212 156h22m-5-5 5 5-5 5" class="trait" /><rect x="242" y="133" width="98" height="46" rx="7" class="cadre-neutre" /><text x="291" y="162" text-anchor="middle">1 rejected</text><path d="M116 179v32m-5-5 5 5 5-5" class="trait" /><text x="134" y="202" class="petite-etiquette">3 completed</text><rect x="20" y="220" width="320" height="46" rx="7" class="cadre-resultat" /><text x="180" y="249" text-anchor="middle">After 60 s: 5 waiting</text><text x="180" y="290" text-anchor="middle" class="petite-etiquette">Rejection is not printing</text></svg><figcaption>The queue was full before processing. At the end, it holds fewer requests than its limit; this snapshot does not erase the rejection that occurred on entry.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>In each interval, distinguish requests offered, admitted, completed, and rejected. An extra waiting slot does not create extra processing capacity.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The printer queue, then bounded admission</h3><p>Let us replay 2 intervals of 60 s, with 2 requests at the start, 5 new ones per interval, and a capacity of 3 completed print jobs per interval. We first accept everything, then add the limit of 8 slots, rejecting new requests that do not fit.</p><ol class="etapes"><li><h3>Set the observations and assumptions</h3><p>All requests take the same time to process. The printer processes only one at a time, without a break when work remains, and without breakdowns or cancellations. Each batch arrives in full at the start of the interval, before processing begins. Nothing arrives between batches; the order within a batch is fixed.</p><p>Q is the number of requests waiting just before the current batch; Q′ is the number left at the end of the interval. The prime means “after this interval”. No work is in progress at our interval boundaries: each print job finishes before or exactly at the boundary. We therefore never count a request in progress as a request still in the queue here.</p><p>A counts requests offered in the batch; E counts those admitted; R counts those rejected; D counts those actually completed during the interval. C is the maximum number of requests that can be completed in that interval. All these quantities are counts of requests. T is the interval duration, in seconds. Here A = 5, C = 3, and T = 60 s. The duration of a print job is T/C = 20 s per request.</p></li><li><h3>Count the first interval without rejection</h3><p>Add the batch to the older requests, since they are all waiting their turn: 2 + 5 = 7 requests available. The machine completes 3, leaving 7 − 3 = 4. Subtraction means removing requests that have actually been completed.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>Q</mi><mo>′</mo></msup><mo>=</mo><mi>Q</mi><mo>+</mo><mi>E</mi><mo>−</mo><mi>D</mi></mrow></math></div><p>This conservation rule applies with or without a limit. Without rejection, E = A. Actual processing exceeds neither the available work nor the capacity: D = min(C, Q + E), where min means “the smallest of the numbers given”. Here there is enough work, so D = C.</p></li><li><h3>Use the remaining count and diagnose overload</h3><p>In the second interval, the starting count is 4, rather than 2. With enough slots still available, the batch gives 4 + 5 = 9 requests; after processing, 9 − 3 = 6 remain. The queue grows by A − C = 5 − 3 = 2 requests per interval as long as everything is accepted and the machine has enough work.</p><p>To compare over the same duration, A/C = 5/3, or approximately 1.67 with no unit, is greater than 1. This ratio compares offered demand with capacity; it is neither a probability nor the printer’s actually observed fraction of time spent working. If these batches repeat indefinitely without rejection, the remaining work grows indefinitely in our model.</p><p>The case A = C would not reduce an existing queue in this regular model. Clearing the backlog requires processing capacity to exceed admitted requests. With irregular arrivals or varying durations, comparing averages alone cannot guarantee a delay.</p></li><li><h3>Replay with a limit on slots</h3><p>B now denotes the maximum number of waiting requests, with 0 ≤ Q ≤ B and B = 8 requests. The chosen rule rejects excess new requests, keeps older ones, and does not retry automatically. All admission takes place before the batch is processed.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mi>min</mi><mo>(</mo><mi>A</mi><mo>,</mo><mi>B</mi><mo>−</mo><mi>Q</mi><mo>)</mo><mo>;</mo><mi>R</mi><mo>=</mo><mi>A</mi><mo>−</mo><mi>E</mi></mrow></math></div><p>The first interval fits in full: 7 ≤ 8, so the remaining count is still 4. Before the next batch, only B − Q = 8 − 4 = 4 slots are free. Of the 5 offered requests, E = 4 enter and R = 5 − 4 = 1 is rejected.</p><p>Before processing, the queue reaches 8 requests. After the 3 completed print jobs, Q′ = 8 − 3 = 5 requests. This remaining count replaces 6 in the calculation without rejection: the paths diverged at admission, rather than during printing.</p></li><li><h3>Check that every request has a state</h3><p>Over the 2 intervals, there were 2 requests at the start and 2 × 5 = 10 new ones, giving 12 requests to account for. The machine completed 2 × 3 = 6 requests. Without rejection: 6 completed + 6 waiting = 12.</p><p>With the limit: 6 completed + 5 waiting = 11 requests admitted in total, including the initial ones. Adding 1 rejected gives 12 = 12 again. A rejected request was neither printed nor left in this queue.</p><p>The limit applies to the queue before printing starts, rather than just to the final remaining count. Real producers may submit while a consumer removes a job and executes it. The moments when slots become free then matter: our batch calculation does not replace that sequence of events.</p></li><li><h3>Choose what happens when the queue is full</h3><p>Our rejection rule allows the sender to be told that the request was not admitted. Another rule could make the sender wait until a slot becomes free; this slows submission only if the sender actually waits. You must then check that the sender is not holding a lock needed by the consumer. A replacement rule could instead remove an older request to accept the new one: that would be a different contract, which must be stated and accounted for.</p><p>The limit bounds the number of stored requests; it guarantees a memory limit in bytes only if request size is also bounded. It does not promise more completed print jobs per interval. Immediately retrying rejected requests can even increase the offered load.</p><p>A useful trace therefore distinguishes admission, the start and end of processing, and any rejection. Removing a request from the queue frees a slot, but does not by itself prove that the document has been printed.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Reconstruct the counts without rereading the operations. Why might a queue have rejected a request even though its final remaining count is below its limit? Then explain when removal becomes a completed print job under our assumptions.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A larger queue will make printing faster.”</h3><p>The limit B measures storage in requests; C measures the number that can be completed during an interval. Adding slots changes admission and waiting, without changing C. Replay the expansion in the last exercise and observe rejection returning.</p><a href="#exercices">Compare the small and large queues</a></li><li><h3>“You only need to subtract capacity each time.”</h3><p>Capacity is a maximum. If the queue provides only 2 requests, the printer cannot complete 3. Use D = min(C, Q + E) before calculating what remains; the count must never become negative.</p><a href="#exemple">Reconstruct conservation and actual processing</a></li><li><h3>“The queue stays the same size, so everything is fine.”</h3><p>A bounded queue can remain stable because it rejects the excess. Distinguish offered requests from admitted ones and check the balance that includes rejections. Even a removed request may be in progress or may have failed; look for actual completion of processing.</p><a href="#exemple">Revisit the balance with rejected requests</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-file-vide"><p class="repere">Exercise 1 · Direct application</p>
+<h3>The machine can do more than arrives</h3><p>The same printer starts with Q = 0 requests, receives only A = 2 requests, and keeps C = 3 over 60 s, with B = 8. Give E, R, D, and Q′. What does the unused capacity represent?</p>
+<label for="reponse-ex-file-vide">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-file-vide" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-file-vide" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-file-vide" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-file-vide" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First count the requests available after admission. There are enough slots.</p></details><details class="indice"><summary>Hint 2</summary><p>D is the smaller of the capacity and the number of requests present.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>All requests enter: E = 2 and R = 0. The stored count is 0 + 2 = 2 requests. So D = min(3, 2) = 2 completed requests.</p><p>Q′ = 2 − 2 = 0 requests. The difference C − D = 3 − 2 = 1 represents an unused processing opportunity over this interval; it does not correspond to a request that disappeared.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish C, the maximum capacity, from D, the number actually completed.</li><li>Obtain no remaining requests, without inventing a print job or a rejection.</li><li>Check Q + A = D + Q′ + R in requests.</li></ul></details></article><article class="exercice" id="ex-attente-bornee"><p class="repere">Exercise 2 · Replay and delay on paper</p>
+<h3>The next batch and its last admitted request</h3><p>Start again from Q = 5 requests, with no work in progress, B = 8, A = 5, and C = 3. Calculate the free slots, E, R, and Q′. Then follow the last new request admitted: how long does it wait before starting, and how much time passes until it finishes? Each print job takes 20 s; no job moves ahead of it.</p>
+<label for="reponse-ex-attente-bornee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-attente-bornee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-attente-bornee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-attente-bornee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-attente-bornee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate B − Q before deciding how many new requests can enter.</p></details><details class="indice"><summary>Hint 2</summary><p>After admission, count the requests ahead of the last one; that request itself is not part of its wait before starting.</p></details><details class="indice"><summary>Hint 3</summary><p>Multiply this count by the duration of a print job. For the time until completion, add its own processing time.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Accepting everything would require 5 + 5 = 10 slots. Only 8 − 5 = 3 remain. So E = 3 and R = 5 − 3 = 2. After admission followed by processing, Q′ = 5 + 3 − 3 = 5 requests.</p><p>The final stored count equals the starting count, despite 2 rejections. The balance for this interval reveals this: 10 initial or offered requests = 3 completed + 5 still waiting + 2 rejected.</p><p>The full queue contains 8 requests before processing starts; the last one has 8 − 1 = 7 ahead of it. Its wait before starting is 7 × 20 = 140 s. It finishes after 140 + 20 = 160 s, measured from its admission.</p><p>These durations exceed 60 s: this request will therefore remain for later intervals. New batches will join behind it. With different durations, a print job already in progress, or a change in order, this multiplication would no longer give its waiting time directly.</p><p class="petit-titre">Check your reasoning</p><ul><li>Exclude rejected requests from admitted requests before calculating what remains.</li><li>Show that a stable stored count can hide rejections.</li><li>Separate the wait before starting from the time until completion.</li><li>Relate the calculated delay to the assumptions of equal durations and processing order.</li></ul></details></article><article class="exercice" id="ex-agrandir"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>More slots: is saturation resolved?</h3><p>Start again from Q = 5 requests, but increase B to 10. Batches remain at 5 and the machine still completes at most 3 requests per interval. Calculate the remaining count and rejections for the next 2 intervals. Respond to “we have enlarged the queue, so the problem is solved”. Finally, starting from the last remaining count, what happens with a batch reduced to 2 requests?</p>
+<label for="reponse-ex-agrandir">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-agrandir" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-agrandir" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-agrandir" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-agrandir" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first batch fits exactly within the new limit. The remaining count becomes the starting count for the next interval.</p></details><details class="indice"><summary>Hint 2</summary><p>For the next batch, compare the requested storage with the limit, then count rejections and completed print jobs separately.</p></details><details class="indice"><summary>Hint 3</summary><p>To reduce the stored count, compare new admissions with the number actually completed.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new limit is 8 + 2 = 10 slots. In the first interval: 5 + 5 = 10 requests, all admitted without rejection; after processing, 10 − 3 = 7 remain.</p><p>In the next interval, 7 + 5 = 12 slots would be needed. The limit allows only 10, so 12 − 10 = 2 requests are rejected. The remaining count is 10 − 3 = 7 requests.</p><p>The larger limit delayed rejection without increasing processing capacity. At the end of the intervals, it retains more requests than the old limit: 7 instead of 5. More waiting has been allowed; the printer has not been made faster.</p><p>Reducing the next batch to 2 gives 7 + 2 = 9 requests, which all fit. After processing, 9 − 3 = 6 remain. The decrease is 3 − 2 = 1 request per interval as long as these conditions and enough work are maintained. This is a real reduction in submissions, rather than rejected attempts that would return immediately.</p><p class="petit-titre">Check your reasoning</p><ul><li>Use the remaining count from the first interval for the second.</li><li>Find rejections despite the new limit.</li><li>Explain the effects on storage, completed processing, and waiting separately.</li><li>Identify why actually reducing submissions allows the backlog to be cleared here.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="file-et-fin"><summary><span class="repere">Recall 1</span><span>What does a queue hold, and what does its first in, first out order guarantee?</span></summary><p>It holds requests awaiting handling. Adding at the end and removing the oldest fixes the order of handling; removing a request does not yet demonstrate that its processing is complete. With our printer, completion of printing must then be checked.</p></details><details class="carte" data-carte="conserver"><summary><span class="repere">Recall 2</span><span>How can you find the remaining count Q′ without inventing print jobs?</span></summary><p>Define E, the number admitted, then D = min(C, Q + E), the number that can actually be completed. The remaining count is Q′ = Q + E − D. The quantities count requests over the same interval; C is a maximum.</p></details><details class="carte" data-carte="borne"><summary><span class="repere">Recall 3</span><span>For our batch admission with rejection of new requests, where do E and R come from?</span></summary><p>With 0 ≤ Q ≤ B, there are B − Q slots left before processing. E = min(A, B − Q) requests enter; R = A − E are rejected. The limit bounds storage without increasing capacity C. Older requests are kept.</p></details><details class="carte" data-carte="stock-stable"><summary><span class="repere">Recall 4</span><span>Why does a stable final stored count fail to prove that all requests are served?</span></summary><p>Bounded admission can reject the excess. Compare the starting requests and offered requests with those completed, still waiting, and rejected. Looking only at queue size hides rejections and does not check processing results.</p></details><details class="carte" data-carte="attente"><summary><span class="repere">Recall 5</span><span>When can waiting time be calculated as number of requests ahead × duration of a print job?</span></summary><p>When the printer is initially free, works without a break in the stated order, and all durations are identical, with no job moving ahead. The product gives the time before starting. Add the duration of the request’s own print job to obtain the time until completion.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the formulas, reconstruct a request’s path: offer, admission or rejection, waiting, handling, completion of processing. Then reconstruct the balance of counts and explain why expanding storage does not change the printer’s throughput. Finish with the assumptions that allowed its waiting time to be calculated.</p></div><div class="exports"><a class="bouton" download="c019-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTQ6ZmlsZS1ldC1maW4iLAogICAgICAidW5pdGUiOiAiYzAxOS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZpbGUtZXQtdHJhaXRlbWVudCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBxdWV1ZSBob2xkLCBhbmQgd2hhdCBkb2VzIGl0cyBmaXJzdCBpbiwgZmlyc3Qgb3V0IG9yZGVyIGd1YXJhbnRlZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBob2xkcyByZXF1ZXN0cyBhd2FpdGluZyBoYW5kbGluZy4gQWRkaW5nIGF0IHRoZSBlbmQgYW5kIHJlbW92aW5nIHRoZSBvbGRlc3QgZml4ZXMgdGhlIG9yZGVyIG9mIGhhbmRsaW5nOyByZW1vdmluZyBhIHJlcXVlc3QgZG9lcyBub3QgeWV0IGRlbW9uc3RyYXRlIHRoYXQgaXRzIHByb2Nlc3NpbmcgaXMgY29tcGxldGUuIFdpdGggb3VyIHByaW50ZXIsIGNvbXBsZXRpb24gb2YgcHJpbnRpbmcgbXVzdCB0aGVuIGJlIGNoZWNrZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTQ6Y29uc2VydmVyIiwKICAgICAgInVuaXRlIjogImMwMTktbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJiaWxhbi1kZS1maWxlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4geW91IGZpbmQgdGhlIHJlbWFpbmluZyBjb3VudCBR4oCyIHdpdGhvdXQgaW52ZW50aW5nIHByaW50IGpvYnM/IiwKICAgICAgInJlcG9uc2UiOiAiRGVmaW5lIEUsIHRoZSBudW1iZXIgYWRtaXR0ZWQsIHRoZW4gRCA9IG1pbihDLCBRICsgRSksIHRoZSBudW1iZXIgdGhhdCBjYW4gYWN0dWFsbHkgYmUgY29tcGxldGVkLiBUaGUgcmVtYWluaW5nIGNvdW50IGlzIFHigLIgPSBRICsgRSDiiJIgRC4gVGhlIHF1YW50aXRpZXMgY291bnQgcmVxdWVzdHMgb3ZlciB0aGUgc2FtZSBpbnRlcnZhbDsgQyBpcyBhIG1heGltdW0uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTQ6Ym9ybmUiLAogICAgICAidW5pdGUiOiAiYzAxOS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFkbWlzc2lvbi1ib3JuZWUiLAogICAgICAicXVlc3Rpb24iOiAiRm9yIG91ciBiYXRjaCBhZG1pc3Npb24gd2l0aCByZWplY3Rpb24gb2YgbmV3IHJlcXVlc3RzLCB3aGVyZSBkbyBFIGFuZCBSIGNvbWUgZnJvbT8iLAogICAgICAicmVwb25zZSI6ICJXaXRoIDAg4omkIFEg4omkIEIsIHRoZXJlIGFyZSBCIOKIkiBRIHNsb3RzIGxlZnQgYmVmb3JlIHByb2Nlc3NpbmcuIEUgPSBtaW4oQSwgQiDiiJIgUSkgcmVxdWVzdHMgZW50ZXI7IFIgPSBBIOKIkiBFIGFyZSByZWplY3RlZC4gVGhlIGxpbWl0IGJvdW5kcyBzdG9yYWdlIHdpdGhvdXQgaW5jcmVhc2luZyBjYXBhY2l0eSBDLiBPbGRlciByZXF1ZXN0cyBhcmUga2VwdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tNDpzdG9jay1zdGFibGUiLAogICAgICAidW5pdGUiOiAiYzAxOS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNhdHVyYXRpb24tZXQtcmVmdXMiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgYSBzdGFibGUgZmluYWwgc3RvcmVkIGNvdW50IGZhaWwgdG8gcHJvdmUgdGhhdCBhbGwgcmVxdWVzdHMgYXJlIHNlcnZlZD8iLAogICAgICAicmVwb25zZSI6ICJCb3VuZGVkIGFkbWlzc2lvbiBjYW4gcmVqZWN0IHRoZSBleGNlc3MuIENvbXBhcmUgdGhlIHN0YXJ0aW5nIHJlcXVlc3RzIGFuZCBvZmZlcmVkIHJlcXVlc3RzIHdpdGggdGhvc2UgY29tcGxldGVkLCBzdGlsbCB3YWl0aW5nLCBhbmQgcmVqZWN0ZWQuIExvb2tpbmcgb25seSBhdCBxdWV1ZSBzaXplIGhpZGVzIHJlamVjdGlvbnMgYW5kIGRvZXMgbm90IGNoZWNrIHByb2Nlc3NpbmcgcmVzdWx0cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tNDphdHRlbnRlIiwKICAgICAgInVuaXRlIjogImMwMTktbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhdHRlbnRlLWV0LWR1cmVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoZW4gY2FuIHdhaXRpbmcgdGltZSBiZSBjYWxjdWxhdGVkIGFzIG51bWJlciBvZiByZXF1ZXN0cyBhaGVhZCDDlyBkdXJhdGlvbiBvZiBhIHByaW50IGpvYj8iLAogICAgICAicmVwb25zZSI6ICJXaGVuIHRoZSBwcmludGVyIGlzIGluaXRpYWxseSBmcmVlLCB3b3JrcyB3aXRob3V0IGEgYnJlYWsgaW4gdGhlIHN0YXRlZCBvcmRlciwgYW5kIGFsbCBkdXJhdGlvbnMgYXJlIGlkZW50aWNhbCwgd2l0aCBubyBqb2IgbW92aW5nIGFoZWFkLiBUaGUgcHJvZHVjdCBnaXZlcyB0aGUgdGltZSBiZWZvcmUgc3RhcnRpbmcuIEFkZCB0aGUgZHVyYXRpb24gb2YgdGhlIHJlcXVlc3TigJlzIG93biBwcmludCBqb2IgdG8gb2J0YWluIHRoZSB0aW1lIHVudGlsIGNvbXBsZXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c019-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgcXVldWUgaG9sZCwgYW5kIHdoYXQgZG9lcyBpdHMgZmlyc3QgaW4sIGZpcnN0IG91dCBvcmRlciBndWFyYW50ZWU/CUl0IGhvbGRzIHJlcXVlc3RzIGF3YWl0aW5nIGhhbmRsaW5nLiBBZGRpbmcgYXQgdGhlIGVuZCBhbmQgcmVtb3ZpbmcgdGhlIG9sZGVzdCBmaXhlcyB0aGUgb3JkZXIgb2YgaGFuZGxpbmc7IHJlbW92aW5nIGEgcmVxdWVzdCBkb2VzIG5vdCB5ZXQgZGVtb25zdHJhdGUgdGhhdCBpdHMgcHJvY2Vzc2luZyBpcyBjb21wbGV0ZS4gV2l0aCBvdXIgcHJpbnRlciwgY29tcGxldGlvbiBvZiBwcmludGluZyBtdXN0IHRoZW4gYmUgY2hlY2tlZC4JdG9kYWkgYzAxOS1tNCBmaWxlLWV0LXRyYWl0ZW1lbnQKSG93IGNhbiB5b3UgZmluZCB0aGUgcmVtYWluaW5nIGNvdW50IFHigLIgd2l0aG91dCBpbnZlbnRpbmcgcHJpbnQgam9icz8JRGVmaW5lIEUsIHRoZSBudW1iZXIgYWRtaXR0ZWQsIHRoZW4gRCA9IG1pbihDLCBRICsgRSksIHRoZSBudW1iZXIgdGhhdCBjYW4gYWN0dWFsbHkgYmUgY29tcGxldGVkLiBUaGUgcmVtYWluaW5nIGNvdW50IGlzIFHigLIgPSBRICsgRSDiiJIgRC4gVGhlIHF1YW50aXRpZXMgY291bnQgcmVxdWVzdHMgb3ZlciB0aGUgc2FtZSBpbnRlcnZhbDsgQyBpcyBhIG1heGltdW0uCXRvZGFpIGMwMTktbTQgYmlsYW4tZGUtZmlsZQpGb3Igb3VyIGJhdGNoIGFkbWlzc2lvbiB3aXRoIHJlamVjdGlvbiBvZiBuZXcgcmVxdWVzdHMsIHdoZXJlIGRvIEUgYW5kIFIgY29tZSBmcm9tPwlXaXRoIDAg4omkIFEg4omkIEIsIHRoZXJlIGFyZSBCIOKIkiBRIHNsb3RzIGxlZnQgYmVmb3JlIHByb2Nlc3NpbmcuIEUgPSBtaW4oQSwgQiDiiJIgUSkgcmVxdWVzdHMgZW50ZXI7IFIgPSBBIOKIkiBFIGFyZSByZWplY3RlZC4gVGhlIGxpbWl0IGJvdW5kcyBzdG9yYWdlIHdpdGhvdXQgaW5jcmVhc2luZyBjYXBhY2l0eSBDLiBPbGRlciByZXF1ZXN0cyBhcmUga2VwdC4JdG9kYWkgYzAxOS1tNCBhZG1pc3Npb24tYm9ybmVlCldoeSBkb2VzIGEgc3RhYmxlIGZpbmFsIHN0b3JlZCBjb3VudCBmYWlsIHRvIHByb3ZlIHRoYXQgYWxsIHJlcXVlc3RzIGFyZSBzZXJ2ZWQ/CUJvdW5kZWQgYWRtaXNzaW9uIGNhbiByZWplY3QgdGhlIGV4Y2Vzcy4gQ29tcGFyZSB0aGUgc3RhcnRpbmcgcmVxdWVzdHMgYW5kIG9mZmVyZWQgcmVxdWVzdHMgd2l0aCB0aG9zZSBjb21wbGV0ZWQsIHN0aWxsIHdhaXRpbmcsIGFuZCByZWplY3RlZC4gTG9va2luZyBvbmx5IGF0IHF1ZXVlIHNpemUgaGlkZXMgcmVqZWN0aW9ucyBhbmQgZG9lcyBub3QgY2hlY2sgcHJvY2Vzc2luZyByZXN1bHRzLgl0b2RhaSBjMDE5LW00IHNhdHVyYXRpb24tZXQtcmVmdXMKV2hlbiBjYW4gd2FpdGluZyB0aW1lIGJlIGNhbGN1bGF0ZWQgYXMgbnVtYmVyIG9mIHJlcXVlc3RzIGFoZWFkIMOXIGR1cmF0aW9uIG9mIGEgcHJpbnQgam9iPwlXaGVuIHRoZSBwcmludGVyIGlzIGluaXRpYWxseSBmcmVlLCB3b3JrcyB3aXRob3V0IGEgYnJlYWsgaW4gdGhlIHN0YXRlZCBvcmRlciwgYW5kIGFsbCBkdXJhdGlvbnMgYXJlIGlkZW50aWNhbCwgd2l0aCBubyBqb2IgbW92aW5nIGFoZWFkLiBUaGUgcHJvZHVjdCBnaXZlcyB0aGUgdGltZSBiZWZvcmUgc3RhcnRpbmcuIEFkZCB0aGUgZHVyYXRpb24gb2YgdGhlIHJlcXVlc3TigJlzIG93biBwcmludCBqb2IgdG8gb2J0YWluIHRoZSB0aW1lIHVudGlsIGNvbXBsZXRpb24uCXRvZGFpIGMwMTktbTQgYXR0ZW50ZS1ldC1kdXJlZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">agiqyl mjrjqc jdvl</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Connect bounded admission to evidence of processing</h3><dl><div><dt>What you understand</dt><dd>A queue allows work to be deferred. A limit imposes an admission policy, and removal from the queue frees a slot before demonstrating a useful result. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fieovq yeeqlf uvpmol gynkzv esxkit jhptvv raxf</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ylekcv csegzt vmeztk mamkfn iayudu hypzcq lcuhka upjnvf rglukw qqkhmo yadcyn pwbvjj pmsnhs lcdkad kgcgpu jtxywq zobkpo eydjxl stzuat ckgmpk lyfndg flwepi bqzsbg fumfev</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for Level 1: reconstruct a queue balance, distinguish capacity, admission, and result, then defend a rule for when the queue is full. Reading this page, recognising a formula, or answering after a hint does not mean a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mgofyu xeiypa elkbpw lmzhle dzmoqe gpsbqr lcrukw wbftyz ljvncr kvyjvs uizlzh ciczwy uecjzb ayaknb smfcwg sdzetm bbxtpv qgrtzs hvmohh uobkxd kogewp yvjhji rkgpkx sdpsyj utazpn syxjcd qotcxo cfcwyt udluyp lxzejd rgrmdw tmdpus qmeuqa wezcsk uoxrez gtncny qbdllo mf</span></span></dd></div><div><dt>Next step</dt><dd>On another day, reconstruct the counts and the difference between removal and success without support, then compare your trace with the stated contract. The next unit covers clocks and persistence. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gvixfg qlltvx pmojre szwsyv miegun mfeqwk zowudm pofjrf kpzhid bmbkvf jxqwix cvhevw kwnwyc ot</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c019-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c019-m3.html">Previous</a> · <a href="c019-m5.html">Next</a></nav>
+<footer><p>Course book · C019·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

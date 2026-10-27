@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Unroll a recurrent neural network over a message, distinguish state from weights, then check the effects of word order and resetting the state.">
+<title>C104·M3 · RNN — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vvbfuq mtoyig hypp</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C104·M3</p><h1>RNN</h1><p class="objectif"><span>Your goal</span>Unroll a recurrent neural network over a message, distinguish state from weights, then check the effects of word order and resetting the state.</p><p class="prerequis"><strong>Before you start</strong><br>c103-m5 : regularization · c101-m5 : rolling-origin forecasting · c060-m5 : approximations and assumptions · c104-m1 : sequences · c104-m2 : embeddings</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An automated reader receives the message “not urgent”, word by word. When it reaches “urgent”, the previous word is no longer the current input. It needs to carry forward something from what it has already read. Imagine a small writing board: at each word, the reader replaces its contents with a new summary, calculated from the word received and the previous summary.</p><p>A recurrent neural network, abbreviated RNN, uses this principle. Its hidden state is this numerical summary: “hidden” means that it is calculated inside the model, rather than supplied directly with the message. The cell is the calculation rule that produces the new state. It is reused at each position with the same weights, meaning the same coefficients.</p><p>The previous unit represented words using numbers. Here, to calculate everything with a pencil, we set a scalar code: “not” becomes 1, and “urgent” becomes 2. These values and all the weights are fictional, chosen by hand and without physical units. This code is not a learned representation; a larger value does not mean a more important word.</p><p>Our only aim is to understand how word order can change a state. The reversed message “urgent not” provides a mechanical comparison. No score on this page measures actual urgency or understanding of English.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same cell reused over time</title><desc>The message not urgent starts from state 0. The word not, coded 1, produces state 1. The word urgent, coded 2, uses this state and produces 2.50. The coefficients are identical on both passes.</desc><rect x="20" y="14" width="320" height="48" rx="7" class="cadre-neutre" /><text x="180" y="44" text-anchor="middle">Starting state: 0</text><line x1="180" y1="62" x2="180" y2="110" class="trait" /><path d="M175 102L180 110L185 102" class="trait" /><text x="30" y="93">not → 1</text><rect x="20" y="112" width="320" height="70" rx="7" class="cadre-prediction" /><text x="180" y="139" text-anchor="middle">Cell · shared weights</text><text x="180" y="166" text-anchor="middle">State after “not”: 1</text><line x1="180" y1="182" x2="180" y2="230" class="trait" /><path d="M175 222L180 230L185 222" class="trait" /><text x="30" y="213">urgent → 2</text><rect x="20" y="232" width="320" height="62" rx="7" class="cadre-resultat" /><text x="180" y="257" text-anchor="middle">Same cell</text><text x="180" y="281" text-anchor="middle">Final state: 2.50</text></svg><figcaption>The diagram unrolls the reading from top to bottom. Each vertical arrow carries a state; the word beside it is the new input. The numbers have no units.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>Word order changes the result</title><desc>From the same starting point, not urgent gives state 2.50 and urgent not gives 2.00. In both cases the sum of the codes is 3. Yet the states differ by 0.50.</desc><text x="180" y="35" text-anchor="middle">Same start: 0</text><rect x="20" y="58" width="320" height="72" rx="7" class="cadre-resultat" /><text x="180" y="85" text-anchor="middle">not → urgent</text><text x="180" y="113" text-anchor="middle">Final state: 2.50</text><rect x="20" y="154" width="320" height="72" rx="7" class="cadre-prediction" /><text x="180" y="181" text-anchor="middle">urgent → not</text><text x="180" y="209" text-anchor="middle">Final state: 2.00</text><text x="180" y="266" text-anchor="middle">Sum of codes: 3</text><text x="180" y="291" text-anchor="middle" class="petite-etiquette">The sum discards order.</text></svg><figcaption>The same vocabulary, the same parameters, the same initial state: only word order changes. This contrast proves sensitivity for these messages, rather than for all possible sequences.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>At each word: take the previous state, combine it with the current input, apply the activation, then pass on the new state. The states change; the weights remain shared.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The numerical writing board for “not urgent”</h3><p>Read the 2 words in order, with an initial state h = 0, a recurrent weight a = 1/2 = 0.50, an input weight u = 1 and a bias b = 0. Apply a rectified activation after each combination. We will perform a reading with fixed weights, without training.</p><ol class="etapes"><li><h3>Write the rule and define each symbol</h3><p>t is the word position, an integer index starting at 1; t − 1 denotes the previous position. x<sub>t</sub> is the code for the current word and h<sub>t</sub> is the state obtained after reading it. Before the first word, the state is h initial = 0. r<sub>t</sub> denotes the sum before activation. a multiplies the previous state; u multiplies the input; b is the bias added to this sum. All these quantities are scalars and have no physical units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>r</mi><mi>t</mi></msub><mo>=</mo><mi>a</mi><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>u</mi><msub><mi>x</mi><mi>t</mi></msub><mo>+</mo><mi>b</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>t</mi></msub><mo>=</mo><mi>φ</mi><mo>(</mo><msub><mi>r</mi><mi>t</mi></msub><mo>)</mo><mo>;</mo><mi>φ</mi><mo>(</mo><mi>r</mi><mo>)</mo><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>r</mi><mo>)</mo></mrow></math></div><p>φ is read as “phi” and denotes the rectified activation function, often called ReLU. max takes the largest of the numbers supplied: a negative sum becomes 0; a positive or 0 sum is kept. This change of rule at 0 makes the activation nonlinear. For a positive r, applying φ here therefore means keeping r, without any further arithmetic operation.</p><p>Assumptions for this reading: the words arrive in order, the code is fixed, the cell receives only the current input and the previous state, and a, u, b remain identical at all positions. The state is reset between independent messages.</p></li><li><h3>Process “not” from the initial state</h3><p>First, multiply the previous state by a to calculate its contribution: 1/2 × 0 = 0. Then weight the current input: 1 × 1 = 1. Add these contributions, then the bias: 0 + 1 = 1, then 1 + 0 = 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mn>1</mn></msub><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>1</mn></mrow></math></div><p>The sum is positive: the activation keeps it. Pass 1 to the next step. Do not reset the state to 0 between words in the same message, because that would erase the recurrent link.</p></li><li><h3>Process “urgent” with the state passed on</h3><p>The weight a is still 1/2. The contribution from the past is now 1/2 × 1 = 1/2 = 0.50. The contribution from the new word is 1 × 2 = 2. We obtain 1/2 + 2 = 5/2, then 5/2 + 0 = 5/2.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mn>2</mn></msub><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>×</mo><mn>1</mn><mo>+</mo><mn>1</mn><mo>×</mo><mn>2</mn><mo>+</mo><mn>0</mn><mo>)</mo><mo>=</mo><mn>5/2</mn></mrow></math></div><p>The sum is positive again; the final state is 5/2, or exactly 2.50, with no units. The word “not” contributes through the state passed on, while only the input “urgent” is supplied at the current step.</p></li><li><h3>Read an output without inventing a meaning for it</h3><p>T denotes the message length: T = 2 positions. For this demonstration, we take the output to be the score s = h final, or 2.50. Reading the state directly in this way is enough to observe a result. In a model designed for a task, an output layer can transform h<sub>t</sub> into a prediction, and training adjusts the weights using examples and an error to reduce.</p><p>The score 2.50 is neither a probability nor a degree of urgency. We have supplied no target and learned no weights. Reading a new word changes h, rather than a, u or b. A program that increments a counter also has a state; that alone does not make it a trained neural network.</p></li><li><h3>Check by expanding the recurrence</h3><p>Since the sums encountered are positive, we can remove max to check this specific path. Substituting the calculation for the intermediate state gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mn>2</mn></msub><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><msub><mi>h</mi><mn>0</mn></msub><mo>+</mo><mi>a</mi><mi>u</mi><msub><mi>x</mi><mn>1</mn></msub><mo>+</mo><mi>u</mi><msub><mi>x</mi><mn>2</mn></msub><mo>+</mo><mo>(</mo><mi>a</mi><mo>+</mo><mn>1</mn><mo>)</mo><mi>b</mi></mrow></math></div><p>h with the index 0 denotes the initial state. Since it equals 0 and b equals 0, this leaves 1/2 × 1 × 1 + 1 × 2 = 1/2 + 2 = 5/2. This second route recovers exactly the state calculated step by step. It replaces the recurrence only on paths where the activations stay in this branch.</p></li><li><h3>Explain word order, then the limits of the summary</h3><p>Reversing the words, the same starting point first produces 2, then 1/2 × 2 + 1 × 1 + 0 = 2. The sums remain positive. Yet the sum of the codes is 3 in both orders. The first word goes through an extra multiplication by a; it therefore plays a different role from the last word. The final difference is 5/2 − 2 = 1/2.</p><p>The network can therefore distinguish these orders. Yet it cannot distinguish all messages: “urgent” alone gives 2, and “urgent not” also gives 2. These identical final states do not allow us to reconstruct which message was read. More generally, the rectified activation also maps all negative sums to the same value 0. With our weights, the contribution of a previous state is multiplied by 0.50 at each step as long as the activation remains positive; an old difference fades. A recurrent memory is therefore not an intact copy of the text.</p><p>In a larger network, x and h can be vectors, meaning lists of numerical components, and the weights can be matrices that combine these components through sums of products. The rule remains: the same transformation at each position, with a new state passed on. Here we limit ourselves to the scalar cell and its forward pass.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Describe what the cell receives at the word “urgent”, then recover its state. Why does the first word carry an extra factor a? Then explain why this state is neither a fully memorized text nor a set of trained weights.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The weights change every time the network reads a word.”</h3><p>Separate the coefficients a, u, b from the state h. For this reading, the coefficients are shared and fixed; only h is recalculated. Changing the weights through training requires examples, a target and an adjustment rule that are not used here.</p><a href="#exemple">Reread the output and the distinction between state and weights</a></li><li><h3>“Adding the codes is equivalent to reading the message.”</h3><p>The sum is 3 in both orders. The cell also uses the previous state: the results 2.50 and 2.00 differ. Start again from the same initial state to compare only the effect of word order.</p><a href="#intuition">Review the two reading paths</a></li><li><h3>“I always keep the final state to start the next message.”</h3><p>First decide whether the next message continues the same sequence. For independent messages, our contract requires the starting point 0; keeping 2.50 would pass on context that does not belong to them. When continuing the same message, however, keep the state.</p><a href="#exercices">Compare continuation and a new message</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-continuer"><p class="repere">Exercise 1 · Application · one extra step</p>
+<h3>The same message continues</h3><p>After “not urgent”, a new word “not” still belongs to the same message. Without changing the weights, calculate the contribution of the previous state, the sum before activation and the new state. Give an exact fraction followed by its decimal representation.</p>
+<label for="reponse-ex-continuer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-continuer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-continuer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-continuer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-continuer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The starting state for this step is 5/2, because the message has not ended.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply this state by 1/2, add 1 × 1 and the bias 0, then check the sign before applying φ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The previous state contributes 1/2 × 5/2 = 5/4, or 1.25. The word “not” contributes 1. The sum is 5/4 + 1 + 0 = 9/4.</p><p>This sum is positive; the activation keeps it. The new state is 9/4 = 2.25, with no units. Starting again from 0 would have treated “not” as a separate message, which does not match the problem statement.</p><p class="petit-titre">Check your reasoning</p><ul><li>You start from 5/2 without changing the weight 1/2.</li><li>You find 5/4 then 9/4 and justify the activation branch.</li><li>You report a state with no physical units, rather than a probability.</li></ul></details></article><article class="exercice" id="ex-inverser"><p class="repere">Exercise 2 · Reconstruction · check an order</p>
+<h3>Replay “urgent not”</h3><p>Close the worked example and start again from 0 for “urgent not”. Calculate each state, then the difference from the score for “not urgent”. Explain why the sum of the codes does not detect this difference and why a difference does not prove understanding of the message.</p>
+<label for="reponse-ex-inverser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-inverser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-inverser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-inverser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-inverser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first code is now 2; the initial state remains the same.</p></details><details class="indice"><summary>Hint 2</summary><p>At the second step, the previous state is 2 and the current code is 1. Then compare with 5/2.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>First step: 1/2 × 0 + 1 × 2 + 0 = 2; the activation gives 2. Second step: 1/2 × 2 = 1, then 1 + 1 + 0 = 2; the final state is 2.</p><p>The difference is 5/2 − 2 = 1/2 = 0.50, with no units. The sum 1 + 2 = 3 ignores the positions of the terms, whereas the first word undergoes an extra transition before the output. These weights chosen by hand demonstrate only this numerical behavior; no learning of meaning or classification result has been established.</p><p class="petit-titre">Check your reasoning</p><ul><li>You recover 2 then 2 from the same starting point.</li><li>You relate the difference 1/2 to the different roles of the positions.</li><li>You limit the conclusion to a difference in calculation for these sequences.</li></ul></details></article><article class="exercice" id="ex-reinitialiser"><p class="repere">Exercise 3 · Diagnosis · change the boundary</p>
+<h3>A new independent message</h3><p>“Not urgent” has ended. Another independent message starts with “not”. Yet a program keeps the final state 5/2 of the completed message. Calculate the state after this first word with and without the required reset. Identify what must be reset and what must remain shared.</p>
+<label for="reponse-ex-reinitialiser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reinitialiser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reinitialiser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reinitialiser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Without a reset, the calculation is the continuation calculation; with a reset, it is the calculation for the first word in the example.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare 9/4 with 1. The weights a, u, b are not the state of the message.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Without a reset: 1/2 × 5/2 + 1 × 1 + 0 = 9/4, giving 2.25 after activation. With the required starting point 0: 1/2 × 0 + 1 × 1 + 0 = 1, giving 1. The sums are positive in both cases.</p><p>The extra context passed on changes the result by 9/4 − 1 = 5/4 = 1.25, with no units. h must be reset to 0 at the boundary between independent messages. The same coefficients a = 1/2, u = 1, b = 0 continue to be used: resetting the state does not erase weights.</p><p>If the application instead decided that these messages form a single sequence, keeping h would be a different explicit contract. Here the fault is the mismatch with the stated independence, rather than the mere presence of a persistent state.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain 9/4 without a reset and 1 with one.</li><li>You reset the state without changing the network parameters.</li><li>You justify the boundary using the contract for independent messages.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="etat-poids"><summary><span class="repere">Recall 1</span><span>What changes during reading, and what remains shared?</span></summary><p>The state h changes after each word. The weights a, u and the bias b remain identical at all positions for this reading. Training the parameters would be a separate operation.</p></details><details class="carte" data-carte="regle"><summary><span class="repere">Recall 2</span><span>Reconstruct the calculation of a cell and the role of its activation.</span></summary><p>Weight the previous state by a and the current input by u, add these contributions and b, then apply φ. Here φ keeps a positive or 0 sum and replaces a negative sum with 0. The result becomes the state for the next step.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 3</span><span>Why can the same words give different final states?</span></summary><p>Each position receives a different state. The first word then passes through more transitions than the last. On our positive path, its final contribution carries an extra factor a; a simple sum of the codes does not retain this difference in role.</p></details><details class="carte" data-carte="frontiere"><summary><span class="repere">Recall 4</span><span>When should the state be kept, and when should it be reset?</span></summary><p>Keep it to continue the same sequence. For our independent messages, start again from 0 at each new message while keeping the weights. The boundary must be set by the task, rather than guessed by the cell.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>Does a state that depends on the past prove that the network keeps everything or understands the text?</span></summary><p>No. The state is a calculated summary that can lose distinctions, particularly when the activation rectifies negative sums. Our fictional codes and weights prove only the calculations shown. They establish neither learning of meaning nor quality on new messages.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the page, reconstruct this sequence: define the codes and the initial state; combine past and input with shared weights; justify the activation; pass on the state; explain the effect of word order; distinguish continuation from a new message; state what the score does not prove. Reading, consulting the correction or answering after a hint never establishes an acquired level: redo the calculations without support on another day.</p></div><div class="exports"><a class="bouton" download="c104-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTM6ZXRhdC1wb2lkcyIsCiAgICAgICJ1bml0ZSI6ICJjMTA0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXRhdC1yZWN1cnJlbnQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBjaGFuZ2VzIGR1cmluZyByZWFkaW5nLCBhbmQgd2hhdCByZW1haW5zIHNoYXJlZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc3RhdGUgaCBjaGFuZ2VzIGFmdGVyIGVhY2ggd29yZC4gVGhlIHdlaWdodHMgYSwgdSBhbmQgdGhlIGJpYXMgYiByZW1haW4gaWRlbnRpY2FsIGF0IGFsbCBwb3NpdGlvbnMgZm9yIHRoaXMgcmVhZGluZy4gVHJhaW5pbmcgdGhlIHBhcmFtZXRlcnMgd291bGQgYmUgYSBzZXBhcmF0ZSBvcGVyYXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTM6cmVnbGUiLAogICAgICAidW5pdGUiOiAiYzEwNC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNlbGx1bGUtcmVjdXJyZW50ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJSZWNvbnN0cnVjdCB0aGUgY2FsY3VsYXRpb24gb2YgYSBjZWxsIGFuZCB0aGUgcm9sZSBvZiBpdHMgYWN0aXZhdGlvbi4iLAogICAgICAicmVwb25zZSI6ICJXZWlnaHQgdGhlIHByZXZpb3VzIHN0YXRlIGJ5IGEgYW5kIHRoZSBjdXJyZW50IGlucHV0IGJ5IHUsIGFkZCB0aGVzZSBjb250cmlidXRpb25zIGFuZCBiLCB0aGVuIGFwcGx5IM+GLiBIZXJlIM+GIGtlZXBzIGEgcG9zaXRpdmUgb3IgMCBzdW0gYW5kIHJlcGxhY2VzIGEgbmVnYXRpdmUgc3VtIHdpdGggMC4gVGhlIHJlc3VsdCBiZWNvbWVzIHRoZSBzdGF0ZSBmb3IgdGhlIG5leHQgc3RlcC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNC1tMzpvcmRyZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA0LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAib3JkcmUtcmVjdXJyZW50IiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gdGhlIHNhbWUgd29yZHMgZ2l2ZSBkaWZmZXJlbnQgZmluYWwgc3RhdGVzPyIsCiAgICAgICJyZXBvbnNlIjogIkVhY2ggcG9zaXRpb24gcmVjZWl2ZXMgYSBkaWZmZXJlbnQgc3RhdGUuIFRoZSBmaXJzdCB3b3JkIHRoZW4gcGFzc2VzIHRocm91Z2ggbW9yZSB0cmFuc2l0aW9ucyB0aGFuIHRoZSBsYXN0LiBPbiBvdXIgcG9zaXRpdmUgcGF0aCwgaXRzIGZpbmFsIGNvbnRyaWJ1dGlvbiBjYXJyaWVzIGFuIGV4dHJhIGZhY3RvciBhOyBhIHNpbXBsZSBzdW0gb2YgdGhlIGNvZGVzIGRvZXMgbm90IHJldGFpbiB0aGlzIGRpZmZlcmVuY2UgaW4gcm9sZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNC1tMzpmcm9udGllcmUiLAogICAgICAidW5pdGUiOiAiYzEwNC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImluaXRpYWxpc2F0aW9uLXJlY3VycmVudGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hlbiBzaG91bGQgdGhlIHN0YXRlIGJlIGtlcHQsIGFuZCB3aGVuIHNob3VsZCBpdCBiZSByZXNldD8iLAogICAgICAicmVwb25zZSI6ICJLZWVwIGl0IHRvIGNvbnRpbnVlIHRoZSBzYW1lIHNlcXVlbmNlLiBGb3Igb3VyIGluZGVwZW5kZW50IG1lc3NhZ2VzLCBzdGFydCBhZ2FpbiBmcm9tIDAgYXQgZWFjaCBuZXcgbWVzc2FnZSB3aGlsZSBrZWVwaW5nIHRoZSB3ZWlnaHRzLiBUaGUgYm91bmRhcnkgbXVzdCBiZSBzZXQgYnkgdGhlIHRhc2ssIHJhdGhlciB0aGFuIGd1ZXNzZWQgYnkgdGhlIGNlbGwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTM6bGltaXRlIiwKICAgICAgInVuaXRlIjogImMxMDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXN1bWUtcmVjdXJyZW50IiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgYSBzdGF0ZSB0aGF0IGRlcGVuZHMgb24gdGhlIHBhc3QgcHJvdmUgdGhhdCB0aGUgbmV0d29yayBrZWVwcyBldmVyeXRoaW5nIG9yIHVuZGVyc3RhbmRzIHRoZSB0ZXh0PyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBUaGUgc3RhdGUgaXMgYSBjYWxjdWxhdGVkIHN1bW1hcnkgdGhhdCBjYW4gbG9zZSBkaXN0aW5jdGlvbnMsIHBhcnRpY3VsYXJseSB3aGVuIHRoZSBhY3RpdmF0aW9uIHJlY3RpZmllcyBuZWdhdGl2ZSBzdW1zLiBPdXIgZmljdGlvbmFsIGNvZGVzIGFuZCB3ZWlnaHRzIHByb3ZlIG9ubHkgdGhlIGNhbGN1bGF0aW9ucyBzaG93bi4gVGhleSBlc3RhYmxpc2ggbmVpdGhlciBsZWFybmluZyBvZiBtZWFuaW5nIG5vciBxdWFsaXR5IG9uIG5ldyBtZXNzYWdlcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c104-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBjaGFuZ2VzIGR1cmluZyByZWFkaW5nLCBhbmQgd2hhdCByZW1haW5zIHNoYXJlZD8JVGhlIHN0YXRlIGggY2hhbmdlcyBhZnRlciBlYWNoIHdvcmQuIFRoZSB3ZWlnaHRzIGEsIHUgYW5kIHRoZSBiaWFzIGIgcmVtYWluIGlkZW50aWNhbCBhdCBhbGwgcG9zaXRpb25zIGZvciB0aGlzIHJlYWRpbmcuIFRyYWluaW5nIHRoZSBwYXJhbWV0ZXJzIHdvdWxkIGJlIGEgc2VwYXJhdGUgb3BlcmF0aW9uLgl0b2RhaSBjMTA0LW0zIGV0YXQtcmVjdXJyZW50ClJlY29uc3RydWN0IHRoZSBjYWxjdWxhdGlvbiBvZiBhIGNlbGwgYW5kIHRoZSByb2xlIG9mIGl0cyBhY3RpdmF0aW9uLglXZWlnaHQgdGhlIHByZXZpb3VzIHN0YXRlIGJ5IGEgYW5kIHRoZSBjdXJyZW50IGlucHV0IGJ5IHUsIGFkZCB0aGVzZSBjb250cmlidXRpb25zIGFuZCBiLCB0aGVuIGFwcGx5IM+GLiBIZXJlIM+GIGtlZXBzIGEgcG9zaXRpdmUgb3IgMCBzdW0gYW5kIHJlcGxhY2VzIGEgbmVnYXRpdmUgc3VtIHdpdGggMC4gVGhlIHJlc3VsdCBiZWNvbWVzIHRoZSBzdGF0ZSBmb3IgdGhlIG5leHQgc3RlcC4JdG9kYWkgYzEwNC1tMyBjZWxsdWxlLXJlY3VycmVudGUKV2h5IGNhbiB0aGUgc2FtZSB3b3JkcyBnaXZlIGRpZmZlcmVudCBmaW5hbCBzdGF0ZXM/CUVhY2ggcG9zaXRpb24gcmVjZWl2ZXMgYSBkaWZmZXJlbnQgc3RhdGUuIFRoZSBmaXJzdCB3b3JkIHRoZW4gcGFzc2VzIHRocm91Z2ggbW9yZSB0cmFuc2l0aW9ucyB0aGFuIHRoZSBsYXN0LiBPbiBvdXIgcG9zaXRpdmUgcGF0aCwgaXRzIGZpbmFsIGNvbnRyaWJ1dGlvbiBjYXJyaWVzIGFuIGV4dHJhIGZhY3RvciBhOyBhIHNpbXBsZSBzdW0gb2YgdGhlIGNvZGVzIGRvZXMgbm90IHJldGFpbiB0aGlzIGRpZmZlcmVuY2UgaW4gcm9sZS4JdG9kYWkgYzEwNC1tMyBvcmRyZS1yZWN1cnJlbnQKV2hlbiBzaG91bGQgdGhlIHN0YXRlIGJlIGtlcHQsIGFuZCB3aGVuIHNob3VsZCBpdCBiZSByZXNldD8JS2VlcCBpdCB0byBjb250aW51ZSB0aGUgc2FtZSBzZXF1ZW5jZS4gRm9yIG91ciBpbmRlcGVuZGVudCBtZXNzYWdlcywgc3RhcnQgYWdhaW4gZnJvbSAwIGF0IGVhY2ggbmV3IG1lc3NhZ2Ugd2hpbGUga2VlcGluZyB0aGUgd2VpZ2h0cy4gVGhlIGJvdW5kYXJ5IG11c3QgYmUgc2V0IGJ5IHRoZSB0YXNrLCByYXRoZXIgdGhhbiBndWVzc2VkIGJ5IHRoZSBjZWxsLgl0b2RhaSBjMTA0LW0zIGluaXRpYWxpc2F0aW9uLXJlY3VycmVudGUKRG9lcyBhIHN0YXRlIHRoYXQgZGVwZW5kcyBvbiB0aGUgcGFzdCBwcm92ZSB0aGF0IHRoZSBuZXR3b3JrIGtlZXBzIGV2ZXJ5dGhpbmcgb3IgdW5kZXJzdGFuZHMgdGhlIHRleHQ/CU5vLiBUaGUgc3RhdGUgaXMgYSBjYWxjdWxhdGVkIHN1bW1hcnkgdGhhdCBjYW4gbG9zZSBkaXN0aW5jdGlvbnMsIHBhcnRpY3VsYXJseSB3aGVuIHRoZSBhY3RpdmF0aW9uIHJlY3RpZmllcyBuZWdhdGl2ZSBzdW1zLiBPdXIgZmljdGlvbmFsIGNvZGVzIGFuZCB3ZWlnaHRzIHByb3ZlIG9ubHkgdGhlIGNhbGN1bGF0aW9ucyBzaG93bi4gVGhleSBlc3RhYmxpc2ggbmVpdGhlciBsZWFybmluZyBvZiBtZWFuaW5nIG5vciBxdWFsaXR5IG9uIG5ldyBtZXNzYWdlcy4JdG9kYWkgYzEwNC1tMyByZXN1bWUtcmVjdXJyZW50Cg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vvbfuq mtoyig hypp</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vfowmf ztnyhh slsb</span></span> · separate the sequence model from its adapter</h3><dl><div><dt>What you understand</dt><dd>A recurrent network calculates a state with shared weights. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fetkqd kwssqs ztafzl flnojd moghrn uckzje xcxvls udnnyq qfveao apgqeh ygnoux zouwgu majwau az</span></span> <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qfzdeh kcuyli fgggrg zmuekw cfemsz utqhsa ospkdt fgqhpe ylqysj yyssyl xtdqpv pnhkzc kaomjh lp</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kynfvw nmhwfh kucffl uaisbx ylaxwx sbccvf dvywjs gtgxzh ppfedi kdjenc qoftkx kdnktu jwllzj soavpi zhajxx ktzqyf rmpski dahwgf dplhvd tszxav yaynqs bejknp zeiwgw hubctm</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 3 to prepare for: reconstruct the cell and its unrolling, keep the weights fixed, then explain when to reset the state. Answering with a correction or after a hint remains assisted; reading the page does not establish any acquired level.</dd></div><div><dt>Evidence and scope</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">otrwmn alxqjr ajcrvp ifqomp nhkkua wfnuos xlxnvz tnubmh fhhiks fznxfq pfybjv ezvotu zicwfp hjffls mxpffs ywpsfg chnfsw ubsrwc joizfd jfqptm dskqlm jjgyct xnduoi xynwap</span></span></dd></div><div><dt>Next step</dt><dd>Redo the reversal and the change of message without support. Unit C104·M4 will study LSTM and GRU, other recurrent cells; C104·M5 will cover the temporal validation required for the milestone. Identifying the model actually used and providing evidence of execution and quality remain separate tasks, not carried out here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c104-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c104-m2.html">Previous</a> · <a href="c104-m4.html">Next</a></nav>
+<footer><p>Course book · C104·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

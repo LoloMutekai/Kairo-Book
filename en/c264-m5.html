@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a monitoring signal, decide when to suspend a model, and specify the evidence needed for a verified rollback.">
+<title>C264·M5 · Monitoring and rollback — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sjevlb hurvkv ohey</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C264·M5</p><h1>Monitoring and rollback</h1><p class="objectif"><span>Your goal</span>Calculate a monitoring signal, decide when to suspend a model, and specify the evidence needed for a verified rollback.</p><p class="prerequis"><strong>Before you start</strong><br>c263-m5 : distribution shift · c074-m5 : identification assumptions · c220-m5 : numerical reproducibility · c017-m5 : reproduction protocol · c264-m1 : permutation · c264-m2 : partial effects · c264-m3 : explanation and causality · c264-m4 : drift</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a test chamber, a model predicts the temperature for the next minute. The technician sees the predictions arrive; that does not tell them whether the predictions remain usable. They compare each prediction, recorded before its target time, with the temperature subsequently measured. The model proposes values: it does not control any equipment.</p><p>Monitoring connects a reading to a prepared decision. Our technician groups the errors into windows, meaning successive batches with no shared observations. If the error stays too large for several windows, they suspend use of the candidate. They already have a fallback version, called the stable version because it was selected previously, with no guarantee for all future conditions.</p><p>Rollback means restoring this version and everything its predictions depend on: parameters, input transformation, and compatible settings. It then remains to check that a request actually reaches this version and that its output is usable. A message saying “restoration successful” does not replace this check.</p><p>The scene and all its temperatures are fictional. We will simulate an operating rule set before examining the errors. The chosen threshold and patience setting are used for the calculation; they are neither recommendations for a real chamber nor a statistical guarantee against false alarms.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>An alarm builds over time</title><desc>Window A gives 2.50 degrees of mean absolute error, above the threshold of 2 degrees. The counter is 1. Window B gives 3.00 degrees; the counter reaches 2 and triggers the stopping rule. The boxes show a timeline, rather than a temperature scale.</desc><rect x="20" y="18" width="320" height="76" rx="8" class="cadre-prediction" /><text x="180" y="43" text-anchor="middle">Window A: 2.50 °C</text><text x="180" y="72" text-anchor="middle">Counter: 1 of 2</text><path d="M180 94v28m-5-6 5 6 5-6" class="trait" /><rect x="20" y="122" width="320" height="76" rx="8" class="cadre-resultat" /><text x="180" y="148" text-anchor="middle">Window B: 3.00 °C</text><text x="180" y="177" text-anchor="middle">Counter: 2 of 2</text><text x="180" y="231" text-anchor="middle" class="petite-etiquette">Strict threshold: error &gt; 2 °C</text><text x="180" y="251" text-anchor="middle" class="petite-etiquette">The rule requires stopping the candidate.</text></svg><figcaption>Each box summarizes a complete window. The values strictly exceed the threshold; the counter records the length of the run of consecutive breaches.</figcaption></figure><figure><svg viewBox="0 0 360 284" xmlns="http://www.w3.org/2000/svg" role="img"><title>From alert to verified rollback</title><desc>The confirmed breach leads to suspension of the candidate. A prepared fallback version is then proposed and applied under the planned authorization. Checking the request path and outputs remains a separate step. A failed restoration leaves the candidate suspended.</desc><rect x="22" y="12" width="316" height="52" rx="7" class="cadre-prediction" /><text x="180" y="44" text-anchor="middle">Suspend the candidate</text><path d="M180 64v22m-5-6 5 6 5-6" class="trait" /><rect x="22" y="86" width="316" height="66" rx="7" class="cadre-neutre" /><text x="180" y="112" text-anchor="middle">Fallback prepared and authorized</text><text x="180" y="137" text-anchor="middle" class="petite-etiquette">Model, settings, transformation</text><path d="M180 152v22m-5-6 5 6 5-6" class="trait" /><rect x="22" y="174" width="316" height="62" rx="7" class="cadre-resultat" /><text x="180" y="201" text-anchor="middle">Check the actual request path</text><text x="180" y="225" text-anchor="middle" class="petite-etiquette">Loaded version, outputs, monitoring</text><text x="180" y="269" text-anchor="middle" class="petite-etiquette">A failed fallback remains a failure.</text></svg><figcaption>The sequence distinguishes a stop request, restoration, and evidence after restoration. If the fallback cannot be established, the protocol keeps the suspended state and reports the incident.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Prepare the fallback before an incident; measure with a consistent rule; suspend when the rule requires it; check what is actually restored, then keep monitoring.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A temperature prediction that deteriorates</h3><p>The candidate is used in a monitored simulation. A window contains n = 4 predictions with a horizon of 1 min. The threshold τ is 2 °C of mean absolute error. The rule suspends the candidate after h = 2 consecutive windows strictly above τ. The counter starts at 0. Before the trial, the person in charge authorized this suspension and rollback to an identified fallback package; this example grants no real authorization.</p><ol class="etapes"><li><h3>Define exactly what is measured</h3><p>t denotes the current window in time order; i denotes an observation in this window, from 1 to n. yᵢ is the reference temperature measured at the target time; pᵢ is the candidate prediction recorded before that time. Both are in °C. We keep them paired by event, along with the issue time, horizon, and identifier of the package used.</p><p>The absolute error eᵢ = |pᵢ − yᵢ| is the distance between prediction and reference, in °C. The bars remove the sign: an overestimate and an underestimate must not cancel each other out. M<sub>t</sub> is the mean of these distances in the window, still in °C. n is a count of observations, with no physical unit; n is strictly greater than 0. The symbol ∑ adds the distances for i running from 1 to n.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>M</mi><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mo>|</mo><msub><mi>p</mi><mi>i</mi></msub><mo>−</mo><msub><mi>y</mi><mi>i</mi></msub><mo>|</mo></mrow></math></div><p>The references are assumed to be available, correctly aligned, and reliable for the simulation. The windows do not overlap and use the same sensor, horizon, and definition of error. This separation does not guarantee that the temperatures are independent. No independence assumption is needed to reproduce this mean; it would need discussion for a statistical interpretation.</p><p>If a reference is missing, M<sub>t</sub> is not evaluated as though the window were complete. The protocol then suspends use of the candidate until monitoring is restored; it never replaces the unknown error with 0. A technical failure or an invalid input also requires a separate stop: patience about quality does not require continued use during a failure.</p></li><li><h3>Write the rule before seeing the results</h3><p>τ is the error threshold, in °C. h is the required run length, in windows. q<sub>t</sub> counts the consecutive breaches ending at window t; it is a count, rather than a probability. The previous counter is denoted q<sub>p</sub>; initially, it is 0.</p><p>For a valid window, if M<sub>t</sub> &gt; τ, set q<sub>t</sub> = q<sub>p</sub> + 1. If M<sub>t</sub> ≤ τ, set q<sub>t</sub> = 0. As soon as q<sub>t</sub> reaches h, suspend the candidate and begin the prepared rollback. Equality at the threshold therefore interrupts the run of breaches.</p><p>Choosing h = 2 deliberately delays the reaction to an isolated breach; it can also allow deterioration to continue during this delay. This tradeoff belongs to the protocol. Changing τ after seeing the alert would change the rule being evaluated.</p></li><li><h3>Calculate the first window</h3><p>Each row pairs the same event across the columns. The readings, predictions, and absolute errors in the table are all in °C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtable><mtr><mtd><mtext>Mesure</mtext></mtd><mtd><mtext>Candidat</mtext></mtd><mtd><mtext>Écart absolu</mtext></mtd></mtr><mtr><mtd><mn>20</mn></mtd><mtd><mn>22</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>22</mn></mtd><mtd><mn>20</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>21</mn></mtd><mtd><mn>24</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>23</mn></mtd><mtd><mn>20</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable></mrow></math></div><p>On the first row, |22 − 20| = 2 °C. On the next, |20 − 22| = 2 °C: take the distance, despite the change of sign. The other distances are 3 °C and 3 °C.</p><p>Adding gives (2 + 2) + (3 + 3) = 4 + 6 = 10 °C. Dividing by the number of predictions gives M for window A: 10/4 = 5/2 °C, or 2.50 °C. We divide to compare an error per prediction, rather than letting the batch size determine the result.</p><p>Since 2.50 °C &gt; 2 °C, q goes from 0 to 1. The required length is 2: the stop for quality has not yet been triggered. The next window remains under monitoring.</p></li><li><h3>Calculate the next window and decide</h3><p>Window B contains new events. The candidate recorded its predictions before knowing the references, as in window A. All cells are in °C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtable><mtr><mtd><mtext>Mesure</mtext></mtd><mtd><mtext>Candidat</mtext></mtd><mtd><mtext>Écart absolu</mtext></mtd></mtr><mtr><mtd><mn>24</mn></mtd><mtd><mn>21</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>23</mn></mtd><mtd><mn>25</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>25</mn></mtd><mtd><mn>21</mn></mtd><mtd><mn>4</mn></mtd></mtr><mtr><mtd><mn>22</mn></mtd><mtd><mn>25</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable></mrow></math></div><p>The distances are |21 − 24| = 3, |25 − 23| = 2, |21 − 25| = 4 and |25 − 22| = 3, in °C. Their sum is (3 + 2) + (4 + 3) = 5 + 7 = 12 °C.</p><p>M for window B is 12/4 = 3 °C, or 3.00 °C. The threshold is exceeded again: q becomes 1 + 1 = 2. It reaches h = 2; the rule now requires suspending the candidate. This decision applies an operating limit; it establishes neither the cause of the problem nor a lasting distribution drift.</p></li><li><h3>Examine the fallback on the same events</h3><p>bᵢ denotes the stable version prediction, in °C. For this fictional trial, it also produced and recorded its outputs before the target times, alongside the candidate. We can therefore examine its errors on the same events in B without retraining after seeing the answers.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtable><mtr><mtd><mtext>Mesure</mtext></mtd><mtd><mtext>Repli</mtext></mtd><mtd><mtext>Écart absolu</mtext></mtd></mtr><mtr><mtd><mn>24</mn></mtd><mtd><mn>23</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>23</mn></mtd><mtd><mn>24</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>25</mn></mtd><mtd><mn>24</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>22</mn></mtd><mtd><mn>23</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable></mrow></math></div><p>The fallback distances are 1, 1, 1 and 1 °C. The sum is (1 + 1) + (1 + 1) = 2 + 2 = 4 °C. Its mean is 4/4 = 1 °C, or 1.00 °C: it is below the threshold on this window.</p><p>On these same events, the difference between the means is 3 − 1 = 2 °C in favor of the fallback. This is a descriptive comparison of predictions on a fictional window. It proves neither future improvement, nor a causal effect on equipment, nor the effectiveness of a real restoration mechanism.</p></li><li><h3>Restore the package, then check that it is used</h3><p>Before the trial, the stable package was saved with its identifier, fingerprint, model, parameters, and input transformation. A fingerprint is a signature calculated from the bytes that allows a change in the package to be detected here; by itself, it does not prove quality. The rollback procedure and required authorization are planned at the same time.</p><p>In our simulated protocol, first remove the candidate from the request path in use, then restore the compatible stable package. Leaving a recent transformation in front of an old model does not restore the complete stable version. If the package is missing or its verification fails, keep the suspension and report the failure; do not put the candidate back into use by default.</p><p>The check after restoration follows a request from end to end: identifier of the package actually loaded, transformation applied, output obtained, and expected reference for a known case. Monitoring resumes at new target times, keeping windows separate by version. Do not mix candidate and fallback outputs in the same mean. Rolling back does not withdraw predictions already used.</p><p>A located package, a requested restoration, and a verified request path are different kinds of evidence. A person in charge prepares any new activation of the candidate after reviewing the incident; a new window falling below the threshold does not automatically authorize it.</p></li><li><h3>Check the calculations and the limits of the decision</h3><p>Reverse check: n × M gives the sum of distances again. For A, 4 × 5/2 = 10 °C; for B, 4 × 3 = 12 °C; for the fallback, 4 × 1 = 4 °C. The means stay between the minimum and maximum distances in each batch.</p><p>Another check: in A, the signed errors pᵢ − yᵢ cancel out exactly to 0 °C, while their absolute sum is 10 °C. The signed mean would have hidden the errors. The exact calculation keeps 5/2 until the French-format display 2.50; no intermediate rounding determines which side of the threshold the result falls on.</p><p>The rule does trigger on the sequence A then B, and equality at the threshold must reset the counter to 0. These checks verify a calculation and logic on fictional data. The relevance of τ, sensor reliability, the cost of the delay, and the actual ability to restore still need to be checked for any real application.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the tables. Explain what the mean measures, what the counter adds, and why an available fallback state is not enough to conclude that rollback has taken place. Then reconstruct the decision from the errors.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The mean of the signed errors is 0, so the model makes no mistakes.”</h3><p>The overestimates and underestimates in A cancel each other out. Calculate their distances before adding them: the absolute sum is 10 °C and the mean is 2.50 °C. The sign answers another question, about a tendency to overestimate or underestimate.</p><a href="#exemple">Revisit the distances and the check using signs</a></li><li><h3>“It is enough to count all the breaches encountered.”</h3><p>The rule concerns a consecutive run. Any valid window with an error below or equal to the threshold resets the counter to 0. Replay the sequence in the exercise that inserts an equality between breaches.</p><a href="#exercices">Replay the interrupted sequence</a></li><li><h3>“The old state has been located: rollback has succeeded.”</h3><p>The compatible package still needs to be applied and a request followed through to its output. The milestone code specifically distinguishes the state proposal from its application; a favorable state lookup result does not prove the actual request path.</p><a href="#jalon"><span class="milestone-label">Read the exact scope of the restoration result</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 1 · Application · threshold and unit</p>
+<h3>Landing exactly on the threshold</h3><p>In a variant of the same simulation, a valid window of 4 predictions has a total distance of 8 °C. The previous counter is 1. Calculate its mean and the new counter. Does the stopping rule for quality trigger?</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The sum describes the whole batch. Divide it by the number of predictions.</p></details><details class="indice"><summary>Hint 2</summary><p>The required breach is strict. An equality follows the branch that interrupts the run.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>M = 8/4 = 2 °C. This mean is exactly equal to τ = 2 °C. The condition M &gt; τ is false: q becomes 0, and the stop for quality is not triggered on this window.</p><p>Reverse check: 4 × 2 = 8 °C. The conclusion assumes that the window is complete and valid; a missing reference falls under the other reason for suspension.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 2 °C with a denominator of 4 observations.</li><li>Reset the counter to 0, despite its previous value.</li><li>Justify the decision using the strict inequality in the rule.</li></ul></details></article><article class="exercice" id="ex-serie"><p class="repere">Exercise 2 · Reasoning · sequence on paper</p>
+<h3>Separated breaches</h3><p>Another sequence from the chamber contains valid windows with means of 2.50 °C, 2.00 °C, then 3.00 °C, in that order. Start with a counter equal to 0 and keep the same τ and h. Give the counter after each window. Can rollback be triggered at the last step on quality grounds alone?</p>
+<label for="reponse-ex-serie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-serie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-serie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-serie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-serie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write a line for each window and state which branch of the rule applies.</p></details><details class="indice"><summary>Hint 2</summary><p>Do not carry over the breach before the equality. The run was interrupted.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>After 2.50 °C &gt; 2 °C, q is 1. After 2.00 °C = 2 °C, it is 0. After 3.00 °C &gt; 2 °C, it restarts at 1. It never reaches h = 2 in this sequence.</p><p>The counter gives the length of the current run, rather than the historical total of breaches. The prescribed rule therefore does not trigger rollback for quality at the last step. Another reason to stop, such as a failure, would retain its own decision.</p><p class="petit-titre">Check your reasoning</p><ul><li>Produce the sequence 1, 0, 1.</li><li>Connect each value to a comparison with the threshold.</li><li>Distinguish the rule being evaluated from a possible separate technical stop.</li></ul></details></article><article class="exercice" id="ex-preuve"><p class="repere">Exercise 3 · Transfer · diagnosis and evidence</p>
+<h3>The old model returns, but its transformation is missing</h3><p>After the main sequence A then B, the simulation log announces “stable package located”. The old model is available, but the input transformation is still the candidate transformation. The next temperature references have not yet arrived. The technician announces: “verified rollback and 0 error”. Write a diagnosis and the next useful check.</p>
+<label for="reponse-ex-preuve">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-preuve" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-preuve" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-preuve" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-preuve" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Separate the located state, the package actually used, and the quality of future outputs.</p></details><details class="indice"><summary>Hint 2</summary><p>A missing reference is not an error of 0 °C. Start again from the complete request path rather than the log message.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The rule required stopping the candidate because q = 2. In the problem statement, the message only attests that the package has been located. The combination of an old model and a recent transformation does not match the planned stable package: its complete restoration has not been established.</p><p>The protocol keeps the suspension. The compatible transformation must be restored and identified, then a request checked on a known case by following the loaded version and its output. When the references for the new target times are available, a new error can be calculated. Until then, it is unknown and is not 0 °C.</p><p>The fallback mean of 1.00 °C on B remains a comparison result in the fictional trial. It does not certify the new outputs or turn a restoration message into evidence of a return to service.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify the package incompatibility and keep a suspended status.</li><li>Request evidence of the request path with the expected transformation.</li><li>Leave future quality unknown when references are absent.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="mesure"><summary><span class="repere">Recall 1</span><span>Why take absolute values before calculating the mean?</span></summary><p>To measure distances without canceling out overestimates and underestimates. Add the distances in °C, then divide by the number of valid observations; the mean remains in °C.</p></details><details class="carte" data-carte="serie"><summary><span class="repere">Recall 2</span><span>What does the counter record, and what does equality at the threshold do?</span></summary><p>It records the consecutive breaches ending at the current window. It increases if the mean strictly exceeds τ; a valid window below or equal to τ resets it to 0.</p></details><details class="carte" data-carte="manque"><summary><span class="repere">Recall 3</span><span>What is the error of a window when its references are unavailable?</span></summary><p>The error of the complete window cannot yet be calculated. It remains unknown; our protocol suspends use of the candidate until monitoring is restored, without replacing a missing reference with 0.</p></details><details class="carte" data-carte="retour"><summary><span class="repere">Recall 4</span><span>What evidence separates a located old state from a verified rollback?</span></summary><p>Application of the compatible package, the identity of the version actually reached, and the output of a check request must be established. Monitoring with new references then checks quality under the new conditions.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does triggering the stopping rule fail to establish?</span></summary><p>It establishes neither the cause of the deterioration, nor a false alarm probability, nor future improvement through the fallback. It triggers an action planned by a protocol whose choices still need justification.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the page, reconstruct the sequence by naming the necessary references, the error calculation, the counter rule, suspension, and the rollback evidence. Then explain the equality case and the missing reference case. Repeat this reasoning without support at least 2 days later: reading or an answer after a hint does not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c264-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjQtbTU6bWVzdXJlIiwKICAgICAgInVuaXRlIjogImMyNjQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlcnJldXItYWJzb2x1ZS1tb3llbm5lIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSB0YWtlIGFic29sdXRlIHZhbHVlcyBiZWZvcmUgY2FsY3VsYXRpbmcgdGhlIG1lYW4/IiwKICAgICAgInJlcG9uc2UiOiAiVG8gbWVhc3VyZSBkaXN0YW5jZXMgd2l0aG91dCBjYW5jZWxpbmcgb3V0IG92ZXJlc3RpbWF0ZXMgYW5kIHVuZGVyZXN0aW1hdGVzLiBBZGQgdGhlIGRpc3RhbmNlcyBpbiDCsEMsIHRoZW4gZGl2aWRlIGJ5IHRoZSBudW1iZXIgb2YgdmFsaWQgb2JzZXJ2YXRpb25zOyB0aGUgbWVhbiByZW1haW5zIGluIMKwQy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2NC1tNTpzZXJpZSIsCiAgICAgICJ1bml0ZSI6ICJjMjY0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGVwYXNzZW1lbnRzLWNvbnNlY3V0aWZzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgY291bnRlciByZWNvcmQsIGFuZCB3aGF0IGRvZXMgZXF1YWxpdHkgYXQgdGhlIHRocmVzaG9sZCBkbz8iLAogICAgICAicmVwb25zZSI6ICJJdCByZWNvcmRzIHRoZSBjb25zZWN1dGl2ZSBicmVhY2hlcyBlbmRpbmcgYXQgdGhlIGN1cnJlbnQgd2luZG93LiBJdCBpbmNyZWFzZXMgaWYgdGhlIG1lYW4gc3RyaWN0bHkgZXhjZWVkcyDPhDsgYSB2YWxpZCB3aW5kb3cgYmVsb3cgb3IgZXF1YWwgdG8gz4QgcmVzZXRzIGl0IHRvIDAuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjQtbTU6bWFucXVlIiwKICAgICAgInVuaXRlIjogImMyNjQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzdXJ2ZWlsbGFuY2UtaW5kaXNwb25pYmxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGVycm9yIG9mIGEgd2luZG93IHdoZW4gaXRzIHJlZmVyZW5jZXMgYXJlIHVuYXZhaWxhYmxlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBlcnJvciBvZiB0aGUgY29tcGxldGUgd2luZG93IGNhbm5vdCB5ZXQgYmUgY2FsY3VsYXRlZC4gSXQgcmVtYWlucyB1bmtub3duOyBvdXIgcHJvdG9jb2wgc3VzcGVuZHMgdXNlIG9mIHRoZSBjYW5kaWRhdGUgdW50aWwgbW9uaXRvcmluZyBpcyByZXN0b3JlZCwgd2l0aG91dCByZXBsYWNpbmcgYSBtaXNzaW5nIHJlZmVyZW5jZSB3aXRoIDAuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjQtbTU6cmV0b3VyIiwKICAgICAgInVuaXRlIjogImMyNjQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXRvdXItYXJyaWVyZS12ZXJpZmllIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZXZpZGVuY2Ugc2VwYXJhdGVzIGEgbG9jYXRlZCBvbGQgc3RhdGUgZnJvbSBhIHZlcmlmaWVkIHJvbGxiYWNrPyIsCiAgICAgICJyZXBvbnNlIjogIkFwcGxpY2F0aW9uIG9mIHRoZSBjb21wYXRpYmxlIHBhY2thZ2UsIHRoZSBpZGVudGl0eSBvZiB0aGUgdmVyc2lvbiBhY3R1YWxseSByZWFjaGVkLCBhbmQgdGhlIG91dHB1dCBvZiBhIGNoZWNrIHJlcXVlc3QgbXVzdCBiZSBlc3RhYmxpc2hlZC4gTW9uaXRvcmluZyB3aXRoIG5ldyByZWZlcmVuY2VzIHRoZW4gY2hlY2tzIHF1YWxpdHkgdW5kZXIgdGhlIG5ldyBjb25kaXRpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjY0LW01OnBvcnRlZSIsCiAgICAgICJ1bml0ZSI6ICJjMjY0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlLWR1LXNldWlsIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0cmlnZ2VyaW5nIHRoZSBzdG9wcGluZyBydWxlIGZhaWwgdG8gZXN0YWJsaXNoPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGVzdGFibGlzaGVzIG5laXRoZXIgdGhlIGNhdXNlIG9mIHRoZSBkZXRlcmlvcmF0aW9uLCBub3IgYSBmYWxzZSBhbGFybSBwcm9iYWJpbGl0eSwgbm9yIGZ1dHVyZSBpbXByb3ZlbWVudCB0aHJvdWdoIHRoZSBmYWxsYmFjay4gSXQgdHJpZ2dlcnMgYW4gYWN0aW9uIHBsYW5uZWQgYnkgYSBwcm90b2NvbCB3aG9zZSBjaG9pY2VzIHN0aWxsIG5lZWQganVzdGlmaWNhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c264-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IHRha2UgYWJzb2x1dGUgdmFsdWVzIGJlZm9yZSBjYWxjdWxhdGluZyB0aGUgbWVhbj8JVG8gbWVhc3VyZSBkaXN0YW5jZXMgd2l0aG91dCBjYW5jZWxpbmcgb3V0IG92ZXJlc3RpbWF0ZXMgYW5kIHVuZGVyZXN0aW1hdGVzLiBBZGQgdGhlIGRpc3RhbmNlcyBpbiDCsEMsIHRoZW4gZGl2aWRlIGJ5IHRoZSBudW1iZXIgb2YgdmFsaWQgb2JzZXJ2YXRpb25zOyB0aGUgbWVhbiByZW1haW5zIGluIMKwQy4JdG9kYWkgYzI2NC1tNSBlcnJldXItYWJzb2x1ZS1tb3llbm5lCldoYXQgZG9lcyB0aGUgY291bnRlciByZWNvcmQsIGFuZCB3aGF0IGRvZXMgZXF1YWxpdHkgYXQgdGhlIHRocmVzaG9sZCBkbz8JSXQgcmVjb3JkcyB0aGUgY29uc2VjdXRpdmUgYnJlYWNoZXMgZW5kaW5nIGF0IHRoZSBjdXJyZW50IHdpbmRvdy4gSXQgaW5jcmVhc2VzIGlmIHRoZSBtZWFuIHN0cmljdGx5IGV4Y2VlZHMgz4Q7IGEgdmFsaWQgd2luZG93IGJlbG93IG9yIGVxdWFsIHRvIM+EIHJlc2V0cyBpdCB0byAwLgl0b2RhaSBjMjY0LW01IGRlcGFzc2VtZW50cy1jb25zZWN1dGlmcwpXaGF0IGlzIHRoZSBlcnJvciBvZiBhIHdpbmRvdyB3aGVuIGl0cyByZWZlcmVuY2VzIGFyZSB1bmF2YWlsYWJsZT8JVGhlIGVycm9yIG9mIHRoZSBjb21wbGV0ZSB3aW5kb3cgY2Fubm90IHlldCBiZSBjYWxjdWxhdGVkLiBJdCByZW1haW5zIHVua25vd247IG91ciBwcm90b2NvbCBzdXNwZW5kcyB1c2Ugb2YgdGhlIGNhbmRpZGF0ZSB1bnRpbCBtb25pdG9yaW5nIGlzIHJlc3RvcmVkLCB3aXRob3V0IHJlcGxhY2luZyBhIG1pc3NpbmcgcmVmZXJlbmNlIHdpdGggMC4JdG9kYWkgYzI2NC1tNSBzdXJ2ZWlsbGFuY2UtaW5kaXNwb25pYmxlCldoYXQgZXZpZGVuY2Ugc2VwYXJhdGVzIGEgbG9jYXRlZCBvbGQgc3RhdGUgZnJvbSBhIHZlcmlmaWVkIHJvbGxiYWNrPwlBcHBsaWNhdGlvbiBvZiB0aGUgY29tcGF0aWJsZSBwYWNrYWdlLCB0aGUgaWRlbnRpdHkgb2YgdGhlIHZlcnNpb24gYWN0dWFsbHkgcmVhY2hlZCwgYW5kIHRoZSBvdXRwdXQgb2YgYSBjaGVjayByZXF1ZXN0IG11c3QgYmUgZXN0YWJsaXNoZWQuIE1vbml0b3Jpbmcgd2l0aCBuZXcgcmVmZXJlbmNlcyB0aGVuIGNoZWNrcyBxdWFsaXR5IHVuZGVyIHRoZSBuZXcgY29uZGl0aW9ucy4JdG9kYWkgYzI2NC1tNSByZXRvdXItYXJyaWVyZS12ZXJpZmllCldoYXQgZG9lcyB0cmlnZ2VyaW5nIHRoZSBzdG9wcGluZyBydWxlIGZhaWwgdG8gZXN0YWJsaXNoPwlJdCBlc3RhYmxpc2hlcyBuZWl0aGVyIHRoZSBjYXVzZSBvZiB0aGUgZGV0ZXJpb3JhdGlvbiwgbm9yIGEgZmFsc2UgYWxhcm0gcHJvYmFiaWxpdHksIG5vciBmdXR1cmUgaW1wcm92ZW1lbnQgdGhyb3VnaCB0aGUgZmFsbGJhY2suIEl0IHRyaWdnZXJzIGFuIGFjdGlvbiBwbGFubmVkIGJ5IGEgcHJvdG9jb2wgd2hvc2UgY2hvaWNlcyBzdGlsbCBuZWVkIGp1c3RpZmljYXRpb24uCXRvZGFpIGMyNjQtbTUgbGltaXRlLWR1LXNldWlsCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sjevlb hurvkv ohey</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kaufdh pvgsff tjtxdd wkeozu pmxffq xlkbtd gtgj</span></span></h3><dl><div><dt>What you understand</dt><dd>Monitoring turns a valid observation into a decision according to a prepared rule. Rollback then requires a compatible package and evidence of its use. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">byotyy sxdwon xvylxe gzklbl bzaeyx pctqfv slcc</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wnyfqs gqwvtq iqmfhb fvclbc mfgabk ayteuw cfzokq gqsfvc fmlypv vkccwm wgdpfe jsasjz kezdxs gojwhu hofxzu xmbygj gdyigp vxiljb twuagz gbbeot xajqan kzacay yjelpq ksuhtl</span></span></dd></div><div><dt>Your level</dt><dd>Level 4 to prepare: reconstruct the calculation, justify the stopping rule, and refute a rollback announcement lacking evidence of the request path. No canonical private milestone is planned for C264 in the architecture; this additional reference point is required by the production contract. Reading and an assisted answer do not confer any level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fetqjz xelozk rupldb scwmtx qyrxax nlwecr rgounx wglhjh rygdvm xshgys ojvhoi uvqtfd knuegk qcnzhh ijbfwz elqghk vkloyv elqybg tzbpcq bwtnml qkosnc aaomsv ycbzwb zacixb stkwxi cszdwv eaqfpv xhtugs rztjjh sgwdoq cwrdck aozzpt wdosbf otttgh idvpsi eyncql faesjv ff</span></span></dd></div><div><dt>Next step</dt><dd>After a delayed independent attempt, prepare a focused reading of the callers and the consumer of the proposed state: who authorizes, who applies, who checks the version and its outputs? Any actual acceptance test will require a separate mandate. No mechanism has been imported, activated, or executed for this page.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c264-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c264-m4.html">Previous</a> · <a href="c265-m1.html">Next</a></nav>
+<footer><p>Course book · C264·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

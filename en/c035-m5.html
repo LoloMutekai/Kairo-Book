@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a covariance for a finite joint distribution, then reconstruct the probabilities and mean after receiving information about distance.">
+<title>C035·M5 · Finite covariance and conditioning — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zhsbqm ungqff gfcd</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C035·M5</p><h1>Finite covariance and conditioning</h1><p class="objectif"><span>Your goal</span>Calculate a covariance for a finite joint distribution, then reconstruct the probabilities and mean after receiving information about distance.</p><p class="prerequis"><strong>Before you start</strong><br>c030-m5 : Poisson · c034-m5 : mean value · c035-m1 : univariate density · c035-m2 : cumulative distribution · c035-m3 : normal and exponential distributions · c035-m4 : finite joint distribution</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At a bicycle delivery workshop, a bag contains 8 cards describing fictional trips. You draw a card at random, with each card equally likely to be drawn. It gives a distance X, in kilometres, and a duration Y, in minutes. The whole bag defines our model; we are not trying to estimate a hidden distribution from real records.</p><p>Short trips are often quick, and long trips are often slow. Covariance assigns a number to this tendency: it examines whether deviations from the means tend to go in the same direction. It also includes cases that go against the tendency; it does not turn “often” into “always”.</p><p>You are then told that the card gives a distance of 4 km. You do not change any duration: you set aside the cards that are incompatible with this information. There are 4 equally likely possibilities left. The probability of a long duration is now calculated within this group, and its mean may differ from that of the whole bag.</p><p>This unit stays within a finite sample space. No normal density, multiple integral, or rule of causality is needed. Conditioning describes information received about the draw; it does not describe an intervention that would actually make a trip longer.</p><div class="schemas"><figure><svg viewBox="0 0 360 292" xmlns="http://www.w3.org/2000/svg" role="img"><title>The bag of cards, sorted by distance and duration</title><desc>The row where X equals 2 kilometres contains 3 cards for 10 minutes and 1 for 20 minutes. The row where X equals 4 kilometres contains 1 card for 10 minutes and 3 for 20 minutes. There are 8 cards in total. The numbers in the cells are counts, not yet probabilities.</desc><text x="180" y="27" text-anchor="middle">Duration Y, in minutes</text><text x="175" y="64" text-anchor="middle">10 min</text><text x="285" y="64" text-anchor="middle">20 min</text><text x="15" y="109" class="petite-etiquette">X = 2 km</text><text x="15" y="189" class="petite-etiquette">X = 4 km</text><rect x="120" y="80" width="110" height="58" rx="7" class="cadre-resultat" /><rect x="230" y="80" width="110" height="58" rx="7" class="cadre-neutre" /><rect x="120" y="160" width="110" height="58" rx="7" class="cadre-neutre" /><rect x="230" y="160" width="110" height="58" rx="7" class="cadre-resultat" /><text x="175" y="116" text-anchor="middle">3</text><text x="285" y="116" text-anchor="middle">1</text><text x="175" y="196" text-anchor="middle">1</text><text x="285" y="196" text-anchor="middle">3</text><text x="180" y="252" text-anchor="middle">Counts: 8 cards in total</text><text x="180" y="277" text-anchor="middle" class="petite-etiquette">Each card has the same weight.</text></svg><figcaption>Read the row and column together: the short–quick and long–slow cells contain 6 cards. The cases with opposite directions of deviation contain 2. The positions and counts let you read the figure without relying on colours.</figcaption></figure><figure><svg viewBox="0 0 360 292" xmlns="http://www.w3.org/2000/svg" role="img"><title>Conditioning on the long distance</title><desc>We know that X equals 4 kilometres. Of the 4 retained cards, 1 gives 10 minutes and 3 give 20 minutes. The conditional weights are 1/4 and 3/4, with sum 1.</desc><rect x="20" y="12" width="320" height="50" rx="7" class="cadre-prediction" /><text x="180" y="44" text-anchor="middle">Information: X = 4 km</text><line x1="180" y1="62" x2="180" y2="92" class="trait" /><text x="180" y="117" text-anchor="middle">Keep 4 cards</text><rect x="20" y="140" width="150" height="79" rx="7" class="cadre-neutre" /><rect x="190" y="140" width="150" height="79" rx="7" class="cadre-resultat" /><text x="95" y="170" text-anchor="middle">10 min</text><text x="95" y="199" text-anchor="middle">weight 1/4</text><text x="265" y="170" text-anchor="middle">20 min</text><text x="265" y="199" text-anchor="middle">weight 3/4</text><text x="180" y="254" text-anchor="middle">1/4 + 3/4 = 1</text><text x="180" y="280" text-anchor="middle" class="petite-etiquette">Use the retained group.</text></svg><figcaption>The “given that” bar will change the denominator. The 4 cards in this row remain equally likely, but the durations are not equally likely: several cards give the same duration.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For covariance, centre both quantities, then average the products of their deviations. To condition, keep the compatible cases and rescale their total probability mass to one.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the whole bag to the revealed distance</h3><p>Calculate the covariance between distance and duration, then the mean duration given X = 4 km. In the order short–quick, short–slow, long–quick, long–slow, the counts are 3, 1, 1, 3. The cards are fictional and equally likely; the distance–duration pairs are not equally likely.</p><ol class="etapes"><li><h3>Turn the counts into a joint distribution</h3><p>X and Y are the values written on the drawn card. Lowercase x and y denote their possible values. D is the set of possible distances, and T is the set of possible durations. p(x,y) denotes P(X = x and Y = y), the joint probability. P means probability, which has no unit; “and” requires both properties on the same card.</p><p>The short row contains n_c = 3 + 1 = 4 cards; the long row contains n_l = 1 + 3 = 4. The total is n = 4 + 4 = 8. Divide each count by n: p(2,10) = 3/8, p(2,20) = 1/8, p(4,10) = 1/8, p(4,20) = 3/8.</p><p>Check: (3 + 1 + 1 + 3)/8 = 1. All these probabilities are nonnegative. The joint distribution is correctly normalized.</p></li><li><h3>Calculate the means used for centring</h3><p>A marginal probability ignores the other quantity: p_X(x) = P(X = x) sums the row for x; p_Y(y) = P(Y = y) sums the column for y. Here each row and each column contains 4 cards: each value of X, and each value of Y, therefore receives weight 1/2.</p><p>E denotes expectation, the weighted average using probabilities as weights. μ_X = E(X), in km, and μ_Y = E(Y), in min, are our means. The symbol Σ tells us to add all the terms specified beneath it.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>μ</mi><mi>X</mi></msub><mo>=</mo><msub><mo>Σ</mo><mrow><mi>x</mi><mo>∈</mo><mi>D</mi></mrow></msub><mi>x</mi><msub><mi>p</mi><mi>X</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>;</mo><msub><mi>μ</mi><mi>Y</mi></msub><mo>=</mo><msub><mo>Σ</mo><mrow><mi>y</mi><mo>∈</mo><mi>T</mi></mrow></msub><mi>y</mi><msub><mi>p</mi><mi>Y</mi></msub><mo>(</mo><mi>y</mi><mo>)</mo></mrow></math></div><p>Since the marginal weights are equal, μ_X = (2 + 4)/2 = 6/2 = 3 km. Similarly, μ_Y = (10 + 20)/2 = 30/2 = 15 min. This simplification using 2 depends on the weights being equal; it is not a rule for every distribution.</p><p>The deviations of X are 2 − 3 = -1 km and 4 − 3 = 1 km. Those of Y are 10 − 15 = -5 min and 20 − 15 = 5 min. Each mean lies between the extreme values of its quantity.</p></li><li><h3>Average the products of deviations</h3><p>Covariance, written Cov(X,Y), is the expectation of the product of the deviations from the means. In the following sum, x ranges over D and y ranges over T; each cell contributes its product of deviations multiplied by p(x,y). Its unit is the product of the units of X and Y: here km·min.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Cov</mi><mo>(</mo><mi>X</mi><mo>,</mo><mi>Y</mi><mo>)</mo><mo>=</mo><msub><mo>Σ</mo><mrow><mi>x</mi><mo>∈</mo><mi>D</mi></mrow></msub><msub><mo>Σ</mo><mrow><mi>y</mi><mo>∈</mo><mi>T</mi></mrow></msub><mo>(</mo><mi>x</mi><mo>−</mo><msub><mi>μ</mi><mi>X</mi></msub><mo>)</mo><mo>(</mo><mi>y</mi><mo>−</mo><msub><mi>μ</mi><mi>Y</mi></msub><mo>)</mo><mi>p</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow></math></div><p>Short–quick: (-1) × (-5) = 5 km·min. Long–slow: 1 × 5 = 5 km·min. These positive products correspond to deviations with the same sign. Together, the 6 cards in these cells contribute 6 × 5 = 30 km·min to the sum over the cards.</p><p>Short–slow: (-1) × 5 = -5 km·min. Long–quick: 1 × (-5) = -5 km·min. These 2 cards contribute 2 × (-5) = -10 km·min.</p><p>The centred sum is 30 + (-10) = 20 km·min. Each card has weight 1/8: Cov(X,Y) = 20/8 = 5/2 km·min, or 2.50 km·min. Dividing by n − 1 would address a different estimation problem; here we are calculating the exact covariance of the distribution defined by the bag.</p><p>The positive sign describes a shared tendency around the means. It does not guarantee the duration on a particular card: the long–quick cell also exists. The value is neither a probability nor a number of minutes per kilometre.</p></li><li><h3>Check using another expression</h3><p>Expanding the centred product and using E(X) = μ_X and E(Y) = μ_Y gives another way to calculate the covariance. XY is the product of the two values on the same card; E(XY) is its mean, in km·min.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Cov</mi><mo>(</mo><mi>X</mi><mo>,</mo><mi>Y</mi><mo>)</mo><mo>=</mo><mi>E</mi><mo>(</mo><mi>XY</mi><mo>)</mo><mo>−</mo><msub><mi>μ</mi><mi>X</mi></msub><msub><mi>μ</mi><mi>Y</mi></msub></mrow></math></div><p>Without centring, add the products over the cards: E(XY) = (3 × 2 × 10 + 1 × 2 × 20 + 1 × 4 × 10 + 3 × 4 × 20)/8 = 47.50 km·min.</p><p>The product of the means is 3 × 15 = 45 km·min. The difference 47.50 − 45 = 2.50 km·min matches the centred calculation. E(XY) and E(X)E(Y) are different quantities in this distribution; confusing them would erase the association we have just calculated.</p></li><li><h3>Change the reference group after receiving information</h3><p>P(Y = y | X = x) is read as “the probability that Y equals y given that X equals x”. The vertical bar means that the information X = x is given. We keep only the cards in this row; p_X(x) must be strictly positive for us to divide by its probability mass.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>(</mo><mi>Y</mi><mo>=</mo><mi>y</mi><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>p</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow><mrow><msub><mi>p</mi><mi>X</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo></mrow></mfrac><mo>,</mo><msub><mi>p</mi><mi>X</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>&gt;</mo><mn>0</mn></mrow></math></div><p>With X = 4 km, we keep 4 cards: 1 quick and 3 slow. The new probabilities are 1/4 = 1/4 for 10 min and 3/4 = 3/4 for 20 min. We can check the second using the joint distribution: 3/8 ÷ 1/2 = 3/4.</p><p>Their sum is 1/4 + 3/4 = 1. Keeping the weights 1/8 and 3/8 without renormalizing them would give only the probability mass 1/2 of the row, rather than a complete distribution over its durations.</p><p>No card gives X = 6 km: P(X = 6) = 0. The preceding formula therefore does not define a conditional distribution for this information in our model. We do not replace this impossibility with a duration of 0.</p></li><li><h3>Calculate the mean in the retained group</h3><p>E(Y | X = x) is the mean of Y using the conditional weights of row x. It is a fixed number once x is given, expressed in minutes. It is not necessarily a duration written on a card.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo><mo>=</mo><msub><mo>Σ</mo><mrow><mi>y</mi><mo>∈</mo><mi>T</mi></mrow></msub><mi>y</mi><mi>P</mi><mo>(</mo><mi>Y</mi><mo>=</mo><mi>y</mi><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo></mrow></math></div><p>For X = 4 km: 1 × 10 = 10 min and 3 × 20 = 60 min. The sum of the durations on the retained cards is 10 + 60 = 70 min. Dividing it by the number of these cards gives 70/4 = 35/2 min, or 17.50 min.</p><p>Another way: 1/4 × 10 + 3/4 × 20 = 17.50 min. The result remains between 10 and 20 min, and it exceeds the overall mean of 15 min. Information about distance changes the weights of the possible durations; it does not determine the actual duration or prove a causal relationship.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Explain why we subtract means for covariance, why we divide by the probability mass of a row to condition, and why these operations answer different questions.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Covariance is simply the mean of the products.”</h3><p>E(XY) is 47.50 km·min, but it also includes the product of the means, 45 km·min. Subtract that product, or start with the centred deviations, to obtain 2.50 km·min.</p><a href="#exemple">Review the two covariance calculations</a></li><li><h3>“Given the distance, I keep the total number of cards in the bag as the denominator.”</h3><p>The original bag contains 8 cards, and the compatible group contains 4. Divide the counts in this group by 4, then check that the conditional weights total 1. A condition with 0 probability prevents this division.</p><a href="#intuition">Review the retained group in the diagram</a></li><li><h3>“Positive covariance gives the exact duration and proves the cause.”</h3><p>In the row X = 4 km, the durations 10 and 20 min remain possible. Their mean of 17.50 min does not predict the exact value on each card. An association in this bag is not enough to describe the effect of an intervention on a real distance.</p><a href="#exercices">Distinguish the whole bag from the conditioned group</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-poids"><p class="repere">Exercise 1 · Warm-up · choose the reference group</p>
+<h3>The same cell, a different question</h3><p>For the cell X = 4 km and Y = 20 min, write the joint probability and the probability of this duration given this distance. Explain why they differ, then check the sum of the conditional probabilities in the row.</p>
+<label for="reponse-ex-poids">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-poids" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-poids" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-poids" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-poids" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The numerator counts the same 3 cards; the denominator depends on what you already know.</p></details><details class="indice"><summary>Hint 2</summary><p>The joint question concerns the whole bag. The conditional question concerns only the long row.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Joint probability: 3/8 = 3/8. Conditional probability: 3/4 = 3/4. The second is greater because the long distance is already known: the probability mass is no longer spread over the whole bag.</p><p>The other duration receives 1/4 = 1/4. The check gives 1/4 + 3/4 = 1. Probabilities have no unit, even when the values they refer to are in km and min.</p><p class="petit-titre">Check your reasoning</p><ul><li>You give 3/8 and 3/4 with the two distinct questions they answer.</li><li>You justify the denominators 8 and 4 and check that the sum equals 1.</li></ul></details></article><article class="exercice" id="ex-recomposer"><p class="repere">Exercise 2 · Application · reconstruct a mean</p>
+<h3>Recover the whole bag from its rows</h3><p>Calculate E(Y | X = 2 km), then recover the overall mean of Y by combining the means of the short and long rows. Explain why the rows have equal weight here and what would need to change if their card counts differed.</p>
+<label for="reponse-ex-recomposer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-recomposer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-recomposer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-recomposer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-recomposer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In the short row, 3 cards give 10 min and 1 gives 20 min.</p></details><details class="indice"><summary>Hint 2</summary><p>To return to the whole bag, the weight of a row mean is the probability of drawing a card from that row. Do not give equal weight to rows of different sizes.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sum of the durations in the short row is 3 × 10 + 1 × 20 = 30 + 20 = 50 min. Its mean is 50/4 = 12.50 min. It is below the mean of the long row, 17.50 min.</p><p>Each row contains 4 cards out of 8, so each has weight 1/2. We recover 1/2 × 12.50 + 1/2 × 17.50 = (12.50 + 17.50)/2 = 30/2 = 15 min, the same as μ_Y.</p><p>This reconstruction works because each card is counted in its row, whose mean is then weighted by the size of that row. With different counts, we would use the respective row probabilities; a simple average of the means would no longer suffice.</p><p class="petit-titre">Check your reasoning</p><ul><li>You find 12.50 min and state the numerator and denominator explicitly.</li><li>You recover 15 min by weighting with the row probabilities.</li><li>You explain why the equal weights are specific to this bag.</li></ul></details></article><article class="exercice" id="ex-covariance-conditionnee"><p class="repere">Exercise 3 · Transfer · change the centring too</p>
+<h3>A covariance that becomes 0 after receiving information</h3><p>We know X = 4 km. Someone claims that the covariance between X and Y must remain 2.50 km·min, since the cards have not changed. Recalculate this covariance under the conditional distribution, using the group means. Can we conclude that distance and duration are independent in the whole bag?</p>
+<label for="reponse-ex-covariance-conditionnee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-covariance-conditionnee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-covariance-conditionnee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-covariance-conditionnee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-covariance-conditionnee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In the retained group, X is constant. Its conditional mean is therefore 4 km.</p></details><details class="indice"><summary>Hint 2</summary><p>Look at the factor X − E(X | X = 4). To check independence in the whole bag, compare a joint probability with the product of the marginal probabilities.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>In the long row, the mean of X is 4 km and that of Y is 17.50 min. On each retained card, X − 4 = 0 km. All products of deviations are therefore 0, whatever the duration: the conditional covariance is 0 km·min.</p><p>The cards are the same, but the reference distribution and its means have changed. Duration still varies in this group; it is the constant value of X that makes each product 0. Using the overall means would calculate a different quantity.</p><p>Independence in the whole bag would require p(x,y) = p_X(x)p_Y(y) for every cell. However, p(4,20) = 3/8, whereas the product of the marginal probabilities is 1/2 × 1/2 = 1/4. These numbers differ: the quantities are not independent under the original distribution. The conditional result does not justify a conclusion about another distribution.</p><p class="petit-titre">Check your reasoning</p><ul><li>You replace both means with those of the retained group.</li><li>You justify the covariance of 0 km·min by showing that a factor is 0 on every card.</li><li>You disprove independence in the whole bag using a cell and the marginal probabilities of the original distribution.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="centrer"><summary><span class="repere">Recall 1</span><span>How do you construct covariance from a finite joint distribution, and what is its unit in the bag of trip cards?</span></summary><p>Calculate the means, then the product of the deviations for each pair. Multiply each product by its joint probability and add. The unit is km·min. The sign indicates the balance between deviations in the same direction and in opposite directions, without guaranteeing any individual duration.</p></details><details class="carte" data-carte="double-controle"><summary><span class="repere">Recall 2</span><span>What other calculation checks the covariance without starting from centred deviations?</span></summary><p>Cov(X,Y) = E(XY) − E(X)E(Y). XY multiplies the values on the same card. In our bag: 47.50 − 45 = 2.50 km·min. The mean of the products and the product of the means are distinct.</p></details><details class="carte" data-carte="conditionner"><summary><span class="repere">Recall 3</span><span>What does the “given that” bar do to the probabilities in a row? What condition makes the operation possible?</span></summary><p>It restricts the distribution to compatible cases and divides each joint probability by the strictly positive probability of the row. The new weights must sum to 1. If the condition has probability 0, this formula does not define a conditional distribution.</p></details><details class="carte" data-carte="moyenne-conditionnelle"><summary><span class="repere">Recall 4</span><span>Why can the mean duration change after the distance is revealed even though no duration is changed?</span></summary><p>The mean is recalculated using the weights of the compatible group. Given X = 4 km, the durations 10 and 20 min have weights 1/4 and 3/4, giving 17.50 min. The duration of the drawn trip remains uncertain; receiving this information is not an intervention on a trip.</p></details><details class="carte" data-carte="loi-de-reference"><summary><span class="repere">Recall 5</span><span>Why does 0 covariance in the long row not make the quantities independent in the whole bag?</span></summary><p>In this row, X is constant: every deviation from its conditional mean is 0. In the whole bag, we must examine the original distribution; the long–slow cell has weight 3/8, different from the product of the marginal probabilities, 1/4. The change of reference distribution must be stated.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without reference material, redraw the table of counts and reconstruct the steps: joint probabilities, marginal probabilities, means, products of deviations, and covariance; check using the difference of expectations. Then reveal a distance, renormalize its row, recalculate the mean duration, and explain what remains uncertain. Repeat this work another day without a hint: fluent reading or an assisted answer does not establish that a level has been attained.</p></div><div class="exports"><a class="bouton" download="c035-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMzUtbTU6Y2VudHJlciIsCiAgICAgICJ1bml0ZSI6ICJjMDM1LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY292YXJpYW5jZS1maW5pZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGNvbnN0cnVjdCBjb3ZhcmlhbmNlIGZyb20gYSBmaW5pdGUgam9pbnQgZGlzdHJpYnV0aW9uLCBhbmQgd2hhdCBpcyBpdHMgdW5pdCBpbiB0aGUgYmFnIG9mIHRyaXAgY2FyZHM/IiwKICAgICAgInJlcG9uc2UiOiAiQ2FsY3VsYXRlIHRoZSBtZWFucywgdGhlbiB0aGUgcHJvZHVjdCBvZiB0aGUgZGV2aWF0aW9ucyBmb3IgZWFjaCBwYWlyLiBNdWx0aXBseSBlYWNoIHByb2R1Y3QgYnkgaXRzIGpvaW50IHByb2JhYmlsaXR5IGFuZCBhZGQuIFRoZSB1bml0IGlzIGttwrdtaW4uIFRoZSBzaWduIGluZGljYXRlcyB0aGUgYmFsYW5jZSBiZXR3ZWVuIGRldmlhdGlvbnMgaW4gdGhlIHNhbWUgZGlyZWN0aW9uIGFuZCBpbiBvcHBvc2l0ZSBkaXJlY3Rpb25zLCB3aXRob3V0IGd1YXJhbnRlZWluZyBhbnkgaW5kaXZpZHVhbCBkdXJhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAzNS1tNTpkb3VibGUtY29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzAzNS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvdmFyaWFuY2UtZmluaWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBvdGhlciBjYWxjdWxhdGlvbiBjaGVja3MgdGhlIGNvdmFyaWFuY2Ugd2l0aG91dCBzdGFydGluZyBmcm9tIGNlbnRyZWQgZGV2aWF0aW9ucz8iLAogICAgICAicmVwb25zZSI6ICJDb3YoWCxZKSA9IEUoWFkpIOKIkiBFKFgpRShZKS4gWFkgbXVsdGlwbGllcyB0aGUgdmFsdWVzIG9uIHRoZSBzYW1lIGNhcmQuIEluIG91ciBiYWc6IDQ3LjUwIOKIkiA0NSA9IDIuNTAga23Ct21pbi4gVGhlIG1lYW4gb2YgdGhlIHByb2R1Y3RzIGFuZCB0aGUgcHJvZHVjdCBvZiB0aGUgbWVhbnMgYXJlIGRpc3RpbmN0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDM1LW01OmNvbmRpdGlvbm5lciIsCiAgICAgICJ1bml0ZSI6ICJjMDM1LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29uZGl0aW9ubmVtZW50LWZpbmkiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSDigJxnaXZlbiB0aGF04oCdIGJhciBkbyB0byB0aGUgcHJvYmFiaWxpdGllcyBpbiBhIHJvdz8gV2hhdCBjb25kaXRpb24gbWFrZXMgdGhlIG9wZXJhdGlvbiBwb3NzaWJsZT8iLAogICAgICAicmVwb25zZSI6ICJJdCByZXN0cmljdHMgdGhlIGRpc3RyaWJ1dGlvbiB0byBjb21wYXRpYmxlIGNhc2VzIGFuZCBkaXZpZGVzIGVhY2ggam9pbnQgcHJvYmFiaWxpdHkgYnkgdGhlIHN0cmljdGx5IHBvc2l0aXZlIHByb2JhYmlsaXR5IG9mIHRoZSByb3cuIFRoZSBuZXcgd2VpZ2h0cyBtdXN0IHN1bSB0byAxLiBJZiB0aGUgY29uZGl0aW9uIGhhcyBwcm9iYWJpbGl0eSAwLCB0aGlzIGZvcm11bGEgZG9lcyBub3QgZGVmaW5lIGEgY29uZGl0aW9uYWwgZGlzdHJpYnV0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDM1LW01Om1veWVubmUtY29uZGl0aW9ubmVsbGUiLAogICAgICAidW5pdGUiOiAiYzAzNS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVzcGVyYW5jZS1jb25kaXRpb25uZWxsZS1maW5pZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2FuIHRoZSBtZWFuIGR1cmF0aW9uIGNoYW5nZSBhZnRlciB0aGUgZGlzdGFuY2UgaXMgcmV2ZWFsZWQgZXZlbiB0aG91Z2ggbm8gZHVyYXRpb24gaXMgY2hhbmdlZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiBpcyByZWNhbGN1bGF0ZWQgdXNpbmcgdGhlIHdlaWdodHMgb2YgdGhlIGNvbXBhdGlibGUgZ3JvdXAuIEdpdmVuIFggPSA0IGttLCB0aGUgZHVyYXRpb25zIDEwIGFuZCAyMCBtaW4gaGF2ZSB3ZWlnaHRzIDEvNCBhbmQgMy80LCBnaXZpbmcgMTcuNTAgbWluLiBUaGUgZHVyYXRpb24gb2YgdGhlIGRyYXduIHRyaXAgcmVtYWlucyB1bmNlcnRhaW47IHJlY2VpdmluZyB0aGlzIGluZm9ybWF0aW9uIGlzIG5vdCBhbiBpbnRlcnZlbnRpb24gb24gYSB0cmlwLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDM1LW01OmxvaS1kZS1yZWZlcmVuY2UiLAogICAgICAidW5pdGUiOiAiYzAzNS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvdmFyaWFuY2UtY29uZGl0aW9ubmVsbGUtZmluaWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgMCBjb3ZhcmlhbmNlIGluIHRoZSBsb25nIHJvdyBub3QgbWFrZSB0aGUgcXVhbnRpdGllcyBpbmRlcGVuZGVudCBpbiB0aGUgd2hvbGUgYmFnPyIsCiAgICAgICJyZXBvbnNlIjogIkluIHRoaXMgcm93LCBYIGlzIGNvbnN0YW50OiBldmVyeSBkZXZpYXRpb24gZnJvbSBpdHMgY29uZGl0aW9uYWwgbWVhbiBpcyAwLiBJbiB0aGUgd2hvbGUgYmFnLCB3ZSBtdXN0IGV4YW1pbmUgdGhlIG9yaWdpbmFsIGRpc3RyaWJ1dGlvbjsgdGhlIGxvbmfigJNzbG93IGNlbGwgaGFzIHdlaWdodCAzLzgsIGRpZmZlcmVudCBmcm9tIHRoZSBwcm9kdWN0IG9mIHRoZSBtYXJnaW5hbCBwcm9iYWJpbGl0aWVzLCAxLzQuIFRoZSBjaGFuZ2Ugb2YgcmVmZXJlbmNlIGRpc3RyaWJ1dGlvbiBtdXN0IGJlIHN0YXRlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c035-m5-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHlvdSBjb25zdHJ1Y3QgY292YXJpYW5jZSBmcm9tIGEgZmluaXRlIGpvaW50IGRpc3RyaWJ1dGlvbiwgYW5kIHdoYXQgaXMgaXRzIHVuaXQgaW4gdGhlIGJhZyBvZiB0cmlwIGNhcmRzPwlDYWxjdWxhdGUgdGhlIG1lYW5zLCB0aGVuIHRoZSBwcm9kdWN0IG9mIHRoZSBkZXZpYXRpb25zIGZvciBlYWNoIHBhaXIuIE11bHRpcGx5IGVhY2ggcHJvZHVjdCBieSBpdHMgam9pbnQgcHJvYmFiaWxpdHkgYW5kIGFkZC4gVGhlIHVuaXQgaXMga23Ct21pbi4gVGhlIHNpZ24gaW5kaWNhdGVzIHRoZSBiYWxhbmNlIGJldHdlZW4gZGV2aWF0aW9ucyBpbiB0aGUgc2FtZSBkaXJlY3Rpb24gYW5kIGluIG9wcG9zaXRlIGRpcmVjdGlvbnMsIHdpdGhvdXQgZ3VhcmFudGVlaW5nIGFueSBpbmRpdmlkdWFsIGR1cmF0aW9uLgl0b2RhaSBjMDM1LW01IGNvdmFyaWFuY2UtZmluaWUKV2hhdCBvdGhlciBjYWxjdWxhdGlvbiBjaGVja3MgdGhlIGNvdmFyaWFuY2Ugd2l0aG91dCBzdGFydGluZyBmcm9tIGNlbnRyZWQgZGV2aWF0aW9ucz8JQ292KFgsWSkgPSBFKFhZKSDiiJIgRShYKUUoWSkuIFhZIG11bHRpcGxpZXMgdGhlIHZhbHVlcyBvbiB0aGUgc2FtZSBjYXJkLiBJbiBvdXIgYmFnOiA0Ny41MCDiiJIgNDUgPSAyLjUwIGttwrdtaW4uIFRoZSBtZWFuIG9mIHRoZSBwcm9kdWN0cyBhbmQgdGhlIHByb2R1Y3Qgb2YgdGhlIG1lYW5zIGFyZSBkaXN0aW5jdC4JdG9kYWkgYzAzNS1tNSBjb3ZhcmlhbmNlLWZpbmllCldoYXQgZG9lcyB0aGUg4oCcZ2l2ZW4gdGhhdOKAnSBiYXIgZG8gdG8gdGhlIHByb2JhYmlsaXRpZXMgaW4gYSByb3c/IFdoYXQgY29uZGl0aW9uIG1ha2VzIHRoZSBvcGVyYXRpb24gcG9zc2libGU/CUl0IHJlc3RyaWN0cyB0aGUgZGlzdHJpYnV0aW9uIHRvIGNvbXBhdGlibGUgY2FzZXMgYW5kIGRpdmlkZXMgZWFjaCBqb2ludCBwcm9iYWJpbGl0eSBieSB0aGUgc3RyaWN0bHkgcG9zaXRpdmUgcHJvYmFiaWxpdHkgb2YgdGhlIHJvdy4gVGhlIG5ldyB3ZWlnaHRzIG11c3Qgc3VtIHRvIDEuIElmIHRoZSBjb25kaXRpb24gaGFzIHByb2JhYmlsaXR5IDAsIHRoaXMgZm9ybXVsYSBkb2VzIG5vdCBkZWZpbmUgYSBjb25kaXRpb25hbCBkaXN0cmlidXRpb24uCXRvZGFpIGMwMzUtbTUgY29uZGl0aW9ubmVtZW50LWZpbmkKV2h5IGNhbiB0aGUgbWVhbiBkdXJhdGlvbiBjaGFuZ2UgYWZ0ZXIgdGhlIGRpc3RhbmNlIGlzIHJldmVhbGVkIGV2ZW4gdGhvdWdoIG5vIGR1cmF0aW9uIGlzIGNoYW5nZWQ/CVRoZSBtZWFuIGlzIHJlY2FsY3VsYXRlZCB1c2luZyB0aGUgd2VpZ2h0cyBvZiB0aGUgY29tcGF0aWJsZSBncm91cC4gR2l2ZW4gWCA9IDQga20sIHRoZSBkdXJhdGlvbnMgMTAgYW5kIDIwIG1pbiBoYXZlIHdlaWdodHMgMS80IGFuZCAzLzQsIGdpdmluZyAxNy41MCBtaW4uIFRoZSBkdXJhdGlvbiBvZiB0aGUgZHJhd24gdHJpcCByZW1haW5zIHVuY2VydGFpbjsgcmVjZWl2aW5nIHRoaXMgaW5mb3JtYXRpb24gaXMgbm90IGFuIGludGVydmVudGlvbiBvbiBhIHRyaXAuCXRvZGFpIGMwMzUtbTUgZXNwZXJhbmNlLWNvbmRpdGlvbm5lbGxlLWZpbmllCldoeSBkb2VzIDAgY292YXJpYW5jZSBpbiB0aGUgbG9uZyByb3cgbm90IG1ha2UgdGhlIHF1YW50aXRpZXMgaW5kZXBlbmRlbnQgaW4gdGhlIHdob2xlIGJhZz8JSW4gdGhpcyByb3csIFggaXMgY29uc3RhbnQ6IGV2ZXJ5IGRldmlhdGlvbiBmcm9tIGl0cyBjb25kaXRpb25hbCBtZWFuIGlzIDAuIEluIHRoZSB3aG9sZSBiYWcsIHdlIG11c3QgZXhhbWluZSB0aGUgb3JpZ2luYWwgZGlzdHJpYnV0aW9uOyB0aGUgbG9uZ+KAk3Nsb3cgY2VsbCBoYXMgd2VpZ2h0IDMvOCwgZGlmZmVyZW50IGZyb20gdGhlIHByb2R1Y3Qgb2YgdGhlIG1hcmdpbmFsIHByb2JhYmlsaXRpZXMsIDEvNC4gVGhlIGNoYW5nZSBvZiByZWZlcmVuY2UgZGlzdHJpYnV0aW9uIG11c3QgYmUgc3RhdGVkLgl0b2RhaSBjMDM1LW01IGNvdmFyaWFuY2UtY29uZGl0aW9ubmVsbGUtZmluaWUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zhsbqm ungqff gfcd</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ayudql ctckvk iuhjxu bhfdnn ctwgbw cnyyny hcty</span></span></h3><dl><div><dt>What you understand</dt><dd>Covariance concerns paired deviations and depends on the distribution used. Conditioning changes that distribution and its means. This reading reference supplements the production brief; no numbered private milestone is planned in the canonical specification for this chapter.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ywdvdo cnzqun xmsdke kbsujr mygeqp gmtjbh fxzgft mtyvxb rdcwfo hzagqq zwlayk gcgiua mgkhjk apiyrt ozfhia uaycvm myfibz iwirpq sczbjb ucgipt xwxxxr vaokwo cnwjjv jgrnld</span></span></dd></div><div><dt>Your level</dt><dd>Level 1 to prepare for: reconstruct the table, the weights, and both covariance calculations, then explain the renormalization of a row. The normalized correlation in the passage requires separate further study. Reading and an answer produced after a hint do not establish that a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hzngsz igriig wgqbbv wtenkr lshhnl tqsynz hmneqb hocvwm kedjmu rifhsc iybfzw ohcfmx zoxgij jfczsq byfqxm diptqx ectjht culzxz psiies xdwuiy nuidhm eyrxfb bzdnbg oycsyo</span></span></dd></div><div><dt>Further work</dt><dd>Redo the exercises without reference material another day, stating the reference distribution at each step. Before connecting this mechanism to real use, the inputs, calls, and authorized validation will still need separate examination. This page activates nothing; visual acceptance belongs to the chapter work.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c035-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c035-m4.html">Previous</a> · <a href="c036-m1.html">Next</a></nav>
+<footer><p>Course book · C035·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

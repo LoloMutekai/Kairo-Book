@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Compare two settings using the same random draws, calculate the variance of their difference exactly, and state when sharing draws reduces or increases the number of simulations needed.">
+<title>C176·M5 · Correlated simulation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fqqiia hcoweg emzh</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C176·M5</p><h1>Correlated simulation</h1><p class="objectif"><span>Your goal</span>Compare two settings using the same random draws, calculate the variance of their difference exactly, and state when sharing draws reduces or increases the number of simulations needed.</p><p class="prerequis"><strong>Before you start</strong><br>c060-m5 : approximations and assumptions · c061-m5 : identifiability and uncertainty · c051-m5 : error diagnostics · c172-m5 : Euler-Maruyama · c017-m5 : reproducibility protocol · c176-m1 : generators and seeds · c176-m2 : Monte Carlo error · c176-m3 : antithetic variates · c176-m4 : control variates</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional service counter receives a queue of varying length each morning. Two settings, A and B, each produce a waiting time that we want to compare. The numbers on this page are invented so that the calculation is exact; they do not describe any real service counter.</p><p>First approach: simulate A over a series of mornings, then B over another series. The observed difference then mixes the effect of the setting with the luck of the mornings drawn. Second approach: draw the workload for each morning once, then let A and B read that same morning. A seed makes a generator’s sequence of numbers reproducible (c176-m1); here, what matters is that the two settings share the same draws, as well as being reproducible.</p><p>When both waiting times rise and fall together with the workload, their difference changes little: the shared component cancels out. The exact tool is covariance, which measures whether two quantities deviate from their respective means in the same direction. Positive covariance lowers the variance of the difference when draws are shared; negative covariance raises it.</p><p>We extend the work on Monte Carlo error (c176-m2). We do not revisit antithetic variates (c176-m3) or control variates (c176-m4): the aim is to compare two settings rather than estimate a single mean. In an Euler-Maruyama simulation (c172-m5), the shared draws would be the noise increments; this page does not simulate any trajectory.</p><p>Assumptions on this page: the workload takes four equally likely values; each pair of simulations draws its workload independently of the other pairs; each waiting time is an exact function of the workload. Without these assumptions, the formulas below must be reconsidered.</p><div class="schemas"><figure><svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>Separate or shared draws</title><desc>Two panels. At the top, settings A and B read different workloads and the variance of the difference is 65 square minutes. At the bottom, A and B read the same workload and this variance is 5 square minutes.</desc><rect x="10" y="8" width="400" height="124" rx="7" class="cadre-neutre" /><text x="210" y="34" text-anchor="middle">Separate draws</text><rect x="40" y="50" width="130" height="34" rx="6" class="cadre-prediction" /><text x="105" y="73" text-anchor="middle">A reads z</text><rect x="250" y="50" width="130" height="34" rx="6" class="cadre-resultat" /><text x="315" y="73" text-anchor="middle">B reads z′</text><text x="210" y="112" text-anchor="middle" class="petite-etiquette">Difference variance: 65 min²</text><rect x="10" y="148" width="400" height="144" rx="7" class="cadre-neutre" /><text x="210" y="174" text-anchor="middle">Shared draw</text><text x="210" y="196" text-anchor="middle" class="petite-etiquette">Difference variance: 5 min²</text><rect x="150" y="204" width="120" height="28" rx="6" class="cadre-neutre" /><text x="210" y="224" text-anchor="middle">z</text><line x1="185" y1="232" x2="105" y2="248" class="trait" /><line x1="235" y1="232" x2="315" y2="248" class="trait" /><rect x="40" y="248" width="130" height="34" rx="6" class="cadre-prediction" /><text x="105" y="271" text-anchor="middle">A reads z</text><rect x="250" y="248" width="130" height="34" rx="6" class="cadre-resultat" /><text x="315" y="271" text-anchor="middle">B reads z</text></svg><figcaption>In the upper panel, B reads a different workload from A; in the lower panel, both read the same workload. Fictional values, with variances in square minutes.</figcaption></figure><figure><svg viewBox="0 0 400 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two waiting times rising with the same workload</title><desc>Four workloads from 2 to 8 people. The waiting times for settings A and B rise together with the workload. The difference is 0 minute at the smallest workload and 6 minutes at the largest.</desc><line x1="40" y1="220" x2="370" y2="220" class="trait" /><line x1="40" y1="20" x2="40" y2="220" class="trait" /><polyline points="104,172 168,140 232,108 296,76" class="repere-dose" /><polyline points="104,172 168,124 232,76 296,28" class="gobelet-e" /><line x1="296" y1="28" x2="296" y2="76" class="chemin-correction" /><circle cx="104" cy="172" r="6" class="point-mesure" /><circle cx="168" cy="140" r="6" class="point-mesure" /><circle cx="232" cy="108" r="6" class="point-mesure" /><circle cx="296" cy="76" r="6" class="point-mesure" /><circle cx="104" cy="172" r="4" class="point-prediction" /><circle cx="168" cy="124" r="4" class="point-prediction" /><circle cx="232" cy="76" r="4" class="point-prediction" /><circle cx="296" cy="28" r="4" class="point-prediction" /><text x="48" y="16" class="petite-etiquette">wait (min)</text><text x="306" y="30">A</text><text x="306" y="58" class="petite-etiquette">gap 6 min</text><text x="306" y="92">B</text><text x="104" y="244" text-anchor="middle">2</text><text x="168" y="244" text-anchor="middle">4</text><text x="232" y="244" text-anchor="middle">6</text><text x="296" y="244" text-anchor="middle">8</text><text x="205" y="266" text-anchor="middle" class="petite-etiquette">workload z (people)</text></svg><figcaption>The four possible workloads and the waiting times for both settings, joined by line segments for readability. The vertical difference is the quantity whose variance we calculate.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To estimate the difference between two settings, share the draws and calculate the variance of the difference as Var(a) + Var(b) − twice Cov(a, b): covariance can help or hurt depending on its sign.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Two service-counter settings, the same simulated morning</h3><p>The workload z, in people, is 2, 4, 6 or 8, each with the same probability. Setting A gives a = 3 z minutes; setting B gives b = 2 z + 2 minutes. These values are fictional. We seek the mean difference d = a − b, then the number of pairs of simulations needed for the observed mean of d to have a variance of at most 1 min².</p><ol class="etapes"><li><h3>Define the quantities, their units and the assumptions</h3><p>z is the workload in people; its mean satisfies the following formula.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mn>2</mn><mo>+</mo><mn>4</mn><mo>+</mo><mn>6</mn><mo>+</mo><mn>8</mn></mrow><mrow><mn>4</mn></mrow></mfrac><mo>=</mo><mn>5</mn><mtext> personnes</mtext></mrow></math></div><p>a and b are waiting times in minutes, and d = a − b is their difference in minutes. Var denotes the mean of the squared deviations from the mean, in square minutes. Cov(a, b) is the mean of the products of the deviations of a and b from their respective means, also in square minutes. A coefficient such as 3 is in minutes per person.</p><p>Assumptions: in separate mode, B reads a workload z′ independent of A’s workload; in shared mode, A and B read the same workload within each pair. The pairs are independent of one another, so the variance of the mean of n pairs is the variance of one pair divided by n, as in Monte Carlo error. This is the formula to be demonstrated.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mi>a</mi><mo>−</mo><mi>b</mi><mo>)</mo><mo>=</mo><mi>Var</mi><mo>(</mo><mi>a</mi><mo>)</mo><mo>+</mo><mi>Var</mi><mo>(</mo><mi>b</mi><mo>)</mo><mo>−</mo><mn>2</mn><mi>Cov</mi><mo>(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>)</mo></mrow></math></div></li><li><h3>Calculate the variance of the workload</h3><p>The deviations from the mean are ±3 and ±1 people: they come in opposite pairs, so the mean of the four squares is the mean of two squares. The squares are 9 and 1 people², and their sum is 10.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>9</mn><mo>+</mo><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac><mo>=</mo><mn>5</mn><mtext> personnes²</mtext></mrow></math></div></li><li><h3>Propagate this variance to both settings</h3><p>Multiplying the workload by a coefficient multiplies its variance by the square of that coefficient; adding a fixed offset shifts the mean without changing the spread. The offset of 2 minutes therefore does not enter the variances.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mi>a</mi><mo>)</mo><mo>=</mo><msup><mn>3</mn><mn>2</mn></msup><mi>Var</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mn>9</mn><mo>×</mo><mn>5</mn><mo>=</mo><mn>45</mn><mtext> min²</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mi>b</mi><mo>)</mo><mo>=</mo><msup><mn>2</mn><mn>2</mn></msup><mi>Var</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mn>4</mn><mo>×</mo><mn>5</mn><mo>=</mo><mn>20</mn><mtext> min²</mtext></mrow></math></div><p>The covariance is calculated using both coefficients, because a and b are multiples of the same workload.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Cov</mi><mo>(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>)</mo><mo>=</mo><mn>3</mn><mo>×</mo><mn>2</mn><mo>×</mo><mi>Var</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mn>6</mn><mo>×</mo><mn>5</mn><mo>=</mo><mn>30</mn><mtext> min²</mtext></mrow></math></div></li><li><h3>Compare separate draws and shared draws</h3><p>With separate workloads, a and b are independent: their covariance is 0 and the variances add. With a shared workload, twice the calculated covariance must be subtracted.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>séparés</mi><mo>:</mo><mn>45</mn><mo>+</mo><mn>20</mn><mo>=</mo><mn>65</mn><mtext> min²</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>communs</mi><mo>:</mo><mn>65</mn><mo>−</mo><mn>2</mn><mo>×</mo><mn>30</mn><mo>=</mo><mn>65</mn><mo>−</mo><mn>60</mn><mo>=</mo><mn>5</mn><mtext> min²</mtext></mrow></math></div><p>The ratio of the two variances is 65 / 5 = 13 in this model.</p></li><li><h3>Check using the direct difference</h3><p>Another approach, without covariance: d = (3 − 2) z − 2, that is, 1 × z − 2. The offset does not change the variance, and the coefficient 1 is squared.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>=</mo><msup><mn>1</mn><mn>2</mn></msup><mi>Var</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mn>1</mn><mo>×</mo><mn>5</mn><mo>=</mo><mn>5</mn><mtext> min²</mtext></mrow></math></div><p>We obtain 5 min² again; agreement between the two approaches validates the covariance calculation. The mean difference is 1 × 5 − 2 = 5 − 2 = 3 minutes: the waiting time for setting A averages 3 minutes longer than for B in this model.</p></li><li><h3>Work through two draws by hand</h3><p>For a workload of 2 people, A gives 6 minutes and B gives 2 × 2 + 2 = 6 minutes: the difference is 0 minute. For 8 people, A gives 24 minutes, B gives 18 minutes, and the difference is 6.</p><p>If A had read the large workload and B the small one, the difference would be 24 − 6 = 18 minutes, instead of 6: part of that difference would come from the draw rather than the setting. Two draws illustrate the mechanism; they do not measure a variance, which describes the spread of the whole distribution.</p></li><li><h3>Convert the variance into a number of pairs</h3><p>The variance of the mean of n pairs is Var(d) / n. For it to be at most 1 min², n must be at least Var(d) divided by 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>n</mi><mo>≥</mo><mfrac><mrow><mn>5</mn></mrow><mrow><mn>1</mn></mrow></mfrac><mo>=</mo><mn>5</mn><mo>;</mo><mi>n</mi><mo>≥</mo><mfrac><mrow><mn>65</mn></mrow><mrow><mn>1</mn></mrow></mfrac><mo>=</mo><mn>65</mn></mrow></math></div><p>With a shared workload, 5 pairs suffice; with separate workloads, 65 are needed. This ratio is exact for this distribution over four workloads and these linear settings. It does not predict the gain in a real simulation: there, correlation is measured from the draws produced.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the fixed offset shift the mean of the difference without changing its variance? And why does covariance disappear when B reads a different workload from A?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Sharing draws always reduces the variance of the difference.”</h3><p>The subtracted term is twice the covariance, and covariance can be negative. If one setting decreases as the workload rises, sharing draws increases the variance: the exercise with the decreasing setting shows this.</p><a href="#exercices">Go to the exercises</a></li><li><h3>“The variance of a difference is the difference of the variances.”</h3><p>The variances add, then the covariance term is subtracted. With 45 and 20, subtraction would give 45 − 20 instead of 5 min²: work through both calculation approaches in the example again.</p><a href="#exemple">Review the example</a></li><li><h3>“Setting a seed for each setting is enough to correlate the simulations.”</h3><p>A seed makes each simulation reproducible; it does not link them. Two generators initialized with different seeds produce distinct draws. A and B must read the same values, at the same positions in the sequence, for the same workload. Compare this with the code passage in the milestone.</p><a href="#jalon"><span class="milestone-label">Go to the milestone</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-pente-unitaire"><p class="repere">Exercise 1 · Guided application</p>
+<h3>A less sensitive setting</h3><p>Keep the workloads and setting A. Setting B′ adds 1 minute of waiting time per person, plus a fixed offset that does not affect the variances (a fictional value). Calculate Var(a − b′) with separate workloads, then with a shared workload, and check using the direct difference.</p>
+<label for="reponse-ex-pente-unitaire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pente-unitaire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pente-unitaire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pente-unitaire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pente-unitaire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A coefficient of one minute per person leaves the workload variance unchanged: Var(b′) is 5 min².</p></details><details class="indice"><summary>Hint 2</summary><p>The covariance of a and b′ is the product of both coefficients and the workload variance.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Separate: Var(a) + Var(b′) = 45 + 5 = 50 min². Covariance: 3 × 1 × 5 = 15 min².</p><p>Shared: 50 − 2 × 15 = 50 − 30 = 20 min².</p><p>Check: the slope of the difference is 3 − 1 = 2; its square is 4, and 4 × 5 = 20 min². Both approaches agree, and sharing draws does reduce the variance.</p><p class="petit-titre">Check your reasoning</p><ul><li>Var(b′) equals the workload variance, in square minutes.</li><li>Covariance calculated using both coefficients.</li><li>Result for shared draws recovered using the direct difference.</li></ul></details></article><article class="exercice" id="ex-pente-inverse"><p class="repere">Exercise 2 · Transfer</p>
+<h3>A setting that decreases as the workload rises</h3><p>Setting C frees up staff: its waiting time decreases by 1 minute per additional person, starting from a fictional fixed offset. Compare Var(a − c) with separate and shared workloads. Does sharing help here?</p>
+<label for="reponse-ex-pente-inverse">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pente-inverse" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pente-inverse" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pente-inverse" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pente-inverse" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The coefficient for C is negative: the covariance of a and c is the negative of the covariance in the previous exercise.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtracting twice a negative covariance amounts to adding.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Var(c) is 5 min², so separate workloads give 45 + 5 = 50 min². The covariance is minus 15 min².</p><p>Shared workload: 50 − 2 × (minus 15) = 50 + 30 = 80 min², greater than 50.</p><p>Check: the difference a − c has slope 3 + 1, or 4 minutes per person; its variance is the square of this slope times 5, giving 80 min². Here sharing hurts: the most common error is forgetting the sign of the covariance.</p><p class="petit-titre">Check your reasoning</p><ul><li>Negative sign of the covariance recognized.</li><li>Variance with shared draws greater than with separate draws, with both numbers given.</li><li>Conclusion limited to this model.</li></ul></details></article><article class="exercice" id="ex-meme-pente"><p class="repere">Exercise 3 · Limiting case</p>
+<h3>Same slope, fixed offset</h3><p>Setting E has the same slope as A, 3 minutes per person, and adds a fixed 2 minutes. Give the variance of a − e with a shared workload and with separate workloads, the number of separate pairs for a target variance of 1 min², then discuss the shared case.</p>
+<label for="reponse-ex-meme-pente">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-meme-pente" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-meme-pente" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-meme-pente" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-meme-pente" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the difference a − e as a function of z: what happens to the term in z?</p></details><details class="indice"><summary>Hint 2</summary><p>With separate workloads, the variances of a and e are equal.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The difference is minus 2 minutes for every workload: its variance with a shared workload is 0 min² and its mean is minus 2 minutes.</p><p>Separate: 45 + 45 = 90 min², so at least 90 / 1 = 90 pairs.</p><p>In the shared case, one pair suffices here, but only because the model is exactly linear and A and E read the same workload. 0 variance in the model establishes nothing about a real simulation containing other sources of randomness.</p><p class="petit-titre">Check your reasoning</p><ul><li>Term in z eliminated from the difference.</li><li>Variance with separate draws obtained by addition.</li><li>Limitation of the exact model recognized.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="variance-ecart"><summary><span class="repere">Recall 1</span><span>What formula gives the variance of a − b?</span></summary><p>Var(a) + Var(b) − 2 Cov(a, b), in square minutes if a and b are in minutes.</p></details><details class="carte" data-carte="signe-covariance"><summary><span class="repere">Recall 2</span><span>When do shared draws reduce the variance of the difference?</span></summary><p>When the covariance of the two outputs is positive, because the variance of the difference then falls below the sum of the variances. Negative covariance raises it.</p></details><details class="carte" data-carte="graine-reglage"><summary><span class="repere">Recall 3</span><span>Why is a seed for each setting insufficient?</span></summary><p>It makes each simulation reproducible but does not correlate them: A and B must read the same draws, at the same positions in the sequence.</p></details><details class="carte" data-carte="decalage-fixe"><summary><span class="repere">Recall 4</span><span>Does adding a fixed offset to an output change its variance?</span></summary><p>No: it only shifts the mean. Variance depends only on the spread around the mean.</p></details><details class="carte" data-carte="nombre-paires"><summary><span class="repere">Recall 5</span><span>How do you go from the variance of a difference to the number of pairs?</span></summary><p>The mean of n independent pairs has variance Var(d) / n; n must be at least Var(d) divided by the target variance, under this independence assumption.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Share the draws between the two settings; define a, b and d = a − b with their units; calculate Var(a), Var(b) and Cov(a, b); apply Var(a − b) = Var(a) + Var(b) − twice Cov(a, b); check using the direct difference; divide Var(d) by the target variance to obtain the number of pairs; check the sign of the covariance and the independence assumptions.</p></div><div class="exports"><a class="bouton" download="c176-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzYtbTU6dmFyaWFuY2UtZWNhcnQiLAogICAgICAidW5pdGUiOiAiYzE3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInZhcmlhbmNlLWVjYXJ0IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZm9ybXVsYSBnaXZlcyB0aGUgdmFyaWFuY2Ugb2YgYSDiiJIgYj8iLAogICAgICAicmVwb25zZSI6ICJWYXIoYSkgKyBWYXIoYikg4oiSIDIgQ292KGEsIGIpLCBpbiBzcXVhcmUgbWludXRlcyBpZiBhIGFuZCBiIGFyZSBpbiBtaW51dGVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTc2LW01OnNpZ25lLWNvdmFyaWFuY2UiLAogICAgICAidW5pdGUiOiAiYzE3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNpZ25lLWNvdmFyaWFuY2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hlbiBkbyBzaGFyZWQgZHJhd3MgcmVkdWNlIHRoZSB2YXJpYW5jZSBvZiB0aGUgZGlmZmVyZW5jZT8iLAogICAgICAicmVwb25zZSI6ICJXaGVuIHRoZSBjb3ZhcmlhbmNlIG9mIHRoZSB0d28gb3V0cHV0cyBpcyBwb3NpdGl2ZSwgYmVjYXVzZSB0aGUgdmFyaWFuY2Ugb2YgdGhlIGRpZmZlcmVuY2UgdGhlbiBmYWxscyBiZWxvdyB0aGUgc3VtIG9mIHRoZSB2YXJpYW5jZXMuIE5lZ2F0aXZlIGNvdmFyaWFuY2UgcmFpc2VzIGl0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTc2LW01OmdyYWluZS1yZWdsYWdlIiwKICAgICAgInVuaXRlIjogImMxNzYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJncmFpbmUtcmVnbGFnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgaXMgYSBzZWVkIGZvciBlYWNoIHNldHRpbmcgaW5zdWZmaWNpZW50PyIsCiAgICAgICJyZXBvbnNlIjogIkl0IG1ha2VzIGVhY2ggc2ltdWxhdGlvbiByZXByb2R1Y2libGUgYnV0IGRvZXMgbm90IGNvcnJlbGF0ZSB0aGVtOiBBIGFuZCBCIG11c3QgcmVhZCB0aGUgc2FtZSBkcmF3cywgYXQgdGhlIHNhbWUgcG9zaXRpb25zIGluIHRoZSBzZXF1ZW5jZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Ni1tNTpkZWNhbGFnZS1maXhlIiwKICAgICAgInVuaXRlIjogImMxNzYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJkZWNhbGFnZS1maXhlIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgYWRkaW5nIGEgZml4ZWQgb2Zmc2V0IHRvIGFuIG91dHB1dCBjaGFuZ2UgaXRzIHZhcmlhbmNlPyIsCiAgICAgICJyZXBvbnNlIjogIk5vOiBpdCBvbmx5IHNoaWZ0cyB0aGUgbWVhbi4gVmFyaWFuY2UgZGVwZW5kcyBvbmx5IG9uIHRoZSBzcHJlYWQgYXJvdW5kIHRoZSBtZWFuLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTc2LW01Om5vbWJyZS1wYWlyZXMiLAogICAgICAidW5pdGUiOiAiYzE3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5vbWJyZS1wYWlyZXMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBnbyBmcm9tIHRoZSB2YXJpYW5jZSBvZiBhIGRpZmZlcmVuY2UgdG8gdGhlIG51bWJlciBvZiBwYWlycz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWVhbiBvZiBuIGluZGVwZW5kZW50IHBhaXJzIGhhcyB2YXJpYW5jZSBWYXIoZCkgLyBuOyBuIG11c3QgYmUgYXQgbGVhc3QgVmFyKGQpIGRpdmlkZWQgYnkgdGhlIHRhcmdldCB2YXJpYW5jZSwgdW5kZXIgdGhpcyBpbmRlcGVuZGVuY2UgYXNzdW1wdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c176-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBmb3JtdWxhIGdpdmVzIHRoZSB2YXJpYW5jZSBvZiBhIOKIkiBiPwlWYXIoYSkgKyBWYXIoYikg4oiSIDIgQ292KGEsIGIpLCBpbiBzcXVhcmUgbWludXRlcyBpZiBhIGFuZCBiIGFyZSBpbiBtaW51dGVzLgl0b2RhaSBjMTc2LW01IHZhcmlhbmNlLWVjYXJ0CldoZW4gZG8gc2hhcmVkIGRyYXdzIHJlZHVjZSB0aGUgdmFyaWFuY2Ugb2YgdGhlIGRpZmZlcmVuY2U/CVdoZW4gdGhlIGNvdmFyaWFuY2Ugb2YgdGhlIHR3byBvdXRwdXRzIGlzIHBvc2l0aXZlLCBiZWNhdXNlIHRoZSB2YXJpYW5jZSBvZiB0aGUgZGlmZmVyZW5jZSB0aGVuIGZhbGxzIGJlbG93IHRoZSBzdW0gb2YgdGhlIHZhcmlhbmNlcy4gTmVnYXRpdmUgY292YXJpYW5jZSByYWlzZXMgaXQuCXRvZGFpIGMxNzYtbTUgc2lnbmUtY292YXJpYW5jZQpXaHkgaXMgYSBzZWVkIGZvciBlYWNoIHNldHRpbmcgaW5zdWZmaWNpZW50PwlJdCBtYWtlcyBlYWNoIHNpbXVsYXRpb24gcmVwcm9kdWNpYmxlIGJ1dCBkb2VzIG5vdCBjb3JyZWxhdGUgdGhlbTogQSBhbmQgQiBtdXN0IHJlYWQgdGhlIHNhbWUgZHJhd3MsIGF0IHRoZSBzYW1lIHBvc2l0aW9ucyBpbiB0aGUgc2VxdWVuY2UuCXRvZGFpIGMxNzYtbTUgZ3JhaW5lLXJlZ2xhZ2UKRG9lcyBhZGRpbmcgYSBmaXhlZCBvZmZzZXQgdG8gYW4gb3V0cHV0IGNoYW5nZSBpdHMgdmFyaWFuY2U/CU5vOiBpdCBvbmx5IHNoaWZ0cyB0aGUgbWVhbi4gVmFyaWFuY2UgZGVwZW5kcyBvbmx5IG9uIHRoZSBzcHJlYWQgYXJvdW5kIHRoZSBtZWFuLgl0b2RhaSBjMTc2LW01IGRlY2FsYWdlLWZpeGUKSG93IGRvIHlvdSBnbyBmcm9tIHRoZSB2YXJpYW5jZSBvZiBhIGRpZmZlcmVuY2UgdG8gdGhlIG51bWJlciBvZiBwYWlycz8JVGhlIG1lYW4gb2YgbiBpbmRlcGVuZGVudCBwYWlycyBoYXMgdmFyaWFuY2UgVmFyKGQpIC8gbjsgbiBtdXN0IGJlIGF0IGxlYXN0IFZhcihkKSBkaXZpZGVkIGJ5IHRoZSB0YXJnZXQgdmFyaWFuY2UsIHVuZGVyIHRoaXMgaW5kZXBlbmRlbmNlIGFzc3VtcHRpb24uCXRvZGFpIGMxNzYtbTUgbm9tYnJlLXBhaXJlcwo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fqqiia hcoweg emzh</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nqjwfu ihwnje nlknfg jgwvfw dxqsxh rcsyhm fioj</span></span></h3><dl><div><dt>What you understand</dt><dd>Two settings are compared using shared draws only if the same draw feeds both, at the same position in the sequence. This lesson calculates exactly what this link changes in a distribution over four workloads; it says nothing about a real service counter or a real simulation.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ydfwqd tfqjcy rxaqdq tbxyie vuhmcp wvzyut nhimfa fhpdvf kazrtt whuciq jchnsp qkifqk baijfh hqvvmu vgbeek kknpaz bzrahh yhfnqi bbbilp bhauid nkddjf clzdrn wvooxt uyuhwx</span></span></dd></div><div><dt>Your level</dt><dd>Prepare to write Var(a − b), state when covariance helps or hurts, distinguish a reproducible seed from shared draws, then work through the example again without support. Reading the lesson or giving an assisted answer does not establish an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fslxre rxwfuv wqgrxf glrtnn tnnhnu szvzue fbqxvn zzolfw vlwfzy kyvunk omyvrv brazyj tnxxcm mxbjfv kmwprm nzunha tjflzy hevqou hydfov xfgmky jfophq myexlg yoswlb jakszk</span></span></dd></div><div><dt>To continue</dt><dd>Before applying the idea to real code, read how draws are consumed for each setting, check on authorized data that A and B read the same values at the same positions in the sequence, then measure the covariance and the variance of the difference. No replacement of the existing mechanism is announced.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c176-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c176-m4.html">Previous</a> · <a href="c183-m1.html">Next</a></nav>
+<footer><p>Course book · C176·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

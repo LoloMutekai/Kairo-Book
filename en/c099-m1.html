@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Transform an affine score into a probability using the sigmoid, then distinguish this probability from the decision made using a threshold.">
+<title>C099·M1 · Logistic regression — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rinzkt mvciey ocbz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C099·M1</p><h1>Logistic regression</h1><p class="objectif"><span>Your goal</span>Transform an affine score into a probability using the sigmoid, then distinguish this probability from the decision made using a threshold.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c060-m5 : approximations and assumptions · c059-m6 : deterministic discrete Bellman</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop receives requests for assistance. For each request, a checklist set in advance counts signs of urgency: we find 2 on the request we will follow. We want to estimate whether it is urgent, then decide whether it enters the priority queue. The count alone does not yet give either a probability or a decision.</p><p>Logistic regression starts by constructing a score: here each sign adds the same contribution, starting from an initial offset. This score can be negative or positive. A curve called the sigmoid transforms it into a value between 0 and 1, interpreted by the model as a probability of urgency.</p><p>For our request, this probability will be 2/3 ≈ 0.67, with no unit. The workshop rule then compares it with the threshold 3/5 = 0.60. The estimated value and the priority ranking rule are separate objects: changing the threshold can change the queue without changing the model.</p><p>This entire scenario is fictional: the requests, checklist, coefficients and threshold are chosen for the calculation. No training on observations has taken place. A bounded output does not guarantee that the probabilities reflect actual frequencies of urgency. Here we study the form of the model and a prediction, rather than all the metrics in the chapter.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The path of a request</title><desc>The request has 2 signs. The score is ln(2), the probability is 2/3 and the assigned class is 1 at the threshold 3/5. The assigned class does not reveal actual urgency.</desc><rect x="40" y="10" width="280" height="52" rx="7" class="cadre-neutre" /><text x="180" y="33" text-anchor="middle">Observed request</text><text x="180" y="54" text-anchor="middle">x = 2 signs</text><path d="M180 62v22m-5-5 5 5 5-5" class="trait" /><rect x="40" y="84" width="280" height="52" rx="7" class="cadre-prediction" /><text x="180" y="107" text-anchor="middle">Affine score</text><text x="180" y="128" text-anchor="middle">z = ln(2)</text><path d="M180 136v22m-5-5 5 5 5-5" class="trait" /><rect x="40" y="158" width="280" height="52" rx="7" class="cadre-resultat" /><text x="180" y="181" text-anchor="middle">Sigmoid</text><text x="180" y="202" text-anchor="middle">p = 2/3 ≈ 0.67</text><path d="M180 210v22m-5-5 5 5 5-5" class="trait" /><rect x="40" y="232" width="280" height="62" rx="7" class="cadre-neutre" /><text x="180" y="257" text-anchor="middle">Threshold t = 0.60</text><text x="180" y="281" text-anchor="middle">Class 1: priority queue</text></svg><figcaption>The score and probability come from the model; assigning a class adds a decision rule. None of these blocks observes the actual urgency of the request.</figcaption></figure><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>Compare on the same scale</title><desc>On bars ranging from 0 to 1, the probability 2/3 exceeds the threshold 3/5. The lengths represent model values, rather than measured frequencies.</desc><text x="180" y="35" text-anchor="middle">Probability p = 2/3 ≈ 0.67</text><rect x="30" y="60" width="200" height="24" class="cadre-resultat" /><rect x="230" y="60" width="100" height="24" class="cadre-neutre" /><line x1="230" y1="54" x2="230" y2="90" class="trait" /><text x="30" y="113" text-anchor="middle">0</text><text x="330" y="113" text-anchor="middle">1</text><text x="180" y="160" text-anchor="middle">Threshold t = 3/5 = 0.60</text><rect x="30" y="185" width="180" height="24" class="cadre-prediction" /><rect x="210" y="185" width="120" height="24" class="cadre-neutre" /><line x1="210" y1="179" x2="210" y2="215" class="trait" /><text x="30" y="240" text-anchor="middle">0</text><text x="330" y="240" text-anchor="middle">1</text></svg><figcaption>The bars have the same endpoints. The exact comparison is 2/3 &gt; 3/5; the decimals help with reading. The areas do not represent a sample of requests.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Construct the affine score, apply the sigmoid, then compare the probability with the stated threshold. Keep the score, probability, predicted class and observed urgency separate.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the urgency checklist to the priority queue</h3><p>Our request has x = 2 signs of urgency. The fictional model sets b = −ln(2) and w = ln(2). The threshold is t = 3/5. Let us find the probability and class, keeping the expressions exact.</p><ol class="etapes"><li><h3>State what we want to predict</h3><p>X denotes the count of signs that a request could have; x is its observed value. Y denotes its urgency label, according to a fixed annotation rule: Y = 1 for urgent, Y = 0 otherwise. An observed label is written y. It must be possible to assign it independently of the classification produced by the model.</p><p>p(x) denotes the conditional probability P(Y = 1 | X = x) assumed by the model; the vertical bar means “given”. We abbreviate it to p for our request. The predicted class is written ŷ, with a hat. Y remains unknown when the request is assigned to a queue.</p><p>b is the initial offset, w the contribution per sign, z the score and t the threshold. All have no unit: x is a pure count and z must be dimensionless to be used in an exponential. The model assumes that the score is affine in x, with coefficients fixed during this prediction; it does not assume that p itself is affine. The checklist and the meaning of the label must stay the same between training and use.</p></li><li><h3>Construct the affine score</h3><p>Affine here means an offset b plus a contribution proportional to the count x, with factor w.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mi>b</mi><mo>+</mo><mi>w</mi><mi>x</mi><mo>=</mo><mo>(</mo><mi>x</mi><mo>−</mo><mn>1</mn><mo>)</mo><mi>ln</mi><mo>(</mo><mn>2</mn><mo>)</mo></mrow></math></div><p>ln is the natural logarithm; exp is its inverse function. Thus exp(ln(a)) = a for positive a. In our choice, b = −ln(2) offsets the contribution of the first sign. With x = 2, z = −ln(2) + 2 × ln(2) = 1 × ln(2) = ln(2).</p><p>The score is positive, but it is not a probability. In general, it is not bounded between 0 and 1. The logarithmic expression is kept exact: we have not rounded a coefficient to obtain a convenient fraction.</p></li><li><h3>Define the sigmoid and the odds</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><mi>σ</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mi>exp</mi><mo>(</mo><mo>−</mo><mi>z</mi><mo>)</mo></mrow></mfrac></mrow></math></div><p>σ, the Greek letter sigma, denotes the logistic sigmoid here. When z increases, exp(−z) decreases, so the denominator decreases and p increases. exp(z) is always positive. Let q = exp(z), the odds assigned to urgency. Multiplying the numerator and denominator of the formula by exp(z) gives a form that is more convenient for calculation:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><mfrac><mi>q</mi><mrow><mn>1</mn><mo>+</mo><mi>q</mi></mrow></mfrac></mrow></math></div></li><li><h3>Calculate the odds without approximation</h3><p>For the score z = ln(2), q = exp(ln(2)) = 2. Odds of 2 compare the “urgent” weight with the “non-urgent” weight: 2 to 1. This ratio is not a probability.</p><p>Another exact interpretation: with no signs, the odds would be exp(−ln(2)) = 1/2. The exponential of a sum is the product of the exponentials of its terms. Each sign adds ln(2) to the score, so it multiplies the odds by 2. With 2 signs, we obtain 1/2 × 2 = 1, then 1 × 2 = 2. This doubling is an assumption encoded by our coefficients, rather than a fact measured on the requests.</p></li><li><h3>Express the weights relative to a common total</h3><p>The relative weights are 2 for urgent and 1 for non-urgent. Their sum is 3. Dividing the urgency weight by this sum makes the two probabilities complementary:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><mfrac><mn>2</mn><mrow><mn>1</mn><mo>+</mo><mn>2</mn></mrow></mfrac><mo>=</mo><mfrac><mn>2</mn><mn>3</mn></mfrac><mo>=</mo><mn>2/3</mn><mo>≈</mo><mn>0.67</mn></mrow></math></div><p>The complementary probability is 1 − 2/3 = 1/3. The sum is 1, with no unit. The denominator 1 + q is strictly greater than q: for any finite score, p stays strictly between 0 and 1.</p></li><li><h3>Add an explicit decision rule</h3><p>Set ŷ = 1 if p ≥ t; otherwise ŷ = 0. By convention, equality therefore places the request in the priority queue. With t = 3/5 = 0.60, the exact difference p − t is 1/15, which is positive. We classify this request as a priority.</p><p>Check without rounding: comparing 2/3 with 3/5 amounts to comparing 2 × 5 = 10 and 3 × 3 = 9, because the denominators are positive. The decision is indeed ŷ = 1. This still does not reveal the actual value of Y. The threshold is given here; choosing a threshold according to the costs of errors requires further work.</p></li><li><h3>Work backwards to check</h3><p>Reconstruct the odds from the probabilities: p/(1 − p) = (2/3)/(1/3) = 2. Their logarithm is ln(2), the original score. This is the characteristic link in the model: the logarithm of the odds, ln(p/(1 − p)), is affine in x.</p><p>With x = 1, the score would become 0 and the probability 1/2 = 0.50. With x = 0, the score would be −ln(2), the odds 1/2 and the probability 1/3. These opposite scores give 1/3 + 2/3 = 1. The direction of change is consistent with positive w: more signs increase p.</p></li><li><h3>Separate the form of the model from its training</h3><p>Why the word regression? The model makes the logarithm of the odds affine, even when the final output is used for classification. In actual training, b and w would be fitted to requests with observed labels y, rather than chosen for this page.</p><p>A common way to fit them minimizes the sum of logarithmic losses over the training examples: for y = 1, the loss is −ln(p); for y = 0, it is −ln(1 − p). The loss penalizes a low probability assigned to the observed label. This criterion trains the coefficients; comparison with t then determines the queue.</p><p>We do not perform this fitting here. Before any real use, defensible labels and evaluation on requests held out from fitting would be needed, among other things. The formula alone establishes neither the quality of the predictions nor a benefit from sorting requests.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Reconstruct the score, then the odds and probability of the request. Why does the denominator contain an additional weight? Then explain how another threshold can change ŷ without changing p or Y.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The odds are 2, so the probability is 2.”</h3><p>The odds compare two weights; a probability relates a weight to the total. Add the weight 1 of the other class: 2/(1 + 2) = 2/3. Calculating p/(1 − p) again must then give 2.</p><a href="#exemple">Review the odds, normalization and reverse check</a></li><li><h3>“A probability of 2/3 means that this request is actually urgent.”</h3><p>The model assigns a probability; the threshold gives a predicted class. The observed label comes from the annotation rule. An output between 0 and 1 does not prove that it reflects actual frequencies and does not guarantee the outcome of an individual case.</p><a href="#intuition">Review what the blocks along the path establish</a></li><li><h3>“Raising the threshold requires retraining the regression.”</h3><p>If the request and coefficients stay fixed, its score and probability stay fixed. The threshold belongs to the decision rule; raising it can only change the assigned class. The consequences of this choice will need to be evaluated separately.</p><a href="#exercices">Work through the rule change in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 1 · Warm-up · reason before calculating</p>
+<h3>One fewer sign</h3><p>In the same workshop, the request now has only x = 1 sign. Keep b and w. Predict whether the probability decreases, then calculate z and p. Classify the request with the initial threshold t = 3/5, then with t = 1/2 and the same convention for equality.</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate (x − 1) × ln(2).</p></details><details class="indice"><summary>Hint 2</summary><p>exp(0) = 1: 2 equal weights give a probability of 1/2.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>w is positive: removing a sign decreases the score and probability. The score is (1 − 1) × ln(2) = 0. The odds are 1, and p = 1/(1 + 1) = 1/2 = 0.50.</p><p>At the threshold 0.60, p is below the threshold: ŷ = 0. At the threshold 0.50, the difference is 0: equality satisfies p ≥ t, so ŷ = 1. Neither decision provides the observed label of the request.</p><p class="petit-titre">Check your reasoning</p><ul><li>I predict a decrease before calculating and relate it to the sign of w.</li><li>I distinguish the score 0, odds 1 and probability 1/2.</li><li>I handle equality using the stated convention, without inferring Y from it.</li></ul></details></article><article class="exercice" id="ex-signe-ajoute"><p class="repere">Exercise 2 · Application · exact calculation on paper</p>
+<h3>One additional sign</h3><p>Start again with the request in the example and add a sign: x = 3. Keep b, w and t. Calculate z, q, p, then the class. Check your probability by reconstructing its odds. You may use exp(2 × ln(2)) = 2 × 2.</p>
+<label for="reponse-ex-signe-ajoute">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-signe-ajoute" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-signe-ajoute" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-signe-ajoute" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-signe-ajoute" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The score is (3 − 1) × ln(2). Each added sign multiplies q by 2.</p></details><details class="indice"><summary>Hint 2</summary><p>The step q → p divides q by 1 + q, never by q alone.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>z = 2 × ln(2) = ln(4). The odds are therefore q = 4. We can also start again from the odds 2 in the example and multiply them by 2: 2 × 2 = 4.</p><p>p = 4/(1 + 4) = 4/5 = 4/5 = 0.80. This probability exceeds t = 0.60, so ŷ = 1.</p><p>Reverse check: the complement is 1/5. Dividing 4/5 by 1/5 gives 4, the expected odds. The probability increases without exceeding 1; it did not double when the odds doubled.</p><p class="petit-titre">Check your reasoning</p><ul><li>I reconstruct the exact score and odds of 4.</li><li>I normalize by the total 5 before comparing with the threshold.</li><li>I check using p/(1 − p) and distinguish doubling the odds from the change in p.</li></ul></details></article><article class="exercice" id="ex-seuil"><p class="repere">Exercise 3 · Transfer · discuss a change</p>
+<h3>Does a new rule mean a new model?</h3><p>Return to exactly the initial request, x = 2. The workshop only replaces t = 3/5 with t = 3/4. Someone announces: “The model now gives a different probability and becomes more accurate.” Calculate both classifications, then correct both claims. What would need to be observed to judge the quality of the sorting?</p>
+<label for="reponse-ex-seuil">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-seuil" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-seuil" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-seuil" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-seuil" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>List the quantities that depend on t in the chain shown in the first diagram.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare 2/3 with 3/4 exactly. A change in the number of priority requests does not tell us which ones deserve that classification.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>x, b and w stay the same: z = ln(2), q = 2 and p = 2/3 do not change. At the threshold 0.60, p − t = 1/15 &gt; 0, so ŷ = 1. At the threshold 0.75, p − t = -1/12 &lt; 0, so ŷ = 0.</p><p>The classification rule changes. The probability and actual urgency of this request do not change with it. No retraining has taken place. A higher threshold makes the entry criterion more demanding; this is not enough to establish that it is better.</p><p>To judge the sorting, we would need to compare the decisions with urgency labels assigned according to the stated rule, on requests held out from fitting, then spell out the consequences of errors. The following units will develop the tools for comparison; we cannot conclude that there is a gain from this fictional calculation alone.</p><p class="petit-titre">Check your reasoning</p><ul><li>I keep p = 2/3 under both rules and obtain opposite classes.</li><li>I explain the change in class without confusing it with a change in Y.</li><li>I ask for labels and an evaluation protocol before claiming better sorting.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="score"><summary><span class="repere">Recall 1</span><span>What does the model calculate before producing a probability?</span></summary><p>An affine score z = b + wx, where b is the offset, w the contribution per unit of x and x the observed feature. The score is dimensionless and is not bounded like a probability.</p></details><details class="carte" data-carte="sigmoide"><summary><span class="repere">Recall 2</span><span>Reconstruct the sigmoid, then its value for a score of 0.</span></summary><p>p = 1/(1 + exp(−z)). If z = 0, exp(−z) = 1, so p = 1/2. For a finite score, the probability is strictly between 0 and 1.</p></details><details class="carte" data-carte="cote"><summary><span class="repere">Recall 3</span><span>Why do odds of 2 give a probability of 2/3?</span></summary><p>The odds q compare the weights of the urgent class and the other class. We normalize: p = q/(1 + q), so 2/(1 + 2) = 2/3. Conversely, q = p/(1 − p), and ln(q) is the affine score.</p></details><details class="carte" data-carte="seuil"><summary><span class="repere">Recall 4</span><span>What can change when only the threshold is modified?</span></summary><p>The predicted class ŷ can change. The score, model probability and actual label stay the same. The handling of equality must be stated; here ŷ = 1 for p ≥ t.</p></details><details class="carte" data-carte="apprentissage"><summary><span class="repere">Recall 5</span><span>What distinguishes our fictional coefficients from learned coefficients?</span></summary><p>Ours are chosen for exact calculation. Learned coefficients would be fitted to features and observed labels, for example by minimizing a logarithmic loss. Quality must then be evaluated separately; reading the formula proves no gain.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the chain for the request: feature x, score b + wx, odds exp(z), probability q/(1 + q), then comparison with t. Reconstruct the exact fraction in the example and its reverse check. Finish by distinguishing learned coefficients, the classification rule and the observed label: none of these terms replaces the other two.</p></div><div class="exports"><a class="bouton" download="c099-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTktbTE6c2NvcmUiLAogICAgICAidW5pdGUiOiAiYzA5OS1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNjb3JlLWFmZmluZS1sb2dpc3RpcXVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgbW9kZWwgY2FsY3VsYXRlIGJlZm9yZSBwcm9kdWNpbmcgYSBwcm9iYWJpbGl0eT8iLAogICAgICAicmVwb25zZSI6ICJBbiBhZmZpbmUgc2NvcmUgeiA9IGIgKyB3eCwgd2hlcmUgYiBpcyB0aGUgb2Zmc2V0LCB3IHRoZSBjb250cmlidXRpb24gcGVyIHVuaXQgb2YgeCBhbmQgeCB0aGUgb2JzZXJ2ZWQgZmVhdHVyZS4gVGhlIHNjb3JlIGlzIGRpbWVuc2lvbmxlc3MgYW5kIGlzIG5vdCBib3VuZGVkIGxpa2UgYSBwcm9iYWJpbGl0eS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OS1tMTpzaWdtb2lkZSIsCiAgICAgICJ1bml0ZSI6ICJjMDk5LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2lnbW9pZGUtbG9naXN0aXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJSZWNvbnN0cnVjdCB0aGUgc2lnbW9pZCwgdGhlbiBpdHMgdmFsdWUgZm9yIGEgc2NvcmUgb2YgMC4iLAogICAgICAicmVwb25zZSI6ICJwID0gMS8oMSArIGV4cCjiiJJ6KSkuIElmIHogPSAwLCBleHAo4oiSeikgPSAxLCBzbyBwID0gMS8yLiBGb3IgYSBmaW5pdGUgc2NvcmUsIHRoZSBwcm9iYWJpbGl0eSBpcyBzdHJpY3RseSBiZXR3ZWVuIDAgYW5kIDEuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTktbTE6Y290ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDk5LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY290ZS1sb2dpc3RpcXVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkbyBvZGRzIG9mIDIgZ2l2ZSBhIHByb2JhYmlsaXR5IG9mIDIvMz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgb2RkcyBxIGNvbXBhcmUgdGhlIHdlaWdodHMgb2YgdGhlIHVyZ2VudCBjbGFzcyBhbmQgdGhlIG90aGVyIGNsYXNzLiBXZSBub3JtYWxpemU6IHAgPSBxLygxICsgcSksIHNvIDIvKDEgKyAyKSA9IDIvMy4gQ29udmVyc2VseSwgcSA9IHAvKDEg4oiSIHApLCBhbmQgbG4ocSkgaXMgdGhlIGFmZmluZSBzY29yZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OS1tMTpzZXVpbCIsCiAgICAgICJ1bml0ZSI6ICJjMDk5LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2V1aWwtZGVjaXNpb24tbG9naXN0aXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNhbiBjaGFuZ2Ugd2hlbiBvbmx5IHRoZSB0aHJlc2hvbGQgaXMgbW9kaWZpZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHByZWRpY3RlZCBjbGFzcyDFtyBjYW4gY2hhbmdlLiBUaGUgc2NvcmUsIG1vZGVsIHByb2JhYmlsaXR5IGFuZCBhY3R1YWwgbGFiZWwgc3RheSB0aGUgc2FtZS4gVGhlIGhhbmRsaW5nIG9mIGVxdWFsaXR5IG11c3QgYmUgc3RhdGVkOyBoZXJlIMW3ID0gMSBmb3IgcCDiiaUgdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OS1tMTphcHByZW50aXNzYWdlIiwKICAgICAgInVuaXRlIjogImMwOTktbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhanVzdGVtZW50LWxvZ2lzdGlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkaXN0aW5ndWlzaGVzIG91ciBmaWN0aW9uYWwgY29lZmZpY2llbnRzIGZyb20gbGVhcm5lZCBjb2VmZmljaWVudHM/IiwKICAgICAgInJlcG9uc2UiOiAiT3VycyBhcmUgY2hvc2VuIGZvciBleGFjdCBjYWxjdWxhdGlvbi4gTGVhcm5lZCBjb2VmZmljaWVudHMgd291bGQgYmUgZml0dGVkIHRvIGZlYXR1cmVzIGFuZCBvYnNlcnZlZCBsYWJlbHMsIGZvciBleGFtcGxlIGJ5IG1pbmltaXppbmcgYSBsb2dhcml0aG1pYyBsb3NzLiBRdWFsaXR5IG11c3QgdGhlbiBiZSBldmFsdWF0ZWQgc2VwYXJhdGVseTsgcmVhZGluZyB0aGUgZm9ybXVsYSBwcm92ZXMgbm8gZ2Fpbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c099-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBtb2RlbCBjYWxjdWxhdGUgYmVmb3JlIHByb2R1Y2luZyBhIHByb2JhYmlsaXR5PwlBbiBhZmZpbmUgc2NvcmUgeiA9IGIgKyB3eCwgd2hlcmUgYiBpcyB0aGUgb2Zmc2V0LCB3IHRoZSBjb250cmlidXRpb24gcGVyIHVuaXQgb2YgeCBhbmQgeCB0aGUgb2JzZXJ2ZWQgZmVhdHVyZS4gVGhlIHNjb3JlIGlzIGRpbWVuc2lvbmxlc3MgYW5kIGlzIG5vdCBib3VuZGVkIGxpa2UgYSBwcm9iYWJpbGl0eS4JdG9kYWkgYzA5OS1tMSBzY29yZS1hZmZpbmUtbG9naXN0aXF1ZQpSZWNvbnN0cnVjdCB0aGUgc2lnbW9pZCwgdGhlbiBpdHMgdmFsdWUgZm9yIGEgc2NvcmUgb2YgMC4JcCA9IDEvKDEgKyBleHAo4oiSeikpLiBJZiB6ID0gMCwgZXhwKOKIknopID0gMSwgc28gcCA9IDEvMi4gRm9yIGEgZmluaXRlIHNjb3JlLCB0aGUgcHJvYmFiaWxpdHkgaXMgc3RyaWN0bHkgYmV0d2VlbiAwIGFuZCAxLgl0b2RhaSBjMDk5LW0xIHNpZ21vaWRlLWxvZ2lzdGlxdWUKV2h5IGRvIG9kZHMgb2YgMiBnaXZlIGEgcHJvYmFiaWxpdHkgb2YgMi8zPwlUaGUgb2RkcyBxIGNvbXBhcmUgdGhlIHdlaWdodHMgb2YgdGhlIHVyZ2VudCBjbGFzcyBhbmQgdGhlIG90aGVyIGNsYXNzLiBXZSBub3JtYWxpemU6IHAgPSBxLygxICsgcSksIHNvIDIvKDEgKyAyKSA9IDIvMy4gQ29udmVyc2VseSwgcSA9IHAvKDEg4oiSIHApLCBhbmQgbG4ocSkgaXMgdGhlIGFmZmluZSBzY29yZS4JdG9kYWkgYzA5OS1tMSBjb3RlLWxvZ2lzdGlxdWUKV2hhdCBjYW4gY2hhbmdlIHdoZW4gb25seSB0aGUgdGhyZXNob2xkIGlzIG1vZGlmaWVkPwlUaGUgcHJlZGljdGVkIGNsYXNzIMW3IGNhbiBjaGFuZ2UuIFRoZSBzY29yZSwgbW9kZWwgcHJvYmFiaWxpdHkgYW5kIGFjdHVhbCBsYWJlbCBzdGF5IHRoZSBzYW1lLiBUaGUgaGFuZGxpbmcgb2YgZXF1YWxpdHkgbXVzdCBiZSBzdGF0ZWQ7IGhlcmUgxbcgPSAxIGZvciBwIOKJpSB0Lgl0b2RhaSBjMDk5LW0xIHNldWlsLWRlY2lzaW9uLWxvZ2lzdGlxdWUKV2hhdCBkaXN0aW5ndWlzaGVzIG91ciBmaWN0aW9uYWwgY29lZmZpY2llbnRzIGZyb20gbGVhcm5lZCBjb2VmZmljaWVudHM/CU91cnMgYXJlIGNob3NlbiBmb3IgZXhhY3QgY2FsY3VsYXRpb24uIExlYXJuZWQgY29lZmZpY2llbnRzIHdvdWxkIGJlIGZpdHRlZCB0byBmZWF0dXJlcyBhbmQgb2JzZXJ2ZWQgbGFiZWxzLCBmb3IgZXhhbXBsZSBieSBtaW5pbWl6aW5nIGEgbG9nYXJpdGhtaWMgbG9zcy4gUXVhbGl0eSBtdXN0IHRoZW4gYmUgZXZhbHVhdGVkIHNlcGFyYXRlbHk7IHJlYWRpbmcgdGhlIGZvcm11bGEgcHJvdmVzIG5vIGdhaW4uCXRvZGFpIGMwOTktbTEgYWp1c3RlbWVudC1sb2dpc3RpcXVlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rinzkt mvciey ocbz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qtosgi hujdam rrwn</span></span> · from a score to a stated probability</h3><dl><div><dt>What you understand</dt><dd>A score can be transformed into a probability using a sigmoid; this probability and a threshold are not enough to establish the quality of a decision. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">srpwok bjyxqo biiyfv amhbqi svhiji vamtzo rnffwp mtutgs bsiiel mxxdsr kqsvby skmoiy ommvlw ub</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rwumay zsvdsa izqwxh xrzarw ziwlzy lueztz ovunqx okrrvm vtuexn kpoyyz bvknxi zlhihk kdmgoz xelmzi cvwcoh iqdimh svomoa xhqrta jabprw legfdz cqklnr kiddjq eokadn hxizow</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: reconstruct the score, odds, probability and decision without support, then explain the effect of a threshold change. Reading or an assisted answer never constitutes an attained level. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ukhcpl yxxjji rahwrq tefhnn wzeekg moqpiq cpav</span></span></dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xujnhj rygdqk aywlev vxfuqd zzidlf jlxgem cubxyt gcxybb xqqfvh pizjrs fkmsfp dfgmpc jltjux cjnukw mqpvru vrwljp lylbxf rktpza xvmfql mlumzn woiipo zhbjcp qiczrt hnrukv</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the exercises without help on another day. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">adlghg gaqkge mrzpmr fngfyg ulphgf ydleys lxjp</span></span> Real use would require an authorized check of the execution path and evaluation on labeled observations separate from the training data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c099-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c098-m5.html">Previous</a> · <a href="c099-m2.html">Next</a></nav>
+<footer><p>Course book · C099·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

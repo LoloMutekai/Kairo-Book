@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Clean a small table without erasing the decisions: distinguish conversion, duplicates and values requiring review, then check the row counts before calculating a mean.">
+<title>C037·M5 · Controlled data cleaning — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">plbulm nnoxcd bryy</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C037·M5</p><h1>Controlled data cleaning</h1><p class="objectif"><span>Your goal</span>Clean a small table without erasing the decisions: distinguish conversion, duplicates and values requiring review, then check the row counts before calculating a mean.</p><p class="prerequis"><strong>Before you start</strong><br>c036-m5 : annotated graphs · c035-m5 : finite covariance and conditioning · c037-m1 : tables · c037-m2 : time indexes · c037-m3 : joins · c037-m4 : aggregations</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You keep a watering log for a plant pot. The export contains 7 rows: a copy of the same record, an empty cell and a negative volume. Before asking the spreadsheet for the mean, you need to decide what each row means. Otherwise, a perfectly calculated mean can answer a distorted question.</p><p>Here, cleaning means producing a usable table according to written rules while keeping the raw data intact. A conversion changes the representation of known information. Removing a copy avoids counting the same record several times. Holding a row for review preserves an anomaly along with its reason; it does not secretly correct it.</p><p>The scene and all its values are fictional. The log describes the total volume poured into this pot each day, in litres, with at most one record expected per date. The dates are calendar days in the same location, without a time of day. The export instructions specify day/month/year and a decimal comma. We do not guess any format or unit.</p><p>The result will describe the usable records. It will not tell us how much water was poured on days whose records remain on hold. Excluding these days can change the picture of the period: the selection must be reported with the result.</p><div class="schemas"><figure><svg viewBox="0 0 360 365" xmlns="http://www.w3.org/2000/svg" role="img"><title>The raw log to examine</title><desc>Each row concerns the same pot. A gives 1.5 litre; B and C have the same date and 2.0 litres. D is empty, E is negative, F is 0 and G has spaces around the number. The letter labels identify the source rows.</desc><text x="18" y="28">Row</text><text x="92" y="28">Raw date</text><text x="260" y="28">Volume (L)</text><line x1="18" y1="43" x2="342" y2="43" class="trait" /><text x="30" y="76">A</text><text x="92" y="76">16/11/2026</text><text x="281" y="76">1.5</text><text x="30" y="116">B</text><text x="92" y="116">17/11/2026</text><text x="281" y="116">2.0</text><text x="30" y="156">C</text><text x="92" y="156">17/11/2026</text><text x="281" y="156">2.0</text><text x="30" y="196">D</text><text x="92" y="196">18/11/2026</text><text x="272" y="196">empty</text><text x="30" y="236">E</text><text x="92" y="236">19/11/2026</text><text x="271" y="236">-1.0</text><text x="30" y="276">F</text><text x="92" y="276">20/11/2026</text><text x="281" y="276">0.0</text><text x="30" y="316">G</text><text x="92" y="316">21/11/2026</text><text x="263" y="316">␠2.5␠</text><text x="18" y="350" class="petite-etiquette">␠ represents a space in the cell.</text></svg><figcaption>The raw data preserve what was received. The letters A to G are provenance labels; they do not make C a different record from B. Every cell is transcribed in the example.</figcaption></figure><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>A row count in which no row disappears</title><desc>The 7 raw rows are divided into 4 retained rows, 1 excluded copy and 2 rows on hold. The log preserves the reasons for every row.</desc><rect x="18" y="12" width="324" height="52" rx="7" class="cadre-prediction" /><text x="180" y="45" text-anchor="middle">Raw data preserved: 7 rows</text><path d="M36 64v212M36 111h25M36 191h25M36 271h25" class="trait" /><rect x="61" y="83" width="281" height="57" rx="7" class="cadre-resultat" /><text x="78" y="107">Retained: 4 rows</text><text x="78" y="129" class="petite-etiquette">A, B, F and G</text><rect x="61" y="163" width="281" height="57" rx="7" class="cadre-neutre" /><text x="78" y="187">Copy: 1 row</text><text x="78" y="209" class="petite-etiquette">C points to B</text><rect x="61" y="243" width="281" height="57" rx="7" class="cadre-neutre" /><text x="78" y="267">On hold: 2 rows</text><text x="78" y="289" class="petite-etiquette">D: missing; E: forbidden sign</text></svg><figcaption>This diagram divides the source rows into mutually exclusive categories. The log remains available to explain this division; the retained table is used for the calculation.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Preserve the raw data, state the rules, log every decision and check the retained rows before any aggregation.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the raw log to a defensible mean</h3><p>For the same pot: A, 16/11/2026, ‘1.5’; B, 17/11/2026, ‘2.0’; C, same date, ‘2.0’; D, 18/11/2026, empty cell; E, 19/11/2026, ‘-1.0’; F, 20/11/2026, ‘0.0’; G, 21/11/2026, ‘␠2.5␠’. The log instructions confirm that C is a copy of B and that the volumes are additions, never withdrawals. Calculate the mean of the usable records, justifying every selection.</p><ol class="etapes"><li><h3>Write the data contract before touching the cells</h3><p>Copy the raw table to work on and preserve its labels A to G. The working table must contain the pot, a valid date and a numeric volume in litres. The pot–date pair identifies the expected record. The source letters identify the rows received, rather than the events measured.</p><p>A usable volume is present, convertible and greater than or equal to 0 L. 0 is allowed: it means that the log records no water added. An empty cell means that we do not know. A negative volume contradicts the meaning of this column; without a correction from the source, we do not change its sign.</p><p>The cleaning log is a separate table: source label, raw value, converted value if any, decision and reason, along with the rule applied. It also preserves the link from C to B. A different rule or a correction from the source produces a new documented version.</p></li><li><h3>Convert the form without inventing the content</h3><p>Read the dates according to the instructions: for A, 16/11/2026 becomes 2026-11-16, in year–month–day order. The date represents the same day. The other dates are handled in the same way and are valid in this calendar.</p><p>Remove only the leading and trailing spaces from G, then interpret the comma as the decimal separator. The numeric cells give A = 1.5 L, B = 2.0 L, C = 2.0 L, E = -1.0 L, F = 0.0 L and G = 2.5 L. D remains missing. Converting E succeeds technically; this does not make its volume acceptable.</p><p>To keep the calculations exact, express the exercise volumes in tenths of a litre. A represents 15 tenths, so 15 ÷ 10 = 3/2 L = 1.5 L. G represents 25 tenths, so 25 ÷ 10 = 5/2 L = 2.5 L. This change in representation preserves the volumes and their unit.</p></li><li><h3>Decide for each record and log the reason</h3><p>A and B are retained. C has the same pot, day and volume as B; the instructions confirm the copy. Keep B, the first row in the fixed source order, and mark C ‘copy of B’. Different values under the same identity would form a conflict requiring review, rather than permission to keep the first arbitrarily.</p><p>D is placed on hold: missing volume. E is placed on hold: -1.0 L is less than 0 L, which is forbidden for an addition in this log. We replace neither D with 0 L nor E with its opposite.</p><p>F is retained with 0.0 L; G is retained with 2.5 L, after conversion and a note that the spaces were removed. The log therefore explains the 7 decisions, even for rows accepted without a change in volume.</p></li><li><h3>Check row conservation and identity</h3><p>After removing the copy: 7 − 1 = 6 rows. After placing rows on hold: 6 − 2 = 4 retained rows, A, B, F and G. These categories are mutually exclusive: each source row has exactly one decision.</p><p>Let N be the number of raw rows, R the number retained, Q the number on hold and K the number of excluded copies. These are row counts, without a physical unit. Each count concerns an explicitly defined category.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><mi>R</mi><mo>+</mo><mi>Q</mi><mo>+</mo><mi>K</mi><mo>=</mo><mn>4</mn><mo>+</mo><mn>2</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>7</mn></mrow></math></div><p>Independent check: list A, B, F, G; then D, E; then C. Every source letter appears once. Also check that the retained pot–date pairs are distinct and that their volumes satisfy the rule. The count alone could still be correct with the wrong letters.</p></li><li><h3>Add the volumes that passed the check</h3><p>The retained table is: A, 2026-11-16, 1.5 L; B, 2026-11-17, 2.0 L; F, 2026-11-20, 0.0 L; G, 2026-11-21, 2.5 L. The dates still identify the records; sorting these rows does not create the missing days.</p><p>S denotes the sum of the retained volumes, in litres. Adding A and B gives 1.5 + 2.0 = 3.5 L. Adding F leaves the sum unchanged: 3.5 + 0.0 = 3.5 L. Adding G gives 3.5 + 2.5 = 6.0 L.</p><p>Another approach: combine A and G, which together contribute 1.5 + 2.5 L, then add B and F. The total must remain 6.0 L. A difference would indicate an omission, double counting or a conversion error.</p></li><li><h3>Divide by the correct count and state the scope</h3><p>m denotes the arithmetic mean volume per retained record. Each retained record counts once; the denominator is R, which must be strictly greater than 0. If no row were retained, the mean would be undefined, never equal to 0 by default.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>m</mi><mo>=</mo><mfrac><mi>S</mi><mi>R</mi></mfrac><mo>=</mo><mfrac><mn>6</mn><mn>4</mn></mfrac><mo>=</mo><mn>3/2</mn><mtext> L par relevé retenu</mtext></mrow></math></div><p>The decimal value is 1.50 L per retained record. Reverse check: 1.50 × 4 = 6.00 L. F counts in R even with no water added: removing it would change the question.</p><p>Report the mean together with the 4 retained records, copy C and the 2 rows D and E on hold. This mean cannot reconstruct the mean amount added over all days in the period. We have no justification for assuming that the excluded days resemble the others.</p></li><li><h3>Check that the rule can be run again</h3><p>Starting again from the same raw data with the same version of the rules must reproduce the same rows, volumes and reasons. Running only the retained table through these rules again must leave it unchanged: dates already converted, valid volumes, no copies. This stability after one pass is called idempotence.</p><p>The row counts differ according to the input: the raw table contains 7 rows; the table already retained contains 4. Do not claim to find a copy in this second input. The log from the first pass remains attached to the raw data.</p><p>Stability is a consistency check, rather than proof that every rule is sound. A rule that systematically erased zeros would also be stable and would distort the selection here. Meaning and provenance still need to be checked.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps. Explain why G can be converted, why D must remain on hold, why F must remain in the calculation and why C does not count a second time. Then reconstruct the row count and the mean, stating their scope.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“An empty cell equals 0; that simplifies the calculation.”</h3><p>An empty cell is not a record of no watering. Replacing D with 0 L would add an invented record: the mean would become 6 ÷ 5 = 1.20 L per record, instead of 1.50. Keep D on hold and retain F, whose 0 is observed in the fictional log.</p><a href="#exemple">Revisit the decisions for D, E and F</a></li><li><h3>“Two rows with the same date are always duplicates.”</h3><p>The date alone is insufficient in a table containing several pots or several daily records. Our contract specifies one record per pot–date pair and confirms that C copies B. A different contract would require a different identity. Different volumes for the same identity must be checked.</p><a href="#intuition">Reread the meaning of the log and its contract</a></li><li><h3>“The row counts balance, so the cleaning is correct.”</h3><p>The row counts prove a complete division only if the categories are mutually exclusive and exhaustive. They do not prove that the correct rows are retained or that the rule respects the meaning of the volume. Check the labels, identities, values and reasons; the last exercise also requires a traceable revision.</p><a href="#exercices">Revise a decision after confirmation from the source</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-decider"><p class="repere">Exercise 1 · Identify and justify</p>
+<h3>The blank, the sign and the 0</h3><p>Without rereading the example, decide what should happen to D, E and F. Give the reason for each, then calculate the number of retained rows from the 7 raw rows and confirmed copy C. Do not calculate the mean yet.</p>
+<label for="reponse-ex-decider">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-decider" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-decider" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-decider" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-decider" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A value can be convertible yet forbidden by the meaning of the column.</p></details><details class="indice"><summary>Hint 2</summary><p>An entered 0 means no water was added; an empty cell provides no information about the amount added.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>D remains on hold because the volume is missing. E remains on hold because -1.0 L is a negative addition forbidden by the contract. F is retained: 0.0 L is a present and permitted value.</p><p>Copy C does not count in the retained table. The row count gives 7 − 1 − 2 = 4 retained rows. Name them: A, B, F, G. The calculation and the list must agree.</p><p class="petit-titre">Check your reasoning</p><ul><li>You distinguish a missing value, a forbidden value and a valid 0.</li><li>You keep the raw data and log the reasons for the decisions.</li><li>You find 4 rows with the correct labels.</li></ul></details></article><article class="exercice" id="ex-doublon"><p class="repere">Exercise 2 · Calculate and diagnose</p>
+<h3>A copy left in the sum</h3><p>Someone removes D and E and converts G, but keeps A, B, C, F and G. Calculate their sum and mean. Explain why their calculation can be arithmetically exact while answering our question incorrectly. Correct it.</p>
+<label for="reponse-ex-doublon">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-doublon" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-doublon" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-doublon" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-doublon" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Their table adds C to the retained table from the example; both the numerator and the denominator increase.</p></details><details class="indice"><summary>Hint 2</summary><p>C contributes an extra 2.0 L to the sum and 1 row to the count.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sum becomes 6 + 2 = 8 L. The count becomes 4 + 1 = 5 rows. The mean is 8/5 L per row, or 1.60 L per row.</p><p>The arithmetic is correct for this list of rows. But B and C represent the same record; that day has been counted several times. The correction is to exclude C from the calculation table, with the link to B in the log, then return to 6/4 = 1.50 L per retained record.</p><p>Changing only the denominator does not correct the problem. Both the sum and the count must be recalculated using the same selection.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain 8 L and 5 rows before dividing.</li><li>You distinguish the mean over rows from the mean over distinct records.</li><li>You remove C&#x27;s contribution to both the sum and the count.</li></ul></details></article><article class="exercice" id="ex-reviser"><p class="repere">Exercise 3 · Revise and check</p>
+<h3>The source responds about the missing record</h3><p>In a fictional continuation of the same log, the source confirms that D corresponds to 3.0 L on its already known date. E remains unresolved. Prepare a new version of the table and log, calculate the new mean and check the row counts again. Explain what you expect from another pass over this retained table.</p>
+<label for="reponse-ex-reviser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reviser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reviser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reviser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reviser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>D leaves the hold category and joins the retained records; C remains a copy and E remains on hold.</p></details><details class="indice"><summary>Hint 2</summary><p>Add the confirmed volume to the sum and one row to the count. The original raw data and the reason for the revision must remain retrievable.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Do not silently fill in the original raw data. In the revised version, link D to the source confirmation and replace its former decision with a new dated decision in the version history. The log preserves the history of the missing value and the reason for releasing the row from hold.</p><p>The total becomes 6 + 3 = 9 L. The retained count is 4 + 1 = 5 records, A, B, D, F, G. The mean becomes 9/5 = 1.80 L per retained record. Reverse check: 1.80 × 5 = 9 L.</p><p>The hold count falls from 2 to 1 row. Raw row balance: 5 retained + 1 on hold + 1 copy = 7. E remains excluded from this mean; the mean over the whole period remains undetermined.</p><p>Running the revised retained table through the same rules again must preserve its 5 rows and volumes. This stability guarantees neither the truth of the confirmation nor the absence of other defects: it complements the checks on provenance and meaning.</p><p class="petit-titre">Check your reasoning</p><ul><li>You preserve the provenance and the reason for changing D.</li><li>You obtain 9 L, 5 records and 1.80 L per retained record.</li><li>You check the row counts again without reinstating E or C.</li><li>You explain the expected stability and its limitation.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="brut"><summary><span class="repere">Recall 1</span><span>What must be preserved to explain a cleaning process?</span></summary><p>The intact raw data and their labels, the version of the rules, the retained table and a log linking every decision to its source row and reason. A later correction preserves its origin and the decision history.</p></details><details class="carte" data-carte="manque"><summary><span class="repere">Recall 2</span><span>Why do D and F receive different decisions?</span></summary><p>D provides no volume; F gives 0 L. F is a valid 0 addition, while D is unknown. Replacing D with 0 would invent an observation and change the number of records used for the mean.</p></details><details class="carte" data-carte="identite"><summary><span class="repere">Recall 3</span><span>What evidence allows C to be excluded as a copy?</span></summary><p>The contract identifies the record by the pot–date pair, B and C have the same volume and the instructions confirm the copy. Keep B according to the fixed source order and log the link from C to B. Matching dates alone would not suffice for every table.</p></details><details class="carte" data-carte="bilan"><summary><span class="repere">Recall 4</span><span>What does the balance N = R + Q + K check, and what else must be verified?</span></summary><p>N counts the raw rows, R the retained rows, Q the rows on hold and K the excluded copies. The balance checks the division if the categories are mutually exclusive and exhaustive. Also check every label, the identities and the volumes, then calculate the sum and count using the same selection. A correct total does not prove that the decisions are sound.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does 1.50 L represent here, and what can this number not tell us?</span></summary><p>It is the mean volume per retained record for A, B, F and G. Without resolving D and E, we do not know the mean volume over all days in the period. An exact conversion or calculation does not create the missing information.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without the lesson: state the meaning of the columns and the identity of a record; distinguish conversion, copies and holds; justify what happens to each letter; check the row counts, then the sum and mean using the same selection; finish with the scope of the result and the record needed for a revision. An answer obtained after a hint remains an assisted answer; prepare another attempt without support on a different day.</p></div><div class="exports"><a class="bouton" download="c037-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMzctbTU6YnJ1dCIsCiAgICAgICJ1bml0ZSI6ICJjMDM3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidHJhY2FiaWxpdGUtbmV0dG95YWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgbXVzdCBiZSBwcmVzZXJ2ZWQgdG8gZXhwbGFpbiBhIGNsZWFuaW5nIHByb2Nlc3M/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGludGFjdCByYXcgZGF0YSBhbmQgdGhlaXIgbGFiZWxzLCB0aGUgdmVyc2lvbiBvZiB0aGUgcnVsZXMsIHRoZSByZXRhaW5lZCB0YWJsZSBhbmQgYSBsb2cgbGlua2luZyBldmVyeSBkZWNpc2lvbiB0byBpdHMgc291cmNlIHJvdyBhbmQgcmVhc29uLiBBIGxhdGVyIGNvcnJlY3Rpb24gcHJlc2VydmVzIGl0cyBvcmlnaW4gYW5kIHRoZSBkZWNpc2lvbiBoaXN0b3J5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDM3LW01Om1hbnF1ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDM3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWFucXVlLWV0LTAiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvIEQgYW5kIEYgcmVjZWl2ZSBkaWZmZXJlbnQgZGVjaXNpb25zPyIsCiAgICAgICJyZXBvbnNlIjogIkQgcHJvdmlkZXMgbm8gdm9sdW1lOyBGIGdpdmVzIDAgTC4gRiBpcyBhIHZhbGlkIDAgYWRkaXRpb24sIHdoaWxlIEQgaXMgdW5rbm93bi4gUmVwbGFjaW5nIEQgd2l0aCAwIHdvdWxkIGludmVudCBhbiBvYnNlcnZhdGlvbiBhbmQgY2hhbmdlIHRoZSBudW1iZXIgb2YgcmVjb3JkcyB1c2VkIGZvciB0aGUgbWVhbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAzNy1tNTppZGVudGl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDM3LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaWRlbnRpdGUtcmVsZXZlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZXZpZGVuY2UgYWxsb3dzIEMgdG8gYmUgZXhjbHVkZWQgYXMgYSBjb3B5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjb250cmFjdCBpZGVudGlmaWVzIHRoZSByZWNvcmQgYnkgdGhlIHBvdOKAk2RhdGUgcGFpciwgQiBhbmQgQyBoYXZlIHRoZSBzYW1lIHZvbHVtZSBhbmQgdGhlIGluc3RydWN0aW9ucyBjb25maXJtIHRoZSBjb3B5LiBLZWVwIEIgYWNjb3JkaW5nIHRvIHRoZSBmaXhlZCBzb3VyY2Ugb3JkZXIgYW5kIGxvZyB0aGUgbGluayBmcm9tIEMgdG8gQi4gTWF0Y2hpbmcgZGF0ZXMgYWxvbmUgd291bGQgbm90IHN1ZmZpY2UgZm9yIGV2ZXJ5IHRhYmxlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDM3LW01OmJpbGFuIiwKICAgICAgInVuaXRlIjogImMwMzctbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJiaWxhbi1uZXR0b3lhZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBiYWxhbmNlIE4gPSBSICsgUSArIEsgY2hlY2ssIGFuZCB3aGF0IGVsc2UgbXVzdCBiZSB2ZXJpZmllZD8iLAogICAgICAicmVwb25zZSI6ICJOIGNvdW50cyB0aGUgcmF3IHJvd3MsIFIgdGhlIHJldGFpbmVkIHJvd3MsIFEgdGhlIHJvd3Mgb24gaG9sZCBhbmQgSyB0aGUgZXhjbHVkZWQgY29waWVzLiBUaGUgYmFsYW5jZSBjaGVja3MgdGhlIGRpdmlzaW9uIGlmIHRoZSBjYXRlZ29yaWVzIGFyZSBtdXR1YWxseSBleGNsdXNpdmUgYW5kIGV4aGF1c3RpdmUuIEFsc28gY2hlY2sgZXZlcnkgbGFiZWwsIHRoZSBpZGVudGl0aWVzIGFuZCB0aGUgdm9sdW1lcywgdGhlbiBjYWxjdWxhdGUgdGhlIHN1bSBhbmQgY291bnQgdXNpbmcgdGhlIHNhbWUgc2VsZWN0aW9uLiBBIGNvcnJlY3QgdG90YWwgZG9lcyBub3QgcHJvdmUgdGhhdCB0aGUgZGVjaXNpb25zIGFyZSBzb3VuZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAzNy1tNTpwb3J0ZWUiLAogICAgICAidW5pdGUiOiAiYzAzNy1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvcnRlZS1tb3llbm5lIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyAxLjUwIEwgcmVwcmVzZW50IGhlcmUsIGFuZCB3aGF0IGNhbiB0aGlzIG51bWJlciBub3QgdGVsbCB1cz8iLAogICAgICAicmVwb25zZSI6ICJJdCBpcyB0aGUgbWVhbiB2b2x1bWUgcGVyIHJldGFpbmVkIHJlY29yZCBmb3IgQSwgQiwgRiBhbmQgRy4gV2l0aG91dCByZXNvbHZpbmcgRCBhbmQgRSwgd2UgZG8gbm90IGtub3cgdGhlIG1lYW4gdm9sdW1lIG92ZXIgYWxsIGRheXMgaW4gdGhlIHBlcmlvZC4gQW4gZXhhY3QgY29udmVyc2lvbiBvciBjYWxjdWxhdGlvbiBkb2VzIG5vdCBjcmVhdGUgdGhlIG1pc3NpbmcgaW5mb3JtYXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c037-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IGJlIHByZXNlcnZlZCB0byBleHBsYWluIGEgY2xlYW5pbmcgcHJvY2Vzcz8JVGhlIGludGFjdCByYXcgZGF0YSBhbmQgdGhlaXIgbGFiZWxzLCB0aGUgdmVyc2lvbiBvZiB0aGUgcnVsZXMsIHRoZSByZXRhaW5lZCB0YWJsZSBhbmQgYSBsb2cgbGlua2luZyBldmVyeSBkZWNpc2lvbiB0byBpdHMgc291cmNlIHJvdyBhbmQgcmVhc29uLiBBIGxhdGVyIGNvcnJlY3Rpb24gcHJlc2VydmVzIGl0cyBvcmlnaW4gYW5kIHRoZSBkZWNpc2lvbiBoaXN0b3J5Lgl0b2RhaSBjMDM3LW01IHRyYWNhYmlsaXRlLW5ldHRveWFnZQpXaHkgZG8gRCBhbmQgRiByZWNlaXZlIGRpZmZlcmVudCBkZWNpc2lvbnM/CUQgcHJvdmlkZXMgbm8gdm9sdW1lOyBGIGdpdmVzIDAgTC4gRiBpcyBhIHZhbGlkIDAgYWRkaXRpb24sIHdoaWxlIEQgaXMgdW5rbm93bi4gUmVwbGFjaW5nIEQgd2l0aCAwIHdvdWxkIGludmVudCBhbiBvYnNlcnZhdGlvbiBhbmQgY2hhbmdlIHRoZSBudW1iZXIgb2YgcmVjb3JkcyB1c2VkIGZvciB0aGUgbWVhbi4JdG9kYWkgYzAzNy1tNSBtYW5xdWUtZXQtMApXaGF0IGV2aWRlbmNlIGFsbG93cyBDIHRvIGJlIGV4Y2x1ZGVkIGFzIGEgY29weT8JVGhlIGNvbnRyYWN0IGlkZW50aWZpZXMgdGhlIHJlY29yZCBieSB0aGUgcG904oCTZGF0ZSBwYWlyLCBCIGFuZCBDIGhhdmUgdGhlIHNhbWUgdm9sdW1lIGFuZCB0aGUgaW5zdHJ1Y3Rpb25zIGNvbmZpcm0gdGhlIGNvcHkuIEtlZXAgQiBhY2NvcmRpbmcgdG8gdGhlIGZpeGVkIHNvdXJjZSBvcmRlciBhbmQgbG9nIHRoZSBsaW5rIGZyb20gQyB0byBCLiBNYXRjaGluZyBkYXRlcyBhbG9uZSB3b3VsZCBub3Qgc3VmZmljZSBmb3IgZXZlcnkgdGFibGUuCXRvZGFpIGMwMzctbTUgaWRlbnRpdGUtcmVsZXZlCldoYXQgZG9lcyB0aGUgYmFsYW5jZSBOID0gUiArIFEgKyBLIGNoZWNrLCBhbmQgd2hhdCBlbHNlIG11c3QgYmUgdmVyaWZpZWQ/CU4gY291bnRzIHRoZSByYXcgcm93cywgUiB0aGUgcmV0YWluZWQgcm93cywgUSB0aGUgcm93cyBvbiBob2xkIGFuZCBLIHRoZSBleGNsdWRlZCBjb3BpZXMuIFRoZSBiYWxhbmNlIGNoZWNrcyB0aGUgZGl2aXNpb24gaWYgdGhlIGNhdGVnb3JpZXMgYXJlIG11dHVhbGx5IGV4Y2x1c2l2ZSBhbmQgZXhoYXVzdGl2ZS4gQWxzbyBjaGVjayBldmVyeSBsYWJlbCwgdGhlIGlkZW50aXRpZXMgYW5kIHRoZSB2b2x1bWVzLCB0aGVuIGNhbGN1bGF0ZSB0aGUgc3VtIGFuZCBjb3VudCB1c2luZyB0aGUgc2FtZSBzZWxlY3Rpb24uIEEgY29ycmVjdCB0b3RhbCBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoZSBkZWNpc2lvbnMgYXJlIHNvdW5kLgl0b2RhaSBjMDM3LW01IGJpbGFuLW5ldHRveWFnZQpXaGF0IGRvZXMgMS41MCBMIHJlcHJlc2VudCBoZXJlLCBhbmQgd2hhdCBjYW4gdGhpcyBudW1iZXIgbm90IHRlbGwgdXM/CUl0IGlzIHRoZSBtZWFuIHZvbHVtZSBwZXIgcmV0YWluZWQgcmVjb3JkIGZvciBBLCBCLCBGIGFuZCBHLiBXaXRob3V0IHJlc29sdmluZyBEIGFuZCBFLCB3ZSBkbyBub3Qga25vdyB0aGUgbWVhbiB2b2x1bWUgb3ZlciBhbGwgZGF5cyBpbiB0aGUgcGVyaW9kLiBBbiBleGFjdCBjb252ZXJzaW9uIG9yIGNhbGN1bGF0aW9uIGRvZXMgbm90IGNyZWF0ZSB0aGUgbWlzc2luZyBpbmZvcm1hdGlvbi4JdG9kYWkgYzAzNy1tNSBwb3J0ZWUtbW95ZW5uZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">plbulm nnoxcd bryy</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">awkunx lrsbfh ueqz</span></span></h3><dl><div><dt>You understand</dt><dd>A conversion, a replacement and a selection decision have different meanings. In the watering log, converting G preserves a known volume; assigning a value to D requires additional justification. The reference below is supplementary code reading, with no numbered canonical milestone added to this chapter.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">swuihv jaemfg bhgbjq zqywti ezwybi iwfoiu iocchr gncfrw foazdv qnbexx hncbdz ujrjdl hyazqj cljzwz fimrfs dtvowi hpdabw csdkpg cqaajx jqhuky igdpxw uimjof gyrwfc uwntny</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 1 to prepare for: reconstruct the watering log decisions, calculate their row balance and explain the scope of the mean without support. Reading a page, understanding a correction or giving an assisted answer never establishes that a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hxdydz xobezt fpsgtr pjloxs qajfur vfipuv ojtyqs jdsejb imgygn jtyvhb weeuvy bzenxp pexgqm rshlpr mxhafm qasrcu gmsmjy gfuwgs wkiovh geakzt gpfenw mejcic lxsnhf nsztvm</span></span></dd></div><div><dt>Next step</dt><dd>Redo the last exercise without a hint on a different day and explain what information authorizes the revision. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hlpypi lkgpuw dlrrbn adzdzd opgehg ouisyu tylwgn cmepcx husmsc mkumfb qbzqru cqmzgr fuojfc zy</span></span> This separate step remains to be done; no actual use was tested here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c037-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c037-m4.html">Previous</a> · <a href="c038-m1.html">Next</a></nav>
+<footer><p>Course book · C037·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Evaluate a one-step forecast by replaying the history: at each origin, fit using only the past, forecast the next value, record the error, then aggregate these errors and compare them with a naive benchmark.">
+<title>C101·M5 · Rolling-origin forecasting — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pmjtll gjbpgv zlop</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C101·M5</p><h1>Rolling-origin forecasting</h1><p class="objectif"><span>Your goal</span>Evaluate a one-step forecast by replaying the history: at each origin, fit using only the past, forecast the next value, record the error, then aggregate these errors and compare them with a naive benchmark.</p><p class="prerequis"><strong>Before you start</strong><br>c090-m5 : stationarity · c061-m5 : identifiability and uncertainty · c101-m1 : AR and MA · c101-m2 : ARIMA · c101-m3 : identification · c101-m4 : residual diagnostics</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A greenhouse is monitored by a sensor that records the temperature difference from the setpoint every day at noon. We have six days of history: 14, 18, 15, 19, 16 and 18 °C. These values are fictional; they allow calculations by hand and describe no actual greenhouse. The practical question is: if a rule forecasts each morning the temperature difference for that day, how far will it be wrong on days it has not seen?</p><p>A tempting first answer is to fit the rule to all six days, then measure the error on those same six days. A residual compares a fitted model with data used to fit it, as in c101-m4. A forecast error is a different quantity: it is the difference between a value that was actually unknown when the forecast was made and the forecast value.</p><p>To assess a forecast, we go back in time. At day 3, we hide the following days, refit the rule using the first three days, forecast day 4, then reveal the actual value and record the error. Day 3 is called the origin. We then move the origin forward by one day and repeat: origin 4, then origin 5. This repetition is rolling-origin evaluation, and each repetition is a fold.</p><p>Two choices make the scene easy to calculate. The fitted rule is a constant level: the forecast is the mean of the known days. It contains neither an AR term nor an MA term; this is deliberately the simplest case, to keep attention on the protocol rather than on estimation. The naive benchmark forecasts the last observed value; it can be interpreted as a random walk with neither an AR term nor an MA term. An isolated score has no scale: it must be interpreted against a benchmark evaluated on the same targets.</p><p>In this example, the training window expands at each origin, and the horizon is one day: we forecast only the next value. A window of fixed length that moves with the origin is a variant we do not calculate here. These choices are assumptions of the example, rather than general rules.</p><div class="schemas"><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Three successive origins</title><desc>Three rows show origins 3, 4 and 5 across six days. Days already known are used for fitting, the next day is the target, and the remaining days are unknown at that time.</desc><text x="8" y="26" class="petite-etiquette">day</text><text x="93" y="26" text-anchor="middle" class="petite-etiquette">1</text><text x="139" y="26" text-anchor="middle" class="petite-etiquette">2</text><text x="185" y="26" text-anchor="middle" class="petite-etiquette">3</text><text x="231" y="26" text-anchor="middle" class="petite-etiquette">4</text><text x="277" y="26" text-anchor="middle" class="petite-etiquette">5</text><text x="323" y="26" text-anchor="middle" class="petite-etiquette">6</text><text x="8" y="64">t = 3</text><rect x="70" y="38" width="46" height="40" rx="5" class="cadre-neutre" /><text x="93" y="64" text-anchor="middle">14</text><rect x="116" y="38" width="46" height="40" rx="5" class="cadre-neutre" /><text x="139" y="64" text-anchor="middle">18</text><rect x="162" y="38" width="46" height="40" rx="5" class="cadre-neutre" /><text x="185" y="64" text-anchor="middle">15</text><rect x="208" y="38" width="46" height="40" rx="5" class="cadre-resultat" /><text x="231" y="64" text-anchor="middle">19</text><text x="231" y="93" text-anchor="middle" class="petite-etiquette">target</text><rect x="254" y="38" width="46" height="40" rx="5" class="cadre-neutre" /><text x="277" y="64" text-anchor="middle">?</text><rect x="300" y="38" width="46" height="40" rx="5" class="cadre-neutre" /><text x="323" y="64" text-anchor="middle">?</text><text x="8" y="130">t = 4</text><rect x="70" y="104" width="46" height="40" rx="5" class="cadre-neutre" /><text x="93" y="130" text-anchor="middle">14</text><rect x="116" y="104" width="46" height="40" rx="5" class="cadre-neutre" /><text x="139" y="130" text-anchor="middle">18</text><rect x="162" y="104" width="46" height="40" rx="5" class="cadre-neutre" /><text x="185" y="130" text-anchor="middle">15</text><rect x="208" y="104" width="46" height="40" rx="5" class="cadre-neutre" /><text x="231" y="130" text-anchor="middle">19</text><rect x="254" y="104" width="46" height="40" rx="5" class="cadre-resultat" /><text x="277" y="130" text-anchor="middle">16</text><text x="277" y="159" text-anchor="middle" class="petite-etiquette">target</text><rect x="300" y="104" width="46" height="40" rx="5" class="cadre-neutre" /><text x="323" y="130" text-anchor="middle">?</text><text x="8" y="196">t = 5</text><rect x="70" y="170" width="46" height="40" rx="5" class="cadre-neutre" /><text x="93" y="196" text-anchor="middle">14</text><rect x="116" y="170" width="46" height="40" rx="5" class="cadre-neutre" /><text x="139" y="196" text-anchor="middle">18</text><rect x="162" y="170" width="46" height="40" rx="5" class="cadre-neutre" /><text x="185" y="196" text-anchor="middle">15</text><rect x="208" y="170" width="46" height="40" rx="5" class="cadre-neutre" /><text x="231" y="196" text-anchor="middle">19</text><rect x="254" y="170" width="46" height="40" rx="5" class="cadre-neutre" /><text x="277" y="196" text-anchor="middle">16</text><rect x="300" y="170" width="46" height="40" rx="5" class="cadre-resultat" /><text x="323" y="196" text-anchor="middle">18</text><text x="323" y="225" text-anchor="middle" class="petite-etiquette">target</text><text x="8" y="252" class="petite-etiquette">Number in neutral box: training value.</text><text x="8" y="270" class="petite-etiquette">?: day still unknown.</text></svg><figcaption>Each row is an origin. Numbered boxes with a neutral border are used for fitting, the gold box is the target, and the question marks remain unknown at that time.</figcaption></figure><figure><svg viewBox="0 0 360 256" xmlns="http://www.w3.org/2000/svg" role="img"><title>Results of the three folds</title><desc>For each origin, the forecast, actual value and squared error; the mean of the three squared errors is 4.64 degrees squared. Fictional values.</desc><text x="14" y="24" text-anchor="start" class="petite-etiquette">origin</text><text x="125" y="24" text-anchor="middle" class="petite-etiquette">forecast</text><text x="205" y="24" text-anchor="middle" class="petite-etiquette">actual</text><text x="290" y="24" text-anchor="middle" class="petite-etiquette">error²</text><rect x="6" y="36" width="348" height="40" rx="5" class="cadre-neutre" /><text x="14" y="62">t = 3</text><text x="125" y="62" text-anchor="middle">15.67</text><text x="205" y="62" text-anchor="middle">19</text><text x="290" y="62" text-anchor="middle">11.11</text><rect x="6" y="84" width="348" height="40" rx="5" class="cadre-neutre" /><text x="14" y="110">t = 4</text><text x="125" y="110" text-anchor="middle">16.50</text><text x="205" y="110" text-anchor="middle">16</text><text x="290" y="110" text-anchor="middle">0.25</text><rect x="6" y="132" width="348" height="40" rx="5" class="cadre-neutre" /><text x="14" y="158">t = 5</text><text x="125" y="158" text-anchor="middle">16.40</text><text x="205" y="158" text-anchor="middle">18</text><text x="290" y="158" text-anchor="middle">2.56</text><rect x="6" y="180" width="348" height="40" rx="5" class="cadre-resultat" /><text x="14" y="206">mean</text><text x="290" y="206" text-anchor="middle">4.64</text><text x="8" y="244" class="petite-etiquette">°C; error² in °C²; fictional data</text></svg><figcaption>What the example calculates: a forecast, the actual value and the squared error at each origin, then the mean of the squared errors. Forecasts and values are in °C, squared errors in °C².</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>At each origin, fit using only values already known, forecast the next value, record its error, then move the origin forward; aggregate these errors and compare them with a benchmark on the same targets.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Six days of temperature differences, three origins</h3><p>The fictional differences from the setpoint, in °C, are 14, 18, 15, 19, 16 and 18. The horizon is one day. The rule is the mean of the known days; the naive benchmark is the last value. We measure three forecast errors, at origins 3, 4 and 5, then their mean squared error.</p><ol class="etapes"><li><h3>Define the origin, target and error</h3><p>y(t) is the temperature difference recorded on day t, in °C. Origin t is the last known day: fitting receives only y(1) through y(t), and the target is y(t + 1). The rule forecasts the mean of the known days.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>y</mi><mo>^</mo></mover><mrow><mi>t</mi><mo>+</mo><mn>1</mn><mo>|</mo><mi>t</mi></mrow></msub><mo>=</mo><mfrac><mn>1</mn><mi>t</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>t</mi></msubsup><msub><mi>y</mi><mi>k</mi></msub></mrow></math></div><p>ŷ(t + 1 | t) reads: the forecast for day t + 1 made at origin t. The error is y(t + 1) − ŷ(t + 1 | t), in °C. To prevent positive and negative errors from cancelling, we square each error, giving °C², then take the mean: this is the mean squared error, abbreviated MSE (EQM in the formula).</p><p>Assumptions: no future value enters the training data; the level is assumed to have no marked trend over these days, an assumption that c090-m5 helps us question; the horizon is one day. With six values, the result illustrates a protocol and measures no actual performance.</p></li><li><h3>First fold: origin three</h3><p>The first three days give the sum 14 + 18 + 15 = 47 °C, hence a forecast of 47 / 3 ≈ 15.67 °C for day 4. This day is hidden during the calculation. We then reveal it: 19 °C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mfrac><mrow><mn>14</mn><mo>+</mo><mn>18</mn><mo>+</mo><mn>15</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>47</mn><mn>3</mn></mfrac><mo>≈</mo><mn>15.67</mn><mtext> °C</mtext></mrow></math></div><p>The error is 19 − 15.67 ≈ 3.33 °C; its square is approximately 11.11 °C². Division by 3 counts the known days, rather than the folds.</p></li><li><h3>Move the origin forward</h3><p>At origin 4, day 4 becomes known: the sum is 66 and the forecast is 16.50 °C. The target is 16 °C, the error -0.50 °C and its square 0.25 °C². At origin 5, the sum is 82 and the forecast 16.40 °C; the target is 18 °C, the error 1.60 °C and its square 2.56 °C².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mn>66</mn><mn>4</mn></mfrac><mo>=</mo><mn>16.50</mn><mtext> °C ; </mtext><mfrac><mn>82</mn><mn>5</mn></mfrac><mo>=</mo><mn>16.40</mn><mtext> °C</mtext></mrow></math></div><p>A day enters the training data only after it has served as a target. This ordering rule defines the entire protocol.</p></li><li><h3>Aggregate the errors</h3><p>The sum of the three squared errors is 13.92 °C². Dividing by the number of folds, 3, gives an MSE of approximately 4.64 °C².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>EQM</mtext><mo>=</mo><mfrac><mrow><mn>11.11</mn><mo>+</mo><mn>0.25</mn><mo>+</mo><mn>2.56</mn></mrow><mn>3</mn></mfrac><mo>≈</mo><mn>4.64</mn><mtext> °C²</mtext></mrow></math></div><p>This mean hides a large difference between folds: 11.11 °C² on the first, 0.25 °C² on the second. A single fold would have given a misleading picture.</p></li><li><h3>Compare with the naive benchmark</h3><p>The benchmark forecasts the previous day&#x27;s value. Its errors on the same targets are 4, -3 and 2 °C, giving squared errors of 16, 9 and 4 °C², with a mean of 9.67 °C². The formula gives the ratio, labelled rapport.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mtext>rapport</mtext><mo>=</mo><mfrac><mn>4.64</mn><mn>9.67</mn></mfrac><mo>≈</mo><mn>0.48</mn></mrow></math></div><p>On these three targets, the rule&#x27;s MSE is approximately half the benchmark&#x27;s MSE. This describes three fictional days; it says nothing about a fourth day or an actual greenhouse.</p></li><li><h3>Measure the leakage</h3><p>Now fit the mean to all six days: the sum is 100 and the mean approximately 16.67 °C. For day 6, the error becomes 18 − 16.67 ≈ 1.33 °C.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mrow><mo>(</mo><mn>18</mn><mo>−</mo><mn>16.67</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>≈</mo><mn>1.78</mn><mtext> °C² contre </mtext><mn>2.56</mn><mtext> °C²</mtext></mrow></math></div><p>The difference of 0.78 °C² arises because the mean already includes the target: the evaluation becomes overly favourable. This is information leakage from the future into fitting.</p></li><li><h3>Check the calculation</h3><p>Units: errors are in °C, their squares in °C²; never add an error to a squared error. Recurrence: the new mean equals the old mean plus the error divided by the number of days now known.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>15.67</mn><mo>+</mo><mfrac><mn>3.33</mn><mn>4</mn></mfrac><mo>=</mo><mn>16.50</mn><mtext> °C</mtext></mrow></math></div><p>Causality: if we changed the last day of the series, the three forecasts would stay the same; only the last error and the mean that includes future information would change. If a forecast changed, the protocol would be allowing information to leak from the future.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the forecast at origin three not use the following day&#x27;s value? Then explain what changes in the figure for the last day when fitting uses all six days.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I can fit the model to the whole series, then measure the error on the same days.”</h3><p>The model has then already seen the target. Here, fitting to all six days gives 1.78 °C² for the last day, compared with 2.56 °C² when that day is actually hidden. Refit at each origin using only past values.</p><a href="#exemple">Review the leakage measurement</a></li><li><h3>“A single good forecast is enough to judge the method.”</h3><p>Squared errors vary greatly from one fold to another: 11.11 °C² compared with 0.25 °C² in the example. Move the origin forward, keep all folds and report their mean together with what it hides.</p><a href="#exercices">Repeat the comparison on one fold</a></li><li><h3>“I can shuffle the days, just as I might shuffle cards to make a test set.”</h3><p>Shuffling puts future days into the training data and destroys the order we want to test. The origin separates the past from the future: preserve chronological order and do not shuffle anything before the origin.</p><a href="#intuition">Reread the idea of the origin</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-un-repli"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>Compare on a single fold</h3><p>At origin 4, the rule forecasts 16.50 °C for day 5, whose value is 16 °C. The naive benchmark forecasts the value of day 4. Calculate both errors and their squares, then say which method wins on this fold and what can be concluded.</p>
+<label for="reponse-ex-un-repli">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-un-repli" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-un-repli" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-un-repli" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-un-repli" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The target is the same for both methods; only the forecasts differ.</p></details><details class="indice"><summary>Hint 2</summary><p>The benchmark forecasts 19 °C.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Rule: 16 − 16.50 = -0.50 °C, squared error 0.25 °C². Benchmark: 16 − 19 = -3 °C, squared error 9 °C². The rule wins on this fold: 0.25 °C² compared with 9 °C².</p><p>The conclusion remains limited to this fold. The difference from the first fold, where the rule&#x27;s squared error is 11.11 °C², shows that the size of the error changes greatly from one origin to another.</p><p class="petit-titre">Check your reasoning</p><ul><li>Both errors start from the same target.</li><li>Squared errors are in °C².</li><li>The conclusion is limited to one fold.</li></ul></details></article><article class="exercice" id="ex-fuite"><p class="repere">Exercise 2 · Repairing a protocol</p>
+<h3>Find the leakage in a colleague&#x27;s work</h3><p>A colleague fits the mean to all six days, then reports a squared error of 1.78 °C² for the last day. Reconstruct the calculation, compare it with the value obtained when this day is hidden, then correct the protocol.</p>
+<label for="reponse-ex-fuite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fuite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fuite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fuite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fuite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Which mean did the colleague use, and which values does it contain?</p></details><details class="indice"><summary>Hint 2</summary><p>Repeat the calculation using only the first five days.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The colleague used 100 / 6 ≈ 16.67 °C, a mean that already includes the target 18 °C. The error is 1.33 °C and its square 1.78 °C².</p><p>With the first 5 days, the forecast is 16.40 °C, the error 1.60 °C and its square 2.56 °C². The overly favourable reduction is 0.78 °C². Corrected protocol: refit at each origin using the preceding days, then report only the error for the hidden day.</p><p class="petit-titre">Check your reasoning</p><ul><li>The faulty mean is identified together with the values it includes.</li><li>The honest evaluation uses only the preceding days.</li><li>The correction describes the sequence: fit, forecast, reveal.</li></ul></details></article><article class="exercice" id="ex-origine-fixe"><p class="repere">Exercise 3 · Transfer</p>
+<h3>Fixed origin versus rolling origin</h3><p>A second protocol fits only once at origin 3, giving the forecast 15.67 °C, and keeps this value for days 5 and 6. Calculate its MSE on these two targets, compare it with the rolling evaluation on the same targets, then say what this comparison does not allow us to conclude.</p>
+<label for="reponse-ex-origine-fixe">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-origine-fixe" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-origine-fixe" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-origine-fixe" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-origine-fixe" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The targets are 16 and 18 °C; the forecast stays the same.</p></details><details class="indice"><summary>Hint 2</summary><p>For the rolling evaluation, use the last two squared errors from the example.</p></details><details class="indice"><summary>Hint 3</summary><p>Do both protocols forecast the same distance ahead of their origin?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Fixed origin: the errors are 1/3 and 7/3 °C, their squares 1/9 and 49/9 °C², giving an MSE of 25/9 °C², or approximately 2.78 °C².</p><p>Rolling origin: (0.25 + 2.56) / 2 ≈ 1.405 °C². Its forecasts are closer to the values on these two targets, but the fixed origin forecasts day 6 further ahead. The comparison therefore does not separate the effect of the update from that of the forecast distance, and it rests on only two targets.</p><p class="petit-titre">Check your reasoning</p><ul><li>Both MSEs use the same two targets.</li><li>Squared errors are averaged over the number of targets.</li><li>The limitation of differing horizons is stated.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="origine"><summary><span class="repere">Recall 1</span><span>What is the origin of a forecast?</span></summary><p>The last known time when making the forecast: fitting uses only values up to that time.</p></details><details class="carte" data-carte="glissante"><summary><span class="repere">Recall 2</span><span>What do we do when we move the origin forward?</span></summary><p>Repeat at the next origin: refit using the past, forecast the next value, record the error, then aggregate the errors.</p></details><details class="carte" data-carte="fuite"><summary><span class="repere">Recall 3</span><span>Why does fitting to the whole series make the evaluation overly favourable?</span></summary><p>The model has already seen the target: its error appears smaller than that of a genuine forecast.</p></details><details class="carte" data-carte="repere"><summary><span class="repere">Recall 4</span><span>Why compare with a naive benchmark on the same targets?</span></summary><p>A score alone has no scale; the last value provides a simple reference, evaluated with the same protocol.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>What does an MSE calculated over three folds fail to prove?</span></summary><p>It proves neither stability nor performance in actual use: three targets and a fictional model do not cover other days.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Choose the horizon and the rule; fix an origin; fit using only the past; forecast the target; record the error in its unit; move the origin forward; aggregate the squared errors; compare with a benchmark on the same targets; preserve chronological order; write down the limitations.</p></div><div class="exports"><a class="bouton" download="c101-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDEtbTU6b3JpZ2luZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAxLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAib3JpZ2luZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBvcmlnaW4gb2YgYSBmb3JlY2FzdD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbGFzdCBrbm93biB0aW1lIHdoZW4gbWFraW5nIHRoZSBmb3JlY2FzdDogZml0dGluZyB1c2VzIG9ubHkgdmFsdWVzIHVwIHRvIHRoYXQgdGltZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMS1tNTpnbGlzc2FudGUiLAogICAgICAidW5pdGUiOiAiYzEwMS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm9yaWdpbmUgZ2xpc3NhbnRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gd2UgZG8gd2hlbiB3ZSBtb3ZlIHRoZSBvcmlnaW4gZm9yd2FyZD8iLAogICAgICAicmVwb25zZSI6ICJSZXBlYXQgYXQgdGhlIG5leHQgb3JpZ2luOiByZWZpdCB1c2luZyB0aGUgcGFzdCwgZm9yZWNhc3QgdGhlIG5leHQgdmFsdWUsIHJlY29yZCB0aGUgZXJyb3IsIHRoZW4gYWdncmVnYXRlIHRoZSBlcnJvcnMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDEtbTU6ZnVpdGUiLAogICAgICAidW5pdGUiOiAiYzEwMS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZ1aXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGZpdHRpbmcgdG8gdGhlIHdob2xlIHNlcmllcyBtYWtlIHRoZSBldmFsdWF0aW9uIG92ZXJseSBmYXZvdXJhYmxlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBtb2RlbCBoYXMgYWxyZWFkeSBzZWVuIHRoZSB0YXJnZXQ6IGl0cyBlcnJvciBhcHBlYXJzIHNtYWxsZXIgdGhhbiB0aGF0IG9mIGEgZ2VudWluZSBmb3JlY2FzdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMS1tNTpyZXBlcmUiLAogICAgICAidW5pdGUiOiAiYzEwMS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlcMOocmUgbmHDr2YiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNvbXBhcmUgd2l0aCBhIG5haXZlIGJlbmNobWFyayBvbiB0aGUgc2FtZSB0YXJnZXRzPyIsCiAgICAgICJyZXBvbnNlIjogIkEgc2NvcmUgYWxvbmUgaGFzIG5vIHNjYWxlOyB0aGUgbGFzdCB2YWx1ZSBwcm92aWRlcyBhIHNpbXBsZSByZWZlcmVuY2UsIGV2YWx1YXRlZCB3aXRoIHRoZSBzYW1lIHByb3RvY29sLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAxLW01OmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAxLW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhbiBNU0UgY2FsY3VsYXRlZCBvdmVyIHRocmVlIGZvbGRzIGZhaWwgdG8gcHJvdmU/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgcHJvdmVzIG5laXRoZXIgc3RhYmlsaXR5IG5vciBwZXJmb3JtYW5jZSBpbiBhY3R1YWwgdXNlOiB0aHJlZSB0YXJnZXRzIGFuZCBhIGZpY3Rpb25hbCBtb2RlbCBkbyBub3QgY292ZXIgb3RoZXIgZGF5cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c101-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgb3JpZ2luIG9mIGEgZm9yZWNhc3Q/CVRoZSBsYXN0IGtub3duIHRpbWUgd2hlbiBtYWtpbmcgdGhlIGZvcmVjYXN0OiBmaXR0aW5nIHVzZXMgb25seSB2YWx1ZXMgdXAgdG8gdGhhdCB0aW1lLgl0b2RhaSBjMTAxLW01IG9yaWdpbmUKV2hhdCBkbyB3ZSBkbyB3aGVuIHdlIG1vdmUgdGhlIG9yaWdpbiBmb3J3YXJkPwlSZXBlYXQgYXQgdGhlIG5leHQgb3JpZ2luOiByZWZpdCB1c2luZyB0aGUgcGFzdCwgZm9yZWNhc3QgdGhlIG5leHQgdmFsdWUsIHJlY29yZCB0aGUgZXJyb3IsIHRoZW4gYWdncmVnYXRlIHRoZSBlcnJvcnMuCXRvZGFpIGMxMDEtbTUgb3JpZ2luZSBnbGlzc2FudGUKV2h5IGRvZXMgZml0dGluZyB0byB0aGUgd2hvbGUgc2VyaWVzIG1ha2UgdGhlIGV2YWx1YXRpb24gb3Zlcmx5IGZhdm91cmFibGU/CVRoZSBtb2RlbCBoYXMgYWxyZWFkeSBzZWVuIHRoZSB0YXJnZXQ6IGl0cyBlcnJvciBhcHBlYXJzIHNtYWxsZXIgdGhhbiB0aGF0IG9mIGEgZ2VudWluZSBmb3JlY2FzdC4JdG9kYWkgYzEwMS1tNSBmdWl0ZQpXaHkgY29tcGFyZSB3aXRoIGEgbmFpdmUgYmVuY2htYXJrIG9uIHRoZSBzYW1lIHRhcmdldHM/CUEgc2NvcmUgYWxvbmUgaGFzIG5vIHNjYWxlOyB0aGUgbGFzdCB2YWx1ZSBwcm92aWRlcyBhIHNpbXBsZSByZWZlcmVuY2UsIGV2YWx1YXRlZCB3aXRoIHRoZSBzYW1lIHByb3RvY29sLgl0b2RhaSBjMTAxLW01IHJlcMOocmUgbmHDr2YKV2hhdCBkb2VzIGFuIE1TRSBjYWxjdWxhdGVkIG92ZXIgdGhyZWUgZm9sZHMgZmFpbCB0byBwcm92ZT8JSXQgcHJvdmVzIG5laXRoZXIgc3RhYmlsaXR5IG5vciBwZXJmb3JtYW5jZSBpbiBhY3R1YWwgdXNlOiB0aHJlZSB0YXJnZXRzIGFuZCBhIGZpY3Rpb25hbCBtb2RlbCBkbyBub3QgY292ZXIgb3RoZXIgZGF5cy4JdG9kYWkgYzEwMS1tNSBsaW1pdGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pmjtll gjbpgv zlop</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · recognize the past-then-target protocol in code</h3><dl><div><dt>What you understand</dt><dd>You distinguish assessing a fit from assessing a forecast: at each origin, fitting stops before the target, the error is recorded, then the origin moves forward. You can explain what leakage changes in a figure and why a benchmark provides a scale.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">unhxgt mmymdn clbuyn kazjkg mgjkju kojbvg xsvmuf bwzjra sqbbgq pmzgav widruy nivqvb xavlwf hygdho oomzjp dzknsh vfjbfe txzmhc fasbmc pgcaqg bcxzpr fhifbf lubxfb zzbofs jxppmt uhanwt jiiucp dfpoaz fyqswn vjvmna qhiyxg qrhgto xtpxxl nqcbur ybgfop rhatxn mlniff kv</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: redo the three folds and the leakage calculation without support, explain why a forecast for a day cannot include that day, and say what a benchmark adds. Reading the lesson and the code does not confer any attained level; an assisted answer does not count as independent recall.</dd></div><div><dt>Evidence and limitations</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uejfrb wlgudm wakgqq zoeggq rzbevc tdmnez ytpyvp igvfwe gpxsws yylmjk gdadgx gchqym cxxhnc vvssdn mxaaqn jwzzgs hnbwqk enmbzw imahxg xataxq iiofbt nqizuo nqqdim vsijys lcfwps wqfpvg deocpl tiumut dvvywd ueufug aaqubd bgkxqq lryhfp nmamtj ohthmw rnnyyt ezioci zh</span></span></dd></div><div><dt>To continue</dt><dd>Redo the three folds and the leakage calculation without support, then add a second benchmark of your choice on the same targets. Before any actual use, the connections, chronological order and absence of leakage will need to be checked separately on authorized data, with criteria written in advance; no such checks are claimed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c101-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c101-m4.html">Previous</a> · <a href="c102-m1.html">Next</a></nav>
+<footer><p>Course book · C101·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

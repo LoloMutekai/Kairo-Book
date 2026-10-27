@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Solve the Ornstein-Uhlenbeck equation, derive the mean and variance at time t, then propagate them hour by hour using the factor r and the limiting variance.">
+<title>C172·M3 · Ornstein-Uhlenbeck — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pikwhv yxrvyc dojv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C172·M3</p><h1>Ornstein-Uhlenbeck</h1><p class="objectif"><span>Your goal</span>Solve the Ornstein-Uhlenbeck equation, derive the mean and variance at time t, then propagate them hour by hour using the factor r and the limiting variance.</p><p class="prerequis"><strong>Before you start</strong><br>c171-m5 : multidimensional case · c052-m5 : convergence protocol · c172-m1 : existence and uniqueness · c172-m2 : GBM</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A container of water is placed in a room kept at 20 °C. It has just come out of a bath at 28 °C. Its temperature approaches that of the room, faster when the gap is larger, but irregular draughts give it random shocks. The entire scene is fictional: the numbers are used for calculation and do not describe any real readings.</p><p>Two effects act against each other. Mean reversion is deterministic: it reduces the gap from room temperature in proportion to that gap. The shock is random: it adds uncertainty, with the same magnitude whatever the temperature. Without shocks, the temperature would follow an exponential decay; without mean reversion, it would be Brownian motion, whose spread grows without bound. The Ornstein-Uhlenbeck process combines these effects.</p><p>We want to find the mean temperature of the water and its spread after one hour, then two. Mean reversion eventually balances the shocks, keeping the spread bounded: this is the difference from the GBM in the previous unit.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Mean and spread hour by hour</title><desc>The mean temperature moves from 28 to 24.8 then 22.88 degrees Celsius, towards room temperature at 20 degrees. The variance moves from 0 to 4 then 5.44 degrees squared, below the limit 6.25.</desc><line x1="30" y1="170" x2="340" y2="170" class="trait" /><text x="338" y="160" text-anchor="end" class="petite-etiquette">room: 20 °C</text><rect x="144" y="68" width="12" height="60" rx="3" class="cadre-prediction" /><rect x="244" y="92" width="12" height="70" rx="3" class="cadre-prediction" /><polyline points="50,50 150,98 250,127" class="chemin-correction" /><circle cx="50" cy="50" r="6" class="resultat" /><circle cx="150" cy="98" r="6" class="resultat" /><circle cx="250" cy="127" r="6" class="resultat" /><text x="50" y="34" text-anchor="middle">28 °C</text><text x="168" y="96">24.8 °C</text><text x="268" y="125">22.88 °C</text><text x="50" y="196" text-anchor="middle">0 h</text><text x="150" y="196" text-anchor="middle">1 h</text><text x="250" y="196" text-anchor="middle">2 h</text><text x="50" y="218" text-anchor="middle" class="petite-etiquette">V = 0</text><text x="150" y="218" text-anchor="middle" class="petite-etiquette">V = 4</text><text x="250" y="218" text-anchor="middle" class="petite-etiquette">V = 5.44</text><text x="180" y="242" text-anchor="middle" class="petite-etiquette">point: mean · bar: one standard deviation</text></svg><figcaption>The point shows the mean value, and the bar extends one standard deviation on either side. Positions are drawn to the scale of the fictional scene: the bar for the second hour corresponds to the square root of 5.44 °C².</figcaption></figure><figure><svg viewBox="0 0 360 285" xmlns="http://www.w3.org/2000/svg" role="img"><title>One hourly step in two actions</title><desc>Mean reversion multiplies the gap from room temperature by 0.6, then a shock with variance 4 degrees squared is added.</desc><rect x="25" y="10" width="310" height="50" rx="7" class="cadre-neutre" /><text x="180" y="42" text-anchor="middle">Temperature at hour start</text><line x1="180" y1="60" x2="180" y2="100" class="trait" /><text x="194" y="86" class="petite-etiquette">room gap × 0.6</text><rect x="25" y="100" width="310" height="56" rx="7" class="cadre-prediction" /><text x="180" y="124" text-anchor="middle">Expected value:</text><text x="180" y="146" text-anchor="middle">μ + r (X − μ)</text><line x1="180" y1="156" x2="180" y2="196" class="trait" /><text x="194" y="182" class="petite-etiquette">+ shock 4 °C²</text><rect x="25" y="196" width="310" height="50" rx="7" class="cadre-resultat" /><text x="180" y="227" text-anchor="middle">Temperature one hour later</text><text x="180" y="272" text-anchor="middle" class="petite-etiquette">variance: r² × previous + 4 °C²</text></svg><figcaption>One hourly step: mean reversion contracts the deviation, and the shock adds variance. The values in the scene are fictional.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Each hour, the deviation from the mean is multiplied by r; the variance is multiplied by r², then the shock variance, v∞(1 − r²), is added.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A container of water returning towards room temperature</h3><p>The water starts at 28 °C, known exactly, in a room at 20 °C. Over one hour, mean reversion multiplies the gap from room temperature by r = 0.6, and the limiting variance is 6.25 °C². The values are fictional. Let us calculate the temperature distribution after one hour, then two.</p><ol class="etapes"><li><h3>Set up the model and name each symbol</h3><p>The fictional container follows a linear stochastic differential equation: at each instant, a deterministic restoring effect pushes the temperature towards room temperature, and a Brownian shock is added.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><mi>θ</mi><mo>(</mo><mi>μ</mi><mo>−</mo><msub><mi>X</mi><mi>t</mi></msub><mo>)</mo><mi>d</mi><mi>t</mi><mo>+</mo><mi>σ</mi><mi>d</mi><msub><mi>W</mi><mi>t</mi></msub></mrow></math></div><p>t is time, in hours. X<sub>t</sub> is the water temperature, in °C. μ is the equilibrium temperature, that of the room, in °C. θ is the mean reversion rate, strictly positive, in inverse hours: the larger θ is, the faster the gap from μ shrinks. σ is the shock amplitude, strictly positive, in °C per square root of an hour. W<sub>t</sub> is standard Brownian motion: its increments are Gaussian, with 0 mean and variance equal to the duration, in hours; it is independent of the initial temperature X<sub>0</sub>.</p><p>Assumptions: μ, θ and σ are constant; the shock is additive, with magnitude σ whatever the temperature, whereas in the GBM of the previous unit it was proportional to the state; the coefficients are affine, hence Lipschitz, which places the model within the framework of the unit on existence and uniqueness.</p></li><li><h3>Solve by multiplying by e to the power θt</h3><p>Without shocks, the deviation X − μ would decay exponentially. To handle mean reversion and shocks together, apply the Ito formula to the product of e to the power θt and X<sub>t</sub>, where e to the power θt is deterministic and differentiable: the formula then adds no quadratic variation term, and only the product rule is needed. Substituting the equation for dX<sub>t</sub> makes the terms in X<sub>t</sub> cancel.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><mo>(</mo><msup><mi>e</mi><mrow><mi>θ</mi><mi>t</mi></mrow></msup><msub><mi>X</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo><mi>θ</mi><mi>μ</mi><msup><mi>e</mi><mrow><mi>θ</mi><mi>t</mi></mrow></msup><mi>d</mi><mi>t</mi><mo>+</mo><mi>σ</mi><msup><mi>e</mi><mrow><mi>θ</mi><mi>t</mi></mrow></msup><mi>d</mi><msub><mi>W</mi><mi>t</mi></msub></mrow></math></div><p>Integrating from time 0 to t, then dividing by e to the power θt, gives the explicit solution:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><mi>μ</mi><mo>+</mo><mo>(</mo><msub><mi>X</mi><mn>0</mn></msub><mo>−</mo><mi>μ</mi><mo>)</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>θ</mi><mi>t</mi></mrow></msup><mo>+</mo><mi>σ</mi><msubsup><mo>∫</mo><mn>0</mn><mi>t</mi></msubsup><msup><mi>e</mi><mrow><mo>−</mo><mi>θ</mi><mo>(</mo><mi>t</mi><mo>−</mo><mi>s</mi><mo>)</mo></mrow></msup><mi>d</mi><msub><mi>W</mi><mi>s</mi></msub></mrow></math></div><p>s is an integration variable, in hours. The last term is an Ito integral with a deterministic integrand: the shock at time s is damped by the factor e to the power −θ(t − s) up to time t.</p></li><li><h3>Read off the mean, variance and distribution</h3><p>An Ito integral with an adapted, square integrable integrand has 0 mean. The mean of X<sub>t</sub> therefore reduces to the deterministic term:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><msub><mi>X</mi><mi>t</mi></msub><mo>]</mo><mo>=</mo><mi>μ</mi><mo>+</mo><mo>(</mo><msub><mi>X</mi><mn>0</mn></msub><mo>−</mo><mi>μ</mi><mo>)</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>θ</mi><mi>t</mi></mrow></msup></mrow></math></div><p>The Ito isometry gives the variance of the random term: it is the integral of the squared integrand. Evaluating the integral in s gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><msup><mi>σ</mi><mn>2</mn></msup><msubsup><mo>∫</mo><mn>0</mn><mi>t</mi></msubsup><msup><mi>e</mi><mrow><mo>−</mo><mn>2</mn><mi>θ</mi><mo>(</mo><mi>t</mi><mo>−</mo><mi>s</mi><mo>)</mo></mrow></msup><mi>d</mi><mi>s</mi><mo>=</mo><mfrac><msup><mi>σ</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>θ</mi></mrow></mfrac><mo>(</mo><mn>1</mn><mo>−</mo><msup><mi>e</mi><mrow><mo>−</mo><mn>2</mn><mi>θ</mi><mi>t</mi></mrow></msup><mo>)</mo></mrow></math></div><p>We accept here that the integral of a deterministic function against W is Gaussian: X<sub>t</sub> then follows a normal distribution with this mean and variance. As t increases, the mean tends to μ and the variance tends to a limit, in °C²:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>v</mi><mi>∞</mi></msub><mo>=</mo><mfrac><msup><mi>σ</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>θ</mi></mrow></mfrac></mrow></math></div></li><li><h3>Move to an hourly step</h3><p>The calculations proceed hour by hour. Apply the same solution between times nΔt and (n + 1)Δt, with Δt = 1 h. Set r = e to the power −θΔt, a dimensionless factor strictly between 0 and 1. X<sub>n</sub> is the temperature at time nΔt.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>μ</mi><mo>+</mo><mi>r</mi><mo>(</mo><msub><mi>X</mi><mi>n</mi></msub><mo>−</mo><mi>μ</mi><mo>)</mo><mo>+</mo><msub><mi>ε</mi><mi>n</mi></msub></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>ε</mi><mi>n</mi></msub><mo>∼</mo><mi>N</mi><mo>(</mo><mn>0</mn><mo>,</mo><msub><mi>v</mi><mi>∞</mi></msub><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msup><mi>r</mi><mn>2</mn></msup><mo>)</mo></mrow><mo>)</mo><mo>,</mo><mtext>  avec  </mtext><mi>r</mi><mo>=</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>θ</mi><mi>Δ</mi><mi>t</mi></mrow></msup></mrow></math></div><p>ε<sub>n</sub> is the accumulated shock over the hour: its mean is 0, its variance is v∞(1 − r²) in °C² from the previous variance formula evaluated at duration Δt, and it is independent of X<sub>n</sub> because it depends only on future increments of W. Let V<sub>n</sub> denote the variance of X<sub>n</sub>. Independence removes the cross term:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msup><mi>r</mi><mn>2</mn></msup><msub><mi>V</mi><mi>n</mi></msub><mo>+</mo><msub><mi>v</mi><mi>∞</mi></msub><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msup><mi>r</mi><mn>2</mn></msup><mo>)</mo></mrow></mrow></math></div><p>The factor r acts on the deviation, so r² acts on the variance: a variance is a mean of squared deviations. We specify r and v∞ rather than θ and σ; they give θ = −ln r / Δt and σ² = 2 θ v∞, without needing their decimal values here. Fictional data: μ = 20 °C; X<sub>0</sub> = 28 °C known exactly, so V<sub>0</sub> = 0; r = 3/5 = 0.6; limiting standard deviation 2.5 °C, giving v∞ = 6.25 °C².</p></li><li><h3>Calculate the first hour</h3><p>Initial deviation: 28 − 20 = 8 °C. Mean reversion multiplies it by r. The mean is μ plus the remaining deviation:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mn>1</mn></msub><mo>=</mo><mn>20</mn><mo>+</mo><mn>0.6</mn><mo>×</mo><mn>8</mn><mo>=</mo><mn>20</mn><mo>+</mo><mn>4.8</mn><mo>=</mo><mn>24.8</mn><mtext> °C</mtext></mrow></math></div><p>The shock over one hour has variance v∞(1 − r²) = 6.25 × 0.64 = 4 °C². Since the initial temperature is known exactly, the variance after one hour comes from this shock alone:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mn>1</mn></msub><mo>=</mo><msup><mn>0.6</mn><mn>2</mn></msup><mo>×</mo><mn>0</mn><mo>+</mo><mn>6.25</mn><mo>×</mo><mn>0.64</mn><mo>=</mo><mn>0</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>4</mn><mtext> °C²</mtext></mrow></math></div><p>After one hour, the model therefore gives a normal distribution with mean 24.8 °C and variance 4 °C², or a standard deviation of 2 °C.</p></li><li><h3>Calculate the second hour</h3><p>Start again from the mean value and variance just obtained. The new deviation from μ is 0.6 × 4.8 = 2.88 °C:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mn>2</mn></msub><mo>=</mo><mn>20</mn><mo>+</mo><mn>0.6</mn><mo>×</mo><mn>4.8</mn><mo>=</mo><mn>20</mn><mo>+</mo><mn>2.88</mn><mo>=</mo><mn>22.88</mn><mtext> °C</mtext></mrow></math></div><p>The existing variance is contracted by r² = 0.36, then the new shock is added:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mn>2</mn></msub><mo>=</mo><mn>0.36</mn><mo>×</mo><mn>4</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>1.44</mn><mo>+</mo><mn>4</mn><mo>=</mo><mn>5.44</mn><mtext> °C²</mtext></mrow></math></div></li><li><h3>Check using the direct formula and the limit</h3><p>Variance check: the closed form over two hours replaces two steps with a single step, using r to the power four.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mn>2</mn></msub><mo>=</mo><mn>6.25</mn><mo>×</mo><mo>(</mo><mn>1</mn><mo>−</mo><mn>0.1296</mn><mo>)</mo><mo>=</mo><mn>6.25</mn><mo>×</mo><mn>0.8704</mn><mo>=</mo><mn>5.44</mn><mtext> °C²</mtext></mrow></math></div><p>Mean check: the direct deviation is r² × 8 = 0.36 × 8 = 2.88 °C, as with the recurrence. Limit check: the variance stays below v∞, and its distance from that limit is given by the closed form:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>6.25</mn><mo>−</mo><mn>5.44</mn><mo>=</mo><mn>0.81</mn><mo>=</mo><mn>6.25</mn><mo>×</mo><mn>0.1296</mn><mtext> °C²</mtext></mrow></math></div><p>Unit check: means and deviations are in °C, variances in °C²; keep them separate. An independent check appears in calculs.py: enumeration of a finite distribution, then numerical integration of the mean and variance equations using θ derived from r.</p></li><li><h3>Interpret the result within its limits</h3><p>Under these assumptions, after two hours, the water temperature is described by a normal distribution with mean 22.88 °C, still 2.88 °C away from room temperature, and variance 5.44 °C². The mean never becomes exactly μ: the deviation is multiplied by r each hour without becoming 0. An individual path can cross μ, however, because the shocks persist. These numbers do not describe any real container: θ and σ have not been estimated from any readings.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why is the variance after two hours greater than after one hour while still below the limit? Explain using r² and the shock variance.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The shocks add up, so the variance keeps growing like that of Brownian motion.”</h3><p>Each hour, mean reversion contracts the existing variance by r². It rises towards σ²/(2θ), without exceeding it: in the example, 5.44 °C² stays below the limit 6.25 °C².</p><a href="#exemple">Review the limit check</a></li><li><h3>“The mean reaches room temperature after a finite time, once mean reversion has brought it all the way back.”</h3><p>The deviation is multiplied by r, never by 0: after two hours, 2.88 °C remains on average. It decreases without becoming 0, although an individual path can cross μ.</p><a href="#exemple">Review the calculation for two hours</a></li><li><h3>“For the variance, multiply by r as for the mean.”</h3><p>A variance is a mean of squared deviations: multiplying a deviation by r multiplies its square by r². Using r alone, the third hour would give 7.264 °C², above the limit 6.25 °C², which is impossible here.</p><a href="#exercices">Recalculate the third hour</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-depart-froid"><p class="repere">Exercise 1 · Explained application</p>
+<h3>Starting below room temperature</h3><p>The same container, with the same r and v∞, comes out of a cold bath at 14 °C, known exactly. Calculate the mean and variance after one hour. This is a fictional scene, with no real readings.</p>
+<label for="reponse-ex-depart-froid">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-depart-froid" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-depart-froid" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-depart-froid" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-depart-froid" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with the initial deviation from μ, keeping its sign.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Initial deviation: 14 − 20 = -6 °C. After one hour, it is 0.6 × -6 = -3.6 °C. Mean: 20 + (-3.6) = 16.4 °C, between the initial temperature and μ. Variance: the initial temperature is known exactly, so V = v∞(1 − r²) = 4 °C², the same as for the warm start, because the shock does not depend on temperature.</p><p class="petit-titre">Check your reasoning</p><ul><li>Signed deviation preserved: -6 °C.</li><li>Mean between the initial temperature and μ.</li><li>Variance equal to that in the example, in °C².</li></ul></details></article><article class="exercice" id="ex-troisieme-heure"><p class="repere">Exercise 2 · Cross-check</p>
+<h3>Extend to the third hour</h3><p>Extend the example to 3 h using the recurrence, then check the mean and variance using the direct formulas: deviation multiplied by r to the power three, variance v∞(1 − r to the power six).</p>
+<label for="reponse-ex-troisieme-heure">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-troisieme-heure" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-troisieme-heure" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-troisieme-heure" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-troisieme-heure" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start from the deviation 2.88 °C and variance 5.44 °C².</p></details><details class="indice"><summary>Hint 2</summary><p>For the direct formula, r to the power three is 0.216 and r to the power six is 0.046656.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Recurrence: deviation 0.6 × 2.88 = 1.728 °C, so mean 20 + 1.728 = 21.728 °C. Variance: r² × 5.44 = 0.36 × 5.44 = 1.9584, then 1.9584 + 4 = 5.9584 °C².</p><p>Direct method: deviation r to the power three × 8 = 0.216 × 8 = 1.728 °C, the same result. Variance: 6.25 × (1 − 0.046656) = 6.25 × 0.953344 = 5.9584 °C², the same result. The variance stays below the limit 6.25 °C².</p><p class="petit-titre">Check your reasoning</p><ul><li>Recurrence applied with r² on the variance.</li><li>Both methods agree for the mean and for the variance.</li><li>Variance remains below v∞.</li></ul></details></article><article class="exercice" id="ex-depart-incertain"><p class="repere">Exercise 3 · Transfer</p>
+<h3>An uncertain initial temperature</h3><p>The initial temperature is no longer known exactly: it is modelled by a normal distribution with mean 28 °C and variance v∞ = 6.25 °C², independent of future shocks. Calculate the mean and variance one hour later, compare with the example, then state what remains of the initial uncertainty.</p>
+<label for="reponse-ex-depart-incertain">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-depart-incertain" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-depart-incertain" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-depart-incertain" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-depart-incertain" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The initial variance is now 6.25 °C², rather than 0.</p></details><details class="indice"><summary>Hint 2</summary><p>Use the same recurrence: r² times the initial variance, plus the shock variance.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mean does not depend on the variance: it is still 24.8 °C. Variance: r² × v∞ + v∞(1 − r²) = 2.25 + 4 = 6.25 °C².</p><p>Compared with the example (4 °C²), the variance has increased by 2.25 °C², which is r² times the initial uncertainty: this has been contracted by r², rather than removed. The result is exactly v∞: starting at the limiting variance leaves it unchanged, because v∞ = r² v∞ + v∞(1 − r²). Independence between the initial temperature and the shocks is essential for adding the two terms.</p><p class="petit-titre">Check your reasoning</p><ul><li>r² applied to the initial variance, rather than r.</li><li>Independence of the initial temperature and the shocks stated.</li><li>Numerical comparison: 4 °C² versus 6.25 °C².</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="parametres"><summary><span class="repere">Recall 1</span><span>What do θ, μ and σ represent in dX = θ(μ − X) dt + σ dW, and what are their units?</span></summary><p>θ is the mean reversion rate, in inverse time; μ is the equilibrium level, in the units of X; σ is the shock amplitude, in the units of X per square root of time.</p></details><details class="carte" data-carte="facteur"><summary><span class="repere">Recall 2</span><span>What is the factor r for a step Δt, and what does it multiply?</span></summary><p>r = e to the power −θΔt. It multiplies the deviation from μ; its square multiplies the existing variance.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 3</span><span>What variance does the process converge to, and why?</span></summary><p>It converges to σ²/(2θ): each step adds v∞(1 − r²) and contracts the previous variance by r², making v∞ a fixed point.</p></details><details class="carte" data-carte="hypotheses"><summary><span class="repere">Recall 4</span><span>What assumptions does the exact solution use?</span></summary><p>Constant parameters, additive shocks, standard Brownian motion independent of the initial temperature, and the accepted property that the integral of a deterministic function against W is Gaussian.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Write dX = θ(μ − X) dt + σ dW with the units; multiply by e to the power θt and integrate; read off the mean, then the variance using the isometry; move to a step Δt: deviation multiplied by r, variance r² V + v∞(1 − r²); check using the direct formula and the limit; draw no conclusions about a real system.</p></div><div class="exports"><a class="bouton" download="c172-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzItbTM6cGFyYW1ldHJlcyIsCiAgICAgICJ1bml0ZSI6ICJjMTcyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGFyYW1ldHJlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIM64LCDOvCBhbmQgz4MgcmVwcmVzZW50IGluIGRYID0gzrgozrwg4oiSIFgpIGR0ICsgz4MgZFcsIGFuZCB3aGF0IGFyZSB0aGVpciB1bml0cz8iLAogICAgICAicmVwb25zZSI6ICLOuCBpcyB0aGUgbWVhbiByZXZlcnNpb24gcmF0ZSwgaW4gaW52ZXJzZSB0aW1lOyDOvCBpcyB0aGUgZXF1aWxpYnJpdW0gbGV2ZWwsIGluIHRoZSB1bml0cyBvZiBYOyDPgyBpcyB0aGUgc2hvY2sgYW1wbGl0dWRlLCBpbiB0aGUgdW5pdHMgb2YgWCBwZXIgc3F1YXJlIHJvb3Qgb2YgdGltZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE3Mi1tMzpmYWN0ZXVyIiwKICAgICAgInVuaXRlIjogImMxNzItbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmYWN0ZXVyIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIGZhY3RvciByIGZvciBhIHN0ZXAgzpR0LCBhbmQgd2hhdCBkb2VzIGl0IG11bHRpcGx5PyIsCiAgICAgICJyZXBvbnNlIjogInIgPSBlIHRvIHRoZSBwb3dlciDiiJLOuM6UdC4gSXQgbXVsdGlwbGllcyB0aGUgZGV2aWF0aW9uIGZyb20gzrw7IGl0cyBzcXVhcmUgbXVsdGlwbGllcyB0aGUgZXhpc3RpbmcgdmFyaWFuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNzItbTM6bGltaXRlIiwKICAgICAgInVuaXRlIjogImMxNzItbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCB2YXJpYW5jZSBkb2VzIHRoZSBwcm9jZXNzIGNvbnZlcmdlIHRvLCBhbmQgd2h5PyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGNvbnZlcmdlcyB0byDPg8KyLygyzrgpOiBlYWNoIHN0ZXAgYWRkcyB24oieKDEg4oiSIHLCsikgYW5kIGNvbnRyYWN0cyB0aGUgcHJldmlvdXMgdmFyaWFuY2UgYnkgcsKyLCBtYWtpbmcgduKIniBhIGZpeGVkIHBvaW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTcyLW0zOmh5cG90aGVzZXMiLAogICAgICAidW5pdGUiOiAiYzE3Mi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImh5cG90aGVzZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBhc3N1bXB0aW9ucyBkb2VzIHRoZSBleGFjdCBzb2x1dGlvbiB1c2U/IiwKICAgICAgInJlcG9uc2UiOiAiQ29uc3RhbnQgcGFyYW1ldGVycywgYWRkaXRpdmUgc2hvY2tzLCBzdGFuZGFyZCBCcm93bmlhbiBtb3Rpb24gaW5kZXBlbmRlbnQgb2YgdGhlIGluaXRpYWwgdGVtcGVyYXR1cmUsIGFuZCB0aGUgYWNjZXB0ZWQgcHJvcGVydHkgdGhhdCB0aGUgaW50ZWdyYWwgb2YgYSBkZXRlcm1pbmlzdGljIGZ1bmN0aW9uIGFnYWluc3QgVyBpcyBHYXVzc2lhbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c172-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyDOuCwgzrwgYW5kIM+DIHJlcHJlc2VudCBpbiBkWCA9IM64KM68IOKIkiBYKSBkdCArIM+DIGRXLCBhbmQgd2hhdCBhcmUgdGhlaXIgdW5pdHM/Cc64IGlzIHRoZSBtZWFuIHJldmVyc2lvbiByYXRlLCBpbiBpbnZlcnNlIHRpbWU7IM68IGlzIHRoZSBlcXVpbGlicml1bSBsZXZlbCwgaW4gdGhlIHVuaXRzIG9mIFg7IM+DIGlzIHRoZSBzaG9jayBhbXBsaXR1ZGUsIGluIHRoZSB1bml0cyBvZiBYIHBlciBzcXVhcmUgcm9vdCBvZiB0aW1lLgl0b2RhaSBjMTcyLW0zIHBhcmFtZXRyZXMKV2hhdCBpcyB0aGUgZmFjdG9yIHIgZm9yIGEgc3RlcCDOlHQsIGFuZCB3aGF0IGRvZXMgaXQgbXVsdGlwbHk/CXIgPSBlIHRvIHRoZSBwb3dlciDiiJLOuM6UdC4gSXQgbXVsdGlwbGllcyB0aGUgZGV2aWF0aW9uIGZyb20gzrw7IGl0cyBzcXVhcmUgbXVsdGlwbGllcyB0aGUgZXhpc3RpbmcgdmFyaWFuY2UuCXRvZGFpIGMxNzItbTMgZmFjdGV1cgpXaGF0IHZhcmlhbmNlIGRvZXMgdGhlIHByb2Nlc3MgY29udmVyZ2UgdG8sIGFuZCB3aHk/CUl0IGNvbnZlcmdlcyB0byDPg8KyLygyzrgpOiBlYWNoIHN0ZXAgYWRkcyB24oieKDEg4oiSIHLCsikgYW5kIGNvbnRyYWN0cyB0aGUgcHJldmlvdXMgdmFyaWFuY2UgYnkgcsKyLCBtYWtpbmcgduKIniBhIGZpeGVkIHBvaW50Lgl0b2RhaSBjMTcyLW0zIGxpbWl0ZQpXaGF0IGFzc3VtcHRpb25zIGRvZXMgdGhlIGV4YWN0IHNvbHV0aW9uIHVzZT8JQ29uc3RhbnQgcGFyYW1ldGVycywgYWRkaXRpdmUgc2hvY2tzLCBzdGFuZGFyZCBCcm93bmlhbiBtb3Rpb24gaW5kZXBlbmRlbnQgb2YgdGhlIGluaXRpYWwgdGVtcGVyYXR1cmUsIGFuZCB0aGUgYWNjZXB0ZWQgcHJvcGVydHkgdGhhdCB0aGUgaW50ZWdyYWwgb2YgYSBkZXRlcm1pbmlzdGljIGZ1bmN0aW9uIGFnYWluc3QgVyBpcyBHYXVzc2lhbi4JdG9kYWkgYzE3Mi1tMyBoeXBvdGhlc2VzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pikwhv yxrvyc dojv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Mean reversion in code: reading an AR(1)</h3><dl><div><dt>What you understand</dt><dd>The exact hourly step in this course is an affine relation: the deviation from μ is multiplied by r, then a 0 mean shock with variance v∞(1 − r²) is added. This is the form of a first order autoregression around a mean, with r as its coefficient.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mxtznf mgxlfh svgafy xpjnvb eufyhg nmftqy zomwir lcsjys iyhkef cfyxzh oifyqb nnvbbl tziojd lvezzh dupqjr yaogeg bdnehl sszeky xrqrch yyerwj lfhxwi vfamlu bhsqdq dwxvdr tskxpf eaosfk vgecck lqwzuu xbqrfy etxiqm kesryj zergtu szymoh qdcqkk wvdrss qmniey nflgnw hw</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: recover the solution using the factor e to the power θt, justify r² on the variance, and distinguish the exact step r = e to the power −θΔt from a first order approximation. Reading the course and the cited lines does not establish that any level has been attained.</dd></div><div><dt>Evidence and limitations</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hywrej sjdmfl qwjeyb dpojie xvnvln mnmtcj dtxqce eochyj oajqfn ejjkyd zxrhtq anlzil zfsmpq zuwnpy gtmclr jppgbh pfnzbh oqkupz meppnd sgfppo hnrhre hwezmq mkrlot ozygvy jtrjgj ziamga sfxkwc fjjkxz rtdxad cllbwc rhkzme vtzctj dndzvg waksjv jvtlkm yhqhew pjeubp wv</span></span></dd></div><div><dt>To continue</dt><dd>Redo the two hours of calculation without support, then read the next unit in the chapter. Before any real use, check the connections, assumptions and authorised data separately. No replacement of an existing mechanism is announced.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c172-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c172-m2.html">Previous</a> · <a href="c172-m4.html">Next</a></nav>
+<footer><p>Course book · C172·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

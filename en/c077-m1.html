@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Relate the sampling instants of a recorded sound to its PCM codes, then check its byte count without confusing rate, amplitude and duration.">
+<title>C077·M1 · Sample, frequency and PCM — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iyfjvk dvlkhc xgpl</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C077·M1</p><h1>Sample, frequency and PCM</h1><p class="objectif"><span>Your goal</span>Relate the sampling instants of a recorded sound to its PCM codes, then check its byte count without confusing rate, amplitude and duration.</p><p class="prerequis"><strong>Before you start</strong><br>c027-m5 : complex numbers · c011-m5 : binomial · c036-m5 : annotated graphs · c021-m5 : origin, authentication and authorization</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small bell rings in front of a microphone. For 1.5 s, the recorder regularly takes a reading of the electrical signal produced by the microphone. Imagine a notebook where each line holds a reading at the next instant: the order of the lines matters as much as the values.</p><p>A sample is a value taken at an instant, for a channel. A channel is a sequence of readings, for example those from a microphone. The sampling rate indicates how many instants are recorded per second and per channel. Here, 16000 Hz means 16000 readings per second on our channel. This number does not say how many times the bell vibrates per second: the frequency of the sound describes its oscillations, while the sampling rate describes the rate at which the recorder takes readings.</p><p>The converter then chooses, from the available amplitude levels, the one that represents each reading: this is quantization. Its code is an integer. PCM stands for pulse code modulation: in our case, these codes are stored at a fixed width, without compression. Time is discretized by the sampling instants; amplitude is discretized by the coding levels.</p><p>The bell, values and duration are fictional. The drawing enlarges only the first 4 codes so they can be read. No sound is loaded or played; we are checking its digital representation, not the fidelity of a real recording.</p><div class="schemas"><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Codes ordered in time</title><desc>Indices 0, 1, 2, 3 hold codes 0, 4096, 0, -4096. The indices are evenly spaced; each step lasts 0.0625 milliseconds. The vertical lines help read the amplitude, without connecting the samples.</desc><text x="20" y="27">Fictional start of the ringing</text><text x="20" y="53" class="petite-etiquette">Amplitude code, no unit</text><line x1="45" y1="142" x2="335" y2="142" class="trait" /><line x1="150" y1="142" x2="150" y2="92" class="repere-dose" /><line x1="290" y1="142" x2="290" y2="192" class="repere-dose" /><circle cx="80" cy="142" r="5" class="point-mesure" /><circle cx="150" cy="92" r="5" class="point-mesure" /><circle cx="220" cy="142" r="5" class="point-mesure" /><circle cx="290" cy="192" r="5" class="point-mesure" /><text x="80" y="126" text-anchor="middle">0</text><text x="150" y="78" text-anchor="middle">4096</text><text x="220" y="126" text-anchor="middle">0</text><text x="290" y="218" text-anchor="middle">-4096</text><path d="M50 242H335M330 237l5 5-5 5" class="trait" /><text x="80" y="263" text-anchor="middle">0</text><text x="150" y="263" text-anchor="middle">1</text><text x="220" y="263" text-anchor="middle">2</text><text x="290" y="263" text-anchor="middle">3</text><text x="180" y="284" text-anchor="middle" class="petite-etiquette">Index n, constant time step</text></svg><figcaption>The points show the recorded codes. Their height indicates an amplitude; their horizontal spacing indicates the sampling rate. The upper horizontal line marks the 0 code, while the lower one carries the indices.</figcaption></figure><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Count the space for each code</title><desc>For 1 channel, each instant contains a code of 16 bits, or 2 bytes. The 24000 instants in the example therefore occupy 48000 bytes of PCM data, excluding the header.</desc><text x="180" y="27" text-anchor="middle">At the same instant: 1 channel</text><rect x="35" y="48" width="290" height="55" rx="7" class="cadre-prediction" /><text x="180" y="82" text-anchor="middle">A code of 16 bits</text><line x1="180" y1="103" x2="180" y2="127" class="trait" /><rect x="35" y="127" width="135" height="48" rx="7" class="cadre-neutre" /><rect x="190" y="127" width="135" height="48" rx="7" class="cadre-neutre" /><text x="102" y="157" text-anchor="middle">8 bits</text><text x="257" y="157" text-anchor="middle">8 bits</text><path d="M35 183v10h290v-10" class="trait" /><text x="180" y="218" text-anchor="middle">2 bytes per mono instant</text><rect x="25" y="239" width="310" height="39" rx="7" class="cadre-resultat" /><text x="180" y="265" text-anchor="middle">24000 × 2 = 48000 bytes</text></svg><figcaption>The code width determines its storage space, even when its amplitude is 0. The total counts only the PCM data: a file that adds a header will take up more space.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The rate determines the spacing of the instants; the bit depth determines the possible codes; the channels multiply the values to store at the same instant.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>How many bytes for our bell?</h3><p>The fictional ringing is recorded for T = 1.5 s, at fₛ = 16000 Hz, with C = 1 channel and b = 16 bits per signed integer code. The first codes are 0, 4096, 0, -4096. Let us calculate the sampling instants, the number of codes and their raw size, then recover the duration.</p><ol class="etapes"><li><h3>Define the format contract before counting</h3><p>f<sub>s</sub> is the sampling rate, in Hz, meaning instants per second and per channel. T is the duration in seconds. C is the number of channels, with no unit. b is the code bit depth, in bits per sample. A bit takes either the value 0 or 1; a byte groups 8 bits. Here b is a multiple of 8: no extra padding is needed.</p><p>We assume a constant positive sampling rate, no lost samples, synchronized channels and a whole number of instants. We count raw uncompressed PCM, excluding the header and any other information. The first instant is t = 0; the recorded interval extends to T, with the final boundary excluded.</p><p>The bytes alone do not give this whole contract. We need to know the sampling rate, channels, bit depth, whether the codes are signed, and the byte order. Under the convention used here, the least significant byte comes first: this is little-endian byte order. This convention changes how the codes are read, not their number.</p></li><li><h3>Place the readings on the time axis</h3><p>Δt denotes the time between successive instants, in seconds. We take the reciprocal of the rate because we want the time per instant rather than the instants per second. n is an integer index with no unit, starting at 0; t<sub>n</sub> is the corresponding instant.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Δt</mi><mo>=</mo><mfrac><mn>1</mn><msub><mi>f</mi><mi>s</mi></msub></mfrac><mo>;</mo><msub><mi>t</mi><mi>n</mi></msub><mo>=</mo><mi>n</mi><mi>Δt</mi></mrow></math></div><p>Here the exact fraction of a second is Δt = 1/16000 s. Since a second contains 1000 milliseconds, Δt is 0.0625 ms. This is a time interval, with no direct relation to sound volume.</p></li><li><h3>Distinguish instants from stored values</h3><p>N denotes the number of instants per channel. We multiply the rate by the duration because each second contributes the same number of instants. A frame groups the samples from all channels at the same instant; there are therefore N frames, but N × C amplitude codes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>N</mi><mo>=</mo><msub><mi>f</mi><mi>s</mi></msub><mi>T</mi><mo>=</mo><mn>16000</mn><mo>×</mo><mfrac><mn>3</mn><mn>2</mn></mfrac><mo>=</mo><mn>24000</mn></mrow></math></div><p>N is indeed an integer: our assumption is satisfied. With C = 1, this gives 24000 × 1 = 24000 codes. A code equal to 0 takes up as much space as any other: we do not remove the instants when the signal crosses 0.</p></li><li><h3>Read the amplitude without assigning it a physical unit</h3><p>q<sub>n</sub> denotes the amplitude code at index n, an integer with no physical unit. In this signed PCM using two’s complement, b bits can encode the integer range below. Two’s complement is the binary convention used here to represent negative integers in this range; we do not need to decode every bit to count the size.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>−</mo><msup><mn>2</mn><mrow><mi>b</mi><mo>−</mo><mn>1</mn></mrow></msup><mo>≤</mo><msub><mi>q</mi><mi>n</mi></msub><mo>≤</mo><msup><mn>2</mn><mrow><mi>b</mi><mo>−</mo><mn>1</mn></mrow></msup><mo>−</mo><mn>1</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mn>2</mn><mn>16</mn></msup><mo>=</mo><mn>65536</mn><mtext> codes ; </mtext><mn>-32768</mn><mo>≤</mo><msub><mi>q</mi><mi>n</mi></msub><mo>≤</mo><mn>32767</mn></mrow></math></div><p>Our codes 0, 4096 and -4096 lie in this range. Their signs indicate opposite sides of the reference level; a negative code does not mean a negative time. Without calibration of the microphone and converter, 4096 becomes neither a pressure in pascals nor a level in decibels. Quantization represents amplitudes using a finite set of levels; it does not preserve their exact analog values.</p></li><li><h3>Convert codes to bytes</h3><p>o is the number of bytes per code. We divide b by the number of bits in a byte: o = 16/8 = 2 bytes per code. A frame occupies C × o = 2 bytes. B denotes the total size of the PCM data alone, in bytes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>B</mi><mo>=</mo><mi>N</mi><mi>C</mi><mi>o</mi><mo>=</mo><mn>24000</mn><mo>×</mo><mn>1</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>48000</mn><mtext> octets</mtext></mrow></math></div><p>The multiplication counts all frames, all their channels and all the bytes in each code. The raw data rate D is the size per second: D = f<sub>s</sub> × C × o = 32000 bytes/s. In bits, this gives 32000 × 8 = 256000 bits/s. Do not confuse bits/s with bytes/s.</p></li><li><h3>Recover the duration and check the final boundary</h3><p>Dividing the size by the data rate should give seconds. This reverse check can reveal, for example, a forgotten channel or conversion to bytes.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>T</mi><mo>=</mo><mfrac><mi>B</mi><mrow><msub><mi>f</mi><mi>s</mi></msub><mi>C</mi><mi>o</mi></mrow></mfrac><mo>=</mo><mfrac><mn>48000</mn><mn>32000</mn></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>2</mn></mfrac><mtext> s</mtext></mrow></math></div><p>We recover 1.5 s. The indices run from 0 to N − 1 = 23999. The last sample is therefore at t = 23999/16000 s; it precedes the boundary T by one step Δt. The exact calculation 23999/16000 + 1/16000 = 3/2 s checks this convention: the interval between the first and last instants is not the entire duration represented by N frames.</p><p>The consistent totals are 24000 instants, 24000 codes and 48000 raw bytes for 1.5 s. They prove neither the absence of noise nor the possibility of perfectly recovering the analog sound: those questions require other assumptions.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Reconstruct the path from the bell to the bytes without looking at the formulas. Why does duration multiply the rate, why do we divide bits by 8, and why does a 0 code still take up space?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The recorder’s sampling rate gives the pitch of the sound.”</h3><p>The rate indicates when readings are taken; pitch concerns the oscillations of the signal. Reread the axes of the drawing: changing amplitude values does not automatically change the time spacing. We cannot deduce the frequency of the bell from the number 16000 Hz alone.</p><a href="#intuition">Review what each axis measures</a></li><li><h3>“A PCM code of 16 bits occupies 16 bytes.”</h3><p>A byte groups 8 bits. We therefore need to divide: 16/8 = 2 bytes per code. Then start again from the number of frames and the number of channels before multiplying the sizes.</p><a href="#exemple">Repeat the conversion, then the reverse check</a></li><li><h3>“Changing the number of hertz written alongside the bytes is enough to improve the recording.”</h3><p>Reading the same list of codes at a different declared rate changes its playback duration. It receives no new readings. To represent the same sound at another rate, we need to calculate a new sequence using a suitable method; changing a label does not do this work.</p><a href="#exercices">Diagnose the incorrectly declared rate</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-debut"><p class="repere">Exercise 1 · Locating values and units</p>
+<h3>Read the first instants</h3><p>Return to the 4 codes in the drawing, at indices 0, 1, 2 and 3. At what instant, in milliseconds, is the last of these codes taken? How many bytes do these 4 mono codes occupy? Does the sign of the last code change its instant?</p>
+<label for="reponse-ex-debut">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-debut" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-debut" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-debut" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-debut" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first code has index 0: count the intervals between the points.</p></details><details class="indice"><summary>Hint 2</summary><p>Use tₙ = n × Δt, then count 2 bytes for each code.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The last index is 3. Its instant is 3 × 1/16000 = 3/16000 s, or 3 × 0.0625 = 0.1875 ms. There are 3 intervals between 4 instants.</p><p>The size is 4 × 2 = 8 bytes. The code -4096 is a negative amplitude taken at a positive instant; its sign changes neither that instant nor its code width.</p><p class="petit-titre">Check your reasoning</p><ul><li>Start from index 3, without confusing the number of points with the number of intervals.</li><li>Obtain 0.1875 ms and 8 bytes with their units.</li><li>Separate the sign of the amplitude from its position in time.</li></ul></details></article><article class="exercice" id="ex-stereo"><p class="repere">Exercise 2 · Application and verification</p>
+<h3>Add a channel to the same ringing</h3><p>The same scene is now recorded in stereo, meaning on 2 synchronized channels, for 1.5 s. Each channel remains at 16000 Hz and 16 bits per code. How many frames, codes and raw bytes are needed? Check that the duration does not double.</p>
+<label for="reponse-ex-stereo">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-stereo" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-stereo" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-stereo" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-stereo" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A frame groups the readings from the channels at the same instant. The number of instants depends on the rate per channel and the duration.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply the number of codes by the bytes per code. To return to seconds, also adjust the data rate to the number of channels.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>There are still N = 16000 × 3/2 = 24000 frames. Each frame holds 2 codes, giving 24000 × 2 = 48000 codes in total. At 2 bytes per code, the size reaches 96000 bytes.</p><p>The data rate is 2 × 32000 = 64000 bytes/s. The check gives 96000/64000 = 1.5 s. The amount of data and the data rate have both doubled: their quotient preserves the duration.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep 24000 frames and count 48000 codes.</li><li>Obtain 96000 bytes excluding the header.</li><li>Recover 1.5 s using the stereo data rate, without reusing the mono data rate.</li></ul></details></article><article class="exercice" id="ex-cadence"><p class="repere">Exercise 3 · Diagnosis and repair</p>
+<h3>An incorrectly declared rate</h3><p>Return to the 48000 mono bytes in the example. The codes have not changed, but a player mistakenly receives the rate 32000 Hz instead of 16000 Hz. It consumes the codes at the declared rate, without any other transformation. What duration does it calculate? What repair corresponds to this error, and what remains impossible to deduce from the size alone?</p>
+<label for="reponse-ex-cadence">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cadence" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cadence" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cadence" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cadence" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First recover the number of codes from the bytes. Then divide by the rate actually used by the player.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish correcting erroneous information from producing new signal values.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The player finds 48000/2 = 24000 codes, still on 1 channel. Their playback duration becomes 24000/32000 = 0.75 s. The rate has been multiplied by 2: the same ringing is played through 2 times as fast.</p><p>Since the problem establishes that capture was at 16000 Hz, we restore that information and recover 1.5 s. This adds no samples and corrects no defects in the capture. Without reliable information about the initial rate, the size alone would not let us decide which duration is correct; the division also assumes that the channels and code format are known.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep 24000 codes and obtain 0.75 s.</li><li>Justify the speed factor using the ratio of the rates.</li><li>Repair the metadata established to be wrong without claiming to create new readings.</li><li>Explain why bytes without a format contract are not enough to recover a duration.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="echantillon"><summary><span class="repere">Recall 1</span><span>What is a sample, and what does a frame add?</span></summary><p>A sample is a signal value for a channel at an instant. A frame groups the samples from all channels at that same instant. In mono, the two counts coincide.</p></details><details class="carte" data-carte="cadence"><summary><span class="repere">Recall 2</span><span>What does fₛ give, and how can we recover the time spacing?</span></summary><p>fₛ gives the instants per second and per channel; Δt = 1/fₛ gives their spacing in seconds. This rate alone does not give the oscillation frequency of the sound.</p></details><details class="carte" data-carte="pcm"><summary><span class="repere">Recall 3</span><span>In our integer PCM, what does the bit depth determine?</span></summary><p>It determines the number of possible amplitude codes and the width of each code. With 16 signed bits, our range runs from -32768 to 32767; each code occupies 2 bytes, even when it equals 0.</p></details><details class="carte" data-carte="taille"><summary><span class="repere">Recall 4</span><span>How can we reconstruct the byte calculation and then recover the duration?</span></summary><p>N = fₛ × T frames; each frame holds C codes of o bytes, with o = b/8 here. Thus B = N × C × o, then T = B/(fₛ × C × o). We need uncompressed PCM, complete frames and a constant rate, and must exclude headers from the count.</p></details><details class="carte" data-carte="metadonnees"><summary><span class="repere">Recall 5</span><span>Why does changing only the declared rate change the playback duration?</span></summary><p>The list contains the same number of codes, but the player consumes a different number per second. Correcting a false rate restores its interpretation; it creates neither additional readings nor evidence of acoustic fidelity.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the page and describe the chain: microphone signal, regular instants, amplitude codes, bytes. Reconstruct Δt, N and then B, giving the units and the role of the channels. Finish with the reverse check and what the bytes alone do not tell us. Try again without help after at least 2 days: reading or answering after a hint never establishes that a level has been achieved.</p></div><div class="exports"><a class="bouton" download="c077-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTE6ZWNoYW50aWxsb24iLAogICAgICAidW5pdGUiOiAiYzA3Ny1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVjaGFudGlsbG9uLWF1ZGlvIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgYSBzYW1wbGUsIGFuZCB3aGF0IGRvZXMgYSBmcmFtZSBhZGQ/IiwKICAgICAgInJlcG9uc2UiOiAiQSBzYW1wbGUgaXMgYSBzaWduYWwgdmFsdWUgZm9yIGEgY2hhbm5lbCBhdCBhbiBpbnN0YW50LiBBIGZyYW1lIGdyb3VwcyB0aGUgc2FtcGxlcyBmcm9tIGFsbCBjaGFubmVscyBhdCB0aGF0IHNhbWUgaW5zdGFudC4gSW4gbW9ubywgdGhlIHR3byBjb3VudHMgY29pbmNpZGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTE6Y2FkZW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZnJlcXVlbmNlLWVjaGFudGlsbG9ubmFnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgZuKCmyBnaXZlLCBhbmQgaG93IGNhbiB3ZSByZWNvdmVyIHRoZSB0aW1lIHNwYWNpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiZuKCmyBnaXZlcyB0aGUgaW5zdGFudHMgcGVyIHNlY29uZCBhbmQgcGVyIGNoYW5uZWw7IM6UdCA9IDEvZuKCmyBnaXZlcyB0aGVpciBzcGFjaW5nIGluIHNlY29uZHMuIFRoaXMgcmF0ZSBhbG9uZSBkb2VzIG5vdCBnaXZlIHRoZSBvc2NpbGxhdGlvbiBmcmVxdWVuY3kgb2YgdGhlIHNvdW5kLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc3LW0xOnBjbSIsCiAgICAgICJ1bml0ZSI6ICJjMDc3LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicGNtLWVudGllciIsCiAgICAgICJxdWVzdGlvbiI6ICJJbiBvdXIgaW50ZWdlciBQQ00sIHdoYXQgZG9lcyB0aGUgYml0IGRlcHRoIGRldGVybWluZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBkZXRlcm1pbmVzIHRoZSBudW1iZXIgb2YgcG9zc2libGUgYW1wbGl0dWRlIGNvZGVzIGFuZCB0aGUgd2lkdGggb2YgZWFjaCBjb2RlLiBXaXRoIDE2IHNpZ25lZCBiaXRzLCBvdXIgcmFuZ2UgcnVucyBmcm9tIC0zMjc2OCB0byAzMjc2NzsgZWFjaCBjb2RlIG9jY3VwaWVzIDIgYnl0ZXMsIGV2ZW4gd2hlbiBpdCBlcXVhbHMgMC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ny1tMTp0YWlsbGUiLAogICAgICAidW5pdGUiOiAiYzA3Ny1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInRhaWxsZS1wY20iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB3ZSByZWNvbnN0cnVjdCB0aGUgYnl0ZSBjYWxjdWxhdGlvbiBhbmQgdGhlbiByZWNvdmVyIHRoZSBkdXJhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJOID0gZuKCmyDDlyBUIGZyYW1lczsgZWFjaCBmcmFtZSBob2xkcyBDIGNvZGVzIG9mIG8gYnl0ZXMsIHdpdGggbyA9IGIvOCBoZXJlLiBUaHVzIEIgPSBOIMOXIEMgw5cgbywgdGhlbiBUID0gQi8oZuKCmyDDlyBDIMOXIG8pLiBXZSBuZWVkIHVuY29tcHJlc3NlZCBQQ00sIGNvbXBsZXRlIGZyYW1lcyBhbmQgYSBjb25zdGFudCByYXRlLCBhbmQgbXVzdCBleGNsdWRlIGhlYWRlcnMgZnJvbSB0aGUgY291bnQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzctbTE6bWV0YWRvbm5lZXMiLAogICAgICAidW5pdGUiOiAiYzA3Ny1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyYXQtcGNtIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGNoYW5naW5nIG9ubHkgdGhlIGRlY2xhcmVkIHJhdGUgY2hhbmdlIHRoZSBwbGF5YmFjayBkdXJhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbGlzdCBjb250YWlucyB0aGUgc2FtZSBudW1iZXIgb2YgY29kZXMsIGJ1dCB0aGUgcGxheWVyIGNvbnN1bWVzIGEgZGlmZmVyZW50IG51bWJlciBwZXIgc2Vjb25kLiBDb3JyZWN0aW5nIGEgZmFsc2UgcmF0ZSByZXN0b3JlcyBpdHMgaW50ZXJwcmV0YXRpb247IGl0IGNyZWF0ZXMgbmVpdGhlciBhZGRpdGlvbmFsIHJlYWRpbmdzIG5vciBldmlkZW5jZSBvZiBhY291c3RpYyBmaWRlbGl0eS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c077-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyBhIHNhbXBsZSwgYW5kIHdoYXQgZG9lcyBhIGZyYW1lIGFkZD8JQSBzYW1wbGUgaXMgYSBzaWduYWwgdmFsdWUgZm9yIGEgY2hhbm5lbCBhdCBhbiBpbnN0YW50LiBBIGZyYW1lIGdyb3VwcyB0aGUgc2FtcGxlcyBmcm9tIGFsbCBjaGFubmVscyBhdCB0aGF0IHNhbWUgaW5zdGFudC4gSW4gbW9ubywgdGhlIHR3byBjb3VudHMgY29pbmNpZGUuCXRvZGFpIGMwNzctbTEgZWNoYW50aWxsb24tYXVkaW8KV2hhdCBkb2VzIGbigpsgZ2l2ZSwgYW5kIGhvdyBjYW4gd2UgcmVjb3ZlciB0aGUgdGltZSBzcGFjaW5nPwlm4oKbIGdpdmVzIHRoZSBpbnN0YW50cyBwZXIgc2Vjb25kIGFuZCBwZXIgY2hhbm5lbDsgzpR0ID0gMS9m4oKbIGdpdmVzIHRoZWlyIHNwYWNpbmcgaW4gc2Vjb25kcy4gVGhpcyByYXRlIGFsb25lIGRvZXMgbm90IGdpdmUgdGhlIG9zY2lsbGF0aW9uIGZyZXF1ZW5jeSBvZiB0aGUgc291bmQuCXRvZGFpIGMwNzctbTEgZnJlcXVlbmNlLWVjaGFudGlsbG9ubmFnZQpJbiBvdXIgaW50ZWdlciBQQ00sIHdoYXQgZG9lcyB0aGUgYml0IGRlcHRoIGRldGVybWluZT8JSXQgZGV0ZXJtaW5lcyB0aGUgbnVtYmVyIG9mIHBvc3NpYmxlIGFtcGxpdHVkZSBjb2RlcyBhbmQgdGhlIHdpZHRoIG9mIGVhY2ggY29kZS4gV2l0aCAxNiBzaWduZWQgYml0cywgb3VyIHJhbmdlIHJ1bnMgZnJvbSAtMzI3NjggdG8gMzI3Njc7IGVhY2ggY29kZSBvY2N1cGllcyAyIGJ5dGVzLCBldmVuIHdoZW4gaXQgZXF1YWxzIDAuCXRvZGFpIGMwNzctbTEgcGNtLWVudGllcgpIb3cgY2FuIHdlIHJlY29uc3RydWN0IHRoZSBieXRlIGNhbGN1bGF0aW9uIGFuZCB0aGVuIHJlY292ZXIgdGhlIGR1cmF0aW9uPwlOID0gZuKCmyDDlyBUIGZyYW1lczsgZWFjaCBmcmFtZSBob2xkcyBDIGNvZGVzIG9mIG8gYnl0ZXMsIHdpdGggbyA9IGIvOCBoZXJlLiBUaHVzIEIgPSBOIMOXIEMgw5cgbywgdGhlbiBUID0gQi8oZuKCmyDDlyBDIMOXIG8pLiBXZSBuZWVkIHVuY29tcHJlc3NlZCBQQ00sIGNvbXBsZXRlIGZyYW1lcyBhbmQgYSBjb25zdGFudCByYXRlLCBhbmQgbXVzdCBleGNsdWRlIGhlYWRlcnMgZnJvbSB0aGUgY291bnQuCXRvZGFpIGMwNzctbTEgdGFpbGxlLXBjbQpXaHkgZG9lcyBjaGFuZ2luZyBvbmx5IHRoZSBkZWNsYXJlZCByYXRlIGNoYW5nZSB0aGUgcGxheWJhY2sgZHVyYXRpb24/CVRoZSBsaXN0IGNvbnRhaW5zIHRoZSBzYW1lIG51bWJlciBvZiBjb2RlcywgYnV0IHRoZSBwbGF5ZXIgY29uc3VtZXMgYSBkaWZmZXJlbnQgbnVtYmVyIHBlciBzZWNvbmQuIENvcnJlY3RpbmcgYSBmYWxzZSByYXRlIHJlc3RvcmVzIGl0cyBpbnRlcnByZXRhdGlvbjsgaXQgY3JlYXRlcyBuZWl0aGVyIGFkZGl0aW9uYWwgcmVhZGluZ3Mgbm9yIGV2aWRlbmNlIG9mIGFjb3VzdGljIGZpZGVsaXR5Lgl0b2RhaSBjMDc3LW0xIGNvbnRyYXQtcGNtCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iyfjvk dvlkhc xgpl</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dizktx ezlvyt hhpa</span></span> · read the contract of a PCM block</h3><dl><div><dt>What you understand</dt><dd>You can distinguish sampling rate, coded amplitude, number of channels and byte count. These quantities describe a digitized sound; they do not yet provide its transcription.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">detvjc cxtwcc kozbup ogzkro bvtwiw jyopsm cpzlkc wdqfie gyhccq sybxkl kcvagm watnku xhoyqp qrouwp ifuzem dfkifx oyyemf nuvdzz pvpugl ifqsse yelzzi zjudue jqqgan mnwgoq</span></span></dd></div><div><dt>Level to prepare for</dt><dd>At the level of this unit, prepare to reconstruct the contract and byte calculation independently. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dlhjzy pqadft oayzyy umfxbn iocwcr dfdmms cmvp</span></span> Neither reading this page nor consulting a correction awards this level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">abnakl tbwpzl qvmayy tsznlb wkikbq grsgmu qlymwc dgclxl qitgpf bktkxl zxjfhz fsphug vqmsuv zbpiwa mkusbw wrwkpl jlmidx vzgycb quxbpq tmejah pyephm orhgjx ewdnjs aazgmj</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the mono calculation, its stereo variant and the rate diagnosis without support. Then continue with C077·M2, window and time measurement. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pzxcqh ydpbhr tjxzvy umctao whmzbi vpxjxz dnipzc sygxoj soljta lxywjq jmtykb gwaukg dljaaw sg</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c077-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c076-m5.html">Previous</a> · <a href="c077-m2.html">Next</a></nav>
+<footer><p>Course book · C077·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

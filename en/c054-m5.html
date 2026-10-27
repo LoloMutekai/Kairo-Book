@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct a Newton step by setting an approximation to the slope equal to 0, then check the domain, the cost and the stopping criterion.">
+<title>C054·M5 · Newton&#x27;s method — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cjyurb jwcscq ugbb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C054·M5</p><h1>Newton&#x27;s method</h1><p class="objectif"><span>Your goal</span>Construct a Newton step by setting an approximation to the slope equal to 0, then check the domain, the cost and the stopping criterion.</p><p class="prerequis"><strong>Before you start</strong><br>c033-m5 : affine approximation · c014-m5 : invariants · c054-m1 : extrema · c054-m2 : mean value theorem · c054-m3 : convexity · c054-m4 : boundary conditions</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You adjust the brightness of lighting for a scale model with a slider x. A cost J penalizes unsuitable settings: the lower this score, the better the setting suits the model. The slider is allowed between 0 and 4. Everything is fictional: no lighting measurements or energy savings are claimed.</p><p>At the starting setting, the slope of the cost is positive, so a small move back to the left reduces the cost. But how far should you move back? Newton also considers how quickly this slope changes: this derivative of the slope is the second derivative of the cost, called curvature here.</p><p>Imagine a graph whose height represents the slope of the cost. Draw its tangent at the current setting. The point where this line reaches height 0 proposes the next setting. We set the tangent to the slope equal to 0; the height of the cost does not need to be 0.</p><p>A tangent remains a local approximation. The proposed setting may still have a nonzero slope, lie outside the allowed interval or increase the cost. We therefore check the proposal before repeating the process. The diagrams show our example with explicit calculations; they do not promise the same behavior for every cost function.</p><div class="schemas"><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Set the tangent to the slope equal to 0</title><desc>The curve represents g(x), the slope of the cost. At the start x = 4, g is 12. Its tangent reaches the horizontal axis at 2.50, while the curve itself is 0 at 2. The Newton proposal therefore does not yet give the exact root.</desc><text x="52" y="22">g(x), slope of the cost</text><line x1="42" y1="260" x2="42" y2="34" class="trait" /><line x1="42" y1="194" x2="318" y2="194" class="trait" /><text x="327" y="200">x</text><text x="30" y="216" text-anchor="end">0</text><text x="30" y="55" text-anchor="end">12</text><path d="M42 242 Q162 242 282 50" class="trait" /><path d="M166 236 L292 34" class="chemin-correction" /><circle cx="282" cy="50" r="6" class="point-prediction" /><circle cx="162" cy="194" r="5" class="point-mesure" /><circle cx="192" cy="194" r="6" class="resultat" /><text x="293" y="83">Start</text><text x="241" y="144" class="resultat">Tangent</text><text x="154" y="217" text-anchor="end">2</text><text x="282" y="217" text-anchor="middle">4</text><text x="199" y="256" text-anchor="middle" class="resultat">Proposal: 2.50</text></svg><figcaption>Gray curve: the actual slope of the model. Gold line: its tangent at the pink point. At the gold point the line is 0; at the lavender point the curve is 0. Horizontal coordinates are in slider units; vertical coordinates are in cost points per slider unit.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Propose, then check again</title><desc>At the start 4, the slope is 12 and the curvature is 8. After the first step, x is 2.50, but the slope 2.25 exceeds the threshold 0.25. After the second, x is 2.05 and its slope 0.2025 is below the threshold.</desc><rect x="20" y="12" width="320" height="64" rx="7" class="cadre-prediction" /><text x="180" y="38" text-anchor="middle">Start: x = 4</text><text x="180" y="62" text-anchor="middle">Slope 12; curvature 8</text><path d="M180 76v22m-5-5 5 5 5-5" class="trait" /><rect x="20" y="100" width="320" height="64" rx="7" class="cadre-neutre" /><text x="180" y="126" text-anchor="middle">First step: x = 2.50</text><text x="180" y="150" text-anchor="middle">Slope 2.25: continue</text><path d="M180 164v22m-5-5 5 5 5-5" class="trait" /><rect x="20" y="188" width="320" height="70" rx="7" class="cadre-resultat" /><text x="180" y="214" text-anchor="middle">Second step: x = 2.05</text><text x="180" y="240" text-anchor="middle">Slope 0.2025 &lt; 0.25</text></svg><figcaption>Each new point requires a new evaluation. Positions are in slider units; slopes are in cost points per slider unit; curvatures are in cost points per squared slider unit. Meeting the stated slope threshold does not mean that the slope is exactly 0.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To find an interior minimum: read the slope and curvature, propose x − slope/curvature, check the domain and cost, then reevaluate the slope at the new point.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Adjust the slider while checking each proposal</h3><p>The fictional cost J is the square of (x − 2), multiplied by (x + 4), then divided by 3, on [0 ; 4]. Start at x = 4. We accept stopping if |J′(x)| ≤ 0.25 cost point per slider unit, with an allowed point and a checked cost. We limit this calculation to 2 steps; reaching this limit without meeting the criterion would mean stopping without observed convergence.</p><ol class="etapes"><li><h3>Define what we are calculating</h3><p>x is the slider position, with no physical unit; J(x) is a penalty score in fictional cost points. J′(x), also written g(x), is the slope: cost points per slider unit. J″(x), also written h(x), measures the change in this slope: cost points per squared slider unit. Primes denote derivatives, not step numbers.</p><p>The cost is a polynomial, so its derivatives exist and are continuous. We assume these formulas are exact, with no measurement noise or evaluation error. The allowed domain remains binding even though the polynomial is defined beyond it. A positive h indicates an increasing slope; the convexity studied earlier will help us interpret the resulting point.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mrow><msup><mrow><mo>(</mo><mi>x</mi><mo>−</mo><mn>2</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>(</mo><mi>x</mi><mo>+</mo><mn>4</mn><mo>)</mo></mrow><mn>3</mn></mfrac></mrow></math></div><p>Expanding the product and then differentiating gives the following expressions. The expanded form also provides an independent check of costs calculated with the factored form.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><msup><mi>x</mi><mn>3</mn></msup><mn>3</mn></mfrac><mo>−</mo><mn>4</mn><mi>x</mi><mo>+</mo><mfrac><msup><mn>4</mn><mn>2</mn></msup><mn>3</mn></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mi>J</mi><mo>′</mo><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><msup><mi>x</mi><mn>2</mn></msup><mo>−</mo><mn>4</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mi>J</mi><mo>″</mo><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mn>2</mn><mi>x</mi></mrow></math></div></li><li><h3>Derive the step from the affine approximation</h3><p>Let x be the current point, u a candidate point and s = u − x the signed displacement. Near x, we replace the slope g(u) with its tangent: g(x) + h(x)(u − x). We seek a candidate where this approximation is 0. The sign ≈ reminds us that we have not replaced the entire curve with an exact straight line.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>g</mi><mo>(</mo><mi>u</mi><mo>)</mo><mo>≈</mo><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>+</mo><mi>h</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>(</mo><mi>u</mi><mo>−</mo><mi>x</mi><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>0</mn><mo>=</mo><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>+</mo><mi>h</mi><mo>(</mo><mi>x</mi><mo>)</mo><mi>s</mi><mo>⇒</mo><mi>s</mi><mo>=</mo><mo>−</mo><mfrac><mrow><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mrow><mi>h</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow></mfrac></mrow></math></div><p>If h(x) is nonzero, adding this displacement to the current point gives the Newton step. As we repeat the process, k is the number of steps already taken, x<sub>k</sub> is the current point and u is the next proposed point:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msub><mi>x</mi><mi>k</mi></msub><mo>−</mo><mfrac><mrow><mi>J</mi><mo>′</mo><mo>(</mo><msub><mi>x</mi><mi>k</mi></msub><mo>)</mo></mrow><mrow><mi>J</mi><mo>″</mo><mo>(</mo><msub><mi>x</mi><mi>k</mi></msub><mo>)</mo></mrow></mfrac></mrow></math></div><p>The quotient has slider units: the cost units cancel, as does a slider factor in the denominator. The rule proposes a point without certifying that it is acceptable. For our search for a minimum, we require positive curvature and will check the domain and cost before continuing.</p></li><li><h3>Calculate the first proposal</h3><p>At the start, the square is 4 × 4 = 16. The slope is 16 − 4 = 12 cost points per slider unit; the curvature is 2 × 4 = 8 cost points per squared slider unit.</p><p>Dividing slope/curvature gives 12/8 = 3/2, or 1.50 slider units. We subtract this positive quantity: the displacement s is negative, to the left, as expected from the sign of the slope.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mn>1</mn></msub><mo>=</mo><mn>4</mn><mo>−</mo><mfrac><mn>12</mn><mn>8</mn></mfrac><mo>=</mo><mn>5/2</mn><mo>=</mo><mn>2.50</mn></mrow></math></div><p>The subscript of x counts the steps: the start is labeled 0 and the first proposal 1. This proposal is in [0 ; 4]. Check the construction: 12 + 8 × (2.50 − 4) = 0. This sets the tangent to g equal to 0, but not necessarily g itself.</p></li><li><h3>Check the cost and the actual slope</h3><p>Calculate the costs using the factored form. At the start: difference 2, square 4, factor x + 4 equal to 8; hence 4 × 8/3 = 32/3 = 32/3 points, or about 10.667 cost points.</p><p>At the proposal: difference 1/2, square 1/4, factor 13/2; the product is 13/8, then dividing by 3 gives 13/24 points, or about 0.542 cost points. The cost has decreased. The expanded form gives the same fractions.</p><p>But the square of 5/2 is 25/4. The actual slope is therefore 25/4 − 4 = 9/4, or 2.25 cost points per slider unit. It exceeds 0.25: the stopping criterion is not met. This is no contradiction; we had set an approximation equal to 0.</p></li><li><h3>Recalculate at the new point and take the second step</h3><p>We keep the new slope 9/4 and recalculate the curvature: 2 × 5/2 = 5. Keeping the initial curvature would produce a different method. The new quotient is 9/4/5 = 9/20, or 0.45 slider units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mn>2</mn></msub><mo>=</mo><mn>5/2</mn><mo>−</mo><mn>9/20</mn><mo>=</mo><mn>41/20</mn><mo>=</mo><mn>2.05</mn></mrow></math></div><p>This point is still in the allowed interval. Its difference from 2 is 1/20; the square of this difference is 1/400 and the factor x + 4 is 121/20. Their product is 121/8000. After division by 3, J is 121/24000 points, or about 0.0050 cost points: it has decreased again.</p></li><li><h3>Stop according to the stated rule and check in other ways</h3><p>The new slope is 1681/400 − 4 = 81/400, or 0.2025 cost points per slider unit. It is positive and below 0.25. The point is allowed and its cost is lower, so our rule permits stopping after 2 steps. We do not claim an exactly 0 slope.</p><p>The factored form of J provides a global check specific to this example. On the interval, the square of (x − 2) is nonnegative and x + 4 is positive. The cost is therefore nonnegative and is 0 only at x = 2, its unique minimum. The point 2.05 remains 0.05 slider units away from this known reference.</p><p>Another check comes from the update rule: for x &gt; 0, the next difference is the square of the current difference divided by 2x. This identity can be checked by substituting the Newton step for u:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>u</mi><mo>−</mo><mn>2</mn><mo>=</mo><mfrac><msup><mrow><mo>(</mo><mi>x</mi><mo>−</mo><mn>2</mn><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><mi>x</mi></mrow></mfrac></mrow></math></div><p>At the first step, the predicted difference is 4/8 = 1/2; at the second, 1/4/5 = 1/20. These match the differences calculated by subtracting the positions. This identity also keeps the candidates to the right of 2. It is specific to our function; a small slope threshold does not give a universal position error.</p><p>Newton applied to an equation F(x) = 0 similarly uses x − F(x)/F′(x), where F is the function whose root we seek, provided that F′(x) is nonzero. To optimize J, this function is F = J′, which explains the second derivative in the denominator. Setting J itself equal to 0 would solve a different problem, even though the solutions coincide for our particular cost function.</p><p>If the curvature is 0, negative for our search for a minimum, or too small for reliable division, we do not blindly take this step. We keep the known point and indicate the need for another strategy. Even with positive curvature and a convex cost, we must check the proposals and boundaries. A method for choosing or reducing the step would require a separate study.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Reconstruct the first step from the equation of the tangent to g, then explain why we still needed to calculate g at the proposed point. Finish by distinguishing the stopping threshold from the exact minimum.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Newton subtracts the slope from the setting; the denominator is optional.”</h3><p>The slope does not directly give a displacement. Dividing it by the curvature produces slider units; setting the tangent equal to 0 explains this quotient and the minus sign. With a positive slope and positive curvature, we move to the left.</p><a href="#exemple">Reconstruct the quotient from the tangent</a></li><li><h3>“The tangent meets the axis: I am already at the exact minimum.”</h3><p>The line gives 2.50, but the slope curve still has value 2.25 there. Reevaluate the derivatives and the cost. Stopping at a threshold does not prove exact equality either, and a general stationary point still needs to be classified.</p><a href="#intuition">Distinguish the intersections of the line and the curve</a></li><li><h3>“A convex cost makes all starting points and all steps acceptable.”</h3><p>At the boundary x = 0, our curvature is 0 and the slope is −4: the Newton division is impossible. On a more restricted interval, a proposal can leave the domain. Check the denominator before dividing, then check feasibility before accepting.</p><a href="#exercices">Examine the slider restriction in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-signe"><p class="repere">Exercise 1 · Warm-up · calculation and justification</p>
+<h3>What sign should the displacement have?</h3><p>At the start x = 4, the slope is 12 and the curvature is 8. Calculate the next point and the signed displacement. Someone adds slope/curvature to the setting: what is their proposal, and which check rejects it immediately?</p>
+<label for="reponse-ex-signe">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-signe" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-signe" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-signe" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-signe" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write 0 = slope + curvature × displacement before moving the slider.</p></details><details class="indice"><summary>Hint 2</summary><p>After calculating, compare each proposal with [0 ; 4].</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The quotient is 12/8 = 1.50 slider units. The displacement is −1.50, so the new point is 4 − 1.50 = 2.50. Subtracting this quotient sets the tangent to the slope equal to 0.</p><p>Adding would give 5.50, above the bound 4: the proposal is forbidden even before evaluating the cost. The positive slope already indicated that a small move to the right would increase the cost.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the positive quotient from the negative displacement.</li><li>Obtain 2.50 with slider units.</li><li>Reject 5.50 by citing the upper bound.</li></ul></details></article><article class="exercice" id="ex-autre-depart"><p class="repere">Exercise 2 · Application · changed starting point</p>
+<h3>Start from the other side</h3><p>Keep the same cost and domain, but start at x = 1. Calculate the slope, curvature and Newton proposal. Do we go past the known minimum x = 2? Is the criterion |J′| ≤ 0.25 met at the resulting point?</p>
+<label for="reponse-ex-autre-depart">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-autre-depart" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-autre-depart" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-autre-depart" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-autre-depart" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The square of 1 is 1. The slope can be negative even when the slider position is positive.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtracting a negative quotient increases x. Reevaluate the slope at the new point without reusing the starting slope.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The slope is 1 − 4 = -3 and the curvature is 2 × 1 = 2. Their quotient is -3/2, or -1.50 slider units.</p><p>The proposal is 1 − (-3/2) = 5/2, or 2.50. It is allowed, but it is to the right of 2 while the start was to the left. A Newton step can cross the minimum.</p><p>At the new point, the slope is 2.25, above 0.25: we cannot stop on grounds of convergence. To check the cost, at the start the difference is −1, its square is 1 and the factor x + 4 is 5. J is therefore 5/3 points. The cost at the candidate, already calculated, is 13/24 points: it is lower. The proposal passes the checks, but we must continue to meet the slope threshold.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain a negative slope and quotient, then a positive displacement.</li><li>Explain crossing 2 without declaring it automatically forbidden.</li><li>Test the slope at the candidate and distinguish this test from the cost check.</li></ul></details></article><article class="exercice" id="ex-bord"><p class="repere">Exercise 3 · Transfer · a domain objection</p>
+<h3>The slider can no longer go as low</h3><p>A constraint on the scale model now reduces the domain to [3 ; 4], with the same cost J. At the point x = 3, calculate the Newton proposal. Can we accept it? Where is the minimum on this new domain? Respond to the statement “At a minimum, the derivative must always be 0.”</p>
+<label for="reponse-ex-bord">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bord" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bord" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bord" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bord" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate the square of 3, subtract 4, then calculate 2 × 3. Compare the proposal with the new lower bound.</p></details><details class="indice"><summary>Hint 2</summary><p>For every x in the new domain, the square of x is at least 9. Deduce the sign of J′ and whether J increases or decreases.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The slope is 9 − 4 = 5; the curvature is 6. The proposal would be 3 − 5/6 = 13/6, or about 2.167. It is below 3, so we reject it. Being able to evaluate the polynomial there does not make the point allowed.</p><p>On [3 ; 4], J′(x) ≥ 5 &gt; 0. The cost is strictly increasing there, so its constrained minimum is at the left boundary x = 3, with a nonzero slope. The condition J′ = 0 applies to a differentiable interior minimum, not to all boundary minima.</p><p>We do not silently change the bounds or present the rejected proposal as a setting we reached. Here, studying the sign is enough to solve the constrained problem; it provides a proof that the unmodified Newton step did not give.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate 13/6 and justify its rejection using the domain.</li><li>Establish the sign of the derivative throughout the new interval.</li><li>Distinguish an interior minimum from a boundary minimum without requiring a 0 slope at the boundary.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="tangente"><summary><span class="repere">Recall 1</span><span>Which line do we set equal to 0 to construct Newton in optimization?</span></summary><p>The tangent to g = J′ at the current point: 0 = J′(x) + J″(x)(u − x). If J″(x) is nonzero, this gives u = x − J′(x)/J″(x). We are not trying to set the tangent to the cost equal to 0.</p></details><details class="carte" data-carte="unites"><summary><span class="repere">Recall 2</span><span>Why does slope/curvature have the units of a displacement?</span></summary><p>The slope is in cost points per slider unit; the curvature is in cost points per squared slider unit. Their quotient is in slider units. The signed displacement is the negative of this quotient.</p></details><details class="carte" data-carte="verification"><summary><span class="repere">Recall 3</span><span>Which checks separate a proposal from a justified stop?</span></summary><p>Before dividing, check the curvature; before accepting, check the domain and cost; at the candidate, reevaluate the slope and compare it with the stated threshold. Reaching an iteration limit does not mean that this threshold is met.</p></details><details class="carte" data-carte="bord"><summary><span class="repere">Recall 4</span><span>Why does seeking J′ = 0 fail to solve every minimum problem?</span></summary><p>A minimum can lie at the boundary of the domain with a nonzero slope. Without convexity, a stationary point can also be a maximum or another point that is not a minimum. We must interpret the solution using the function and the constraints.</p></details><details class="carte" data-carte="approximation"><summary><span class="repere">Recall 5</span><span>Why did the first step not yet give a 0 slope?</span></summary><p>The point 2.50 sets an affine approximation to the slope equal to 0. The actual slope there is 2.25 and exceeds our threshold 0.25. We must recalculate, then repeat if the proposal remains acceptable.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without looking: explain which function we linearize, derive the quotient and its sign, then put the checks back in order. Finish with the difference between stopping at the threshold, an exact minimum and a boundary minimum. An answer obtained after a hint remains an assisted answer; reading and consulting the correction do not award any achieved level.</p></div><div class="exports"><a class="bouton" download="c054-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTQtbTU6dGFuZ2VudGUiLAogICAgICAidW5pdGUiOiAiYzA1NC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnN0cnVjdGlvbi1kdS1wYXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggbGluZSBkbyB3ZSBzZXQgZXF1YWwgdG8gMCB0byBjb25zdHJ1Y3QgTmV3dG9uIGluIG9wdGltaXphdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdGFuZ2VudCB0byBnID0gSuKAsiBhdCB0aGUgY3VycmVudCBwb2ludDogMCA9IErigLIoeCkgKyBK4oCzKHgpKHUg4oiSIHgpLiBJZiBK4oCzKHgpIGlzIG5vbnplcm8sIHRoaXMgZ2l2ZXMgdSA9IHgg4oiSIErigLIoeCkvSuKAsyh4KS4gV2UgYXJlIG5vdCB0cnlpbmcgdG8gc2V0IHRoZSB0YW5nZW50IHRvIHRoZSBjb3N0IGVxdWFsIHRvIDAuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTQtbTU6dW5pdGVzIiwKICAgICAgInVuaXRlIjogImMwNTQtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ1bml0ZXMtZHUtcGFzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHNsb3BlL2N1cnZhdHVyZSBoYXZlIHRoZSB1bml0cyBvZiBhIGRpc3BsYWNlbWVudD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc2xvcGUgaXMgaW4gY29zdCBwb2ludHMgcGVyIHNsaWRlciB1bml0OyB0aGUgY3VydmF0dXJlIGlzIGluIGNvc3QgcG9pbnRzIHBlciBzcXVhcmVkIHNsaWRlciB1bml0LiBUaGVpciBxdW90aWVudCBpcyBpbiBzbGlkZXIgdW5pdHMuIFRoZSBzaWduZWQgZGlzcGxhY2VtZW50IGlzIHRoZSBuZWdhdGl2ZSBvZiB0aGlzIHF1b3RpZW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDU0LW01OnZlcmlmaWNhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDU0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJvbGUtZXQtYXJyZXQiLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggY2hlY2tzIHNlcGFyYXRlIGEgcHJvcG9zYWwgZnJvbSBhIGp1c3RpZmllZCBzdG9wPyIsCiAgICAgICJyZXBvbnNlIjogIkJlZm9yZSBkaXZpZGluZywgY2hlY2sgdGhlIGN1cnZhdHVyZTsgYmVmb3JlIGFjY2VwdGluZywgY2hlY2sgdGhlIGRvbWFpbiBhbmQgY29zdDsgYXQgdGhlIGNhbmRpZGF0ZSwgcmVldmFsdWF0ZSB0aGUgc2xvcGUgYW5kIGNvbXBhcmUgaXQgd2l0aCB0aGUgc3RhdGVkIHRocmVzaG9sZC4gUmVhY2hpbmcgYW4gaXRlcmF0aW9uIGxpbWl0IGRvZXMgbm90IG1lYW4gdGhhdCB0aGlzIHRocmVzaG9sZCBpcyBtZXQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTQtbTU6Ym9yZCIsCiAgICAgICJ1bml0ZSI6ICJjMDU0LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlLWR1LXBvaW50LXN0YXRpb25uYWlyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBzZWVraW5nIErigLIgPSAwIGZhaWwgdG8gc29sdmUgZXZlcnkgbWluaW11bSBwcm9ibGVtPyIsCiAgICAgICJyZXBvbnNlIjogIkEgbWluaW11bSBjYW4gbGllIGF0IHRoZSBib3VuZGFyeSBvZiB0aGUgZG9tYWluIHdpdGggYSBub256ZXJvIHNsb3BlLiBXaXRob3V0IGNvbnZleGl0eSwgYSBzdGF0aW9uYXJ5IHBvaW50IGNhbiBhbHNvIGJlIGEgbWF4aW11bSBvciBhbm90aGVyIHBvaW50IHRoYXQgaXMgbm90IGEgbWluaW11bS4gV2UgbXVzdCBpbnRlcnByZXQgdGhlIHNvbHV0aW9uIHVzaW5nIHRoZSBmdW5jdGlvbiBhbmQgdGhlIGNvbnN0cmFpbnRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDU0LW01OmFwcHJveGltYXRpb24iLAogICAgICAidW5pdGUiOiAiYzA1NC1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlbnRlLXJlZWxsZS1ldC1hcHByb3hpbWVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkaWQgdGhlIGZpcnN0IHN0ZXAgbm90IHlldCBnaXZlIGEgMCBzbG9wZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcG9pbnQgMi41MCBzZXRzIGFuIGFmZmluZSBhcHByb3hpbWF0aW9uIHRvIHRoZSBzbG9wZSBlcXVhbCB0byAwLiBUaGUgYWN0dWFsIHNsb3BlIHRoZXJlIGlzIDIuMjUgYW5kIGV4Y2VlZHMgb3VyIHRocmVzaG9sZCAwLjI1LiBXZSBtdXN0IHJlY2FsY3VsYXRlLCB0aGVuIHJlcGVhdCBpZiB0aGUgcHJvcG9zYWwgcmVtYWlucyBhY2NlcHRhYmxlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c054-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hpY2ggbGluZSBkbyB3ZSBzZXQgZXF1YWwgdG8gMCB0byBjb25zdHJ1Y3QgTmV3dG9uIGluIG9wdGltaXphdGlvbj8JVGhlIHRhbmdlbnQgdG8gZyA9IErigLIgYXQgdGhlIGN1cnJlbnQgcG9pbnQ6IDAgPSBK4oCyKHgpICsgSuKAsyh4KSh1IOKIkiB4KS4gSWYgSuKAsyh4KSBpcyBub256ZXJvLCB0aGlzIGdpdmVzIHUgPSB4IOKIkiBK4oCyKHgpL0rigLMoeCkuIFdlIGFyZSBub3QgdHJ5aW5nIHRvIHNldCB0aGUgdGFuZ2VudCB0byB0aGUgY29zdCBlcXVhbCB0byAwLgl0b2RhaSBjMDU0LW01IGNvbnN0cnVjdGlvbi1kdS1wYXMKV2h5IGRvZXMgc2xvcGUvY3VydmF0dXJlIGhhdmUgdGhlIHVuaXRzIG9mIGEgZGlzcGxhY2VtZW50PwlUaGUgc2xvcGUgaXMgaW4gY29zdCBwb2ludHMgcGVyIHNsaWRlciB1bml0OyB0aGUgY3VydmF0dXJlIGlzIGluIGNvc3QgcG9pbnRzIHBlciBzcXVhcmVkIHNsaWRlciB1bml0LiBUaGVpciBxdW90aWVudCBpcyBpbiBzbGlkZXIgdW5pdHMuIFRoZSBzaWduZWQgZGlzcGxhY2VtZW50IGlzIHRoZSBuZWdhdGl2ZSBvZiB0aGlzIHF1b3RpZW50Lgl0b2RhaSBjMDU0LW01IHVuaXRlcy1kdS1wYXMKV2hpY2ggY2hlY2tzIHNlcGFyYXRlIGEgcHJvcG9zYWwgZnJvbSBhIGp1c3RpZmllZCBzdG9wPwlCZWZvcmUgZGl2aWRpbmcsIGNoZWNrIHRoZSBjdXJ2YXR1cmU7IGJlZm9yZSBhY2NlcHRpbmcsIGNoZWNrIHRoZSBkb21haW4gYW5kIGNvc3Q7IGF0IHRoZSBjYW5kaWRhdGUsIHJlZXZhbHVhdGUgdGhlIHNsb3BlIGFuZCBjb21wYXJlIGl0IHdpdGggdGhlIHN0YXRlZCB0aHJlc2hvbGQuIFJlYWNoaW5nIGFuIGl0ZXJhdGlvbiBsaW1pdCBkb2VzIG5vdCBtZWFuIHRoYXQgdGhpcyB0aHJlc2hvbGQgaXMgbWV0Lgl0b2RhaSBjMDU0LW01IGNvbnRyb2xlLWV0LWFycmV0CldoeSBkb2VzIHNlZWtpbmcgSuKAsiA9IDAgZmFpbCB0byBzb2x2ZSBldmVyeSBtaW5pbXVtIHByb2JsZW0/CUEgbWluaW11bSBjYW4gbGllIGF0IHRoZSBib3VuZGFyeSBvZiB0aGUgZG9tYWluIHdpdGggYSBub256ZXJvIHNsb3BlLiBXaXRob3V0IGNvbnZleGl0eSwgYSBzdGF0aW9uYXJ5IHBvaW50IGNhbiBhbHNvIGJlIGEgbWF4aW11bSBvciBhbm90aGVyIHBvaW50IHRoYXQgaXMgbm90IGEgbWluaW11bS4gV2UgbXVzdCBpbnRlcnByZXQgdGhlIHNvbHV0aW9uIHVzaW5nIHRoZSBmdW5jdGlvbiBhbmQgdGhlIGNvbnN0cmFpbnRzLgl0b2RhaSBjMDU0LW01IGxpbWl0ZS1kdS1wb2ludC1zdGF0aW9ubmFpcmUKV2h5IGRpZCB0aGUgZmlyc3Qgc3RlcCBub3QgeWV0IGdpdmUgYSAwIHNsb3BlPwlUaGUgcG9pbnQgMi41MCBzZXRzIGFuIGFmZmluZSBhcHByb3hpbWF0aW9uIHRvIHRoZSBzbG9wZSBlcXVhbCB0byAwLiBUaGUgYWN0dWFsIHNsb3BlIHRoZXJlIGlzIDIuMjUgYW5kIGV4Y2VlZHMgb3VyIHRocmVzaG9sZCAwLjI1LiBXZSBtdXN0IHJlY2FsY3VsYXRlLCB0aGVuIHJlcGVhdCBpZiB0aGUgcHJvcG9zYWwgcmVtYWlucyBhY2NlcHRhYmxlLgl0b2RhaSBjMDU0LW01IHBlbnRlLXJlZWxsZS1ldC1hcHByb3hpbWVlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cjyurb jwcscq ugbb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dcgoik rvbgwv jmzcaj hfhcug vaezze cnqzhm qytx</span></span></h3><dl><div><dt>What you understand</dt><dd>An optimization step includes a proposal rule and checks. The gradient collects the slopes when several settings vary; with a single setting, it is our derivative. Newton also uses curvature: seeing a gradient and a convergence flag is not enough to identify Newton. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rndlbw nlzeii cmqrqc gelqyy bippvg sltwql ryoq</span></span></dd></div><div><dt>Existing code and source</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mkinyw xfyikz jadpig yclqab tpqdiz hqmukf edszfi gzsvrh ajcgnt xduhby rclwxh wcsidk xwtnjo cvvlzc zfbnav uuoavn zpxwxm trqzlv srttjw pupqss pshtlt efnujb omwnkt fiwsoc</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for the level of this unit: reconstruct the step from the tangent, redo the calculations and defend the boundary checks. No canonical private milestone is planned for this chapter; this reading reference is added under the production mandate. Reading or an assisted answer does not award any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cxeskc fyazrd ijznvd fmhahj tppgrn ojemzj zguikp hfgjyp hmngpz yolriq tnugts jlcsfj nynagw jnxvft gplezb jbqpsf bfvjby ydrcah evgqop njvxdq yhwwjd sozcpl qlmsnn juyxam</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises without help on another day, then explain what each criterion actually allows us to conclude. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gyjmul fxhdni tkrprv qsrbbg btnntu jdajxr pnigxu otoxhs iwwgpw broyql ogzyfd xedziu akxmkp xd</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c054-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c054-m4.html">Previous</a> · <a href="c055-m1.html">Next</a></nav>
+<footer><p>Course book · C054·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

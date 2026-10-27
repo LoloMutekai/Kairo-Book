@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a dot product in a feature space using a kernel function applied to the input points, check the equality on an example, then classify a new point using the dual form.">
+<title>C140·M4 · Kernel trick — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">adqpfw tsyhbo erez</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C140·M4</p><h1>Kernel trick</h1><p class="objectif"><span>Your goal</span>Calculate a dot product in a feature space using a kernel function applied to the input points, check the equality on an example, then classify a new point using the dual form.</p><p class="prerequis"><strong>Before you start</strong><br>c059-m6 : Deterministic discrete Bellman · c099-m5 : probability calibration · c040-m5 : least squares · c140-m1 : margin · c140-m2 : hinge loss · c140-m3 : dual</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Two fictional signals, centered and without units, are read four times. The label y is +1 when the two signals have the same sign, and −1 when they have opposite signs. The four readings are plotted as A, B, C and D in the first diagram. All values on this page are fictional.</p><p>No straight line in the plane separates them. At the midpoint of two points, an affine score takes the average of its values at those two points. The midpoint of A and B is the origin; so is the midpoint of C and D. A score that is positive at A and B would therefore be positive at the origin, and a score that is negative at C and D would be negative at the same place: this is a contradiction.</p><p>Add a calculated coordinate: the product x<sub>1</sub>x<sub>2</sub> of the two signals. It is +1 for A and B, and −1 for C and D; in this richer space, a simple threshold is enough. The cost is that we have to build a list of coordinates for each point, and this list grows quickly as we add signals and products.</p><p>The kernel trick uses a fact from the unit on the dual, repeated here without a new proof: in the hard-margin dual problem, the points appear only through their pairwise dot products, and the same holds for the decision function. If we can calculate the dot product of two lists of coordinates using only the two original points, we never need to write out those lists.</p><p>Here are the objects involved. The feature map φ sends a point in the plane to a list of coordinates; the dot product ⟨·, ·⟩ adds the products of corresponding coordinates; the kernel k is the function that gives this dot product directly. In the decision function, the dual weights α are positive or 0, one per training point, the y values are the labels, the x values are the training points and b is the bias.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>k</mi><mo>(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>)</mo><mo>=</mo><mo>⟨</mo><mi>φ</mi><mo>(</mo><mi>a</mi><mo>)</mo><mo>,</mo><mi>φ</mi><mo>(</mo><mi>b</mi><mo>)</mo><mo>⟩</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>α</mi><mi>i</mi></msub><msub><mi>y</mi><mi>i</mi></msub><mi>k</mi><mo>(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>,</mo><mi>x</mi><mo>)</mo><mo>+</mo><mi>b</mi></mrow></math></div><p>Assumptions and limits. The data are fictional, the margin is hard (no errors allowed) and the points are separable in the feature space. The trick is valid only if k really is a dot product in a feature space; here we check this using an explicit map φ, and we do not cover a general criterion.</p><div class="schemas"><figure><svg viewBox="0 0 400 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Four readings that no straight line separates</title><desc>Four points in the plane. A at (1, 1) and B at (−1, −1) have the plus label, shown as disks. C at (1, −1) and D at (−1, 1) have the minus label, shown as squares. Segments AB and CD intersect at the origin (0, 0): their midpoints coincide.</desc><line x1="40" y1="150" x2="370" y2="150" class="trait" /><line x1="205" y1="20" x2="205" y2="252" class="trait" /><line x1="275" y1="80" x2="135" y2="220" class="trait" /><line x1="275" y1="220" x2="135" y2="80" class="trait" /><circle cx="275" cy="80" r="10" class="prediction" /><circle cx="135" cy="220" r="10" class="prediction" /><rect x="265" y="210" width="20" height="20" class="mesure" /><rect x="125" y="70" width="20" height="20" class="mesure" /><circle cx="205" cy="150" r="5" class="resultat" /><text x="290" y="76">A (1, 1) +</text><text x="290" y="238">C (1, −1) −</text><text x="120" y="238" text-anchor="end">B (−1, −1) +</text><text x="120" y="76" text-anchor="end">D (−1, 1) −</text><text x="372" y="172" class="petite-etiquette">x₁</text><text x="214" y="32" class="petite-etiquette">x₂</text><text x="205" y="278" text-anchor="middle" class="petite-etiquette">both midpoints are the origin</text></svg><figcaption>Disks have the + label, squares the − label. The two segments intersect at the origin: no straight line puts A and B on one side and C and D on the other. Fictional values.</figcaption></figure><figure><svg viewBox="0 0 420 262" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two paths to the same number</title><desc>For the pair C and U, the long path builds two lists of four coordinates and gives 4. The short path calculates the dot product 2 in the plane, then squares it, and gives 4. The two results are equal.</desc><rect x="110" y="8" width="200" height="52" rx="7" class="cadre-neutre" /><text x="210" y="32" text-anchor="middle">Pair C and U</text><text x="210" y="52" text-anchor="middle" class="petite-etiquette">C (1, −1) · U (3, 1)</text><line x1="160" y1="60" x2="102" y2="92" class="trait" /><line x1="260" y1="60" x2="318" y2="92" class="trait" /><rect x="10" y="92" width="185" height="84" rx="7" class="cadre-prediction" /><text x="102" y="114" text-anchor="middle">Long path</text><text x="102" y="137" text-anchor="middle" class="petite-etiquette">φ(C) = (1, −1, −1, 1)</text><text x="102" y="158" text-anchor="middle" class="petite-etiquette">φ(U) = (9, 3, 3, 1)</text><rect x="225" y="92" width="185" height="84" rx="7" class="cadre-resultat" /><text x="318" y="114" text-anchor="middle">Short path</text><text x="318" y="137" text-anchor="middle" class="petite-etiquette">⟨C, U⟩ = 3 − 1 = 2</text><text x="318" y="158" text-anchor="middle" class="petite-etiquette">then square it</text><line x1="102" y1="176" x2="102" y2="200" class="trait" /><line x1="318" y1="176" x2="318" y2="200" class="trait" /><rect x="10" y="200" width="185" height="50" rx="7" class="cadre-neutre" /><text x="102" y="231" text-anchor="middle">9 − 3 − 3 + 1 = 4</text><rect x="225" y="200" width="185" height="50" rx="7" class="cadre-neutre" /><text x="318" y="231" text-anchor="middle">2 × 2 = 4</text><text x="210" y="231" text-anchor="middle">=</text></svg><figcaption>Two paths to the same number for the pair C and U. The short path builds no list of coordinates; the equality is checked here rather than assumed to hold in general.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Calculate k(a, b) directly from the input points rather than calculating ⟨φ(a), φ(b)⟩ coordinate by coordinate, then replace the dot product with k in the dual and in the decision function, provided that k really is a dot product in a feature space.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Four fictional readings and a new point</h3><p>The four fictional readings are A = (1, 1) and B = (−1, −1) with label +1, then C = (1, −1) and D = (−1, 1) with label −1; the coordinates have no units. A new point U = (3, 1) arrives. We want its label using the kernel k(a, b) equal to the square of ⟨a, b⟩, without ever writing φ(U) in the decision calculation, then we check using explicit calculations.</p><ol class="etapes"><li><h3>Set out the points and check that a straight line fails</h3><p>A point is written x = (x<sub>1</sub>, x<sub>2</sub>). At the midpoint of two points, an affine score g(x) = w<sub>1</sub>x<sub>1</sub> + w<sub>2</sub>x<sub>2</sub> + b takes the average of its values at those points. For A and B, the sum of each coordinate is 1 + (−1) = 0: the midpoint is the origin. For C and D, the result is the same. Separation would require g(origin) &gt; 0 from A and B, and g(origin) &lt; 0 from C and D. A straight line therefore cannot work.</p></li><li><h3>Build the map φ</h3><p>Choose the following map. The coordinate x<sub>1</sub>x<sub>2</sub> is written twice: the usual version of this kernel includes it just once with an irrational factor, giving the same dot product; we repeat it to stay within the rational numbers.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>φ</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mo>(</mo><msup><msub><mi>x</mi><mn>1</mn></msub><mn>2</mn></msup><mo>,</mo><msub><mi>x</mi><mn>1</mn></msub><msub><mi>x</mi><mn>2</mn></msub><mo>,</mo><msub><mi>x</mi><mn>1</mn></msub><msub><mi>x</mi><mn>2</mn></msub><mo>,</mo><msup><msub><mi>x</mi><mn>2</mn></msub><mn>2</mn></msup><mo>)</mo></mrow></math></div><p>For A = (1, 1), φ(A) = (1, 1, 1, 1). B = (−1, −1) gives the same four numbers, because the product of two numbers with the same sign is positive. For C = (1, −1), φ(C) = (1, −1, −1, 1), and D = (−1, 1) has the same image.</p></li><li><h3>Separate in the feature space</h3><p>Take the weight vector w = (0, 1/2, 1/2, 0) and b = 0. Then w·φ(A) = 0×1 + 1/2×1 + 1/2×1 + 0×1 = 1, and w·φ(C) = 1/2×(−1) + 1/2×(−1) = −1. All four points therefore have exactly y(w·φ(x) + b) = 1: they all lie on the functional margin boundary.</p><p>In the original plane, this score is f(x) = 1·x<sub>1</sub>x<sub>2</sub>, the product of the two signals. The separator is linear in the space of φ; viewed in the plane, it is nonlinear.</p></li><li><h3>The trick: the same number without building φ</h3><p>Expand the square of the dot product in the plane. The four terms on the right are, in order, the four products of corresponding coordinates of φ(a) and φ(b).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>k</mi><mo>(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>)</mo><mo>=</mo><msup><mo>⟨</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo>⟩</mo><mn>2</mn></msup><mo>=</mo><msup><mrow><mo>(</mo><msub><mi>a</mi><mn>1</mn></msub><msub><mi>b</mi><mn>1</mn></msub><mo>+</mo><msub><mi>a</mi><mn>2</mn></msub><msub><mi>b</mi><mn>2</mn></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mrow><mo>(</mo><msub><mi>a</mi><mn>1</mn></msub><msub><mi>b</mi><mn>1</mn></msub><mo>+</mo><msub><mi>a</mi><mn>2</mn></msub><msub><mi>b</mi><mn>2</mn></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>=</mo><msup><msub><mi>a</mi><mn>1</mn></msub><mn>2</mn></msup><msup><msub><mi>b</mi><mn>1</mn></msub><mn>2</mn></msup><mo>+</mo><msub><mi>a</mi><mn>1</mn></msub><msub><mi>a</mi><mn>2</mn></msub><msub><mi>b</mi><mn>1</mn></msub><msub><mi>b</mi><mn>2</mn></msub><mo>+</mo><msub><mi>a</mi><mn>1</mn></msub><msub><mi>a</mi><mn>2</mn></msub><msub><mi>b</mi><mn>1</mn></msub><msub><mi>b</mi><mn>2</mn></msub><mo>+</mo><msup><msub><mi>a</mi><mn>2</mn></msub><mn>2</mn></msup><msup><msub><mi>b</mi><mn>2</mn></msub><mn>2</mn></msup></mrow></math></div><p>So k(a, b) = ⟨φ(a), φ(b)⟩. Test this on C = (1, −1) and U = (3, 1). Short path: ⟨C, U⟩ = 1×3 + (−1)×1 = 3 − 1 = 2, giving k(C, U) = 2 × 2 = 4.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>k</mi><mo>(</mo><mi>C</mi><mo>,</mo><mi>U</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mn>3</mn><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mn>2</mn></msup><mo>=</mo><msup><mn>2</mn><mn>2</mn></msup><mo>=</mo><mn>4</mn></mrow></math></div><p>Long path: φ(U) = (9, 3, 3, 1) and ⟨φ(C), φ(U)⟩ = 9 − 3 − 3 + 1; we calculate 9 − 3 = 6, then 6 − 3 = 3, then 3 + 1 = 4. Both paths give 4, and the first handled only two numbers per point.</p></li><li><h3>Build the Gram matrix</h3><p>The Gram matrix K stores k(x, x′) for all pairs of training points, in the order A, B, C, D. For A with itself, ⟨A, A⟩ = 1 + 1 = 2 and k = 2 × 2 = 4. For A and B, since B = −A, the dot product changes sign and squaring removes that change: k(A, B) = 4. The kernel is therefore even, k(−a, b) = k(a, b). For A and C, ⟨A, C⟩ = 1 − 1 = 0, giving k = 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>K</mi><mo>=</mo><mo>(</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable><mo>)</mo></mrow></math></div><p>The other entries follow from symmetry or evenness. Between a + point and a − point, the kernel is 0; between points with the same label, it is 4. This matrix was calculated entirely in the plane.</p></li><li><h3>Classify point U using the dual</h3><p>We use the dual solution for these four points: all four weights are α = 1/8 and b = 0. This is given as a starting point and checked in the next step. Between each training point and U: ⟨A, U⟩ = 3 + 1 = 4, so k(A, U) = 4 × 4 = 16; k(B, U) = 16 by evenness; k(C, U) = k(D, U) = 4 from the previous step.</p><p>Add the signed contributions: 16 + 16 = 32 for the + points, and 4 + 4 = 8 for the − points.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>f</mi><mo>(</mo><mi>U</mi><mo>)</mo><mo>=</mo><mn>1/8</mn><mo>×</mo><mrow><mo>(</mo><mn>32</mn><mo>−</mo><mn>8</mn><mo>)</mo></mrow><mo>=</mo><mn>1/8</mn><mo>×</mo><mn>24</mn><mo>=</mo><mn>3</mn></mrow></math></div><p>The sign is positive: U receives the label +1. Also, f(U) = 3 exceeds 1, so U is beyond the margin boundary. No list of coordinates of φ(U) was used in this decision.</p></li><li><h3>Check by three other routes</h3><p>Direct route: w·φ(U) = 1/2×3 + 1/2×3 = 1×3 = 3, and x<sub>1</sub>x<sub>2</sub> is 3×1 = 3: three ways, one number 3.</p><p>Reconstructed weights: w = the sum of α·y·φ(x) over the points. In the second coordinate, φ(A) and φ(C) are 1 and −1, with a difference of 1 − (−1) = 2; with two points per class, this gives 2 × 2 = 4, then 1/8 × 4 = 1/2, which is indeed the value 1/2 in w. The third coordinate gives the same value, and the first and last coordinates cancel because φ(A) and φ(C) coincide there.</p><p>Sum of signed weights: each class has 1/8 + 1/8 = 1/4, and the difference between the classes is 0.</p><p>These equalities — positive weights, a signed sum of 0, w reconstructed from the weights, and the margin reached at points with nonzero weight — are the dual conditions from the previous unit. We check them here without proving optimality again or drawing a conclusion for other data.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Explain why calculating f(U) never needed φ(U), and why we nevertheless needed to know that k is a dot product of features. What would happen to the result if each product of coordinates were squared separately?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The kernel trick calculates φ faster.”</h3><p>It avoids building φ: the dual needs only the dot product of the two lists. The exercise counts 101 multiplications versus 30000 for a fictional case; this is an operation count rather than a measured time.</p><a href="#exercices">Repeat the operation count</a></li><li><h3>“The kernel is the sum of the squares of the products of coordinates.”</h3><p>The square applies to the entire sum. For C and U, the sum of squares gives 10, whereas the kernel is 4: the two cross terms a₁a₂b₁b₂ are missing from the incorrect formula.</p><a href="#exemple">Review the expansion of the square</a></li><li><h3>“If a hyperplane separates the points after φ, a straight line would already have been enough in the plane.”</h3><p>The hyperplane lies in the feature space. In the original plane, f(x) = x₁x₂ is 0 on both axes, and the midpoints of A, B and of C, D coincide: no straight line works, although a separator exists in the space of φ.</p><a href="#intuition">Review the diagram of the four points</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-paire"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Two paths for a new pair</h3><p>Using the fictional points a = (2, 1) and b = (1, −3), calculate k(a, b) by the short path, then ⟨φ(a), φ(b)⟩ by the long path, and compare.</p>
+<label for="reponse-ex-paire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-paire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-paire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-paire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-paire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Keep the sign of ⟨a, b⟩ before squaring it.</p></details><details class="indice"><summary>Hint 2</summary><p>First write φ(a) and φ(b), each with its four coordinates (square of the first, product of the two coordinates twice, square of the second).</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Short path: ⟨a, b⟩ = 2×1 + 1×(−3) = 2 − 3 = −1, so k(a, b) = (−1) × (−1) = 1.</p><p>Long path: φ(a) = (4, 2, 2, 1) and φ(b) = (1, −3, −3, 9). The dot product is 4×1 + 2×(−3) + 2×(−3) + 1×9, giving 4 − 6 − 6 + 9. Regrouping: 4 + 9 = 13, then 13 − 6 = 7, then 7 − 6 = 1.</p><p>Both paths give 1. The original dot product was negative, while the kernel is positive because it is a square: there is no contradiction, because k is the dot product of the images under φ rather than of a and b.</p><p class="petit-titre">Check your reasoning</p><ul><li>The sign of ⟨a, b⟩ is kept before squaring.</li><li>All four coordinates of φ(a) and φ(b) are written out.</li><li>Both paths give the same number.</li></ul></details></article><article class="exercice" id="ex-decision"><p class="repere">Exercise 2 · Application with explanation</p>
+<h3>Classify a second point</h3><p>Use the weights α = 1/8 and b = 0 from the example. Determine the label of the fictional point V = (3, −1) using the four kernel values, then check with f(x) = x₁x₂.</p>
+<label for="reponse-ex-decision">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-decision" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-decision" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-decision" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-decision" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>V is obtained from U by changing the sign of one coordinate: look at what this does to ⟨A, V⟩ and ⟨C, V⟩.</p></details><details class="indice"><summary>Hint 2</summary><p>The kernel is even: k(B, V) = k(A, V) and k(D, V) = k(C, V). The contributions have now swapped roles.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>⟨A, V⟩ = 3 − 1 = 2, so k(A, V) = k(B, V) = 4. ⟨C, V⟩ = 3 + 1 = 4, so k(C, V) = k(D, V) = 16.</p><p>f(V) = 1/8 × (8 − 32) = −1/8 × 24 = −3: point V receives the label −1, and its absolute score exceeds 1, so V is beyond the margin.</p><p>Check: x<sub>1</sub>x<sub>2</sub> = 3×(−1) = −3. The two routes agree.</p><p class="petit-titre">Check your reasoning</p><ul><li>All four kernel values are calculated, using evenness.</li><li>The sign and magnitude of f(V) are interpreted.</li><li>The check using the product of the signals is carried out.</li></ul></details></article><article class="exercice" id="ex-cout"><p class="repere">Exercise 3 · Transfer</p>
+<h3>Count without drawing conclusions too quickly</h3><p>Fictional case: each point has n = 100 signals, and φ lists all products of two signals taken in order (signal i then signal j), giving n squared coordinates. For a pair a, b, count only the multiplications in the long path (build φ(a), build φ(b), then take their dot product) and in the short path (⟨a, b⟩ then its square). State what this count does not prove, and how many entries the Gram matrix of 4 points has.</p>
+<label for="reponse-ex-cout">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cout" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cout" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cout" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cout" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each coordinate of φ costs one multiplication to build; the dot product of two lists of the same length costs as many multiplications as that length.</p></details><details class="indice"><summary>Hint 2</summary><p>For ⟨a, b⟩: one multiplication per signal, then one for the square. For Gram: one entry per ordered pair of points.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The square of n is 10000. Long path: 10000 multiplications for φ(a), as many for φ(b), and as many for the dot product, so 3 × 10000 = 30000. Even when reusing lists already built, the dot product alone costs 10000.</p><p>Short path: 100 multiplications for ⟨a, b⟩, plus one for the square, giving 100 + 1 = 101.</p><p>This count ignores additions, memory, reads and any time measurement; it proves neither an actual improvement in a program nor that a kernel suits a dataset. The Gram matrix of 4 points has 4 × 4 = 16 entries, with somewhat fewer to store thanks to symmetry: it grows with the number of points rather than with the dimension of φ.</p><p class="petit-titre">Check your reasoning</p><ul><li>Multiplications are counted for each path using the same conventions.</li><li>The limit of the count (no measured time, no guarantee about the model) is stated.</li><li>The size of the Gram matrix depends on the number of points.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="noyau"><summary><span class="repere">Recall 1</span><span>What does a kernel k(a, b) calculate in this unit?</span></summary><p>The dot product ⟨φ(a), φ(b)⟩ of two lists of coordinates, obtained directly from a and b; here, the square of ⟨a, b⟩.</p></details><details class="carte" data-carte="remplacement"><summary><span class="repere">Recall 2</span><span>What does the kernel trick replace in the dual and in the decision function?</span></summary><p>It replaces each dot product of the input points with k(x, x′); the decision becomes the sum, over the training points, of α·y·k(point, x), plus b.</p></details><details class="carte" data-carte="deux-chemins"><summary><span class="repere">Recall 3</span><span>What equality links the short and long paths for the pair C and U?</span></summary><p>k(C, U) = ⟨C, U⟩ squared = ⟨φ(C), φ(U)⟩: 2 squared gives 4, and the sum of the four products of corresponding coordinates of φ also gives 4.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>What does the success of this example fail to guarantee?</span></summary><p>It guarantees neither that a kernel suits other data, nor a general criterion for kernel validity, nor good performance: the example is fictional, with a hard margin and an explicit φ.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Set out the points and labels; use the midpoints to show that a straight line fails; choose φ and separate in its space; see that the dual uses only dot products; replace each one with k(a, b) calculated from the input points, checking the equality on a pair; build the Gram matrix and classify U using the signed sum of α·y·k; check using w, the weights and their sum; keep the limits in mind: a valid kernel, fictional data, and an operation count without measured time.</p></div><div class="exports"><a class="bouton" download="c140-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDAtbTQ6bm95YXUiLAogICAgICAidW5pdGUiOiAiYzE0MC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm5veWF1IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhIGtlcm5lbCBrKGEsIGIpIGNhbGN1bGF0ZSBpbiB0aGlzIHVuaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGRvdCBwcm9kdWN0IOKfqM+GKGEpLCDPhihiKeKfqSBvZiB0d28gbGlzdHMgb2YgY29vcmRpbmF0ZXMsIG9idGFpbmVkIGRpcmVjdGx5IGZyb20gYSBhbmQgYjsgaGVyZSwgdGhlIHNxdWFyZSBvZiDin6hhLCBi4p+pLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTQwLW00OnJlbXBsYWNlbWVudCIsCiAgICAgICJ1bml0ZSI6ICJjMTQwLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZHVhbCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIGtlcm5lbCB0cmljayByZXBsYWNlIGluIHRoZSBkdWFsIGFuZCBpbiB0aGUgZGVjaXNpb24gZnVuY3Rpb24/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgcmVwbGFjZXMgZWFjaCBkb3QgcHJvZHVjdCBvZiB0aGUgaW5wdXQgcG9pbnRzIHdpdGggayh4LCB44oCyKTsgdGhlIGRlY2lzaW9uIGJlY29tZXMgdGhlIHN1bSwgb3ZlciB0aGUgdHJhaW5pbmcgcG9pbnRzLCBvZiDOscK3ecK3ayhwb2ludCwgeCksIHBsdXMgYi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tNDpkZXV4LWNoZW1pbnMiLAogICAgICAidW5pdGUiOiAiYzE0MC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImlkZW50aXRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZXF1YWxpdHkgbGlua3MgdGhlIHNob3J0IGFuZCBsb25nIHBhdGhzIGZvciB0aGUgcGFpciBDIGFuZCBVPyIsCiAgICAgICJyZXBvbnNlIjogImsoQywgVSkgPSDin6hDLCBV4p+pIHNxdWFyZWQgPSDin6jPhihDKSwgz4YoVSnin6k6IDIgc3F1YXJlZCBnaXZlcyA0LCBhbmQgdGhlIHN1bSBvZiB0aGUgZm91ciBwcm9kdWN0cyBvZiBjb3JyZXNwb25kaW5nIGNvb3JkaW5hdGVzIG9mIM+GIGFsc28gZ2l2ZXMgNC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MC1tNDpsaW1pdGUiLAogICAgICAidW5pdGUiOiAiYzE0MC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIHN1Y2Nlc3Mgb2YgdGhpcyBleGFtcGxlIGZhaWwgdG8gZ3VhcmFudGVlPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGd1YXJhbnRlZXMgbmVpdGhlciB0aGF0IGEga2VybmVsIHN1aXRzIG90aGVyIGRhdGEsIG5vciBhIGdlbmVyYWwgY3JpdGVyaW9uIGZvciBrZXJuZWwgdmFsaWRpdHksIG5vciBnb29kIHBlcmZvcm1hbmNlOiB0aGUgZXhhbXBsZSBpcyBmaWN0aW9uYWwsIHdpdGggYSBoYXJkIG1hcmdpbiBhbmQgYW4gZXhwbGljaXQgz4YuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c140-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEga2VybmVsIGsoYSwgYikgY2FsY3VsYXRlIGluIHRoaXMgdW5pdD8JVGhlIGRvdCBwcm9kdWN0IOKfqM+GKGEpLCDPhihiKeKfqSBvZiB0d28gbGlzdHMgb2YgY29vcmRpbmF0ZXMsIG9idGFpbmVkIGRpcmVjdGx5IGZyb20gYSBhbmQgYjsgaGVyZSwgdGhlIHNxdWFyZSBvZiDin6hhLCBi4p+pLgl0b2RhaSBjMTQwLW00IG5veWF1CldoYXQgZG9lcyB0aGUga2VybmVsIHRyaWNrIHJlcGxhY2UgaW4gdGhlIGR1YWwgYW5kIGluIHRoZSBkZWNpc2lvbiBmdW5jdGlvbj8JSXQgcmVwbGFjZXMgZWFjaCBkb3QgcHJvZHVjdCBvZiB0aGUgaW5wdXQgcG9pbnRzIHdpdGggayh4LCB44oCyKTsgdGhlIGRlY2lzaW9uIGJlY29tZXMgdGhlIHN1bSwgb3ZlciB0aGUgdHJhaW5pbmcgcG9pbnRzLCBvZiDOscK3ecK3ayhwb2ludCwgeCksIHBsdXMgYi4JdG9kYWkgYzE0MC1tNCBkdWFsCldoYXQgZXF1YWxpdHkgbGlua3MgdGhlIHNob3J0IGFuZCBsb25nIHBhdGhzIGZvciB0aGUgcGFpciBDIGFuZCBVPwlrKEMsIFUpID0g4p+oQywgVeKfqSBzcXVhcmVkID0g4p+oz4YoQyksIM+GKFUp4p+pOiAyIHNxdWFyZWQgZ2l2ZXMgNCwgYW5kIHRoZSBzdW0gb2YgdGhlIGZvdXIgcHJvZHVjdHMgb2YgY29ycmVzcG9uZGluZyBjb29yZGluYXRlcyBvZiDPhiBhbHNvIGdpdmVzIDQuCXRvZGFpIGMxNDAtbTQgaWRlbnRpdGUKV2hhdCBkb2VzIHRoZSBzdWNjZXNzIG9mIHRoaXMgZXhhbXBsZSBmYWlsIHRvIGd1YXJhbnRlZT8JSXQgZ3VhcmFudGVlcyBuZWl0aGVyIHRoYXQgYSBrZXJuZWwgc3VpdHMgb3RoZXIgZGF0YSwgbm9yIGEgZ2VuZXJhbCBjcml0ZXJpb24gZm9yIGtlcm5lbCB2YWxpZGl0eSwgbm9yIGdvb2QgcGVyZm9ybWFuY2U6IHRoZSBleGFtcGxlIGlzIGZpY3Rpb25hbCwgd2l0aCBhIGhhcmQgbWFyZ2luIGFuZCBhbiBleHBsaWNpdCDPhi4JdG9kYWkgYzE0MC1tNCBsaW1pdGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">adqpfw tsyhbo erez</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · dot product and kernel in the code</h3><dl><div><dt>What you understand</dt><dd>The kernel trick replaces a dot product in a feature space with a direct calculation on the input points. It therefore relies on the dot product as a building block and on a function k that really is one.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pxwvfx xklkjh wjlomj vpcjmg yugibk onohxc ofkwys lqqynx mkuckh yuhfes vxjtlu yqgvyc xgspdu vqldwz nlfvze ccsvgx frmfwh vnmrnm dkmyyr pmseyq mcfcpt hzdmrq kojvpt guqwcl</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: repeat the two-path calculation on a new pair, the Gram matrix and the classification of a point, then explain the assumption about k. The presence of code and reading the course do not establish any attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ytbafi yptwmq jtncxw tkeqct mxiqcc ochpxp ghjvgu hejwbv hadbnx agtklp mjygsj ivhjwj sfaoqa xujhfj pwsnma vyzwcn gtlwkj wgsiuu fptamk gixvbf fzohcv wbruho srzaci zlswvc</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example without help, then read unit C140·M5 on hyperparameter validation. Before considering a kernel in a real project, you would need to check a need, authorized data, kernel validity and an out-of-sample evaluation separately.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c140-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c140-m3.html">Previous</a> · <a href="c140-m5.html">Next</a></nav>
+<footer><p>Course book · C140·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

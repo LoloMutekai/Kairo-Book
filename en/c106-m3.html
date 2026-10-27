@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Reduce an activation map using windows, calculate the maximum and the mean, then explain what position information is lost.">
+<title>C106·M3 · Pooling — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gcsswd ynhddq tdqe</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C106·M3</p><h1>Pooling</h1><p class="objectif"><span>Your goal</span>Reduce an activation map using windows, calculate the maximum and the mean, then explain what position information is lost.</p><p class="prerequis"><strong>Before you start</strong><br>c103-m5 : regularization · c036-m5 : annotated graphs · c106-m1 : discrete convolution · c106-m2 : channels</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An edge detector produces a map from a small image of fabric: each cell indicates the strength of its response at that location. We want to keep a coarser view of this same map. Divide it into squares and replace each square with a single value.</p><p>Pooling, described here as local grouping, determines the rule for this summary. The maximum answers: “What is the strongest response in this region?” The mean answers: “What is the mean response in this region?” An isolated peak and a uniformly active region can therefore lead to different summaries.</p><p>The activations are fictional scores with no physical unit; they are neither probabilities nor readings from a real image. The map has 4 rows and 4 columns, with 1 channel. A window of 2 cells by 2, moved by 2 cells each time, gives 2 rows and 2 columns here.</p><p>The exact position of the peak within its window is lost if only the maximum is kept. Permuting the values in that window does not even change its summary. This can make a representation less sensitive to certain local shifts; it also prevents reconstruction of the original map. A reduction is therefore not automatically an improvement for a task that requires precise localization.</p><div class="schemas"><figure><svg viewBox="0 0 360 410" xmlns="http://www.w3.org/2000/svg" role="img"><title>From the map to local maxima</title><desc>Fictional map with no unit. Successive rows: 1, 7, 2, 4; 3, 5, 0, 6; 8, 2, 1, 3; 4, 0, 5, 9. The 2 by 2 blocks give the maxima 7, 6, then 8, 9.</desc><text x="180" y="25" text-anchor="middle">Input: 4 × 4</text><rect x="100" y="46" width="80" height="80" class="cadre-prediction" /><rect x="180" y="46" width="80" height="80" class="cadre-neutre" /><rect x="100" y="126" width="80" height="80" class="cadre-neutre" /><rect x="180" y="126" width="80" height="80" class="cadre-prediction" /><path d="M140 46V206M220 46V206M100 86H260M100 166H260" class="trait" /><text x="120" y="73" text-anchor="middle">1</text><text x="160" y="73" text-anchor="middle" class="resultat">7</text><text x="200" y="73" text-anchor="middle">2</text><text x="240" y="73" text-anchor="middle">4</text><text x="120" y="113" text-anchor="middle">3</text><text x="160" y="113" text-anchor="middle">5</text><text x="200" y="113" text-anchor="middle">0</text><text x="240" y="113" text-anchor="middle" class="resultat">6</text><text x="120" y="153" text-anchor="middle" class="resultat">8</text><text x="160" y="153" text-anchor="middle">2</text><text x="200" y="153" text-anchor="middle">1</text><text x="240" y="153" text-anchor="middle">3</text><text x="120" y="193" text-anchor="middle">4</text><text x="160" y="193" text-anchor="middle">0</text><text x="200" y="193" text-anchor="middle">5</text><text x="240" y="193" text-anchor="middle" class="resultat">9</text><text x="180" y="235" text-anchor="middle" class="petite-etiquette">Maximum of each block</text><rect x="128" y="252" width="104" height="104" class="cadre-resultat" /><path d="M180 252V356M128 304H232" class="trait" /><text x="154" y="286" text-anchor="middle">7</text><text x="206" y="286" text-anchor="middle">6</text><text x="154" y="338" text-anchor="middle">8</text><text x="206" y="338" text-anchor="middle">9</text><text x="180" y="390" text-anchor="middle">Output: 2 × 2</text></svg><figcaption>The outlines mark the windows; their boundaries run through the middle of the map. Each maximum keeps the position of its block in the output. The values remain scores with no unit.</figcaption></figure><figure><svg viewBox="0 0 360 410" xmlns="http://www.w3.org/2000/svg" role="img"><title>Position information lost in the summary</title><desc>The top left block contains 1, 7, then 3, 5. After swapping the top cells, it contains 7, 1, then 3, 5. Both maxima equal 7: the output does not say where the peak was.</desc><text x="88" y="40" text-anchor="middle">Before</text><text x="272" y="40" text-anchor="middle">Permuted</text><rect x="32" y="64" width="112" height="112" class="cadre-prediction" /><rect x="216" y="64" width="112" height="112" class="cadre-prediction" /><path d="M88 64V176M32 120H144M272 64V176M216 120H328" class="trait" /><text x="60" y="99" text-anchor="middle">1</text><text x="116" y="99" text-anchor="middle">7</text><text x="60" y="155" text-anchor="middle">3</text><text x="116" y="155" text-anchor="middle">5</text><text x="244" y="99" text-anchor="middle">7</text><text x="300" y="99" text-anchor="middle">1</text><text x="244" y="155" text-anchor="middle">3</text><text x="300" y="155" text-anchor="middle">5</text><path d="M88 182V226M82 220L88 226L94 220M272 182V226M266 220L272 226L278 220" class="trait" /><rect x="32" y="236" width="112" height="64" class="cadre-resultat" /><rect x="216" y="236" width="112" height="64" class="cadre-resultat" /><text x="88" y="276" text-anchor="middle">7</text><text x="272" y="276" text-anchor="middle">7</text><text x="180" y="338" text-anchor="middle">Same maximum</text><text x="180" y="378" text-anchor="middle" class="petite-etiquette">The peak has moved.</text></svg><figcaption>We permute only the top cells within the same window. This local equality does not demonstrate invariance to all shifts of the image.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Set the window, the stride and the handling of boundaries; summarize each window in each channel; check the size and state what information the summary loses.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Summarize the edge detector map</h3><p>Keep the fabric map shown above. Calculate its full output using maxima, then its output using means with the same windows. We are neither trying to recognize a fabric nor measuring classification performance.</p><ol class="etapes"><li><h3>Define the objects, units and conventions</h3><p>X denotes the input array. X[r, t, c] is the score at row r, column t and channel c; these indices will appear as subscripts of X in the formulas. H and W count the rows and columns respectively; C counts the channels. Here H = 4, W = 4 and C = 1. All indices start at 0: r &lt; H, t &lt; W and c &lt; C. The scores and summaries have no unit; distances on this grid are counted in cells.</p><p>k is the positive integer side length of the square window, here 2 cells. s is its positive integer stride in both directions, here 2 cells. No padding is added: only windows entirely contained within the map are processed. We use neither gaps between cells within a window nor rounding the output size upwards. H and W are at least as large as k.</p><p>i and j identify an output cell. Its window starts at row s × i and column s × j in the input. The integer offsets u and v range from 0 to k − 1. The symbol Ω, with indices i and j, denotes the set of positions (s × i + u, s × j + v) covered in this way; it contains k × k positions. The sign ∈ means “belongs to this set”. With channel c fixed, the other channels never contribute to this summary.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>7</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>4</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd><mtd><mn>5</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>6</mn></mtd></mtr><mtr><mtd><mn>8</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>1</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>4</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>5</mn></mtd><mtd><mn>9</mn></mtd></mtr></mtable><mo>]</mo><mtext> pour l’unique canal</mtext></mrow></math></div></li><li><h3>Count the windows before calculating their values</h3><p>H<sub>o</sub> and W<sub>o</sub> are the numbers of output rows and columns; the subscript o indicates the output. The symbol ⌊a⌋ denotes the greatest integer less than or equal to a. For one direction, H − k counts the space remaining after placing the initial window. Dividing by s counts the possible steps; adding 1 counts the initial window itself.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>H</mi><mi>o</mi></msub><mo>=</mo><mo>⌊</mo><mfrac><mrow><mi>H</mi><mo>−</mo><mi>k</mi></mrow><mi>s</mi></mfrac><mo>⌋</mo><mo>+</mo><mn>1</mn><mo>;</mo><msub><mi>W</mi><mi>o</mi></msub><mo>=</mo><mo>⌊</mo><mfrac><mrow><mi>W</mi><mo>−</mo><mi>k</mi></mrow><mi>s</mi></mfrac><mo>⌋</mo><mo>+</mo><mn>1</mn></mrow></math></div><p>Here the divisions are exact: H − k = 2, then 2 ÷ 2 = 1, then 1 + 1 = 2 rows. Likewise, W − k = 2, then 2 ÷ 2 + 1 = 2 columns. The starting positions are 0 and 2 in each direction: we visit top left, top right, bottom left, bottom right.</p><p>The size changes from 4 × 4 × 1 to 2 × 2 × 1: 16 scores become 4 scores in this channel. The number of output values is smaller by a factor of 4. This size ratio measures neither a speedup of the program nor an improvement in the detector.</p></li><li><h3>Compare values to find the maxima</h3><p>Y denotes the output array. The label max specifies the chosen rule; it is not an exponent. The symbol max selects the largest value in the window Ωᵢ,ⱼ, with channel c unchanged.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>Y</mi><mrow><mi>i</mi><mo>,</mo><mi>j</mi><mo>,</mo><mi>c</mi></mrow><mtext>max</mtext></msubsup><mo>=</mo><msub><mo>max</mo><mrow><mo>(</mo><mi>r</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>∈</mo><msub><mi>Ω</mi><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></msub></mrow></msub><msub><mi>X</mi><mrow><mi>r</mi><mo>,</mo><mi>t</mi><mo>,</mo><mi>c</mi></mrow></msub></mrow></math></div><p>Top left: comparing 1, 7, 3, 5 selects 7. Top right: comparing 2, 4, 0, 6 selects 6. Bottom left: comparing 8, 2, 4, 0 selects 8. Bottom right: comparing 1, 3, 5, 9 selects 9.</p><p>The result follows the spatial order: first row (7 ; 6), second row (8 ; 9). Check: each output value belongs to its own window and is greater than or equal to all its values. Taking only the cell at the start of each window would instead give (1 ; 2), then (8 ; 1): this would be sampling at spaced intervals, rather than taking a local maximum.</p></li><li><h3>Change the rule to calculate the means</h3><p>The label moy indicates an output computed using the mean. The symbol Σ instructs us to add the scores at the positions in the window. Each window contains k × k values; dividing by this count preserves the scale of the scores. A sum alone would have a different scale.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>Y</mi><mrow><mi>i</mi><mo>,</mo><mi>j</mi><mo>,</mo><mi>c</mi></mrow><mtext>moy</mtext></msubsup><mo>=</mo><mfrac><mn>1</mn><msup><mi>k</mi><mn>2</mn></msup></mfrac><msub><mo>Σ</mo><mrow><mo>(</mo><mi>r</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>∈</mo><msub><mi>Ω</mi><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></msub></mrow></msub><msub><mi>X</mi><mrow><mi>r</mi><mo>,</mo><mi>t</mi><mo>,</mo><mi>c</mi></mrow></msub></mrow></math></div><p>The count is 2 × 2 = 4. Top left: (1 + 7) + (3 + 5) = 8 + 8 = 16, then 16 ÷ 4 = 4.0. Top right: (2 + 4) + (0 + 6) = 6 + 6 = 12, then 12 ÷ 4 = 3.0.</p><p>Bottom left: (8 + 2) + (4 + 0) = 10 + 4 = 14, then 14 ÷ 4 = 3.5. Bottom right: (1 + 3) + (5 + 9) = 4 + 14 = 18, then 18 ÷ 4 = 4.5.</p><p>The output using means therefore has rows (4.0 ; 3.0), then (3.5 ; 4.5), still with no unit. It summarizes the activity distributed across the window; it gives no more information about the locations of the cells that produced it.</p></li><li><h3>Check without repeating the calculation</h3><p>In each window, the mean must remain between the minimum and the maximum: for example 0 ≤ 3.5 ≤ 8 at the bottom left. A result greater than the maximum could indicate, in particular, that the division was forgotten.</p><p>With our stride equal to the side length of the window and our map tiled exactly, each score is counted once. Sum of the top half: 16 + 12 = 28; bottom half: 14 + 18 = 32; input total: 28 + 32 = 60.</p><p>The means give 4.0 + 3.0 = 7.0 at the top and 3.5 + 4.5 = 8.0 at the bottom. Their sum is 15.0; multiplying it by 4 reconstructs 60. This check does not apply as it stands when windows overlap or boundary cells are ignored.</p></li><li><h3>State the limits of what this mechanism guarantees</h3><p>Max or mean pooling describes a fixed rule here: it learns no coefficients. Choosing the rule, k and s remains a design decision. The number C of channels is preserved; only their spatial grid changes.</p><p>For s = k, permuting the values within a block leaves its mean and maximum unchanged. The second diagram explicitly shows two different inputs that give the same output: without additional information, recovering the input is impossible.</p><p>A pattern that crosses a window boundary can change the output. Pooling therefore provides no general invariance to translations, meaning shifts of the entire image. The maximum does not eliminate a spurious peak either: if it becomes the largest score, it is kept. These limits matter as much as the size reduction.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the results and redraw the windows. Justify the number of possible starting positions, then explain why the maximum and the mean answer different questions. Finally, give two different blocks that have the same summary.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The window is small, so the number of channels decreases too.”</h3><p>The window moves through the rows and columns of a fixed channel. Repeating the same operation in all channels preserves their number C. Write the spatial dimensions and the channel dimension separately.</p><a href="#exemple">Review the dimensions and the window for each channel</a></li><li><h3>“I always divide the height by the side length of the window.”</h3><p>The number of windows also depends on the stride and the boundaries. Here, simple division works because s = k and the map is tiled exactly. With stride 1, the same window gives an output side length of 3, rather than 2.</p><a href="#exercices">Recount the overlapping windows</a></li><li><h3>“The peak can move within a block, so the output is unaffected by any shift.”</h3><p>The permutation in the diagram stays within a single window. As soon as values move into another window, the sets being compared change. The boundary exercise provides a counterexample on the same map.</p><a href="#exercices">Test crossing a boundary</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-moyenne"><p class="repere">Exercise 1 · Local application</p>
+<h3>Check the last block</h3><p>Without rereading the example, return to the bottom right window: (1 ; 3), then (5 ; 9). Calculate its maximum and mean. What simple check would detect a mean calculated without division?</p>
+<label for="reponse-ex-moyenne">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-moyenne" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-moyenne" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-moyenne" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-moyenne" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The maximum is a value present in the block; the mean requires counting all the cells.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the sum with the maximum before reporting a mean.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The maximum is 9, because no score in the block exceeds it. The sum is (1 + 3) + (5 + 9) = 4 + 14 = 18. There are 4 cells: the mean is 18/4 = 4.5, with no unit.</p><p>The check 1 ≤ 4.5 ≤ 9 is satisfied. The sum 18 exceeds 9; reporting it as the mean would violate this bound. The maximum and the mean use the same window but perform different operations.</p><p class="petit-titre">Check your reasoning</p><ul><li>Justify the maximum by comparing it with all values in the block.</li><li>Write the sum, the cell count and the division.</li><li>Check the bounds and keep the scores without a unit.</li></ul></details></article><article class="exercice" id="ex-chevauchement"><p class="repere">Exercise 2 · Changing a parameter</p>
+<h3>Move in smaller steps</h3><p>Keep the map and the window of side length 2, with no padding, but take s = 1. Give the output size, list the window starting positions in one direction, then calculate the maximum of the central window. Can you directly reuse the global sum check from the example?</p>
+<label for="reponse-ex-chevauchement">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-chevauchement" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-chevauchement" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-chevauchement" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-chevauchement" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The last allowed starting position still leaves the entire window inside the map.</p></details><details class="indice"><summary>Hint 2</summary><p>The central window starts at row 1, column 1, with indices starting at 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>In each direction, (4 − 2)/1 + 1 = 2 + 1 = 3 starting positions, at indices 0, 1 and 2. The output has size 3 × 3, giving 9 scores for the single channel.</p><p>The central window contains (5 ; 0), then (2 ; 1). Its maximum is 5. The stride has changed the sets visited and their number, even though the side length of the window is unchanged.</p><p>The windows overlap: the same cell now contributes to several summaries. Multiplying the sum of the means by the area would count contributions with their repetitions, without directly reconstructing the input sum. These repetitions would need to be taken into account.</p><p class="petit-titre">Check your reasoning</p><ul><li>List valid starting positions before concluding what the size is.</li><li>Identify the cells in the central window and its maximum 5.</li><li>Explain why the previous global check loses its assumption that each cell is counted once.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 3 · Counterexample and limit</p>
+<h3>The peak moves into the neighboring block</h3><p>Return to stride 2. Swap only 7 and 2 in the first row: it becomes (1 ; 2 ; 7 ; 4). All other cells stay the same. Recalculate the output using maxima. Compare it with the permutation within the window in the diagram: what can you claim about stability under shifts?</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Only the blocks in the top half contain swapped cells.</p></details><details class="indice"><summary>Hint 2</summary><p>On the left, the score 5 is still present; on the right, the peak 7 has just entered.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The top left block now contains 1, 2, 3, 5: its maximum is 5. The top right block contains 7, 4, 0, 6: its maximum is 7. The output row becomes (5 ; 7), instead of (7 ; 6). At the bottom, (8 ; 9) stays unchanged.</p><p>In the diagram, the permuted values belonged to the same block, whose set of values stayed the same. Here they cross a boundary: the summary changes. This swap moves a strong response by one cell; it is not a translation of the entire image. It is enough to refute the claim that every local shift would be invisible, without demonstrating the behavior of all possible translations.</p><p>To decide whether this pooling suits a real task, we would need to specify the allowed shifts, the required localization accuracy and the outputs to compare. This counterexample explains a limit; it attributes no performance to a model.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recalculate each affected block and preserve the unaffected blocks.</li><li>Distinguish a permutation within a block, crossing a boundary and shifting the entire image.</li><li>State conditional stability without claiming general invariance.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="regle"><summary><span class="repere">Recall 1</span><span>What must be specified to define local pooling?</span></summary><p>The window size, the stride, the summary rule and the handling of boundaries. In this unit, the windows stay entirely within the map and each channel is processed separately.</p></details><details class="carte" data-carte="taille"><summary><span class="repere">Recall 2</span><span>How do you count the output rows without padding?</span></summary><p>If H is the height, k the window side length and s the stride, count ⌊(H − k)/s⌋ + 1 starting positions. The division counts the steps; the final term counts the initial window. The same reasoning applies to the width; the channels are preserved.</p></details><details class="carte" data-carte="resume"><summary><span class="repere">Recall 3</span><span>What do the maximum and the mean distinguish within the same window?</span></summary><p>The maximum keeps the strongest response. The mean adds all the responses and divides by the number of cells. It keeps a value between the extremes; an isolated peak does not contribute in the same way as distributed activity.</p></details><details class="carte" data-carte="perte"><summary><span class="repere">Recall 4</span><span>Why does the summary not allow the window to be reconstructed?</span></summary><p>Two different windows can give the same maximum or mean, in particular by permuting their cells. The summary alone therefore recovers neither the individual values nor their arrangement.</p></details><details class="carte" data-carte="stabilite"><summary><span class="repere">Recall 5</span><span>What limit prevents a promise of general invariance to shifts?</span></summary><p>A permutation within a block does not change its summary, but crossing a boundary changes the sets being compared. The effect depends on the stride and the windows; the maximum can also keep a spurious peak.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct this sequence: a map and its channels; the allowed window starting positions; a maximum or mean rule; an output whose size you justify; a check of the values; a loss of information and a boundary counterexample. Explain each link using the fabric map, then try again on another day without help.</p></div><div class="exports"><a class="bouton" download="c106-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTM6cmVnbGUiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlZ3JvdXBlbWVudC1sb2NhbCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgYmUgc3BlY2lmaWVkIHRvIGRlZmluZSBsb2NhbCBwb29saW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSB3aW5kb3cgc2l6ZSwgdGhlIHN0cmlkZSwgdGhlIHN1bW1hcnkgcnVsZSBhbmQgdGhlIGhhbmRsaW5nIG9mIGJvdW5kYXJpZXMuIEluIHRoaXMgdW5pdCwgdGhlIHdpbmRvd3Mgc3RheSBlbnRpcmVseSB3aXRoaW4gdGhlIG1hcCBhbmQgZWFjaCBjaGFubmVsIGlzIHByb2Nlc3NlZCBzZXBhcmF0ZWx5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA2LW0zOnRhaWxsZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA2LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGFpbGxlLWRlLXNvcnRpZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGNvdW50IHRoZSBvdXRwdXQgcm93cyB3aXRob3V0IHBhZGRpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiSWYgSCBpcyB0aGUgaGVpZ2h0LCBrIHRoZSB3aW5kb3cgc2lkZSBsZW5ndGggYW5kIHMgdGhlIHN0cmlkZSwgY291bnQg4oyKKEgg4oiSIGspL3PijIsgKyAxIHN0YXJ0aW5nIHBvc2l0aW9ucy4gVGhlIGRpdmlzaW9uIGNvdW50cyB0aGUgc3RlcHM7IHRoZSBmaW5hbCB0ZXJtIGNvdW50cyB0aGUgaW5pdGlhbCB3aW5kb3cuIFRoZSBzYW1lIHJlYXNvbmluZyBhcHBsaWVzIHRvIHRoZSB3aWR0aDsgdGhlIGNoYW5uZWxzIGFyZSBwcmVzZXJ2ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTM6cmVzdW1lIiwKICAgICAgInVuaXRlIjogImMxMDYtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtYXhpbXVtLWV0LW1veWVubmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkbyB0aGUgbWF4aW11bSBhbmQgdGhlIG1lYW4gZGlzdGluZ3Vpc2ggd2l0aGluIHRoZSBzYW1lIHdpbmRvdz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbWF4aW11bSBrZWVwcyB0aGUgc3Ryb25nZXN0IHJlc3BvbnNlLiBUaGUgbWVhbiBhZGRzIGFsbCB0aGUgcmVzcG9uc2VzIGFuZCBkaXZpZGVzIGJ5IHRoZSBudW1iZXIgb2YgY2VsbHMuIEl0IGtlZXBzIGEgdmFsdWUgYmV0d2VlbiB0aGUgZXh0cmVtZXM7IGFuIGlzb2xhdGVkIHBlYWsgZG9lcyBub3QgY29udHJpYnV0ZSBpbiB0aGUgc2FtZSB3YXkgYXMgZGlzdHJpYnV0ZWQgYWN0aXZpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTM6cGVydGUiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlcnRlLWRlLXBvc2l0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHRoZSBzdW1tYXJ5IG5vdCBhbGxvdyB0aGUgd2luZG93IHRvIGJlIHJlY29uc3RydWN0ZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiVHdvIGRpZmZlcmVudCB3aW5kb3dzIGNhbiBnaXZlIHRoZSBzYW1lIG1heGltdW0gb3IgbWVhbiwgaW4gcGFydGljdWxhciBieSBwZXJtdXRpbmcgdGhlaXIgY2VsbHMuIFRoZSBzdW1tYXJ5IGFsb25lIHRoZXJlZm9yZSByZWNvdmVycyBuZWl0aGVyIHRoZSBpbmRpdmlkdWFsIHZhbHVlcyBub3IgdGhlaXIgYXJyYW5nZW1lbnQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTM6c3RhYmlsaXRlIiwKICAgICAgInVuaXRlIjogImMxMDYtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzdGFiaWxpdGUtY29uZGl0aW9ubmVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBsaW1pdCBwcmV2ZW50cyBhIHByb21pc2Ugb2YgZ2VuZXJhbCBpbnZhcmlhbmNlIHRvIHNoaWZ0cz8iLAogICAgICAicmVwb25zZSI6ICJBIHBlcm11dGF0aW9uIHdpdGhpbiBhIGJsb2NrIGRvZXMgbm90IGNoYW5nZSBpdHMgc3VtbWFyeSwgYnV0IGNyb3NzaW5nIGEgYm91bmRhcnkgY2hhbmdlcyB0aGUgc2V0cyBiZWluZyBjb21wYXJlZC4gVGhlIGVmZmVjdCBkZXBlbmRzIG9uIHRoZSBzdHJpZGUgYW5kIHRoZSB3aW5kb3dzOyB0aGUgbWF4aW11bSBjYW4gYWxzbyBrZWVwIGEgc3B1cmlvdXMgcGVhay4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c106-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IGJlIHNwZWNpZmllZCB0byBkZWZpbmUgbG9jYWwgcG9vbGluZz8JVGhlIHdpbmRvdyBzaXplLCB0aGUgc3RyaWRlLCB0aGUgc3VtbWFyeSBydWxlIGFuZCB0aGUgaGFuZGxpbmcgb2YgYm91bmRhcmllcy4gSW4gdGhpcyB1bml0LCB0aGUgd2luZG93cyBzdGF5IGVudGlyZWx5IHdpdGhpbiB0aGUgbWFwIGFuZCBlYWNoIGNoYW5uZWwgaXMgcHJvY2Vzc2VkIHNlcGFyYXRlbHkuCXRvZGFpIGMxMDYtbTMgcmVncm91cGVtZW50LWxvY2FsCkhvdyBkbyB5b3UgY291bnQgdGhlIG91dHB1dCByb3dzIHdpdGhvdXQgcGFkZGluZz8JSWYgSCBpcyB0aGUgaGVpZ2h0LCBrIHRoZSB3aW5kb3cgc2lkZSBsZW5ndGggYW5kIHMgdGhlIHN0cmlkZSwgY291bnQg4oyKKEgg4oiSIGspL3PijIsgKyAxIHN0YXJ0aW5nIHBvc2l0aW9ucy4gVGhlIGRpdmlzaW9uIGNvdW50cyB0aGUgc3RlcHM7IHRoZSBmaW5hbCB0ZXJtIGNvdW50cyB0aGUgaW5pdGlhbCB3aW5kb3cuIFRoZSBzYW1lIHJlYXNvbmluZyBhcHBsaWVzIHRvIHRoZSB3aWR0aDsgdGhlIGNoYW5uZWxzIGFyZSBwcmVzZXJ2ZWQuCXRvZGFpIGMxMDYtbTMgdGFpbGxlLWRlLXNvcnRpZQpXaGF0IGRvIHRoZSBtYXhpbXVtIGFuZCB0aGUgbWVhbiBkaXN0aW5ndWlzaCB3aXRoaW4gdGhlIHNhbWUgd2luZG93PwlUaGUgbWF4aW11bSBrZWVwcyB0aGUgc3Ryb25nZXN0IHJlc3BvbnNlLiBUaGUgbWVhbiBhZGRzIGFsbCB0aGUgcmVzcG9uc2VzIGFuZCBkaXZpZGVzIGJ5IHRoZSBudW1iZXIgb2YgY2VsbHMuIEl0IGtlZXBzIGEgdmFsdWUgYmV0d2VlbiB0aGUgZXh0cmVtZXM7IGFuIGlzb2xhdGVkIHBlYWsgZG9lcyBub3QgY29udHJpYnV0ZSBpbiB0aGUgc2FtZSB3YXkgYXMgZGlzdHJpYnV0ZWQgYWN0aXZpdHkuCXRvZGFpIGMxMDYtbTMgbWF4aW11bS1ldC1tb3llbm5lCldoeSBkb2VzIHRoZSBzdW1tYXJ5IG5vdCBhbGxvdyB0aGUgd2luZG93IHRvIGJlIHJlY29uc3RydWN0ZWQ/CVR3byBkaWZmZXJlbnQgd2luZG93cyBjYW4gZ2l2ZSB0aGUgc2FtZSBtYXhpbXVtIG9yIG1lYW4sIGluIHBhcnRpY3VsYXIgYnkgcGVybXV0aW5nIHRoZWlyIGNlbGxzLiBUaGUgc3VtbWFyeSBhbG9uZSB0aGVyZWZvcmUgcmVjb3ZlcnMgbmVpdGhlciB0aGUgaW5kaXZpZHVhbCB2YWx1ZXMgbm9yIHRoZWlyIGFycmFuZ2VtZW50Lgl0b2RhaSBjMTA2LW0zIHBlcnRlLWRlLXBvc2l0aW9uCldoYXQgbGltaXQgcHJldmVudHMgYSBwcm9taXNlIG9mIGdlbmVyYWwgaW52YXJpYW5jZSB0byBzaGlmdHM/CUEgcGVybXV0YXRpb24gd2l0aGluIGEgYmxvY2sgZG9lcyBub3QgY2hhbmdlIGl0cyBzdW1tYXJ5LCBidXQgY3Jvc3NpbmcgYSBib3VuZGFyeSBjaGFuZ2VzIHRoZSBzZXRzIGJlaW5nIGNvbXBhcmVkLiBUaGUgZWZmZWN0IGRlcGVuZHMgb24gdGhlIHN0cmlkZSBhbmQgdGhlIHdpbmRvd3M7IHRoZSBtYXhpbXVtIGNhbiBhbHNvIGtlZXAgYSBzcHVyaW91cyBwZWFrLgl0b2RhaSBjMTA2LW0zIHN0YWJpbGl0ZS1jb25kaXRpb25uZWxsZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">gcsswd ynhddq tdqe</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">veykzz iewjlx qmvq</span></span> after C106·M5: from the local mechanism to evidence about an analyzer</h3><dl><div><dt>You understand</dt><dd>You can follow local pooling, check its dimensions and explain a loss of position information. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">aldjjh xjuqqz ceahco zovcik aqzvkq olufrq fnyk</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">icsqmh xzpdrx wdvxxh xkivvk cozmpu vihgru hgugwd cmqpnp qpdbzu mlrphw jplxrw hkuduy wyzljl xtbgbu ksrsft dwsvnc dbxkom qkbxox jggznr qtrkkk xiyoxa ecuxea yzwsoz fzntjp</span></span></dd></div><div><dt>Level to prepare</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ehnujk mabntv qnuopo yvvxwa zuppnc uinjty vbxpkc hxxoze qobrtd pdceyb akrikw zaiohb waephs jz</span></span> Here, redo the calculations and the counterexample without support. Reading, an immediate result or an answer after a hint never establish that a level has been achieved.</dd></div><div><dt>Evidence and limit</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">odizpd wjwyhk otmhfw lkibej dzuvkz mxabdt oyugfe lbnwgo jywczi ljvbau ovjrlc gjkzoy ijflrg ylljxi pcgbwt oywexd bpczvq lezchc wmuotk jbsvzq isbmdg grwwjy gifdyw amnkud</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the explanation on another day, without help, then continue with C106·M4 and C106·M5. To then connect this lesson to the actual analyzer, you will need to identify its definition and intermediate dimensions, then distinguish evidence of its internal operations from evidence of the interface checks. Any real observation would require a separate, authorized procedure.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c106-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c106-m2.html">Previous</a> · <a href="c106-m4.html">Next</a></nav>
+<footer><p>Course book · C106·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

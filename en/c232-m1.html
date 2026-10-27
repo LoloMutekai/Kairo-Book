@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Approximate the area under a narrow exponential curve using the parabola at its peak, then measure what this approximation leaves out.">
+<title>C232·M1 · Laplace&#x27;s method — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fjkwts ebcghl pbdf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C232·M1</p><h1>Laplace&#x27;s method</h1><p class="objectif"><span>Your goal</span>Approximate the area under a narrow exponential curve using the parabola at its peak, then measure what this approximation leaves out.</p><p class="prerequis"><strong>Before you start</strong><br>c231-m5 : geodesics · c228-m5 : incompleteness · c061-m5 : identifiability and uncertainty · c174-m5 : conditions for validity</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An unnormalized probability density looks like a hill whose total area we want to find. This area does not always have a simple formula. But when the hill becomes very narrow, almost all the area lies around the peak, and near a peak a curve resembles a parabola. Laplace&#x27;s method therefore uses the parabola at the peak to replace the hill with a curve whose area can be calculated exactly.</p><p>Our example is entirely fictional. A dimensionless parameter θ is observed through n = 12 fictional independent readings. The unnormalized density of θ is proportional to exp(−n h(θ)), where the dimensionless function h is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><msup><mi>θ</mi><mn>4</mn></msup><mn>4</mn></mfrac><mo>−</mo><mi>θ</mi></mrow></math></div><p>This toy model is chosen so that every calculation can be done by hand; it describes no real phenomenon. We want the mass Z<sub>n</sub>, meaning the total area under the density, for example to normalize it:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Z</mi><mi>n</mi></msub><mo>=</mo><mo>∫</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>n</mi><mi>h</mi><mo>(</mo><mi>θ</mi><mo>)</mo></mrow></msup><mi>d</mi><mi>θ</mi></mrow></math></div><p>Why does the hill become narrower? Because n multiplies h in the exponent. Wherever h exceeds its minimum, even slightly, the factor n turns this difference into a rapid drop in density. As n increases, the hill becomes narrower, and the parabola at the peak describes it more accurately.</p><p>Three terms to establish. The peak θ̂ is the point where h is smallest, so the density is largest. The slope h′(θ̂) measures the inclination of h at the peak; it is 0 there. The curvature h″(θ̂) measures how sharply h rises on either side: the greater it is, the more pointed the hill. We use only these two derivatives, calculated step by step for a polynomial.</p><p>One fact is accepted here without proof: the area under a Gaussian curve with variance σ² centered at 0 is σ√(2π). Of the prerequisites in the catalogue, this example directly uses only the uncertainty from c061-m5, viewed as the width of a density. The other three prerequisites are not used in this example.</p><p>The result takes the form of a height multiplied by a width:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Z</mi><mi>n</mi></msub><mo>≈</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>n</mi><mi>h</mi><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo></mrow></msup><mo>×</mo><msqrt><mrow><mfrac><mn>2</mn><mi>π</mi><mi>n</mi><msup><mi>h</mi><mo>″</mo></msup><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo></mfrac></mrow></msqrt></mrow></math></div><p>The symbol ≈ indicates an approximation, rather than an equality. The last part of the lesson measures what it leaves out.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>The exact hill and its parabola at the peak</title><desc>Two bell curves around θ̂ = 1. The thick gold line is the exact integrand; the thin lavender line is the Gaussian with the same peak and curvature; both have height 1 at the peak. The exact curve is slightly higher on the left and lower on the right.</desc><line x1="20" y1="185" x2="340" y2="185" class="trait" /><line x1="130" y1="50" x2="130" y2="185" class="trait" /><line x1="230" y1="50" x2="230" y2="185" class="trait" /><path d="M30.0 183.6 L45.0 181.6 L60.0 177.7 L75.0 170.7 L90.0 159.3 L105.0 142.8 L120.0 121.7 L135.0 98.3 L150.0 76.4 L165.0 60.7 L180.0 55.0 L195.0 60.7 L210.0 76.4 L225.0 98.3 L240.0 121.7 L255.0 142.8 L270.0 159.3 L285.0 170.7 L300.0 177.7 L315.0 181.6 L330.0 183.6" class="repere-dose" /><path d="M30.0 179.6 L45.0 176.0 L60.0 170.4 L75.0 162.1 L90.0 150.3 L105.0 134.7 L120.0 115.7 L135.0 94.8 L150.0 75.1 L165.0 60.5 L180.0 55.0 L195.0 60.9 L210.0 77.7 L225.0 101.9 L240.0 127.8 L255.0 150.4 L270.0 166.8 L285.0 176.8 L300.0 181.9 L315.0 184.0 L330.0 184.7" class="chemin-correction" /><text x="20" y="26" class="petite-etiquette">height at peak: 1</text><text x="180" y="206" text-anchor="middle">θ̂</text><text x="130" y="206" text-anchor="middle" class="petite-etiquette">θ̂ − σ</text><text x="230" y="206" text-anchor="middle" class="petite-etiquette">θ̂ + σ</text><line x1="20" y1="226" x2="50" y2="226" class="chemin-correction" /><text x="58" y="231" class="petite-etiquette">exact</text><line x1="150" y1="226" x2="180" y2="226" class="repere-dose" /><text x="188" y="231" class="petite-etiquette">Gaussian</text></svg><figcaption>The thin lavender Gaussian follows the thick gold hill near the peak. It deviates in the tails: the exact curve is higher on the left and lower on the right. Fictional values.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Three quantities at the peak</title><desc>Three boxes in a row: the 0 slope 0 locates the peak, the curvature 3 measures its sharpness, and the variance 1/36 gives the width. They feed into a central box for the exponent 9, followed by a box checking the cubic and quartic deviations.</desc><rect x="8" y="14" width="104" height="64" rx="7" class="cadre-prediction" /><text x="60" y="40" text-anchor="middle">Peak</text><text x="60" y="64" text-anchor="middle" class="petite-etiquette">slope 0</text><rect x="128" y="14" width="104" height="64" rx="7" class="cadre-neutre" /><text x="180" y="40" text-anchor="middle">Curvature</text><text x="180" y="64" text-anchor="middle" class="petite-etiquette">h″ = 3</text><rect x="248" y="14" width="104" height="64" rx="7" class="cadre-resultat" /><text x="300" y="40" text-anchor="middle">Width</text><text x="300" y="64" text-anchor="middle" class="petite-etiquette">σ² = 1/36</text><line x1="60" y1="78" x2="60" y2="106" class="trait" /><line x1="180" y1="78" x2="180" y2="106" class="trait" /><line x1="300" y1="78" x2="300" y2="106" class="trait" /><rect x="8" y="106" width="344" height="60" rx="7" class="cadre-neutre" /><text x="180" y="132" text-anchor="middle">Mass ≈ height × width</text><text x="180" y="154" text-anchor="middle" class="petite-etiquette">height exponent: 9</text><line x1="180" y1="166" x2="180" y2="190" class="trait" /><rect x="8" y="190" width="344" height="52" rx="7" class="cadre-prediction" /><text x="180" y="213" text-anchor="middle">Check neglected terms</text><text x="180" y="233" text-anchor="middle" class="petite-etiquette">cubic 0.056 · quartic 0.002</text></svg><figcaption>Three quantities at the peak give the approximate mass; a final box measures the deviations. Every number comes from the worked example.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Find the peak θ̂ from h; read off the exponent −n h(θ̂) and the width σ² = the reciprocal of n h″(θ̂); write height times width; then check the neglected terms before trusting the result.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Approximate the mass Zₙ of a fictional density</h3><p>Using the function h from the intuition section and n = 12 fictional readings, approximate Zₙ with Laplace&#x27;s method, then measure what the approximation leaves out. All values are fictional and dimensionless.</p><ol class="etapes"><li><h3>Define the objects and assumptions</h3><p>θ is the parameter; h is the function from the intuition section; n = 12 counts the fictional readings; Z<sub>n</sub> is the area under exp(−n h) over the entire real line. Everything is dimensionless.</p><p>The method assumes four things: h is smooth; it has a unique global minimum θ̂ in the interior of the domain; its curvature h″(θ̂) is strictly positive; n is large enough for the mass to concentrate near θ̂. Here h tends to infinity on both sides, so the area is finite. We will check each assumption rather than take it for granted.</p></li><li><h3>Find the peak and check that it is unique</h3><p>Differentiating the term θ to the power 4, divided by 4, gives θ to the power 3, because the two fours cancel; differentiating −θ gives −1. The slope is therefore:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>h</mi><mo>′</mo></msup><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><msup><mi>θ</mi><mn>3</mn></msup><mo>−</mo><mn>1</mn></mrow></math></div><p>Try θ̂ = 1: its cube is 1, so the slope is 1 − 1 = 0, and θ̂ = 1 does make the slope 0. To check uniqueness, factorize:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>θ</mi><mn>3</mn></msup><mo>−</mo><mn>1</mn><mo>=</mo><mo>(</mo><mi>θ</mi><mo>−</mo><mn>1</mn><mo>)</mo><mo>(</mo><msup><mi>θ</mi><mn>2</mn></msup><mo>+</mo><mi>θ</mi><mo>+</mo><mn>1</mn><mo>)</mo></mrow></math></div><p>The second factor is always strictly positive: for a θ² + b θ + c with (a, b, c) = (1, 1, 1), the quantity 4ac − b² is 4 − 1 = 3, which is positive with a &gt; 0, so the polynomial never vanishes. The slope is negative to the left of θ̂ and positive to the right: θ̂ is the unique global minimum.</p></li><li><h3>Read off the height at the peak</h3><p>The height of the hill at θ̂ is exp(−n h(θ̂)). Calculate h at the peak, with θ̂ to the power 4 equal to 1:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>h</mi><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mn>4</mn></mfrac><mo>−</mo><mn>1</mn><mo>=</mo><mo>−</mo><mn>0.75</mn></mrow></math></div><p>In decimal form: 1/4 = 0.25, then 0.25 − 1 = −0.75, or the fraction −3/4. Read off the exponent using the sign in the formula:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>−</mo><mi>n</mi><mi>h</mi><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><mn>12</mn><mo>×</mo><mn>0.75</mn><mo>=</mo><mn>9</mn></mrow></math></div><p>Check: h(θ̂) is negative, so −n h(θ̂) is positive, and the height is exp(9). An enormous absolute height causes no problem: only the shape of the hill around the peak matters.</p></li><li><h3>Measure the curvature and deduce the width</h3><p>The derivative of θ³ − 1 is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>h</mi><mo>″</mo></msup><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mn>3</mn><msup><mi>θ</mi><mn>2</mn></msup></mrow></math></div><p>At the peak: 3 × 1 = 3. The precision, meaning n h″(θ̂), is 12 × 3 = 36. It is strictly positive: the curvature assumption holds. The variance of the replacement Gaussian is the reciprocal of the precision:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mfrac><mn>1</mn><mi>n</mi><msup><mi>h</mi><mo>″</mo></msup><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo></mfrac><mo>=</mo><mfrac><mn>1</mn><mn>12</mn><mo>×</mo><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>1</mn><mn>36</mn></mfrac></mrow></math></div><p>Thus σ² = 1/36 ≈ 0.028, and σ = 1/6 ≈ 0.167. Check: 1/6 × 1/6 = 1/36, and 6 × 6 = 36. θ is dimensionless, so σ is too.</p></li><li><h3>Expand around the peak and keep only the parabola</h3><p>Set u = θ − θ̂. For a polynomial of degree four, h(θ̂ + u) = h(θ̂) + h′u + h″u²/2 + h‴u³/6 + h⁗u⁴/24 is exact (Taylor&#x27;s formula, accepted here; you can also expand (θ̂ + u) to the power 4 by hand). The next derivatives of h are h‴(θ̂) = 6 × 1 = 6 and h⁗ = 6. The coefficients of u³ and u⁴ are h‴/6 = 1 and h⁗/24 = 0.25; the coefficient of u² is h″/2. Multiplying by n gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>n</mi><mi>h</mi><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>+</mo><mi>u</mi><mo>)</mo><mo>=</mo><mi>n</mi><mi>h</mi><mo>(</mo><mover><mi>θ</mi><mo>^</mo></mover><mo>)</mo><mo>+</mo><mn>18</mn><msup><mi>u</mi><mn>2</mn></msup><mo>+</mo><mn>12</mn><msup><mi>u</mi><mn>3</mn></msup><mo>+</mo><mn>3</mn><msup><mi>u</mi><mn>4</mn></msup></mrow></math></div><p>Check: 18 is indeed half the precision 36. A Gaussian with variance σ² has exponent −u²/(2σ²), or −18 u². Keeping only the term in u² therefore means replacing the hill with a Gaussian of variance σ². Its area is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mo>∫</mo><msup><mi>e</mi><mrow><mo>−</mo><mfrac><msup><mi>u</mi><mn>2</mn></msup><mn>2</mn><msup><mi>σ</mi><mn>2</mn></msup></mfrac></mrow></msup><mi>d</mi><mi>u</mi><mo>=</mo><mi>σ</mi><msqrt><mrow><mn>2</mn><mi>π</mi></mrow></msqrt></mrow></math></div></li><li><h3>Write Laplace&#x27;s formula</h3><p>Combine the height exp(9) with the area under the Gaussian of variance 1/36:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Z</mi><mi>n</mi></msub><mo>≈</mo><msup><mi>e</mi><mn>9</mn></msup><mo>×</mo><msqrt><mrow><mfrac><mn>2</mn><mi>π</mi><mn>36</mn></mfrac></mrow></msqrt></mrow></math></div><p>We do not calculate a decimal value for Z<sub>n</sub>: this lesson uses exact arithmetic, with π and the exponential appearing only as symbols. Remember: a height factor multiplied by a width derived from the curvature.</p></li><li><h3>Measure the neglected terms one width from the peak</h3><p>Evaluate the three terms of the exponent at u = σ = 1/6. The quadratic term is 18 × 1/36 = 1/2. The cubic term is 12 × 1/216 = 1/18. The term in u⁴ is 3 × 1/1296 = 1/432. On the right, all terms add; on the left, the cubic term changes sign:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>1/2</mn><mo>+</mo><mn>1/18</mn><mo>+</mo><mn>1/432</mn><mo>=</mo><mn>241/432</mn></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>1/2</mn><mo>−</mo><mn>1/18</mn><mo>+</mo><mn>1/432</mn><mo>=</mo><mn>193/432</mn></mrow></math></div><p>Independent check: directly calculating n (h(θ̂ ± σ) − h(θ̂)), without an expansion, gives 241/432 and 193/432 again. Relative to the Gaussian, whose drop is 1/2, the deviation is 25/432 ≈ 0.058 on the right and 23/432 ≈ 0.053 on the left: small compared with 0.5, but nonzero. On the right the hill is lower than its parabolic approximation, and on the left higher, as in the first diagram.</p></li><li><h3>State what has been established</h3><p>Established: the peak, its height, its width, and the local deviations at ± σ, as exact fractions. Not established: the global error in Z<sub>n</sub>, because two points do not bound an area. Under regularity assumptions accepted here, the relative error of the formula decreases like 1/n as n increases.</p><p>A separate numerical check in the unit&#x27;s calculation file compares the actual integral and the formula, finding agreement within a few percent for n = 12 and n = 48. This checks the order of magnitude for this example; it is not a general proof.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does keeping only the parabola become more reliable as n increases? Relate your answer to the width σ and the cubic and quartic terms.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The mass is the height at the peak: Zₙ ≈ exp(−n h(θ̂)).”</h3><p>An area is a height multiplied by a width. The height is exp(9), but the width √(2π σ²) comes from the curvature 3; without it, changing n would not change the scale of the answer even though the hill becomes narrower.</p><a href="#intuition">Review the diagram of the hill and its parabola</a></li><li><h3>“The parabola is exact, since Laplace&#x27;s formula is a formula.”</h3><p>It is an approximation. At u = ± σ, the cubic term 1/18 and quartic term 1/432 show that the hill is not symmetric; these deviations decrease as n increases, as the cubic term in the first exercise shows.</p><a href="#exemple">Measure the neglected terms again</a></li><li><h3>“The method applies whenever a function has a minimum.”</h3><p>An interior global minimum is needed, unique or handled separately, with strictly positive curvature. For h_C, the curvature is 0: the variance σ² = the reciprocal of 0 does not exist, and the Gaussian formula no longer applies.</p><a href="#exercices">Redo the exercise on the degenerate peak</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-n-grand"><p class="repere">Exercise 1 · Explained application</p>
+<h3>A narrower hill</h3><p>Keep the function h from the example and take n = 48 instead of 12. Calculate the precision, the variance σ², the standard deviation σ, and then the cubic term at u = σ. Compare it with the one in the example. The values remain fictional.</p>
+<label for="reponse-ex-n-grand">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-n-grand" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-n-grand" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-n-grand" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-n-grand" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The curvature h″(θ̂) does not depend on n; only the precision n h″(θ̂) changes.</p></details><details class="indice"><summary>Hint 2</summary><p>The cubic term is n × c × σ³, where c = 1 is the coefficient of u³ in h.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Precision: 48 × 3 = 144. Variance: the reciprocal of 144, giving 1/144. Standard deviation: 1/12, because 1/12 × 1/12 = 1/144; σ was divided by 2 while n was multiplied by 4.</p><p>Cubic term: n × c = 48, σ³ = 1/1728, product 1/36 ≈ 0.028, compared with 1/18 in the example. The ratio is 1/2: the cubic term is divided by 2 when n is multiplied by 4, so it decreases like the reciprocal of the square root of n. Check: 144 × 1/144 = 1, and 1/2 × 1/2 × 4 = 1.</p><p class="petit-titre">Check your reasoning</p><ul><li>The curvature remains 3; only the precision changes.</li><li>σ is divided by 2 when n is multiplied by 4.</li><li>The cubic term is compared with the one in the example, with ratio 1/2.</li></ul></details></article><article class="exercice" id="ex-autre-h"><p class="repere">Exercise 2 · Guided transfer</p>
+<h3>Another function, the same mechanism</h3><p>Take n = 2 and the fictional function h_B in the formula, with c = 8. Its minimum is attained at a strictly positive integer. Find it by checking that the slope vanishes, then calculate the exponent n × (−h_B(θ̂)) and the variance σ².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>B</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><msup><mi>θ</mi><mn>4</mn></msup><mn>4</mn></mfrac><mo>−</mo><mi>c</mi><mi>θ</mi></mrow></math></div>
+<label for="reponse-ex-autre-h">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-autre-h" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-autre-h" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-autre-h" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-autre-h" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The slope is h_B′(θ) = θ³ − c; look for an integer whose cube equals c.</p></details><details class="indice"><summary>Hint 2</summary><p>Try θ̂ = 2, then calculate h_B(θ̂) and the curvature 3θ̂².</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The cube of 2 is 8, so the slope 8 − 8 = 0 vanishes at θ̂ = 2. The second factor in the factorization remains positive, as in the example, so this peak is unique.</p><p>Height: θ̂ to the power 4 is 16, divided by 4 gives 4; c × θ̂ = 8 × 2 = 16; h_B(θ̂) = 4 − 16 = −12. Exponent: 2 × 12 = 24.</p><p>Curvature: 3 × θ̂² = 3 × 4 = 12. Precision: 2 × 12 = 24. Variance: σ² = 1/24. Check: the precision 24 times the variance 1/24 gives 1 again.</p><p class="petit-titre">Check your reasoning</p><ul><li>The 0 slope is checked by calculation, rather than guessed.</li><li>The exponent has the correct sign: n times the negative of h_B(θ̂).</li><li>The variance is the reciprocal of n times the curvature.</li></ul></details></article><article class="exercice" id="ex-degenere"><p class="repere">Exercise 3 · Diagnostic</p>
+<h3>When the parabola is flat</h3><p>Consider the fictional function h_C in the formula, with no linear term. Its minimum is at θ̂ = 0. Calculate its curvature at the peak and the precision for n = 16. Can the Gaussian formula from the example be applied? Then find the scale ε such that n × ε to the power 4 equals 1, and compare it with the Gaussian scale such that n × ε² equals 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>C</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><msup><mi>θ</mi><mn>4</mn></msup><mn>4</mn></mfrac></mrow></math></div>
+<label for="reponse-ex-degenere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-degenere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-degenere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-degenere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-degenere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The curvature is h_C″(θ) = 3θ²; evaluate it at θ̂.</p></details><details class="indice"><summary>Hint 2</summary><p>Look for ε as a simple fraction for n = 16: which fraction to the power 4 equals 1/16?</p></details><details class="indice"><summary>Hint 3</summary><p>The substitution θ = ε s turns n h_C into s⁴/4 when ε is chosen this way.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Curvature: 3 × 0² = 0. Precision: 16 × 0 = 0. The variance σ² would be the reciprocal of 0: it does not exist, and the Gaussian formula does not apply. The parabola at the peak is flat; the fourth power term dominates.</p><p>Scale: with ε = 1/2, ε to the power 4 multiplied by 16 equals 1. Gaussian scale: ε = 1/4, ε² multiplied by 16 equals 1. The degenerate hill is wider (1/2 compared with 1/4): its mass decreases like n to the power minus one quarter, rather than n to the power minus one half.</p><p>After substitution, the mass is ε times the area under exp(−s⁴/4). This remaining area is not calculated here: the degenerate case requires a different treatment from the Gaussian formula.</p><p class="petit-titre">Check your reasoning</p><ul><li>The 0 precision is identified without dividing by 0.</li><li>The scale 1/2 is compared with the Gaussian scale 1/4.</li><li>The remaining area under exp(−s⁴/4) is explicitly stated to be uncalculated.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="sommet"><summary><span class="repere">Recall 1</span><span>What must be checked before applying Laplace&#x27;s method?</span></summary><p>That h is smooth, that it has a unique interior global minimum θ̂ (0 slope), that its curvature h″(θ̂) is strictly positive, and that n is large enough.</p></details><details class="carte" data-carte="largeur"><summary><span class="repere">Recall 2</span><span>What is the variance of the replacement Gaussian?</span></summary><p>σ² = the reciprocal of n h″(θ̂): the width is set by the curvature at the peak, multiplied by n.</p></details><details class="carte" data-carte="formule"><summary><span class="repere">Recall 3</span><span>What form does the Laplace approximation take?</span></summary><p>Zₙ ≈ exp(−n h(θ̂)) × √(2π / (n h″(θ̂))): a height at the peak multiplied by the width of a Gaussian.</p></details><details class="carte" data-carte="limites"><summary><span class="repere">Recall 4</span><span>What does a check of the terms at ± σ leave unresolved?</span></summary><p>It measures the local deviation from the Gaussian, but does not bound the error in the area; it also does not cover a peak with 0 curvature.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Find the peak by setting the slope to 0 and check that it is unique, interior, and has positive curvature; read off the exponent n × (−h(θ̂)); read off the width σ² = the reciprocal of n h″(θ̂); write exp(−n h(θ̂)) × √(2π σ²); measure the cubic and quartic terms at ± σ; state that this check does not bound the error or handle a peak with 0 curvature.</p></div><div class="exports"><a class="bouton" download="c232-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzItbTE6c29tbWV0IiwKICAgICAgInVuaXRlIjogImMyMzItbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzb21tZXQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBtdXN0IGJlIGNoZWNrZWQgYmVmb3JlIGFwcGx5aW5nIExhcGxhY2UncyBtZXRob2Q/IiwKICAgICAgInJlcG9uc2UiOiAiVGhhdCBoIGlzIHNtb290aCwgdGhhdCBpdCBoYXMgYSB1bmlxdWUgaW50ZXJpb3IgZ2xvYmFsIG1pbmltdW0gzrjMgiAoMCBzbG9wZSksIHRoYXQgaXRzIGN1cnZhdHVyZSBo4oCzKM64zIIpIGlzIHN0cmljdGx5IHBvc2l0aXZlLCBhbmQgdGhhdCBuIGlzIGxhcmdlIGVub3VnaC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIzMi1tMTpsYXJnZXVyIiwKICAgICAgInVuaXRlIjogImMyMzItbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsYXJnZXVyIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgdGhlIHZhcmlhbmNlIG9mIHRoZSByZXBsYWNlbWVudCBHYXVzc2lhbj8iLAogICAgICAicmVwb25zZSI6ICLPg8KyID0gdGhlIHJlY2lwcm9jYWwgb2YgbiBo4oCzKM64zIIpOiB0aGUgd2lkdGggaXMgc2V0IGJ5IHRoZSBjdXJ2YXR1cmUgYXQgdGhlIHBlYWssIG11bHRpcGxpZWQgYnkgbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzIzMi1tMTpmb3JtdWxlIiwKICAgICAgInVuaXRlIjogImMyMzItbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmb3JtdWxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZm9ybSBkb2VzIHRoZSBMYXBsYWNlIGFwcHJveGltYXRpb24gdGFrZT8iLAogICAgICAicmVwb25zZSI6ICJa4oKZIOKJiCBleHAo4oiSbiBoKM64zIIpKSDDlyDiiJooMs+AIC8gKG4gaOKAsyjOuMyCKSkpOiBhIGhlaWdodCBhdCB0aGUgcGVhayBtdWx0aXBsaWVkIGJ5IHRoZSB3aWR0aCBvZiBhIEdhdXNzaWFuLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjMyLW0xOmxpbWl0ZXMiLAogICAgICAidW5pdGUiOiAiYzIzMi1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZXMiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGEgY2hlY2sgb2YgdGhlIHRlcm1zIGF0IMKxIM+DIGxlYXZlIHVucmVzb2x2ZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgbWVhc3VyZXMgdGhlIGxvY2FsIGRldmlhdGlvbiBmcm9tIHRoZSBHYXVzc2lhbiwgYnV0IGRvZXMgbm90IGJvdW5kIHRoZSBlcnJvciBpbiB0aGUgYXJlYTsgaXQgYWxzbyBkb2VzIG5vdCBjb3ZlciBhIHBlYWsgd2l0aCAwIGN1cnZhdHVyZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c232-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IGJlIGNoZWNrZWQgYmVmb3JlIGFwcGx5aW5nIExhcGxhY2UncyBtZXRob2Q/CVRoYXQgaCBpcyBzbW9vdGgsIHRoYXQgaXQgaGFzIGEgdW5pcXVlIGludGVyaW9yIGdsb2JhbCBtaW5pbXVtIM64zIIgKDAgc2xvcGUpLCB0aGF0IGl0cyBjdXJ2YXR1cmUgaOKAsyjOuMyCKSBpcyBzdHJpY3RseSBwb3NpdGl2ZSwgYW5kIHRoYXQgbiBpcyBsYXJnZSBlbm91Z2guCXRvZGFpIGMyMzItbTEgc29tbWV0CldoYXQgaXMgdGhlIHZhcmlhbmNlIG9mIHRoZSByZXBsYWNlbWVudCBHYXVzc2lhbj8Jz4PCsiA9IHRoZSByZWNpcHJvY2FsIG9mIG4gaOKAsyjOuMyCKTogdGhlIHdpZHRoIGlzIHNldCBieSB0aGUgY3VydmF0dXJlIGF0IHRoZSBwZWFrLCBtdWx0aXBsaWVkIGJ5IG4uCXRvZGFpIGMyMzItbTEgbGFyZ2V1cgpXaGF0IGZvcm0gZG9lcyB0aGUgTGFwbGFjZSBhcHByb3hpbWF0aW9uIHRha2U/CVrigpkg4omIIGV4cCjiiJJuIGgozrjMgikpIMOXIOKImigyz4AgLyAobiBo4oCzKM64zIIpKSk6IGEgaGVpZ2h0IGF0IHRoZSBwZWFrIG11bHRpcGxpZWQgYnkgdGhlIHdpZHRoIG9mIGEgR2F1c3NpYW4uCXRvZGFpIGMyMzItbTEgZm9ybXVsZQpXaGF0IGRvZXMgYSBjaGVjayBvZiB0aGUgdGVybXMgYXQgwrEgz4MgbGVhdmUgdW5yZXNvbHZlZD8JSXQgbWVhc3VyZXMgdGhlIGxvY2FsIGRldmlhdGlvbiBmcm9tIHRoZSBHYXVzc2lhbiwgYnV0IGRvZXMgbm90IGJvdW5kIHRoZSBlcnJvciBpbiB0aGUgYXJlYTsgaXQgYWxzbyBkb2VzIG5vdCBjb3ZlciBhIHBlYWsgd2l0aCAwIGN1cnZhdHVyZS4JdG9kYWkgYzIzMi1tMSBsaW1pdGVzCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fjkwts ebcghl pbdf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Milestone · distinguish Laplace smoothing from Laplace&#x27;s method</h3><dl><div><dt>What you understand</dt><dd>Laplace&#x27;s method uses the parabola at the peak to approximate a narrow hill: the mass becomes a height multiplied by a width derived from the curvature. The name “Laplace” refers to other objects elsewhere; here it concerns the approximation of an integral.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ixoody qtrwqp eiqbgu rpwgxd vwdkhd vpfyiu cpmcch hokkwq crptyw fbmxvn rfdzef kmtcoy oqcboi zysdcw euwfml oznkah evgizi qduljy mewsna wdpwst cxmqcp ufazdp tpyjkw epyjdq njdikf vxlaez coyzeb ndkhyv hocznp ilpmkd eywhqr pjozbe szomyk icqmeu ogqrsf koglmg rblbam vm</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: reconstruct the peak, the precision n h″, and the width without support; repeat the check at ± σ; recognize the case with 0 curvature. The presence of code and reading the lesson do not establish an attained level, and an assisted answer does not count as independent recall.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uydexz hmfduz shpbhv nnhvpv scyaxf hakwaa njatsg bnezja mudsyg kebgho vcdhxb tjtopx xfvsuh eogmmx zmrwgk uutkig fktvpi cqsnmr qapvsl iovkoy qozvyx xntdtd uurigr wzqqtm eqbsuu riozpz bnjqjb mpeklv ouiuou pvnmfm jwznck ymwimq tjpnyq isdvnt hnjgzx tzjemr wfmipw ub</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example with another function, without support, then read the next unit on steepest descent (c232-m2). Before any real use, the unique minimum, positive curvature, and size of n would need to be checked separately for the specific case.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c232-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c231-m5.html">Previous</a> · <a href="c232-m2.html">Next</a></nav>
+<footer><p>Course book · C232·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a state space for a partially observed cart, then distinguish the transition, the observation, and the available information.">
+<title>C234·M1 · State space — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ebqyij qpmghq gqyk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C234·M1</p><h1>State space</h1><p class="objectif"><span>Your goal</span>Build a state space for a partially observed cart, then distinguish the transition, the observation, and the available information.</p><p class="prerequis"><strong>Before you start</strong><br>c233-m5 : verification theorem · c066-m5 : standard errors and diagnostics · c227-m5 : Ito-Tanaka</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A sensor above a track reports where a cart passes. It does not report how fast the cart is moving. Imagine the cart at the same marker, sometimes moving slowly and sometimes quickly: the sensor can display the same position even though the subsequent motion will differ.</p><p>To describe what happens next, we keep both position and velocity. Their pair is the state; the state space contains all pairs allowed by the model. The sensor reveals only a projection of this pair, with its measurement error added. The word latent means that observations do not give the state directly.</p><p>The transition describes how the cart evolves between readings. The observation model describes how this state produces a reading. A disturbance to the motion changes the cart; a sensor error changes the display. Putting them in the same place would make the model describe a different situation.</p><p>The scene and all its values are fictional. We assume a track with no ends and signed coordinates, with no bound on velocity in this model. The numerical noise values in the example will be revealed to check the operations; an ordinary observer does not know them.</p><div class="schemas"><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>From cart to reading</title><desc>Start at 12 metres and 3 metres per second. After 2.5 seconds and the revealed disturbances, the state is 18.5 metres and 4 metres per second. The sensor reports 20.5 metres. The lines indicate the order: transition, then observation.</desc><rect x="24" y="12" width="312" height="64" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">Starting state</text><text x="180" y="62" text-anchor="middle">12 m ; 3 m/s</text><path d="M180 76v54m-5-6 5 6 5-6" class="trait" /><text x="193" y="100" class="petite-etiquette">Transition</text><text x="193" y="120" class="petite-etiquette">Δ = 2.5 s</text><rect x="24" y="134" width="312" height="64" rx="7" class="cadre-resultat" /><text x="180" y="160" text-anchor="middle">Next state</text><text x="180" y="184" text-anchor="middle">18.5 m ; 4 m/s</text><path d="M180 198v54m-5-6 5 6 5-6" class="trait" /><text x="193" y="224" class="petite-etiquette">Sensor</text><text x="193" y="244" class="petite-etiquette">ε = 2 m</text><rect x="24" y="256" width="312" height="58" rx="7" class="cadre-prediction" /><text x="180" y="281" text-anchor="middle">Reading only</text><text x="180" y="303" text-anchor="middle">20.5 m</text></svg><figcaption>Each box names its quantity and unit. Passing through the sensor discards the velocity component; the calculation will also detail the disturbances to the motion.</figcaption></figure><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Same position, different states</title><desc>In the state plane, the horizontal axis is position in metres and the vertical axis is velocity in metres per second. At position 12 metres, points A and B have velocities 3 and 1 metres per second. A position sensor with no error gives 12 metres in each case.</desc><path d="M44 212V28m-5 6 5-6 5 6M44 212h288m-6-5 6 5-6 5" class="trait" /><text x="63" y="25" class="petite-etiquette">Velocity (m/s)</text><text x="332" y="258" text-anchor="end" class="petite-etiquette">Position (m)</text><line x1="204" y1="68" x2="204" y2="212" class="trait" /><line x1="39" y1="68" x2="49" y2="68" class="trait" /><line x1="39" y1="164" x2="49" y2="164" class="trait" /><circle cx="204" cy="68" r="6" class="point-prediction" /><circle cx="204" cy="164" r="6" class="point-mesure" /><text x="29" y="74" text-anchor="end">3</text><text x="29" y="170" text-anchor="end">1</text><text x="29" y="218" text-anchor="end">0</text><text x="204" y="235" text-anchor="middle">12</text><text x="220" y="74">A</text><text x="220" y="170">B</text><text x="83" y="114" class="petite-etiquette">Same reading,</text><text x="83" y="136" class="petite-etiquette">different velocity</text></svg><figcaption>This drawing is a plane of possible states, rather than the trajectory of the cart over time. Points A and B share a position but lead to different future positions.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Choose a state that captures what the next transition depends on, then write separately what the sensor observes of that state.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Describe a step before trying to estimate</h3><p>The cart starts at p = 12 m and v = 3 m/s. The time step is Δ = 5/2 s = 2.5 s. For this step alone, we reveal a position disturbance η = -1 m, a velocity disturbance ξ = 1 m/s, and a sensor error ε = 2 m. Let us construct the next state and then the reading, keeping both distinct from an estimate.</p><ol class="etapes"><li><h3>Choose the coordinates and their spaces</h3><p>The index k counts steps and has no unit; k + 1 denotes the next step. p<sub>k</sub> is position, in metres (m), and v<sub>k</sub> is signed velocity, in metres per second (m/s). x<sub>k</sub> is the column containing both. A column is a vector written vertically. E denotes the state space; ℝ is the set of real numbers.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mrow><mi>k</mi></mrow></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><msub><mi>p</mi><mrow><mi>k</mi></mrow></msub></mtd></mtr><mtr><mtd><msub><mi>v</mi><mrow><mi>k</mi></mrow></msub></mtd></mtr></mtable><mo>]</mo><mo>∈</mo><mi>E</mi><mo>=</mo><msup><mi>ℝ</mi><mn>2</mn></msup></mrow></math></div><p>The coordinates of E are the numerical values in the specified units. They keep their distinct roles: directly adding position and velocity would have no physical meaning. y<sub>k</sub>, in metres, denotes the scalar reading; it belongs to the observation space ℝ, of dimension 1, whereas x<sub>k</sub> has 2 components.</p></li><li><h3>Specify what the state must capture</h3><p>The time step Δ is known, constant, and strictly positive. During a step, the nominal part keeps velocity constant and advances position by Δv<sub>k</sub>. At the end, the vector w for the next step adds the deviations that were not represented: its components are η, in m, and ξ, in m/s. We write it as (η, ξ)ᵀ; the symbol ᵀ turns the pair written as a row into a column. This discrete model does not impose a continuous acceleration law.</p><p>The components of the initial state have finite expected absolute values. The vectors w are independent across steps and independent of the initial state, with a common distribution, 0 mean, and finite expected absolute values for their components. The measurement noise ε<sub>k</sub> is in m, has 0 mean and the same distribution at each step, and is independent across steps, independent of the initial state, and independent of the entire sequence of w vectors. The components η and ξ of the same vector may be dependent. Their distributions and the distribution of the initial state must be specified to obtain a complete probabilistic model; the values for a single step do not determine them.</p><p>The Markov property means here that, once x<sub>k</sub> is given, earlier history provides no further information about the distribution of the next state. Write h<sub>k</sub> for the history of states and observations up to the current step. L denotes a probability distribution, and the vertical bar means “given”. Under the stated independence assumptions:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>|</mo><msub><mi>h</mi><mrow><mi>k</mi></mrow></msub><mo>)</mo><mo>=</mo><mi>L</mi><mo>(</mo><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>|</mo><msub><mi>x</mi><mrow><mi>k</mi></mrow></msub><mo>)</mo></mrow></math></div><p>The state is therefore sufficient for this transition. This does not mean that a reader who knows only y<sub>k</sub> knows x<sub>k</sub>. The conditional distribution of y<sub>k</sub> given x<sub>k</sub> depends on x<sub>k</sub> through the sensor model, rather than on earlier history. These properties do not require any particular form for the noise distributions.</p></li><li><h3>Separate transition and observation</h3><p>F is the transition matrix, an array of coefficients of size 2 × 2. H is the observation matrix, of size 1 × 2. Read the multiplication of a matrix by a column row by row: multiply corresponding entries, then add.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>F</mi><msub><mi>x</mi><mrow><mi>k</mi></mrow></msub><mo>+</mo><msub><mi>w</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>,</mo><mi>F</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mi>Δ</mi></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mrow><mi>k</mi></mrow></msub><mo>=</mo><mi>H</mi><msub><mi>x</mi><mrow><mi>k</mi></mrow></msub><mo>+</mo><msub><mi>ε</mi><mrow><mi>k</mi></mrow></msub><mo>,</mo><mi>H</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>0</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The top row of F gives p<sub>k</sub> + Δv<sub>k</sub>; the bottom row keeps v<sub>k</sub> unchanged. The diagonal coefficients 1 have no unit, Δ has units of seconds, and the 0 coefficient at the bottom left has units of inverse seconds. In H, 1 selects position; the 0 coefficient of velocity can be read as 0 s. Thus Hx<sub>k</sub> is in metres. Having the correct matrix size does not remove the need to check these units.</p><p>To read the transition without indices, let p and v denote the starting coordinates, and p′ and v′ the ending coordinates. The prime means “at the next step”. The equations become p′ = p + Δv + η and v′ = v + ξ, where η and ξ are the disturbances for the step. The sensor relation y<sub>k</sub> = p<sub>k</sub> + ε<sub>k</sub> uses the state at the time of the reading. Sensor noise does not move the cart forward.</p></li><li><h3>Calculate the nominal transition</h3><p>Start with Fx<sub>k</sub>, before the disturbances. Multiplying velocity by a duration produces a displacement: Δv<sub>k</sub> = 5/2 × 3 = 15/2 m = 7.5 m. Add this displacement to the starting position.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><msub><mi>x</mi><mrow><mi>k</mi></mrow></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>5/2</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo><mo>[</mo><mtable><mtr><mtd><mn>12</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>39/2</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The nominal position is 12 + 7.5 = 19.5 m; the nominal velocity remains 3 m/s. The numerical column above uses m and m/s in that order. Since the process noise has 0 mean and is independent of the past, Fx<sub>k</sub> is also the mean of the next state given the exact current state. A conditional mean is not the realization of the step.</p></li><li><h3>Add the disturbance acting on the cart</h3><p>The revealed values η = -1 m and ξ = 1 m/s are particular realizations of the noises. A distribution with 0 mean can produce a nonzero deviation during a step. Add each deviation to the component with the same unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>39/2</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd></mtr></mtable><mo>]</mo><mo>+</mo><mo>[</mo><mtable><mtr><mtd><mn>-1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>37/2</mn></mtd></mtr><mtr><mtd><mn>4</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The ending position is 19.5 + (-1) = 18.5 m, and the ending velocity is 3 + 1 = 4 m/s. The new velocity does not retroactively replace the starting velocity in Δv<sub>k</sub>: our transition convention adds the velocity disturbance at the end.</p></li><li><h3>Produce the reading at the correct time</h3><p>The sensor now selects the position of the next state. It discards the velocity component, then adds its own error. This operation gives a number in metres, rather than a new state column.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>H</mi><msub><mi>x</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>ε</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mn>37/2</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>41/2</mn><mtext> m</mtext></mrow></math></div><p>The reading is therefore 18.5 + 2 = 20.5 m. The actual position of the cart in this fictional scene remains 18.5 m, and its velocity is 4 m/s. The exact calculation gives y = 41/2 m; its decimal representation in French notation is 20.5 m.</p></li><li><h3>Check, then specify what remains hidden</h3><p>Reverse check of the motion: 18.5 − 19.5 = -1 m recovers η; 4 − 3 = 1 m/s recovers ξ. Sensor check: 20.5 − 18.5 = 2 m recovers ε. These checks verify the construction and are possible because the exercise reveals the deviations.</p><p>Another check, with all noises set to 0 in the same model: we must recover the nominal state (19.5 m; 3 m/s) and a reading of 19.5 m. Measurement noise alone can change y without affecting x. These checks distinguish the roles of the noises, beyond just the numerical result.</p><p>If only the reading 20.5 m were available, neither ε, nor velocity, nor the exact position would be revealed. H is not invertible: several state columns give the same observed position, even without noise. Estimating the state will involve combining successive observations with the model and the associated uncertainty. That is the topic of the next unit; no Kalman update has been performed here.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Reconstruct the sequence starting state → nominal transition → disturbed state → reading. Justify every unit and explain why a noise distribution with 0 mean does not require a realized noise value of 0.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The last number displayed is the whole state.”</h3><p>The reading y is a scalar, in metres. The state x also contains velocity. Even if ε equals 0, knowing p does not determine v. Return to points A and B in the state plane: the same position, distinct velocities.</p><a href="#intuition">Review the plane of possible states</a></li><li><h3>“I can add sensor noise to the transition.”</h3><p>Assign each deviation to what it changes. η and ξ modify the state of the cart; ε modifies the reading. Recalculate the motion and the reading separately, then recover each noise value by subtraction.</p><a href="#exemple">Revisit the separation and the checks</a></li><li><h3>“Noise with 0 mean disappears at every step.”</h3><p>Having 0 mean means that its mean under its distribution is 0. Here η = -1 m and ξ = 1 m/s are particular nonzero values. The mean transition and the realized state must therefore remain distinct.</p><a href="#exemple">Review the nominal transition, then the realized step</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-lire"><p class="repere">Exercise 1 · Identification and justification</p>
+<h3>What the sensor actually provided</h3><p>At the end of the step, the sensor gives 20.5 m. Someone proposes x = 20.5 m as the complete state. Explain the problem with dimension, then state what the reading lets you know if ε is unknown, and if ε equals 0.</p>
+<label for="reponse-ex-lire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-lire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-lire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-lire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-lire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the expected components of x, with their units, before looking at the reading.</p></details><details class="indice"><summary>Hint 2</summary><p>The relation y = p + ε contains no velocity. Setting ε to 0 does not add that information.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The state is a column with 2 components: position in m and velocity in m/s. The reading is just a scalar in m. If ε is unknown, the reading imposes only p + ε = 20.5 m: it gives neither p exactly nor v.</p><p>In the hypothetical case of a sensor with no error, we would know p = 20.5 m, but v would remain undetermined. This hypothetical case differs from the revealed step in the example, where ε = 2 m. In that step, the subtraction 20.5 − 2 recovers 18.5 m only because ε was supplied.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the state dimension 2 from the observation dimension 1.</li><li>Give the units of each component.</li><li>Separate known noise, unknown noise, and the case with no noise, without inventing a measured velocity.</li></ul></details></article><article class="exercice" id="ex-pas"><p class="repere">Exercise 2 · Calculation on paper</p>
+<h3>Change the duration, starting from the state</h3><p>Start again from the revealed state (18.5 m; 4 m/s). For the next step, divide the duration by 2 and assume all noises are 0. Write the new matrix F, the resulting state, and the reading. Then quantify the error if you start from 20.5 m as though this reading were the actual position, keeping the correct velocity.</p>
+<label for="reponse-ex-pas">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pas" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pas" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pas" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pas" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The top right entry of F is the duration of the step, rather than a coefficient to keep independently of the clock.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the displacement over the new duration, then add it separately to the true position and to the reading mistakenly treated as a position.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The duration becomes Δ = 5/2/2 = 5/4 s = 1.25 s. The other coefficients remain unchanged.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>F</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>5/4</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The displacement is 5/4 × 4 = 5 m. The next position is 18.5 + 5 = 23.5 m; velocity remains 4 m/s. Without sensor noise, y = 23.5 m. Reverse check: subtracting 5 m recovers 18.5 m.</p><p>Starting from the reading would give 20.5 + 5 = 25.5 m. The difference would be 25.5 − 23.5 = 2 m: the initial sensor error is carried forward as though it belonged to the cart. No statistical update has been authorized in this exercise.</p><p class="petit-titre">Check your reasoning</p><ul><li>Put 1.25 s in the entry of F that couples velocity and position.</li><li>Obtain the state (23.5 m; 4 m/s), then a scalar observation.</li><li>Explain and calculate the difference of 2 m caused by the initial confusion.</li></ul></details></article><article class="exercice" id="ex-suffisance"><p class="repere">Exercise 3 · Constructing a counterexample</p>
+<h3>Can velocity be removed from the state?</h3><p>To test the representation, set the noises to 0 and use Δ = 2.5 s again. At the marker p = 12 m, compare state A with velocity 3 m/s and state B with velocity 1 m/s. Their current readings are identical. Calculate their next positions, then refute the claim: “p is always sufficient to determine the next transition, whatever the initial state.” What would need to be checked to reduce the state in another model?</p>
+<label for="reponse-ex-suffisance">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-suffisance" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-suffisance" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-suffisance" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-suffisance" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A reduced state must give the same transition rule for all full states that it treats as identical, if this reduction is required for every initial distribution.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate p + Δv in cases A and B. Do not conclude that every sequence of positions necessarily lacks any Markov property in every model.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For A, the displacement is 7.5 m and the next position is 19.5 m. For B, the displacement is 2.5 × 1 = 2.5 m and the next position is 14.5 m. Yet their current readings without noise both equal 12 m. The future difference reaches 19.5 − 14.5 = 5 m.</p><p>A rule based on the current position alone cannot reproduce these deterministic transitions for all allowed initial states. Keeping v distinguishes precisely the futures that p alone treats as identical. With noise, the criterion concerns the conditional distributions of the futures, rather than just their means.</p><p>A reduction could be justified under additional constraints, for example if velocity were already specified as a function of position. We would need to establish that states treated as identical lead to the same distribution for the next reduced state. Our counterexample refutes the general sufficiency of p in this model; it does not claim to rule out every reduced representation under other assumptions.</p><p class="petit-titre">Check your reasoning</p><ul><li>Give the same current reading and distinct future positions.</li><li>Connect keeping velocity in the state to the sufficiency of the state for the transition.</li><li>Limit the conclusion to the allowed states and assumptions; state the distributional criterion for a general reduction.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="etat"><summary><span class="repere">Recall 1</span><span>What does a point in the state space of our cart represent?</span></summary><p>A position–velocity pair allowed by the model. With the specified units, x = (p, v)ᵀ belongs to real space of dimension 2; position is in m and velocity in m/s.</p></details><details class="carte" data-carte="suffisance"><summary><span class="repere">Recall 2</span><span>In what sense does the state capture the past?</span></summary><p>Under the noise assumptions of the model, the distribution of the next state given the entire history is the same as the distribution given the current state. This property does not assert that the latest observation makes the state known.</p></details><details class="carte" data-carte="modeles"><summary><span class="repere">Recall 3</span><span>How can you reconstruct F and H without reciting their entries?</span></summary><p>The next position receives p + Δv, and the nominal velocity remains v: this gives the rows of F. The sensor selects only p: this gives H = [1, 0]. Then add process noise to the state and measurement noise to the reading.</p></details><details class="carte" data-carte="bruit"><summary><span class="repere">Recall 4</span><span>Why can Fx be a correct mean without being the realized state?</span></summary><p>Process noise with 0 mean disappears in the conditional mean given x. Its value during a step can be nonzero: the realized state is Fx + w. The revealed disturbances in the example illustrate this difference.</p></details><details class="carte" data-carte="lecture"><summary><span class="repere">Recall 5</span><span>Why does knowing an exact position fail to reveal the whole state?</span></summary><p>The selection H discards velocity. States A and B have the same current position but different future positions. The model and several observations can help estimate what remains hidden; a reading alone is not that state.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the state and observation spaces with their units; justify keeping velocity in the state; write the transition and the sensor relation with their distinct noises. Then reconstruct the numerical step and its checks, and explain what the latest reading leaves unknown. Repeat this reconstruction without hints on another day: reading and an assisted answer do not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c234-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTE6ZXRhdCIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXNwYWNlLWV0YXQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGEgcG9pbnQgaW4gdGhlIHN0YXRlIHNwYWNlIG9mIG91ciBjYXJ0IHJlcHJlc2VudD8iLAogICAgICAicmVwb25zZSI6ICJBIHBvc2l0aW9u4oCTdmVsb2NpdHkgcGFpciBhbGxvd2VkIGJ5IHRoZSBtb2RlbC4gV2l0aCB0aGUgc3BlY2lmaWVkIHVuaXRzLCB4ID0gKHAsIHYp4bWAIGJlbG9uZ3MgdG8gcmVhbCBzcGFjZSBvZiBkaW1lbnNpb24gMjsgcG9zaXRpb24gaXMgaW4gbSBhbmQgdmVsb2NpdHkgaW4gbS9zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0xOnN1ZmZpc2FuY2UiLAogICAgICAidW5pdGUiOiAiYzIzNC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInN1ZmZpc2FuY2UtbWFya292aWVubmUiLAogICAgICAicXVlc3Rpb24iOiAiSW4gd2hhdCBzZW5zZSBkb2VzIHRoZSBzdGF0ZSBjYXB0dXJlIHRoZSBwYXN0PyIsCiAgICAgICJyZXBvbnNlIjogIlVuZGVyIHRoZSBub2lzZSBhc3N1bXB0aW9ucyBvZiB0aGUgbW9kZWwsIHRoZSBkaXN0cmlidXRpb24gb2YgdGhlIG5leHQgc3RhdGUgZ2l2ZW4gdGhlIGVudGlyZSBoaXN0b3J5IGlzIHRoZSBzYW1lIGFzIHRoZSBkaXN0cmlidXRpb24gZ2l2ZW4gdGhlIGN1cnJlbnQgc3RhdGUuIFRoaXMgcHJvcGVydHkgZG9lcyBub3QgYXNzZXJ0IHRoYXQgdGhlIGxhdGVzdCBvYnNlcnZhdGlvbiBtYWtlcyB0aGUgc3RhdGUga25vd24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTE6bW9kZWxlcyIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidHJhbnNpdGlvbi1vYnNlcnZhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSByZWNvbnN0cnVjdCBGIGFuZCBIIHdpdGhvdXQgcmVjaXRpbmcgdGhlaXIgZW50cmllcz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbmV4dCBwb3NpdGlvbiByZWNlaXZlcyBwICsgzpR2LCBhbmQgdGhlIG5vbWluYWwgdmVsb2NpdHkgcmVtYWlucyB2OiB0aGlzIGdpdmVzIHRoZSByb3dzIG9mIEYuIFRoZSBzZW5zb3Igc2VsZWN0cyBvbmx5IHA6IHRoaXMgZ2l2ZXMgSCA9IFsxLCAwXS4gVGhlbiBhZGQgcHJvY2VzcyBub2lzZSB0byB0aGUgc3RhdGUgYW5kIG1lYXN1cmVtZW50IG5vaXNlIHRvIHRoZSByZWFkaW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0xOmJydWl0IiwKICAgICAgInVuaXRlIjogImMyMzQtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtb3llbm5lLWV0LXJlYWxpc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gRnggYmUgYSBjb3JyZWN0IG1lYW4gd2l0aG91dCBiZWluZyB0aGUgcmVhbGl6ZWQgc3RhdGU/IiwKICAgICAgInJlcG9uc2UiOiAiUHJvY2VzcyBub2lzZSB3aXRoIDAgbWVhbiBkaXNhcHBlYXJzIGluIHRoZSBjb25kaXRpb25hbCBtZWFuIGdpdmVuIHguIEl0cyB2YWx1ZSBkdXJpbmcgYSBzdGVwIGNhbiBiZSBub256ZXJvOiB0aGUgcmVhbGl6ZWQgc3RhdGUgaXMgRnggKyB3LiBUaGUgcmV2ZWFsZWQgZGlzdHVyYmFuY2VzIGluIHRoZSBleGFtcGxlIGlsbHVzdHJhdGUgdGhpcyBkaWZmZXJlbmNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW0xOmxlY3R1cmUiLAogICAgICAidW5pdGUiOiAiYzIzNC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV0YXQtbGF0ZW50LW9ic2VydmF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGtub3dpbmcgYW4gZXhhY3QgcG9zaXRpb24gZmFpbCB0byByZXZlYWwgdGhlIHdob2xlIHN0YXRlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBzZWxlY3Rpb24gSCBkaXNjYXJkcyB2ZWxvY2l0eS4gU3RhdGVzIEEgYW5kIEIgaGF2ZSB0aGUgc2FtZSBjdXJyZW50IHBvc2l0aW9uIGJ1dCBkaWZmZXJlbnQgZnV0dXJlIHBvc2l0aW9ucy4gVGhlIG1vZGVsIGFuZCBzZXZlcmFsIG9ic2VydmF0aW9ucyBjYW4gaGVscCBlc3RpbWF0ZSB3aGF0IHJlbWFpbnMgaGlkZGVuOyBhIHJlYWRpbmcgYWxvbmUgaXMgbm90IHRoYXQgc3RhdGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c234-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgcG9pbnQgaW4gdGhlIHN0YXRlIHNwYWNlIG9mIG91ciBjYXJ0IHJlcHJlc2VudD8JQSBwb3NpdGlvbuKAk3ZlbG9jaXR5IHBhaXIgYWxsb3dlZCBieSB0aGUgbW9kZWwuIFdpdGggdGhlIHNwZWNpZmllZCB1bml0cywgeCA9IChwLCB2KeG1gCBiZWxvbmdzIHRvIHJlYWwgc3BhY2Ugb2YgZGltZW5zaW9uIDI7IHBvc2l0aW9uIGlzIGluIG0gYW5kIHZlbG9jaXR5IGluIG0vcy4JdG9kYWkgYzIzNC1tMSBlc3BhY2UtZXRhdApJbiB3aGF0IHNlbnNlIGRvZXMgdGhlIHN0YXRlIGNhcHR1cmUgdGhlIHBhc3Q/CVVuZGVyIHRoZSBub2lzZSBhc3N1bXB0aW9ucyBvZiB0aGUgbW9kZWwsIHRoZSBkaXN0cmlidXRpb24gb2YgdGhlIG5leHQgc3RhdGUgZ2l2ZW4gdGhlIGVudGlyZSBoaXN0b3J5IGlzIHRoZSBzYW1lIGFzIHRoZSBkaXN0cmlidXRpb24gZ2l2ZW4gdGhlIGN1cnJlbnQgc3RhdGUuIFRoaXMgcHJvcGVydHkgZG9lcyBub3QgYXNzZXJ0IHRoYXQgdGhlIGxhdGVzdCBvYnNlcnZhdGlvbiBtYWtlcyB0aGUgc3RhdGUga25vd24uCXRvZGFpIGMyMzQtbTEgc3VmZmlzYW5jZS1tYXJrb3ZpZW5uZQpIb3cgY2FuIHlvdSByZWNvbnN0cnVjdCBGIGFuZCBIIHdpdGhvdXQgcmVjaXRpbmcgdGhlaXIgZW50cmllcz8JVGhlIG5leHQgcG9zaXRpb24gcmVjZWl2ZXMgcCArIM6UdiwgYW5kIHRoZSBub21pbmFsIHZlbG9jaXR5IHJlbWFpbnMgdjogdGhpcyBnaXZlcyB0aGUgcm93cyBvZiBGLiBUaGUgc2Vuc29yIHNlbGVjdHMgb25seSBwOiB0aGlzIGdpdmVzIEggPSBbMSwgMF0uIFRoZW4gYWRkIHByb2Nlc3Mgbm9pc2UgdG8gdGhlIHN0YXRlIGFuZCBtZWFzdXJlbWVudCBub2lzZSB0byB0aGUgcmVhZGluZy4JdG9kYWkgYzIzNC1tMSB0cmFuc2l0aW9uLW9ic2VydmF0aW9uCldoeSBjYW4gRnggYmUgYSBjb3JyZWN0IG1lYW4gd2l0aG91dCBiZWluZyB0aGUgcmVhbGl6ZWQgc3RhdGU/CVByb2Nlc3Mgbm9pc2Ugd2l0aCAwIG1lYW4gZGlzYXBwZWFycyBpbiB0aGUgY29uZGl0aW9uYWwgbWVhbiBnaXZlbiB4LiBJdHMgdmFsdWUgZHVyaW5nIGEgc3RlcCBjYW4gYmUgbm9uemVybzogdGhlIHJlYWxpemVkIHN0YXRlIGlzIEZ4ICsgdy4gVGhlIHJldmVhbGVkIGRpc3R1cmJhbmNlcyBpbiB0aGUgZXhhbXBsZSBpbGx1c3RyYXRlIHRoaXMgZGlmZmVyZW5jZS4JdG9kYWkgYzIzNC1tMSBtb3llbm5lLWV0LXJlYWxpc2F0aW9uCldoeSBkb2VzIGtub3dpbmcgYW4gZXhhY3QgcG9zaXRpb24gZmFpbCB0byByZXZlYWwgdGhlIHdob2xlIHN0YXRlPwlUaGUgc2VsZWN0aW9uIEggZGlzY2FyZHMgdmVsb2NpdHkuIFN0YXRlcyBBIGFuZCBCIGhhdmUgdGhlIHNhbWUgY3VycmVudCBwb3NpdGlvbiBidXQgZGlmZmVyZW50IGZ1dHVyZSBwb3NpdGlvbnMuIFRoZSBtb2RlbCBhbmQgc2V2ZXJhbCBvYnNlcnZhdGlvbnMgY2FuIGhlbHAgZXN0aW1hdGUgd2hhdCByZW1haW5zIGhpZGRlbjsgYSByZWFkaW5nIGFsb25lIGlzIG5vdCB0aGF0IHN0YXRlLgl0b2RhaSBjMjM0LW0xIGV0YXQtbGF0ZW50LW9ic2VydmF0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ebqyij qpmghq gqyk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qdwbju jwagmj nxmqbl zqwtdu zabzil lzuzvp juba</span></span></h3><dl><div><dt>What you understand</dt><dd>The latent state of the model describes the system; the computational state of an estimator stores the information needed for its next calculations. These meanings of the word state must be distinguished. The cart remains a teaching scene, with no claim to model a quantity in the project.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kyjapg dosuqe qeynzl boevyb qwvlcg wusdsi whtfyt ozdvoh xgcgls wydreh kfdjho jgdwxr qrksly qiieuw ddaljh mjomsy kfqxxm ravszu gikxti rjlwcj zqolfc kgqtse zrwylh hrnawx</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for Level 4: reconstruct the state–observation model, state the sufficiency assumptions, and produce the counterexample to an unjustified reduction. Reading, static checking, and an assisted answer do not establish any attained level. This reference creates no canonical numbered milestone for this chapter.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ugnwbf bsryua wtzqhw elehva pggnvd otujfe ykltjz fvrqiq xiboka xbyqen vdlntu caqnfr whnxxy flmwkd aieqab hjxglv bzgjzo mqjymc zqujuz bjzuqw hykcnh hsqbmi duwzab pvejnd</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the cart model and redo the exercises without support after a delay. C234·M2 will study the Kalman filter. Using the actual code would require a separate, authorized study of the quantities, noise distributions, callers, and validation; this page executes none of that.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c234-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c233-m5.html">Previous</a> · <a href="c234-m2.html">Next</a></nav>
+<footer><p>Course book · C234·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

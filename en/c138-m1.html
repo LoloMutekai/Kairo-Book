@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build a split in a classification tree, justify its choice using weighted impurity, and follow a parcel to its leaf.">
+<title>C138·M1 · Trees — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">frajzz gvrfys oxuv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C138·M1</p><h1>Trees</h1><p class="objectif"><span>Your goal</span>Build a split in a classification tree, justify its choice using weighted impurity, and follow a parcel to its leaf.</p><p class="prerequis"><strong>Before you start</strong><br>c099-m5 : probability calibration · c100-m5 : learning curves</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At a shipping counter, we want to predict whether a parcel will need reinforced packaging. We have its mass before packing and past requirements recorded after inspection. R means “reinforce”; O means “ordinary packaging”. These letters are the classes to predict, rather than answers already known for future parcels.</p><p>A decision tree resembles a path through questions. The root receives all the parcels. A decision node asks a question about an available feature, here mass; each branch receives an answer. A leaf ends the path and gives a common prediction for the parcels that reach it. Here, the majority class of its training examples provides this prediction.</p><p>The question “mass at most 3 kg?” gathers the lighter parcels into a group where the need for reinforcement is uniform. The rest remain mixed. Training means choosing questions from labeled examples; prediction then means following the fixed questions without knowing what the new parcel actually needs.</p><p>The entire scene and its data are fictional. Mass is our only feature: we do not claim that it actually explains packaging requirements. We build a tree limited to a single question on each path, then examine what this limit protects against and what it leaves imperfect.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The fictional training batch</title><desc>Masses in kilograms and recorded requirements: A, 1, R; B, 2, R; C, 3, R; D, 4, O; E, 5, R; F, 6, O; G, 7, O; H, 8, O.</desc><text x="180" y="28" text-anchor="middle">Before choosing the question</text><text x="30" y="62" class="petite-etiquette">Parcel</text><text x="164" y="62" text-anchor="middle" class="petite-etiquette">Mass (kg)</text><text x="294" y="62" text-anchor="middle" class="petite-etiquette">Need</text><line x1="20" y1="73" x2="340" y2="73" class="trait" /><text x="42" y="96">A</text><text x="164" y="96" text-anchor="middle">1</text><text x="294" y="96" text-anchor="middle">R</text><text x="42" y="119">B</text><text x="164" y="119" text-anchor="middle">2</text><text x="294" y="119" text-anchor="middle">R</text><text x="42" y="142">C</text><text x="164" y="142" text-anchor="middle">3</text><text x="294" y="142" text-anchor="middle">R</text><line x1="20" y1="152" x2="340" y2="152" class="trait" /><text x="42" y="175">D</text><text x="164" y="175" text-anchor="middle">4</text><text x="294" y="175" text-anchor="middle">O</text><text x="42" y="198">E</text><text x="164" y="198" text-anchor="middle">5</text><text x="294" y="198" text-anchor="middle">R</text><text x="42" y="221">F</text><text x="164" y="221" text-anchor="middle">6</text><text x="294" y="221" text-anchor="middle">O</text><text x="42" y="244">G</text><text x="164" y="244" text-anchor="middle">7</text><text x="294" y="244" text-anchor="middle">O</text><text x="42" y="267">H</text><text x="164" y="267" text-anchor="middle">8</text><text x="294" y="267" text-anchor="middle">O</text><text x="180" y="300" text-anchor="middle" class="petite-etiquette">The line separates A–C from D–H.</text></svg><figcaption>The labels come from a fictional inspection. The line after C shows the partition produced by the 3 kg threshold; it does not separate the classes perfectly.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>A question and its leaves</title><desc>The root contains 8 parcels. If the mass is at most 3 kilograms, the left leaf contains 3 R and 0 O and predicts R. Otherwise, the right leaf contains 1 R and 4 O and predicts O.</desc><rect x="55" y="15" width="250" height="70" rx="7" class="cadre-prediction" /><text x="180" y="42" text-anchor="middle">Mass ≤ 3 kg?</text><text x="180" y="68" text-anchor="middle" class="petite-etiquette">Root: 8 parcels</text><path d="M130 85L88 150M230 85L272 150" class="trait" /><text x="67" y="116" class="petite-etiquette">Yes</text><text x="282" y="116" class="petite-etiquette">No</text><rect x="12" y="150" width="152" height="122" rx="7" class="cadre-resultat" /><text x="88" y="178" text-anchor="middle">Predict R</text><text x="88" y="205" text-anchor="middle">3 R; 0 O</text><text x="88" y="231" text-anchor="middle" class="petite-etiquette">Pure leaf</text><text x="88" y="254" text-anchor="middle" class="petite-etiquette">G = 0</text><rect x="196" y="150" width="152" height="122" rx="7" class="cadre-neutre" /><text x="272" y="178" text-anchor="middle">Predict O</text><text x="272" y="205" text-anchor="middle">1 R; 4 O</text><text x="272" y="231" text-anchor="middle" class="petite-etiquette">Mixed leaf</text><text x="272" y="254" text-anchor="middle" class="petite-etiquette">G = 0.32</text><text x="180" y="300" text-anchor="middle" class="petite-etiquette">A path ends at a leaf.</text></svg><figcaption>The lines represent answers to the question, rather than causal effects of mass. Although the right leaf predicts O, parcel E carries the label R there.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Separate the examples with a question, measure the remaining mixture while accounting for group sizes, then predict in the leaf; evaluate future parcels using examples kept out of the tree selection process.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Choose the question at the counter</h3><p>Using parcels A through H, let us compare only the thresholds 3 kg and 4 kg. A yes answer sends a parcel left, a no answer right. Every parcel has the same weight. The maximum depth is set to 1 decision per path; we also require at least 2 examples per leaf. These choices deliberately limit our exercise.</p><ol class="etapes"><li><h3>Name what we are learning</h3><p>m denotes a parcel’s mass, in kg; y denotes its recorded requirement, R or O, with no physical unit. The threshold θ, the Greek letter theta, is in kg. The rule m ≤ θ belongs to the learned model; y is used to choose this rule on the training batch and remains unknown when making a new prediction. We assume that masses are available, labels are supplied, and no values are missing.</p><p>A node t is a group of parcels reached by the same path. n denotes its size, counted in parcels; nᴿ and nᴼ denote its counts by class. p = nᴿ/n and q = nᴼ/n are unitless proportions, with p + q = 1. We calculate these proportions only in a nonempty group. At the root, we count 4 R and 4 O, so n = 8, p = 1/2 and q = 1/2.</p></li><li><h3>Measure the mixture before splitting</h3><p>Gini impurity G(t) measures the mixture of classes in node t. It is unitless. With our classes R and O, it equals:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>G</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mn>1</mn><mo>−</mo><msup><mi>p</mi><mn>2</mn></msup><mo>−</mo><msup><mi>q</mi><mn>2</mn></msup><mo>=</mo><mn>2</mn><mi>p</mi><mi>q</mi></mrow></math></div><p>The second expression comes from (p + q) squared = p × p + 2pq + q × q = 1. A single class gives G = 0; an equal division gives the binary maximum 0.50. Another interpretation helps us check: draw 2 labels independently from the group, with replacement; G is the probability that they differ, R then O or O then R. It is not the probability that our prediction is wrong.</p><p>At the root: p × q = 1/4, then G = 2 × 1/2 × 1/2 = 1/2 = 0.50. This calculation sets the comparison point before the question.</p></li><li><h3>Divide the parcels at the chosen threshold</h3><p>For θ = 3 kg, A, B and C answer yes: n_g = 3 parcels, with 3 R and 0 O. The symbols g and d will denote left and right. We obtain p_g = 1, q_g = 0, p_gq_g = 0, so G_g = 0: all the examples in this leaf need reinforcement.</p><p>D, E, F, G and H answer no: n_d = 5 parcels, with 1 R and 4 O. Divide each count by the size of THIS group: p_d = 1/5, q_d = 4/5. Their product is 4/25 and G_d = 2 × 4/25 = 8/25 = 0.32.</p><p>Partition check: 3 + 5 = 8 parcels; the R counts give 3 + 1 = 4 and the O counts give 0 + 4 = 4. No parcel should disappear or be counted in both branches.</p></li><li><h3>Weight the remaining mixture</h3><p>J(θ) denotes the impurity after the split. ΔG, read as “change in G”, is its reduction relative to the parent. G_g and G_d are the impurities of the child groups. To represent a parcel chosen uniformly from the parent, each group must be weighted by its size divided by n. All these ratios, J and ΔG are unitless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfrac><msub><mi>n</mi><mi>g</mi></msub><mi>n</mi></mfrac><msub><mi>G</mi><mi>g</mi></msub><mo>+</mo><mfrac><msub><mi>n</mi><mi>d</mi></msub><mi>n</mi></mfrac><msub><mi>G</mi><mi>d</mi></msub></mrow></math></div><p>The weights are 3/8 and 5/8 and their sum is 1. The left contributes 3/8 × 0 = 0; the right 5/8 × 8/25 = 1/5. Thus J = 1/5 = 0.20.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ΔG</mi><mo>=</mo><mi>G</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>−</mo><mi>J</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mn>0.50</mn><mo>−</mo><mn>0.20</mn><mo>=</mo><mn>0.30</mn></mrow></math></div><p>The reduction is therefore 0.30 impurity units. This is a selection criterion on these fictional examples, rather than a measured gain in success on new parcels.</p></li><li><h3>Compare the competing split</h3><p>At threshold θ = 4 kg, D moves to the left. A through D form 4 parcels with 3 R and 1 O: p = 3/4, q = 1/4, pq = 3/16 and G = 3/8. E through H form 4 parcels with 1 R and 3 O. Swapping p and q preserves their product: their impurity is also 3/8.</p><p>The weights are each 1/2; each contribution is 3/16. We find J = 3/16 + 3/16 = 3/8 = 0.375, then ΔG = 1/8 = 0.125. The 3 kg threshold leaves less mixture: 0.200 &lt; 0.375. Both splits meet the minimum size; we therefore select 3 kg from these candidates alone.</p><p>We have not searched all thresholds or all possible trees. More complete training repeats the comparison at each permitted node, with a stopping rule and a rule for breaking ties. This local search does not guarantee the globally optimal tree. Here, the fixed depth already stops the path after this question.</p></li><li><h3>Predict, check, and keep the right limits</h3><p>In the selected tree, the left predicts R because 3 &gt; 0, and the right predicts O because 4 &gt; 1. If the class counts were tied, our convention would be to predict O; it must be fixed before evaluation. A future parcel of 5 kg follows 5 &gt; 3 and therefore receives O, without using its actual label. The O proportion in its leaf is 4/5 = 0.80: a training frequency whose calibration on future cases has not been demonstrated.</p><p>Parcel E in the training batch follows exactly this path, but its recorded requirement is R. A leaf that predicts the majority class can therefore contain counterexamples. This also explains why a pure leaf does not guarantee the class of a new parcel.</p><p>Independent check of G at the root: ordered pairs of different classes give 2 × 4 × 4 cases, out of 8 × 8 draws with replacement. The ratio recovers 1/2. On the right, the same count gives 2 × 1 × 4 / (5 × 5) = 8/25; weighting this ratio recovers J = 1/5.</p><p>To assess generalization, meaning performance on other parcels, we would need a reserved batch used to choose neither the threshold nor the depth. Making the tree deeper can eventually isolate peculiarities of the batch: this is overfitting. Depth and minimum group size are complexity limits to tune on separate validation data; the final test stays apart. No future performance is measured on this page.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Repeat the counting without the diagram. Explain why the purest leaf is not enough to choose the split, then describe how a new parcel receives a class without its actual requirement being known.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I take the simple average of the leaf impurities.”</h3><p>At the 3 kg threshold, this average would give (0 + 8/25)/2 = 0.16. But the groups differ in size. We need the weights 3/8 and 5/8, which give 0.20. Always check which population each weight refers to.</p><a href="#exemple">Review the weighting of the mixture</a></li><li><h3>“The O proportion in the leaf is my probability of being right.”</h3><p>0.80 describes the training examples that reached this leaf. This number can serve as an estimate, but using mass alone, a small batch, and the selection of the split itself can make it misleading. Check calibration on separate examples; distinguish leaf frequency, impurity, and future error.</p><a href="#exemple">Review prediction and its limits</a></li><li><h3>“If a new question lowers Gini impurity, I must add it.”</h3><p>A decrease on the training data may come from an isolated example. First check the depth and leaf size limits, then performance on the validation data. The extension exercise shows a local improvement that violates these limits.</p><a href="#exercices">Try the forbidden extension</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 1 · Direct application</p>
+<h3>At the threshold boundary</h3><p>The selected tree receives a new parcel of 3 kg. Write the test, the branch, the predicted class, and the R proportion in the leaf. Can we state its actual requirement with certainty?</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The ≤ sign includes equality. Then distinguish the prediction from the requirement that is still unknown.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The test 3 ≤ 3 is true: left branch, prediction R. The R proportion is 3/3 = 1; the training leaf is pure.</p><p>The new parcel has not yet been inspected. A frequency equal to 1 in this small group establishes no certainty about it. The test uses only its mass; looking at its requirement to choose the branch would use the answer we are trying to predict.</p><p class="petit-titre">Check your reasoning</p><ul><li>Include equality in the left branch.</li><li>Justify R using the leaf counts.</li><li>Distinguish observed frequency from the truth about the new case.</li></ul></details></article><article class="exercice" id="ex-comparer"><p class="repere">Exercise 2 · Reconstructing the calculation</p>
+<h3>Repeat the comparison without the example</h3><p>Using the batch A through H, reconstruct the groups at the 4 kg threshold, their proportions, their impurity, and J. Compare with J = 1/5 for the 3 kg threshold. Why would a simple average be allowed here but not at the 3 kg threshold?</p>
+<label for="reponse-ex-comparer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-comparer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-comparer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-comparer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-comparer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the parcel identifiers on each side before counting R and O.</p></details><details class="indice"><summary>Hint 2</summary><p>The groups at the competing threshold have the same size; justify the weights before simplifying.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>On the left, A through D: 4 parcels, 3 R and 1 O. On the right, E through H: 4 parcels, 1 R and 3 O. The left proportions are 3/4 and 1/4; those on the right are swapped.</p><p>Each G equals 2 × 3/16 = 3/8. The weights are 1/2; J = 3/16 + 3/16 = 0.375. The gain is 1/2 − 3/8 = 1/8. Since 0.375 &gt; 0.200, the 4 kg candidate loses the comparison.</p><p>Groups of equal size each carry half the weight: the simple average then coincides with the weighted average. At the 3 kg threshold, the sizes 3 and 5 differ; treating them as equal changes the criterion.</p><p class="petit-titre">Check your reasoning</p><ul><li>No parcel lost or counted twice.</li><li>Proportions divided by the size of their own group.</li><li>Weights justified, J and the Gini reduction calculated exactly.</li><li>Choose from the compared candidates without claiming a global optimum.</li></ul></details></article><article class="exercice" id="ex-extension"><p class="repere">Exercise 3 · Reasoned diagnosis</p>
+<h3>An extension that looks appealing</h3><p>In the right leaf of the 3 kg threshold, an additional question is proposed: “mass ≤ 4 kg?” Calculate the remaining mixture within this group. Does this extension meet our maximum depth of 1 and our minimum of 2 examples per leaf? Would a decrease be enough to prove a future improvement?</p>
+<label for="reponse-ex-extension">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-extension" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-extension" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-extension" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-extension" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The right leaf contains only D, E, F, G and H. Which branch receives D?</p></details><details class="indice"><summary>Hint 2</summary><p>The remaining group is E through H, whose G you already know. Base the weights on the 5 parcels in this node.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new yes branch contains only D: 1 parcel O, so impurity 0. The no branch contains E through H: 4 parcels, 1 R and 3 O, with G = 3/8.</p><p>In this node, the weight of the remaining group is 4/5 = 4/5. The mixture after extension is 1/5 × 0 + 4/5 × 3/8 = 3/10 = 0.30, compared with 0.32 before. The local decrease is 1/50 = 0.02; it concerns the right group, rather than directly the whole root.</p><p>The extension is rejected: it would make 2 decisions on some paths and create a leaf with 1 example, below the minimum 2. Even if these limits were lifted, this decrease on the training data would prove no improvement on new parcels. We would need to compare on separate validation data, then keep the final test untouched.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the counts in the right node from those at the root.</li><li>Recover the exact local decrease and identify the group it concerns.</li><li>Identify both violated constraints.</li><li>Require a separate evaluation before drawing any conclusion about future cases.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="trajet"><summary><span class="repere">Recall 1</span><span>How does a tree assign a class to a parcel that has not yet been inspected?</span></summary><p>It tests its mass at the nodes along the path, follows the branches, and reaches a leaf. The majority class of that leaf’s training examples provides the prediction; the parcel’s actual requirement plays no part in the path.</p></details><details class="carte" data-carte="gini"><summary><span class="repere">Recall 2</span><span>How can we recover Gini impurity for our classes R and O, and what does it measure?</span></summary><p>With the group proportions p and q, p + q = 1, G = 1 − p × p − q × q = 2pq. It measures the mixture of classes, or the probability of drawing different classes with replacement. It is not the model’s future error.</p></details><details class="carte" data-carte="poids"><summary><span class="repere">Recall 3</span><span>Why do group sizes matter when choosing a split?</span></summary><p>Each child must contribute in proportion to the number of parcels from the parent that reach it. We add (n_g/n)G_g and (n_d/n)G_d; a simple average is justified only when group sizes are equal.</p></details><details class="carte" data-carte="apprendre"><summary><span class="repere">Recall 4</span><span>What is the difference between choosing the question and using it?</span></summary><p>During training, recorded requirements are used to compare the impurities of candidate splits. During prediction, the questions are fixed and only the information available about the new parcel is used to follow the path.</p></details><details class="carte" data-carte="arreter"><summary><span class="repere">Recall 5</span><span>Why stop a tree when it can still reduce the mixture in the training data?</span></summary><p>Additional questions can isolate peculiarities of the batch. Limiting depth and leaf size restrains this complexity; comparing on separate validation data helps choose these limits. A pure leaf or an assisted answer proves neither mastery nor future performance.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without support, reconstruct the batch at the counter and its tree: available feature, label to predict, question, complete partition, proportions by group, impurity, and weights. Explain the choice between our candidates, then follow a new parcel and distinguish its prediction from its actual requirement. Finish with a complexity limit and the evidence of generalization that is still missing. Reading or succeeding with a hint prepares another independent attempt; it does not confer any attained level.</p></div><div class="exports"><a class="bouton" download="c138-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMzgtbTE6dHJhamV0IiwKICAgICAgInVuaXRlIjogImMxMzgtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhcmJyZS1jbGFzc2lmaWNhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG9lcyBhIHRyZWUgYXNzaWduIGEgY2xhc3MgdG8gYSBwYXJjZWwgdGhhdCBoYXMgbm90IHlldCBiZWVuIGluc3BlY3RlZD8iLAogICAgICAicmVwb25zZSI6ICJJdCB0ZXN0cyBpdHMgbWFzcyBhdCB0aGUgbm9kZXMgYWxvbmcgdGhlIHBhdGgsIGZvbGxvd3MgdGhlIGJyYW5jaGVzLCBhbmQgcmVhY2hlcyBhIGxlYWYuIFRoZSBtYWpvcml0eSBjbGFzcyBvZiB0aGF0IGxlYWbigJlzIHRyYWluaW5nIGV4YW1wbGVzIHByb3ZpZGVzIHRoZSBwcmVkaWN0aW9uOyB0aGUgcGFyY2Vs4oCZcyBhY3R1YWwgcmVxdWlyZW1lbnQgcGxheXMgbm8gcGFydCBpbiB0aGUgcGF0aC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzOC1tMTpnaW5pIiwKICAgICAgInVuaXRlIjogImMxMzgtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbXB1cmV0ZS1naW5pIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gd2UgcmVjb3ZlciBHaW5pIGltcHVyaXR5IGZvciBvdXIgY2xhc3NlcyBSIGFuZCBPLCBhbmQgd2hhdCBkb2VzIGl0IG1lYXN1cmU/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCB0aGUgZ3JvdXAgcHJvcG9ydGlvbnMgcCBhbmQgcSwgcCArIHEgPSAxLCBHID0gMSDiiJIgcCDDlyBwIOKIkiBxIMOXIHEgPSAycHEuIEl0IG1lYXN1cmVzIHRoZSBtaXh0dXJlIG9mIGNsYXNzZXMsIG9yIHRoZSBwcm9iYWJpbGl0eSBvZiBkcmF3aW5nIGRpZmZlcmVudCBjbGFzc2VzIHdpdGggcmVwbGFjZW1lbnQuIEl0IGlzIG5vdCB0aGUgbW9kZWzigJlzIGZ1dHVyZSBlcnJvci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEzOC1tMTpwb2lkcyIsCiAgICAgICJ1bml0ZSI6ICJjMTM4LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaW1wdXJldGUtcG9uZGVyZWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvIGdyb3VwIHNpemVzIG1hdHRlciB3aGVuIGNob29zaW5nIGEgc3BsaXQ/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBjaGlsZCBtdXN0IGNvbnRyaWJ1dGUgaW4gcHJvcG9ydGlvbiB0byB0aGUgbnVtYmVyIG9mIHBhcmNlbHMgZnJvbSB0aGUgcGFyZW50IHRoYXQgcmVhY2ggaXQuIFdlIGFkZCAobl9nL24pR19nIGFuZCAobl9kL24pR19kOyBhIHNpbXBsZSBhdmVyYWdlIGlzIGp1c3RpZmllZCBvbmx5IHdoZW4gZ3JvdXAgc2l6ZXMgYXJlIGVxdWFsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0xOmFwcHJlbmRyZSIsCiAgICAgICJ1bml0ZSI6ICJjMTM4LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYXBwcmVudGlzc2FnZS1hcmJyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gY2hvb3NpbmcgdGhlIHF1ZXN0aW9uIGFuZCB1c2luZyBpdD8iLAogICAgICAicmVwb25zZSI6ICJEdXJpbmcgdHJhaW5pbmcsIHJlY29yZGVkIHJlcXVpcmVtZW50cyBhcmUgdXNlZCB0byBjb21wYXJlIHRoZSBpbXB1cml0aWVzIG9mIGNhbmRpZGF0ZSBzcGxpdHMuIER1cmluZyBwcmVkaWN0aW9uLCB0aGUgcXVlc3Rpb25zIGFyZSBmaXhlZCBhbmQgb25seSB0aGUgaW5mb3JtYXRpb24gYXZhaWxhYmxlIGFib3V0IHRoZSBuZXcgcGFyY2VsIGlzIHVzZWQgdG8gZm9sbG93IHRoZSBwYXRoLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTM4LW0xOmFycmV0ZXIiLAogICAgICAidW5pdGUiOiAiYzEzOC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImxpbWl0ZXMtYXJicmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHN0b3AgYSB0cmVlIHdoZW4gaXQgY2FuIHN0aWxsIHJlZHVjZSB0aGUgbWl4dHVyZSBpbiB0aGUgdHJhaW5pbmcgZGF0YT8iLAogICAgICAicmVwb25zZSI6ICJBZGRpdGlvbmFsIHF1ZXN0aW9ucyBjYW4gaXNvbGF0ZSBwZWN1bGlhcml0aWVzIG9mIHRoZSBiYXRjaC4gTGltaXRpbmcgZGVwdGggYW5kIGxlYWYgc2l6ZSByZXN0cmFpbnMgdGhpcyBjb21wbGV4aXR5OyBjb21wYXJpbmcgb24gc2VwYXJhdGUgdmFsaWRhdGlvbiBkYXRhIGhlbHBzIGNob29zZSB0aGVzZSBsaW1pdHMuIEEgcHVyZSBsZWFmIG9yIGFuIGFzc2lzdGVkIGFuc3dlciBwcm92ZXMgbmVpdGhlciBtYXN0ZXJ5IG5vciBmdXR1cmUgcGVyZm9ybWFuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c138-m1-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvZXMgYSB0cmVlIGFzc2lnbiBhIGNsYXNzIHRvIGEgcGFyY2VsIHRoYXQgaGFzIG5vdCB5ZXQgYmVlbiBpbnNwZWN0ZWQ/CUl0IHRlc3RzIGl0cyBtYXNzIGF0IHRoZSBub2RlcyBhbG9uZyB0aGUgcGF0aCwgZm9sbG93cyB0aGUgYnJhbmNoZXMsIGFuZCByZWFjaGVzIGEgbGVhZi4gVGhlIG1ham9yaXR5IGNsYXNzIG9mIHRoYXQgbGVhZuKAmXMgdHJhaW5pbmcgZXhhbXBsZXMgcHJvdmlkZXMgdGhlIHByZWRpY3Rpb247IHRoZSBwYXJjZWzigJlzIGFjdHVhbCByZXF1aXJlbWVudCBwbGF5cyBubyBwYXJ0IGluIHRoZSBwYXRoLgl0b2RhaSBjMTM4LW0xIGFyYnJlLWNsYXNzaWZpY2F0aW9uCkhvdyBjYW4gd2UgcmVjb3ZlciBHaW5pIGltcHVyaXR5IGZvciBvdXIgY2xhc3NlcyBSIGFuZCBPLCBhbmQgd2hhdCBkb2VzIGl0IG1lYXN1cmU/CVdpdGggdGhlIGdyb3VwIHByb3BvcnRpb25zIHAgYW5kIHEsIHAgKyBxID0gMSwgRyA9IDEg4oiSIHAgw5cgcCDiiJIgcSDDlyBxID0gMnBxLiBJdCBtZWFzdXJlcyB0aGUgbWl4dHVyZSBvZiBjbGFzc2VzLCBvciB0aGUgcHJvYmFiaWxpdHkgb2YgZHJhd2luZyBkaWZmZXJlbnQgY2xhc3NlcyB3aXRoIHJlcGxhY2VtZW50LiBJdCBpcyBub3QgdGhlIG1vZGVs4oCZcyBmdXR1cmUgZXJyb3IuCXRvZGFpIGMxMzgtbTEgaW1wdXJldGUtZ2luaQpXaHkgZG8gZ3JvdXAgc2l6ZXMgbWF0dGVyIHdoZW4gY2hvb3NpbmcgYSBzcGxpdD8JRWFjaCBjaGlsZCBtdXN0IGNvbnRyaWJ1dGUgaW4gcHJvcG9ydGlvbiB0byB0aGUgbnVtYmVyIG9mIHBhcmNlbHMgZnJvbSB0aGUgcGFyZW50IHRoYXQgcmVhY2ggaXQuIFdlIGFkZCAobl9nL24pR19nIGFuZCAobl9kL24pR19kOyBhIHNpbXBsZSBhdmVyYWdlIGlzIGp1c3RpZmllZCBvbmx5IHdoZW4gZ3JvdXAgc2l6ZXMgYXJlIGVxdWFsLgl0b2RhaSBjMTM4LW0xIGltcHVyZXRlLXBvbmRlcmVlCldoYXQgaXMgdGhlIGRpZmZlcmVuY2UgYmV0d2VlbiBjaG9vc2luZyB0aGUgcXVlc3Rpb24gYW5kIHVzaW5nIGl0PwlEdXJpbmcgdHJhaW5pbmcsIHJlY29yZGVkIHJlcXVpcmVtZW50cyBhcmUgdXNlZCB0byBjb21wYXJlIHRoZSBpbXB1cml0aWVzIG9mIGNhbmRpZGF0ZSBzcGxpdHMuIER1cmluZyBwcmVkaWN0aW9uLCB0aGUgcXVlc3Rpb25zIGFyZSBmaXhlZCBhbmQgb25seSB0aGUgaW5mb3JtYXRpb24gYXZhaWxhYmxlIGFib3V0IHRoZSBuZXcgcGFyY2VsIGlzIHVzZWQgdG8gZm9sbG93IHRoZSBwYXRoLgl0b2RhaSBjMTM4LW0xIGFwcHJlbnRpc3NhZ2UtYXJicmUKV2h5IHN0b3AgYSB0cmVlIHdoZW4gaXQgY2FuIHN0aWxsIHJlZHVjZSB0aGUgbWl4dHVyZSBpbiB0aGUgdHJhaW5pbmcgZGF0YT8JQWRkaXRpb25hbCBxdWVzdGlvbnMgY2FuIGlzb2xhdGUgcGVjdWxpYXJpdGllcyBvZiB0aGUgYmF0Y2guIExpbWl0aW5nIGRlcHRoIGFuZCBsZWFmIHNpemUgcmVzdHJhaW5zIHRoaXMgY29tcGxleGl0eTsgY29tcGFyaW5nIG9uIHNlcGFyYXRlIHZhbGlkYXRpb24gZGF0YSBoZWxwcyBjaG9vc2UgdGhlc2UgbGltaXRzLiBBIHB1cmUgbGVhZiBvciBhbiBhc3Npc3RlZCBhbnN3ZXIgcHJvdmVzIG5laXRoZXIgbWFzdGVyeSBub3IgZnV0dXJlIHBlcmZvcm1hbmNlLgl0b2RhaSBjMTM4LW0xIGxpbWl0ZXMtYXJicmUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">frajzz gvrfys oxuv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Recognize a path of decisions without assuming it was learned</h3><dl><div><dt>What you understand</dt><dd>A sequence of comparisons can be drawn as a tree. Learning a tree also requires choosing its questions from labeled examples; the counter illustrates this difference without modeling the project’s domain.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hcqqip cuswwo vpufip fjlwxb nknwom lvhgdw xcgual kprjno aqxydh hspypb sroayg jpjlfg opludp galubv hvovql hcvcge jdkrvf lnpfpm bvkkpl hxowbk ibxfds iutzrg xmdueh kexnbs</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: reconstruct the split, its counts, and its criterion, then explain the difference from thresholds written in advance. Reading, consulting a worked answer, or giving an assisted answer never constitutes an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">aucxgp igtfsd xuimzq bjxiyf iiubdv abxphk ssoznf xvwreo hlhzyj rnvqwx rjotqr hgdgqn iskkyr qunkmb zuqwkd ubfcnr hvqznr nezewt wetrht bmkytq lllkrf gbvawk sbzdud qatyxw</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the exercises without support during a delayed recall attempt, then explain where training data, split selection, and evaluation would fit. The next unit will cover bagging. Any verification of the project’s connections or performance would require a separate investigation and mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c138-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c137-m5.html">Previous</a> · <a href="c138-m2.html">Next</a></nav>
+<footer><p>Course book · C138·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

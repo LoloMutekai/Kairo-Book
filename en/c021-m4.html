@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Set a time limit for a locker availability check, decide when to retry it, and distinguish a missing response from an action that did not take place.">
+<title>C021·M4 · Timeouts and retries — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">furbbb qcwqmb ecpg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C021·M4</p><h1>Timeouts and retries</h1><p class="objectif"><span>Your goal</span>Set a time limit for a locker availability check, decide when to retry it, and distinguish a missing response from an action that did not take place.</p><p class="prerequis"><strong>Before you start</strong><br>c019-m5 : clocks and persistence · c018-m5 : contract tests and test doubles · c021-m1 : client, server, and port · c021-m2 : HTTP request and JSON schema · c021-m3 : WebSocket and events</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At a parcel locker, you tap “Check locker”. The kiosk sends an availability query to the server, then waits for its response. The screen stays on “searching”. Should it wait indefinitely, try again immediately, or display that the locker is unavailable? Silence alone supports none of these conclusions.</p><p>A timeout sets how long the kiosk is willing to wait for an attempt. When it expires, the kiosk knows only that it did not receive the expected response in time. The server may have received nothing, may still be working, or may have responded without the response reaching the kiosk. The diagram shows this last possibility; it does not diagnose a failure.</p><p>A retry sends a new attempt. A pause before this retry spaces out the requests; an overall deadline limits the entire check, including pauses. These limits answer different questions: how much time for this call, how many calls, and how much time for the whole process?</p><p>The entire scene and all its durations are fictional. Here, the check is a read operation: it neither reserves nor opens the locker. We explicitly assume that repeating it does not change the server state. Availability can still change between responses; a new read does not guarantee the same content.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>A completed read may still have no response received</title><desc>The kiosk sends its check. In this possible case, the server reads the availability but the response is lost. At 1.50 seconds, the kiosk stops waiting without knowing whether the read took place.</desc><rect x="14" y="14" width="140" height="42" rx="7" class="cadre-prediction" /><text x="84" y="41" text-anchor="middle">Kiosk</text><rect x="206" y="14" width="140" height="42" rx="7" class="cadre-neutre" /><text x="276" y="41" text-anchor="middle">Server</text><path d="M84 56v126M276 56v126M84 84h192m-8-5 8 5-8 5" class="trait" /><text x="180" y="76" text-anchor="middle" class="petite-etiquette">Check sent</text><text x="276" y="113" text-anchor="middle" class="petite-etiquette">Read completed</text><path d="M276 136h-80M174 129l12 14M186 129l-12 14" class="trait" /><text x="180" y="169" text-anchor="middle" class="petite-etiquette">Response lost in this case</text><rect x="20" y="192" width="320" height="52" rx="7" class="cadre-resultat" /><text x="180" y="214" text-anchor="middle">At 1.50 s: timeout</text><text x="180" y="234" text-anchor="middle" class="petite-etiquette">Server result unknown to kiosk</text></svg><figcaption>A missing response is not proof that no processing took place. The cross marks the lost response in this possible scenario; the client sees only its own wait.</figcaption></figure><figure><svg viewBox="0 0 360 324" xmlns="http://www.w3.org/2000/svg" role="img"><title>A budget shared by calls and pauses</title><desc>At most 3 attempts. Call A from 0 to 1.50 seconds, a pause of 0.50 seconds, call B from 2.00 to 3.50 seconds, a pause of 1.00 seconds. Call C at 4.50 seconds with only 0.50 seconds remaining. Everything must finish before the deadline of 5 seconds.</desc><text x="180" y="25" text-anchor="middle">Overall deadline: 5 s</text><rect x="20" y="40" width="320" height="48" rx="7" class="cadre-prediction" /><text x="180" y="61" text-anchor="middle">Call A: 0 → 1.50 s</text><text x="180" y="80" text-anchor="middle" class="petite-etiquette">No expected response received</text><text x="180" y="116" text-anchor="middle">Pause: 0.50 s</text><rect x="20" y="134" width="320" height="48" rx="7" class="cadre-prediction" /><text x="180" y="155" text-anchor="middle">Call B: 2.00 → 3.50 s</text><text x="180" y="174" text-anchor="middle" class="petite-etiquette">No expected response received</text><text x="180" y="210" text-anchor="middle">Pause: 1.00 s</text><rect x="20" y="228" width="320" height="56" rx="7" class="cadre-resultat" /><text x="180" y="251" text-anchor="middle">Call C at 4.50 s</text><text x="180" y="273" text-anchor="middle">Wait limited to 0.50 s</text><text x="180" y="310" text-anchor="middle" class="petite-etiquette">Order only; lengths not to scale</text></svg><figcaption>Attempts and pauses use the same budget. The boxes show their order, without a graphical time scale. The last wait must be shortened.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Before each retry, check whether the operation may be repeated, the number of attempts, and the time remaining. A timeout describes the client’s wait; it does not determine the result on the server.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Check the locker before the deadline</h3><p>The kiosk’s HTTP availability check receives no usable response during calls A and B. At most 3 attempts are allowed, with a timeout of 1.50 s per attempt. The overall budget is 5 s, the first pause is 0.50 s, and the next pause doubles. In this fictional trace, the response to call C arrives 0.25 s after it is sent and meets the expected JSON contract.</p><ol class="etapes"><li><h3>Define the limits before sending</h3><p>We use t for the time elapsed since the first request was sent, in seconds; it starts at 0 s. B = 5 s is the overall budget: here, the deadline is reached when t = B. Time is measured with a monotonic clock, which measures durations without following adjustments to civil time.</p><p>τ, the Greek letter tau, denotes the maximum timeout for an attempt, in seconds: τ = 3/2 s = 1.50 s. N = 3 is the maximum number of attempts, with no unit. The initial request counts: N therefore allows at most 2 retries. The letters A, B, and C name the calls; the letter B on its own in formulas still means the budget.</p><p>p denotes a pause, in seconds. The chosen pauses are 0.50 s, then 2 × 0.50 s = 1.00 s. This increasing interval gives the server more time to recover between requests. It guarantees neither recovery nor an optimal duration; this setting is chosen for the exercise.</p><p>We assume a timer that covers the entire call, including connection and reception, and a check of the overall deadline. The local time spent on calculation and validation is ignored here. In a program, these tasks also take time: the clock must be read again before making decisions. A simple read timeout that restarts with each chunk received is not this overall limit.</p></li><li><h3>Choose an allowed retry</h3><p>The contract for this check allows availability to be read again without making a reservation. After a timeout, we allow another attempt at this read. A JSON contract error or an explicit refusal would not be fixed by blindly repeating the request: the response would need to be understood and the request corrected if necessary.</p><p>The algorithm follows a simple rule: stop as soon as a usable response arrives; after a failure that permits a retry, check the counter, then check that the pause will leave time for a new call. It sends nothing if the attempt limit has been reached or if the pause would use all the remaining time. Attempts run one after another on the client; earlier processing may still continue on the server.</p></li><li><h3>Advance the clock to the second request</h3><p>Call A starts at 0 s. Since no usable response arrives before its limit, the wait ends at 0 + 1.50 = 1.50 s. The kiosk records a timeout; it does not conclude that the server did nothing.</p><p>The pause starts now, after this wait. The next request is therefore sent at 1.50 + 0.50 = 2.00 s. Adding only the pause to the time of the first request would make the waits overlap on the client.</p></li><li><h3>Calculate what remains for the last call</h3><p>Call B starts at 2.00 s and ends its wait at 2.00 + 1.50 = 3.50 s. There is 1 allowed attempt left. The new pause is 1.00 s; call C can therefore start at 3.50 + 1.00 = 4.50 s.</p><p>r denotes the time remaining when a request is sent, in seconds. We subtract the time already used from the budget, because the pauses have not reset the clock. For C:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mi>B</mi><mo>−</mo><mi>t</mi><mo>=</mo><mn>5</mn><mo>−</mo><mn>4.50</mn><mo>=</mo><mn>0.50</mn><mtext> s</mtext></mrow></math></div><p>d denotes the maximum wait actually allowed for this new call, in seconds. It must respect both τ and r: we take their smaller value. For the last call, the remaining budget is smaller:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><mo>=</mo><mi>min</mi><mo>(</mo><mi>τ</mi><mo>,</mo><mi>r</mi><mo>)</mo><mo>=</mo><mi>min</mi><mo>(</mo><mn>1.50</mn><mo>,</mo><mn>0.50</mn><mo>)</mo><mo>=</mo><mn>0.50</mn><mtext> s</mtext></mrow></math></div><p>Without a response, C would be stopped at 4.50 + 0.50 = 5.00 s. Giving C the full timeout again would exceed the deadline. Our rule gives priority to the deadline if a response arrives at exactly that time: a usable response must arrive before this limit.</p></li><li><h3>Accept the response and stop retrying</h3><p>The response from C arrives after 1/4 s, a wait of 0.25 s. This duration is shorter than the 0.50 s allowed. The reception time is 4.50 + 0.25 = 4.75 s. The response is received before the deadline, then found to meet the contract under our timing assumptions.</p><p>The remaining margin is 5 − 4.75 = 0.25 s. We stop immediately: the timeout is an upper limit, not a duration to fill. The result says that availability was checked; it proves neither a reservation nor an opening of the locker.</p></li><li><h3>Check the total time, including pauses</h3><p>Let us check the case where no call responds in another way. The waits total 1.50 + 1.50 + 0.50 = 3.50 s. The pauses total 0.50 + 1.00 = 1.50 s. Together: 3.50 + 1.50 = 5.00 s, exactly the budget.</p><p>With a full timeout for every call, the waits alone would take 3 × 1.50 = 4.50 s. Adding the pauses would give 6.00 s, which is 1 s too much. The maximum number of attempts therefore does not, by itself, keep the total time within the intended limit.</p><p>The response accepted in our fictional trace arrives at 4.75 s, before this upper limit. At the deadline without a response, an accurate screen would say “availability check unconfirmed” and offer an explicit next step; it would not invent an availability status. A read response arriving after the check has been abandoned must not silently replace a more recent check.</p></li><li><h3>Use the same caution if the button makes a reservation</h3><p>Now suppose that the button for the same locker requests a reservation. If the response is lost after the reservation is recorded, repeating the request may create another reservation when the server does not protect against duplicates. The HTTP method name or the absence of a response is not enough to establish that repeating the request is safe.</p><p>An operation is called idempotent when repeating it has the same intended effect on state as executing it once. Our read satisfies the assumption that it does not change that state. For a reservation, an automatic retry would require a verified contract that prevents the effect from being repeated, for example a request reference that the server remembers durably. Without this, the result must remain unknown and a way to check this request must be provided. The timer does not cancel a reservation already made. Restoring a WebSocket connection does not resolve this uncertainty either.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking at the timeline, reconstruct when C starts and how long it is allowed to wait. Explain why the last wait is shortened, then why the same timer does not allow a reservation to be blindly replayed.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The timeout has expired, so the server did nothing.”</h3><p>The timer describes only the client’s waiting limit. The server may have processed the request and the response may have been lost. For the locker reservation, keep the result unknown until suitable evidence determines it.</p><a href="#intuition">Review the response lost between the server and the kiosk</a></li><li><h3>“With 3 attempts, I will always stay within 5 s.”</h3><p>Add the calls and the pauses. Here, giving every call its full timeout would lead to 6.00 s. A shared deadline requires recalculating the time remaining before each call and shortening C.</p><a href="#exemple">Repeat the check of the total time</a></li><li><h3>“A network failure allows any request to be sent again.”</h3><p>Look at the request’s effect. Reading availability again is allowed by the contract in this scene; making a reservation may repeat an effect that has already occurred. Without a verified guarantee against duplicates, avoid automatic replay and check the outcome of the initial request.</p><a href="#exercices">Handle the uncertain reservation in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-reponse-precoce"><p class="repere">Exercise 1 · Direct application</p>
+<h3>The response arrives before the timer expires</h3><p>With the kiosk’s initial settings, call A receives a usable response at t = 1 s. When does the check end? How much time remained before this call’s limit and before the overall deadline? Should there be a pause followed by a retry?</p>
+<label for="reponse-ex-reponse-precoce">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reponse-precoce" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reponse-precoce" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reponse-precoce" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reponse-precoce" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A usable response is a condition for stopping immediately. The maximum timeout is not a required wait.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract the elapsed time from each limit separately.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The check ends at 1 s, after 1 attempt. The margin on A’s timer is 1.50 − 1 = 0.50 s; the remaining overall budget is 5 − 1 = 4 s.</p><p>There is no pause or retry: we already have the expected response. Waiting for the full timeout or using the remaining attempts would add requests without a reason in this check.</p><p class="petit-titre">Check your reasoning</p><ul><li>You stop on reception and give the two margins separately, in seconds.</li><li>You explain why the maximum attempt count does not require further requests.</li></ul></details></article><article class="exercice" id="ex-budget-court"><p class="repere">Exercise 2 · Decision with calculation</p>
+<h3>The budget no longer allows the next pause</h3><p>The same check now has B = 4 s available. The timeout per call, the pauses, and the attempt limit stay the same. A and B use their full timeouts without a usable response. At what time does B’s wait end? Does the policy allow C after the planned pause? Give the result to display.</p>
+<label for="reponse-ex-budget-court">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-budget-court" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-budget-court" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-budget-court" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-budget-court" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Reconstruct the timeline from the first request: wait for A, pause, wait for B.</p></details><details class="indice"><summary>Hint 2</summary><p>After B, compare the time remaining with the next full pause. Our policy requires it to leave time for a call.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>B’s wait still ends at 1.50 + 0.50 + 1.50 = 3.50 s. The remaining budget is 4 − 3.50 = 0.50 s.</p><p>The planned pause of 1.00 s is longer than the time remaining. The policy therefore does not send C and ends at 3.50 s, after 2 attempts. It does not arbitrarily shorten the chosen pause or wait needlessly for the deadline.</p><p>The kiosk reports an unconfirmed availability check. We have no usable response; this does not establish that the server has stopped or that the locker is occupied. The attempt limit still allowed another call, but the budget and pause rule prohibit it.</p><p class="petit-titre">Check your reasoning</p><ul><li>You find 3.50 s, then 0.50 s remaining.</li><li>You reject C because too little time would remain after the pause, without changing the policy.</li><li>You display the uncertainty about the result, without inventing the server state.</li></ul></details></article><article class="exercice" id="ex-reservation"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>The reservation with no response</h3><p>The button for the same locker now sends a reservation request. The server can create a new record each time it receives one and states no protection against duplicates. The kiosk reaches its timeout without receiving a response. Someone suggests retrying as with the availability check. Respond to this suggestion and specify what evidence to seek before deciding to send again.</p>
+<label for="reponse-ex-reservation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reservation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reservation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reservation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reservation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Construct a case in which the server recorded the reservation but the response was lost.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate checking the initial result from making a new request that could repeat the effect.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The server may have created the reservation before the response was lost. Replaying without protection may create another one. A timeout therefore proves neither the absence of a reservation nor the safety of sending again.</p><p>The kiosk keeps the status “reservation unconfirmed” and does not replay automatically. There must be a defined way to check the outcome of the initial request: for example, a known reference and a server state that can be queried to determine its result. Simply reading “locker occupied” does not say who reserved it and is not enough.</p><p>If a contract prevents duplicates for the same request reference, you must still verify that the server enforces this contract, including after a restart, before relying on it. The kiosk cannot invent this guarantee. A time budget and a reconnection govern waiting and transport; they do not demonstrate this property of the operation.</p><p class="petit-titre">Check your reasoning</p><ul><li>You describe the case of a response lost after an effect has already occurred.</li><li>You distinguish an unknown result from a confirmed failure.</li><li>You reject automatic resending under the given assumptions and require evidence tied to the initial request.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="delai-inconnu"><summary><span class="repere">Recall 1</span><span>What does a timeout prove for the kiosk?</span></summary><p>It did not receive the expected response in time. This does not say whether the server received nothing, is still working, or processed the request without a response being received.</p></details><details class="carte" data-carte="trois-limites"><summary><span class="repere">Recall 2</span><span>Which limits must be distinguished, and do pauses use the budget?</span></summary><p>The timeout per attempt, the maximum number of attempts including the initial request, and the overall deadline. Pauses use the overall budget. A usable response stops the check before these limits.</p></details><details class="carte" data-carte="reste"><summary><span class="repere">Recall 3</span><span>How do you find the allowed wait for a new call?</span></summary><p>Measure the elapsed time t, subtract it from the budget B, and take the smaller value between this remainder and the timeout per call. If the attempt count is exhausted or the pause leaves no time, do not send a new call.</p></details><details class="carte" data-carte="repeter"><summary><span class="repere">Recall 4</span><span>Why should a reservation not be retried automatically like a locker read?</span></summary><p>A reservation may already exist despite the lost response. Repeating it may repeat the effect. You must check the initial outcome or have an enforced contract that prevents duplicates; a timer does not provide this evidence.</p></details><details class="carte" data-carte="dernier-appel"><summary><span class="repere">Recall 5</span><span>Without rereading, reconstruct C’s start time and its limit with the example’s settings.</span></summary><p>The waits for A and B each take 1.50 s, separated by 0.50 s. After B, the pause is 1.00 s. C therefore starts at 4.50 s; out of 5 s in total, only 0.50 s remain. Its limit is 5.00 s.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct the rule using the kiosk: name the read operation and its effect, set the timeout, counter, and deadline, place pauses after waits, recalculate the time remaining, and stop on a usable response or a limit. Finish with the lost response case: an ended wait does not prove the absence of a reservation. Reading or producing an assisted answer does not mean a level has been achieved; reconstruct the reasoning without support on another day.</p></div><div class="exports"><a class="bouton" download="c021-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTQ6ZGVsYWktaW5jb25udSIsCiAgICAgICJ1bml0ZSI6ICJjMDIxLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGVsYWktZXQtcmVzdWx0YXQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIGEgdGltZW91dCBwcm92ZSBmb3IgdGhlIGtpb3NrPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGRpZCBub3QgcmVjZWl2ZSB0aGUgZXhwZWN0ZWQgcmVzcG9uc2UgaW4gdGltZS4gVGhpcyBkb2VzIG5vdCBzYXkgd2hldGhlciB0aGUgc2VydmVyIHJlY2VpdmVkIG5vdGhpbmcsIGlzIHN0aWxsIHdvcmtpbmcsIG9yIHByb2Nlc3NlZCB0aGUgcmVxdWVzdCB3aXRob3V0IGEgcmVzcG9uc2UgYmVpbmcgcmVjZWl2ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTQ6dHJvaXMtbGltaXRlcyIsCiAgICAgICJ1bml0ZSI6ICJjMDIxLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiYnVkZ2V0LWRlLXJlcHJpc2UiLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggbGltaXRzIG11c3QgYmUgZGlzdGluZ3Vpc2hlZCwgYW5kIGRvIHBhdXNlcyB1c2UgdGhlIGJ1ZGdldD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdGltZW91dCBwZXIgYXR0ZW1wdCwgdGhlIG1heGltdW0gbnVtYmVyIG9mIGF0dGVtcHRzIGluY2x1ZGluZyB0aGUgaW5pdGlhbCByZXF1ZXN0LCBhbmQgdGhlIG92ZXJhbGwgZGVhZGxpbmUuIFBhdXNlcyB1c2UgdGhlIG92ZXJhbGwgYnVkZ2V0LiBBIHVzYWJsZSByZXNwb25zZSBzdG9wcyB0aGUgY2hlY2sgYmVmb3JlIHRoZXNlIGxpbWl0cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAyMS1tNDpyZXN0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDIxLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidGVtcHMtcmVzdGFudCIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGZpbmQgdGhlIGFsbG93ZWQgd2FpdCBmb3IgYSBuZXcgY2FsbD8iLAogICAgICAicmVwb25zZSI6ICJNZWFzdXJlIHRoZSBlbGFwc2VkIHRpbWUgdCwgc3VidHJhY3QgaXQgZnJvbSB0aGUgYnVkZ2V0IEIsIGFuZCB0YWtlIHRoZSBzbWFsbGVyIHZhbHVlIGJldHdlZW4gdGhpcyByZW1haW5kZXIgYW5kIHRoZSB0aW1lb3V0IHBlciBjYWxsLiBJZiB0aGUgYXR0ZW1wdCBjb3VudCBpcyBleGhhdXN0ZWQgb3IgdGhlIHBhdXNlIGxlYXZlcyBubyB0aW1lLCBkbyBub3Qgc2VuZCBhIG5ldyBjYWxsLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDIxLW00OnJlcGV0ZXIiLAogICAgICAidW5pdGUiOiAiYzAyMS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlcHJpc2UtZXQtZWZmZXQiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IHNob3VsZCBhIHJlc2VydmF0aW9uIG5vdCBiZSByZXRyaWVkIGF1dG9tYXRpY2FsbHkgbGlrZSBhIGxvY2tlciByZWFkPyIsCiAgICAgICJyZXBvbnNlIjogIkEgcmVzZXJ2YXRpb24gbWF5IGFscmVhZHkgZXhpc3QgZGVzcGl0ZSB0aGUgbG9zdCByZXNwb25zZS4gUmVwZWF0aW5nIGl0IG1heSByZXBlYXQgdGhlIGVmZmVjdC4gWW91IG11c3QgY2hlY2sgdGhlIGluaXRpYWwgb3V0Y29tZSBvciBoYXZlIGFuIGVuZm9yY2VkIGNvbnRyYWN0IHRoYXQgcHJldmVudHMgZHVwbGljYXRlczsgYSB0aW1lciBkb2VzIG5vdCBwcm92aWRlIHRoaXMgZXZpZGVuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMjEtbTQ6ZGVybmllci1hcHBlbCIsCiAgICAgICJ1bml0ZSI6ICJjMDIxLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2hyb25vbG9naWUtYm9ybmVlIiwKICAgICAgInF1ZXN0aW9uIjogIldpdGhvdXQgcmVyZWFkaW5nLCByZWNvbnN0cnVjdCBD4oCZcyBzdGFydCB0aW1lIGFuZCBpdHMgbGltaXQgd2l0aCB0aGUgZXhhbXBsZeKAmXMgc2V0dGluZ3MuIiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHdhaXRzIGZvciBBIGFuZCBCIGVhY2ggdGFrZSAxLjUwIHMsIHNlcGFyYXRlZCBieSAwLjUwIHMuIEFmdGVyIEIsIHRoZSBwYXVzZSBpcyAxLjAwIHMuIEMgdGhlcmVmb3JlIHN0YXJ0cyBhdCA0LjUwIHM7IG91dCBvZiA1IHMgaW4gdG90YWwsIG9ubHkgMC41MCBzIHJlbWFpbi4gSXRzIGxpbWl0IGlzIDUuMDAgcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c021-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGEgdGltZW91dCBwcm92ZSBmb3IgdGhlIGtpb3NrPwlJdCBkaWQgbm90IHJlY2VpdmUgdGhlIGV4cGVjdGVkIHJlc3BvbnNlIGluIHRpbWUuIFRoaXMgZG9lcyBub3Qgc2F5IHdoZXRoZXIgdGhlIHNlcnZlciByZWNlaXZlZCBub3RoaW5nLCBpcyBzdGlsbCB3b3JraW5nLCBvciBwcm9jZXNzZWQgdGhlIHJlcXVlc3Qgd2l0aG91dCBhIHJlc3BvbnNlIGJlaW5nIHJlY2VpdmVkLgl0b2RhaSBjMDIxLW00IGRlbGFpLWV0LXJlc3VsdGF0CldoaWNoIGxpbWl0cyBtdXN0IGJlIGRpc3Rpbmd1aXNoZWQsIGFuZCBkbyBwYXVzZXMgdXNlIHRoZSBidWRnZXQ/CVRoZSB0aW1lb3V0IHBlciBhdHRlbXB0LCB0aGUgbWF4aW11bSBudW1iZXIgb2YgYXR0ZW1wdHMgaW5jbHVkaW5nIHRoZSBpbml0aWFsIHJlcXVlc3QsIGFuZCB0aGUgb3ZlcmFsbCBkZWFkbGluZS4gUGF1c2VzIHVzZSB0aGUgb3ZlcmFsbCBidWRnZXQuIEEgdXNhYmxlIHJlc3BvbnNlIHN0b3BzIHRoZSBjaGVjayBiZWZvcmUgdGhlc2UgbGltaXRzLgl0b2RhaSBjMDIxLW00IGJ1ZGdldC1kZS1yZXByaXNlCkhvdyBkbyB5b3UgZmluZCB0aGUgYWxsb3dlZCB3YWl0IGZvciBhIG5ldyBjYWxsPwlNZWFzdXJlIHRoZSBlbGFwc2VkIHRpbWUgdCwgc3VidHJhY3QgaXQgZnJvbSB0aGUgYnVkZ2V0IEIsIGFuZCB0YWtlIHRoZSBzbWFsbGVyIHZhbHVlIGJldHdlZW4gdGhpcyByZW1haW5kZXIgYW5kIHRoZSB0aW1lb3V0IHBlciBjYWxsLiBJZiB0aGUgYXR0ZW1wdCBjb3VudCBpcyBleGhhdXN0ZWQgb3IgdGhlIHBhdXNlIGxlYXZlcyBubyB0aW1lLCBkbyBub3Qgc2VuZCBhIG5ldyBjYWxsLgl0b2RhaSBjMDIxLW00IHRlbXBzLXJlc3RhbnQKV2h5IHNob3VsZCBhIHJlc2VydmF0aW9uIG5vdCBiZSByZXRyaWVkIGF1dG9tYXRpY2FsbHkgbGlrZSBhIGxvY2tlciByZWFkPwlBIHJlc2VydmF0aW9uIG1heSBhbHJlYWR5IGV4aXN0IGRlc3BpdGUgdGhlIGxvc3QgcmVzcG9uc2UuIFJlcGVhdGluZyBpdCBtYXkgcmVwZWF0IHRoZSBlZmZlY3QuIFlvdSBtdXN0IGNoZWNrIHRoZSBpbml0aWFsIG91dGNvbWUgb3IgaGF2ZSBhbiBlbmZvcmNlZCBjb250cmFjdCB0aGF0IHByZXZlbnRzIGR1cGxpY2F0ZXM7IGEgdGltZXIgZG9lcyBub3QgcHJvdmlkZSB0aGlzIGV2aWRlbmNlLgl0b2RhaSBjMDIxLW00IHJlcHJpc2UtZXQtZWZmZXQKV2l0aG91dCByZXJlYWRpbmcsIHJlY29uc3RydWN0IEPigJlzIHN0YXJ0IHRpbWUgYW5kIGl0cyBsaW1pdCB3aXRoIHRoZSBleGFtcGxl4oCZcyBzZXR0aW5ncy4JVGhlIHdhaXRzIGZvciBBIGFuZCBCIGVhY2ggdGFrZSAxLjUwIHMsIHNlcGFyYXRlZCBieSAwLjUwIHMuIEFmdGVyIEIsIHRoZSBwYXVzZSBpcyAxLjAwIHMuIEMgdGhlcmVmb3JlIHN0YXJ0cyBhdCA0LjUwIHM7IG91dCBvZiA1IHMgaW4gdG90YWwsIG9ubHkgMC41MCBzIHJlbWFpbi4gSXRzIGxpbWl0IGlzIDUuMDAgcy4JdG9kYWkgYzAyMS1tNCBjaHJvbm9sb2dpZS1ib3JuZWUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">furbbb qcwqmb ecpg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hxawem sxpsws zdkt</span></span> · understand retries within limits</h3><dl><div><dt>What you understand</dt><dd>A timeout limits a local wait; a retry also requires a budget and a contract about the request’s effect. Reconnecting a transport does not prove the result of an earlier operation. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yejbvh krnkml htatxu ectqdb jpkxho ikqghr nwef</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">isxber hqehza olixzm wiiyzx evrhhg wwusrn jyoppt xoefvo piuetg qzmetw xibiep zlqwae pzekay jiekil ffqokv wqijeu jesogh vhbcjo gruvrk sqtvzt wcggyd flvuhy lnzral ybsgwx</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 1: reconstruct the timeline, limit the remaining wait, and respond to the case of a reservation whose response is lost. Neither reading this code nor succeeding after a hint demonstrates independent recall. The full milestone also requires the next unit.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ucpxhx fgxdlb hozodx rnbngf cbywcl jjuaxd zcndrw sbjzxu wrrpck jnkrqn luhwwg dswyau qzxhag hkgidn yuasmy bqixmv yjxuyc syhtoj cbpdrq dqsfcb rqrkng aoxnwj jmowhn niynvs wveyeu nxyhjl dgjuds jlifgq hdubwv wzdnrq gdtcxk vfsbpn zyooae opbpbm wblcem nlxmjj ivubvf tr</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises without support on another day, then continue with C021·M5, origin, authentication, and authorization. To prepare evidence of the real flow, the caller and its limits still need to be traced through to the visible result, then delayed or lost responses tested in an authorized setting. This reading does not execute that flow.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c021-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c021-m3.html">Previous</a></nav>
+<footer><p>Course book · C021·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

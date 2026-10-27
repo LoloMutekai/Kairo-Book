@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calibrate the leverage using the average variance at the same price, check the resulting variance and explain why this calculation must be reassessed when the simulated distribution changes.">
+<title>C253·M2 · Conditional calibration — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eygdam qgotvd paab</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C253·M2</p><h1>Conditional calibration</h1><p class="objectif"><span>Your goal</span>Calibrate the leverage using the average variance at the same price, check the resulting variance and explain why this calculation must be reassessed when the simulated distribution changes.</p><p class="prerequis"><strong>Before you start</strong><br>c252-m5 : model risk · c239-m5 : calibration and identifiability · c182-m5 : trinomial tree and admissibility · c220-m5 : numerical reproducibility · c198-m5 : independent validation · c253-m1 : leverage function</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a fictional simulator, the same unit of an asset can reach 100 € along very different paths. Some paths arrive with small fluctuations, others with large ones. To adjust the fluctuations at a price of 100 €, we must look at the paths that reach that price: paths that reach 120 € answer a different question.</p><p>Here, a particle is a possible state of the simulator, described by its price and the instantaneous variance of its relative changes. We freeze 4 equally probable particles at the same instant. The 2 priced at 100 € have variances of 0.04 and 0.16 per year; the other 2 are priced at 120 € and have variances of 0.25 and 0.35 per year. These numbers are entirely fictional.</p><p>The leverage multiplies the amplitude of the fluctuations. Its square therefore multiplies their variance. The local target requires a variance of 0.09 per year at the chosen price. The idea is to divide this target by the average variance of the paths at that price, then check the resulting product.</p><p>We work with a single time slice. This task involves neither choosing the best financial product nor calculating an option price. Before looking at the result, predict whether the leverage will need to amplify or reduce the fluctuations of the group at 100 €.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>Keep the states at the same price</title><desc>At the frozen instant, the group at 100 euros contains variances of 0.04 and 0.16 per year. The group at 120 euros contains 0.25 and 0.35 per year. Each particle has the same weight.</desc><rect x="18" y="16" width="324" height="100" rx="7" class="cadre-prediction" /><text x="180" y="44" text-anchor="middle">Selected price: 100 €</text><text x="180" y="74" text-anchor="middle">A: 0.04 · B: 0.16 per year</text><text x="180" y="101" text-anchor="middle" class="petite-etiquette">Conditional mean: 0.10</text><rect x="18" y="138" width="324" height="100" rx="7" class="cadre-neutre" /><text x="180" y="166" text-anchor="middle">Other price: 120 €</text><text x="180" y="196" text-anchor="middle">C: 0.25 · D: 0.35 per year</text><text x="180" y="223" text-anchor="middle" class="petite-etiquette">Outside the selected group</text></svg><figcaption>The boxes separate price groups, rather than successive instants. The letters A to D identify the particles. No path is simulated in this figure.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The target determines a product</title><desc>The mean of 0.10 per year multiplied by the square of the leverage, 0.90, gives the target of 0.09 per year. The check returns to the particles in the same group.</desc><rect x="24" y="14" width="312" height="54" rx="7" class="cadre-prediction" /><text x="180" y="48" text-anchor="middle">Mean: 0.10 per year</text><line x1="180" y1="68" x2="180" y2="96" class="trait" /><rect x="24" y="96" width="312" height="54" rx="7" class="cadre-neutre" /><text x="180" y="130" text-anchor="middle">Multiply by L squared: 0.90</text><line x1="180" y1="150" x2="180" y2="178" class="trait" /><rect x="24" y="178" width="312" height="54" rx="7" class="cadre-resultat" /><text x="180" y="212" text-anchor="middle">Resulting variance: 0.09 per year</text></svg><figcaption>The factor 0.90 is dimensionless. The result retains the unit of the average variance. The diagram shows a calculation on frozen states, without claiming that a dynamic calibration is complete.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>First condition on the price, estimate the average variance, set the square of the leverage, then check the projected variance for this same group.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Adjust the slice at a price of 100 €</h3><p>At t = 1 year, the target local model provides a volatility σloc = 0.30 per square root of a year at price s = 100 €. Particles A, B, C and D are those in the diagram, each with probability 1/4. Let us find the nonnegative leverage and check its projected variance.</p><ol class="etapes"><li><h3>Name the objects and the constraint</h3><p>t is time in years; S<sub>t</sub> is the random price, in euros; s is a fixed price, in the same unit. V<sub>t</sub> is the instantaneous variance of relative changes, expressed per year. L(t,s) is the dimensionless deterministic leverage, chosen to be nonnegative. The amplitude of price fluctuations is s × L(t,s) × √V<sub>t</sub>, in euros per square root of a year. The target local volatility σloc(t,s) has units of inverse square root of a year; its square is a variance per year.</p><p>Q denotes the pricing distribution, called risk neutral. E_Q is the mean under this distribution, and the vertical bar means “given that”. Define m_L(t,s) as the mean of V<sub>t</sub> given S<sub>t</sub> = s under the model using L. The symbol m denotes a mean, rather than a number of particles. The constraint to satisfy is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>m</mi><mi>L</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>s</mi><mo>)</mo><mo>=</mo><msub><mi>E</mi><mi>Q</mi></msub><mo>[</mo><msub><mi>V</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>S</mi><mi>t</mi></msub><mo>=</mo><mi>s</mi><mo>]</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>σ</mi><mtext>loc</mtext><mn>2</mn></msubsup><mo>(</mo><mi>t</mi><mo>,</mo><mi>s</mi><mo>)</mo><mo>=</mo><msup><mi>L</mi><mn>2</mn></msup><mo>(</mo><mi>t</mi><mo>,</mo><mi>s</mi><mo>)</mo><msub><mi>m</mi><mi>L</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>s</mi><mo>)</mo></mrow></math></div><p>This relation compares instantaneous variances of relative changes. Once the price is fixed, L(t,s) no longer varies across the states in the group: its square can be taken outside the conditional mean. No independence between S<sub>t</sub> and V<sub>t</sub> is assumed. The continuous framework assumes a strictly positive price, a diffusion without jumps, the same drift as the local model, an admissible target and a finite, strictly positive conditional mean at the point studied. We use the local constraint; solving it numerically does not by itself demonstrate equality of all marginal distributions.</p></li><li><h3>Form the group before calculating the mean</h3><p>In our fictional discrete distribution, S<sub>t</sub> = 100 € selects A and B. Their conditional probabilities are equal to 1/2: the equal initial probabilities are renormalized within the group. C and D are excluded. The empirical mean, denoted by m̂ with a hat, is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>m</mi><mo>^</mo></mover><mo>=</mo><mfrac><mrow><mn>0.04</mn><mo>+</mo><mn>0.16</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mn>0.20</mn><mn>2</mn></mfrac><mo>=</mo><mn>0.10</mn><mtext> par an</mtext></mrow></math></div><p>We average the variances V, without taking their square roots or subtracting their mean: we are not calculating the variance of the V values. Here, m̂ is exact for the stated small discrete distribution. In a model with a continuous price, a fixed price can have probability 0: E_Q[V<sub>t</sub> | S<sub>t</sub> = s] then denotes a conditional expectation, rather than a naive selection by equality in a finite sample.</p><p>In practice, this mean is estimated using nearby prices, for example within a window around s. A wide window mixes different states; a narrow window may contain too few states. The neighborhood rule, weights and resulting sample size must be stated. With unequal weights, we divide the sum of weighted variances by the sum of the retained weights.</p></li><li><h3>Express the target in the correct unit</h3><p>The given σloc is a volatility, whereas m̂ is a variance. We therefore square σloc: 0.30 × 0.30 = 0.09 per year. This calculation converts units of inverse square root of a year into inverse years. Dividing the volatility directly by m̂ would leave the leverage with a unit.</p><p>The target of 0.09 per year is below the mean of 0.10 per year. The factor applied to the variance must be less than 1: we expect a reduction.</p></li><li><h3>Isolate the square of the leverage</h3><p>The mean m̂ is positive, so division is allowed. We set the square of the leverage by dividing the required variance by that of the frozen group:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>L</mi><mn>2</mn></msup><mo>=</mo><mfrac><msubsup><mi>σ</mi><mtext>loc</mtext><mn>2</mn></msubsup><mover><mi>m</mi><mo>^</mo></mover></mfrac><mo>=</mo><mfrac><mn>0.09</mn><mn>0.10</mn></mfrac><mo>=</mo><mn>0.90</mn><mo>;</mo><mi>L</mi><mo>=</mo><msqrt><mn>0.90</mn></msqrt></mrow></math></div><p>The division cancels the units. The exact rational result for the square is 9/10. The leverage itself is the positive square root of this fraction; keeping it in this form avoids rounding. Do not use 0.90 as the amplitude: it is the variance factor.</p></li><li><h3>Check by returning to the particles</h3><p>Multiply the variances of A and B separately by 0.90. For A: 0.90 × 0.04 = 0.036 per year. For B: 0.90 × 0.16 = 0.144 per year. The projected conditional variance is then:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mn>0.036</mn><mo>+</mo><mn>0.144</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mn>0.18</mn><mn>2</mn></mfrac><mo>=</mo><mn>0.09</mn><mtext> par an</mtext></mrow></math></div><p>The residual, defined as projected variance minus target, is 0.09 − 0.09 = 0 per year. The direction of change matches our expectation: every variance in the group has decreased. The check recalculated a mean over the particles; it went beyond simply rereading the quotient.</p></li><li><h3>Show why the wrong conditioning fails</h3><p>If all the states are mixed together, their sum of variances is 0.20 + 0.60 = 0.80 per year and their mean is 0.80/4 = 0.20 per year. The incorrect square of the leverage becomes 0.09/0.20 = 0.45.</p><p>At a price of 100 €, however, this factor gives 0.45 × 0.10 = 0.045 per year. This falls short of the target by 0.045 per year, compared with the target of 0.09. The global calculation is arithmetically correct; it addresses the wrong condition.</p></li><li><h3>Place this calculation within a calibration</h3><p>The subscript L in m_L reminds us that the joint distribution of S<sub>t</sub> and V<sub>t</sub> itself depends on the leverage function used to evolve the model. Even if the equation for V does not contain L, changing the paths of S can change which variance states are found at the same price. Evaluating the quotient on a frozen distribution gives a candidate update, rather than proof that this new function will reproduce the same mean after simulation.</p><p>A procedure on a grid of times and prices estimates the means using the current leverage, proposes a new leverage, recalculates the distribution it induces and checks the residuals. Depending on the method, these operations are arranged as time advances or are iterated. A fixed point here means that the leverage and the means it produces jointly satisfy the constraint. The quotient identity guarantees neither existence, uniqueness nor convergence of this procedure.</p><p>A 0 mean with a positive target permits no finite solution; an empty cell does not even provide a mean. A very small mean can produce a very large leverage. Widening the window, interpolating or imposing a floor changes the estimate or the constraint: this must be declared and the corresponding residual measured. Our example specifies none of these settings. The density equations belong to the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the final values. Reconstruct the group, the unit of the numerator and the quotient; then check the particles one by one. Explain why moving particles to the neighboring price can change the next leverage without changing the target.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“An average of all the variances is enough.”</h3><p>The leverage is set at price s. Repeat the selection by price before averaging: the global mean includes states outside the condition. The counterexample calculation produces 0.045 per year instead of 0.09.</p><a href="#exemple">Review the selected group and the global counterexample calculation</a></li><li><h3>“The quotient directly gives the leverage.”</h3><p>The quotient gives the square of L. Variances are multiplied by this square; the amplitude is multiplied by its positive square root. Also check that the numerator is the target volatility squared.</p><a href="#exemple">Review the units and the square root that gives the leverage</a></li><li><h3>“A 0 residual on these particles completes the calibration.”</h3><p>It confirms the algebra for the frozen distribution. A recalculated distribution can change the conditional mean; an empty cell does not justify any quotient. Reconstruct the test in which the mean changes and state what remains to be checked.</p><a href="#exercices">Test the new mean and the empty cell</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-groupe-voisin"><p class="repere">Exercise 1 · Application to the neighboring group</p>
+<h3>Same target, different condition</h3><p>In the same frozen sample, now adjust the price of 120 €. The target local volatility there is also 0.30 per square root of a year. Calculate the conditional mean, the square of the leverage and the mean of the adjusted variances. First predict which price will require the greater reduction.</p>
+<label for="reponse-ex-groupe-voisin">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-groupe-voisin" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-groupe-voisin" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-groupe-voisin" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-groupe-voisin" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Keep only C and D. The variance target remains 0.09 per year.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply each retained variance by the square of the leverage before recalculating the mean.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The neighboring group has higher variances, so it requires a greater reduction. Its mean is (0.25 + 0.35)/2 = 0.60/2 = 0.30 per year.</p><p>The square of the leverage is 0.09/0.30 = 0.30, less than 0.90. The positive leverage is the square root of 0.30, with no unit.</p><p>The adjusted variances are 0.075 and 0.105 per year. Their sum is 0.18, then their mean is 0.09 per year: a different leverage reaches the same target because the conditional group differs.</p><p class="petit-titre">Check your reasoning</p><ul><li>Select only C and D.</li><li>Square the target volatility before dividing.</li><li>Check the adjusted variances and explain the direction of change.</li></ul></details></article><article class="exercice" id="ex-loi-modifiee"><p class="repere">Exercise 2 · Diagnosing an update</p>
+<h3>The mean changes after recalculating the distribution</h3><p>A new fictional pass of the same simulator gives, at a price of 100 €, a conditional mean of 0.20 per year. The target remains 0.09 per year. What does the old square of the leverage, 0.90, produce? Calculate the new candidate square, then say whether this new quotient proves convergence.</p>
+<label for="reponse-ex-loi-modifiee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-loi-modifiee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-loi-modifiee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-loi-modifiee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-loi-modifiee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First check the old factor by multiplication, without repeating its division.</p></details><details class="indice"><summary>Hint 2</summary><p>The new quotient uses the mean from the new pass. The distribution induced by the candidate leverage must then be checked.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The old factor produces 0.90 × 0.20 = 0.18 per year. The residual is 0.18 − 0.09 = 0.09 per year: the target is exceeded.</p><p>The new candidate square is 0.09/0.20 = 0.45. The frozen check gives 0.45 × 0.20 = 0.09 per year.</p><p>Since the mean doubled, the candidate square was divided by 2. This does not demonstrate convergence: this leverage can still change the distribution and therefore the mean at the next recalculation. The residuals must be checked using the distribution it induces, followed by sensitivity to discretization and conditional estimation.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the residual of the old factor in the unit of variance.</li><li>Recalculate the candidate square using the current mean.</li><li>Distinguish a check on a frozen slice from a consistency check after evolution.</li></ul></details></article><article class="exercice" id="ex-case-vide"><p class="repere">Exercise 3 · Limitation and checking protocol</p>
+<h3>The price with no particle</h3><p>Return to the initial particles. At a price of 110 €, the sample size is 0. A proposal is to replace the missing mean with 0, then divide the target of 0.09 by this number. Diagnose this proposal and describe a sequence of checks without inventing a leverage value.</p>
+<label for="reponse-ex-case-vide">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-case-vide" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-case-vide" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-case-vide" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-case-vide" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Is a missing mean a mean variance of 0?</p></details><details class="indice"><summary>Hint 2</summary><p>Separate what the sample allows you to calculate from the additional choice of a neighborhood rule.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sample has no state at 110 €. Its empirical conditional mean obtained by exact selection is undefined: an empty sum divided by a sample size of 0 does not give a variance of 0. The proposed division is therefore unjustified and, with a 0 denominator, impossible.</p><p>The cell must be marked as not estimated. One possible sequence would be to state a neighborhood that retains nearby prices, its weights and its sample size; the mean would then need to be recalculated, other widths tested and the residuals checked. Interpolation from the existing groups would also be an additional assumption. Without a stated rule, no numerical leverage is determined at this price.</p><p>Even if another sample provided a true 0 mean, a positive target could not be reached with finite leverage. This mathematical obstruction is distinct from the lack of observations in our cell.</p><p class="petit-titre">Check your reasoning</p><ul><li>Do not confuse missing data with 0 variance.</li><li>Give no numerical quotient for the empty cell.</li><li>Propose a declared estimation rule with a check of its sensitivity.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="condition"><summary><span class="repere">Recall 1</span><span>Why condition on the price before averaging V?</span></summary><p>The local target concerns a given price and instant. We must average the variances of states matching this condition. The global mean can mix groups whose variances differ.</p></details><details class="carte" data-carte="quotient"><summary><span class="repere">Recall 2</span><span>What does the quotient of the target local variance and the conditional mean of V give?</span></summary><p>The dimensionless square of the leverage, if the mean is finite and strictly positive. The positive leverage is its square root. The numerator is the square of the local volatility, rather than the volatility itself.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 3</span><span>How can the result be checked beyond simply rereading the quotient?</span></summary><p>Multiply each variance in the group by the square of the leverage, recalculate the mean using the same weights and subtract the target. This check verifies the algebra and the group selected for the frozen distribution.</p></details><details class="carte" data-carte="dependance"><summary><span class="repere">Recall 4</span><span>Why write m_L rather than a mean independent of the leverage?</span></summary><p>The leverage changes the price paths and can change the joint distribution of price and variance. The states found at the same price can therefore differ. The constraint must be checked using the distribution induced by the candidate leverage.</p></details><details class="carte" data-carte="absence"><summary><span class="repere">Recall 5</span><span>Does a cell with no particle justify a mean variance of 0?</span></summary><p>No. The empirical mean is not estimated there. A neighborhood rule or interpolation requires declared assumptions and checks. A true 0 mean with a positive target would be a different problem: no finite leverage would satisfy the constraint.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct this sequence: choose the instant and the price; form the condition and its weights; estimate the average variance; square the target; divide to obtain the square of the leverage; check the product on the particles; reassess the induced distribution and the cells where no estimate is available. Explain aloud what the frozen residual proves and what it leaves open.</p></div><div class="exports"><a class="bouton" download="c253-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTI6Y29uZGl0aW9uIiwKICAgICAgInVuaXRlIjogImMyNTMtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjYWxpYnJhdGlvbi1jb25kaXRpb25uZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY29uZGl0aW9uIG9uIHRoZSBwcmljZSBiZWZvcmUgYXZlcmFnaW5nIFY/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGxvY2FsIHRhcmdldCBjb25jZXJucyBhIGdpdmVuIHByaWNlIGFuZCBpbnN0YW50LiBXZSBtdXN0IGF2ZXJhZ2UgdGhlIHZhcmlhbmNlcyBvZiBzdGF0ZXMgbWF0Y2hpbmcgdGhpcyBjb25kaXRpb24uIFRoZSBnbG9iYWwgbWVhbiBjYW4gbWl4IGdyb3VwcyB3aG9zZSB2YXJpYW5jZXMgZGlmZmVyLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjUzLW0yOnF1b3RpZW50IiwKICAgICAgInVuaXRlIjogImMyNTMtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjYXJyZS1kdS1sZXZpZXIiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBxdW90aWVudCBvZiB0aGUgdGFyZ2V0IGxvY2FsIHZhcmlhbmNlIGFuZCB0aGUgY29uZGl0aW9uYWwgbWVhbiBvZiBWIGdpdmU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGRpbWVuc2lvbmxlc3Mgc3F1YXJlIG9mIHRoZSBsZXZlcmFnZSwgaWYgdGhlIG1lYW4gaXMgZmluaXRlIGFuZCBzdHJpY3RseSBwb3NpdGl2ZS4gVGhlIHBvc2l0aXZlIGxldmVyYWdlIGlzIGl0cyBzcXVhcmUgcm9vdC4gVGhlIG51bWVyYXRvciBpcyB0aGUgc3F1YXJlIG9mIHRoZSBsb2NhbCB2b2xhdGlsaXR5LCByYXRoZXIgdGhhbiB0aGUgdm9sYXRpbGl0eSBpdHNlbGYuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTI6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzI1My1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlLWNvbmRpdGlvbm5lbCIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHRoZSByZXN1bHQgYmUgY2hlY2tlZCBiZXlvbmQgc2ltcGx5IHJlcmVhZGluZyB0aGUgcXVvdGllbnQ/IiwKICAgICAgInJlcG9uc2UiOiAiTXVsdGlwbHkgZWFjaCB2YXJpYW5jZSBpbiB0aGUgZ3JvdXAgYnkgdGhlIHNxdWFyZSBvZiB0aGUgbGV2ZXJhZ2UsIHJlY2FsY3VsYXRlIHRoZSBtZWFuIHVzaW5nIHRoZSBzYW1lIHdlaWdodHMgYW5kIHN1YnRyYWN0IHRoZSB0YXJnZXQuIFRoaXMgY2hlY2sgdmVyaWZpZXMgdGhlIGFsZ2VicmEgYW5kIHRoZSBncm91cCBzZWxlY3RlZCBmb3IgdGhlIGZyb3plbiBkaXN0cmlidXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTI6ZGVwZW5kYW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMjUzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29oZXJlbmNlLWR1LWxldmllciIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgd3JpdGUgbV9MIHJhdGhlciB0aGFuIGEgbWVhbiBpbmRlcGVuZGVudCBvZiB0aGUgbGV2ZXJhZ2U/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGxldmVyYWdlIGNoYW5nZXMgdGhlIHByaWNlIHBhdGhzIGFuZCBjYW4gY2hhbmdlIHRoZSBqb2ludCBkaXN0cmlidXRpb24gb2YgcHJpY2UgYW5kIHZhcmlhbmNlLiBUaGUgc3RhdGVzIGZvdW5kIGF0IHRoZSBzYW1lIHByaWNlIGNhbiB0aGVyZWZvcmUgZGlmZmVyLiBUaGUgY29uc3RyYWludCBtdXN0IGJlIGNoZWNrZWQgdXNpbmcgdGhlIGRpc3RyaWJ1dGlvbiBpbmR1Y2VkIGJ5IHRoZSBjYW5kaWRhdGUgbGV2ZXJhZ2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTI6YWJzZW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMjUzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY2FzZS1ub24tZXN0aW1lZSIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIGEgY2VsbCB3aXRoIG5vIHBhcnRpY2xlIGp1c3RpZnkgYSBtZWFuIHZhcmlhbmNlIG9mIDA/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIFRoZSBlbXBpcmljYWwgbWVhbiBpcyBub3QgZXN0aW1hdGVkIHRoZXJlLiBBIG5laWdoYm9yaG9vZCBydWxlIG9yIGludGVycG9sYXRpb24gcmVxdWlyZXMgZGVjbGFyZWQgYXNzdW1wdGlvbnMgYW5kIGNoZWNrcy4gQSB0cnVlIDAgbWVhbiB3aXRoIGEgcG9zaXRpdmUgdGFyZ2V0IHdvdWxkIGJlIGEgZGlmZmVyZW50IHByb2JsZW06IG5vIGZpbml0ZSBsZXZlcmFnZSB3b3VsZCBzYXRpc2Z5IHRoZSBjb25zdHJhaW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c253-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGNvbmRpdGlvbiBvbiB0aGUgcHJpY2UgYmVmb3JlIGF2ZXJhZ2luZyBWPwlUaGUgbG9jYWwgdGFyZ2V0IGNvbmNlcm5zIGEgZ2l2ZW4gcHJpY2UgYW5kIGluc3RhbnQuIFdlIG11c3QgYXZlcmFnZSB0aGUgdmFyaWFuY2VzIG9mIHN0YXRlcyBtYXRjaGluZyB0aGlzIGNvbmRpdGlvbi4gVGhlIGdsb2JhbCBtZWFuIGNhbiBtaXggZ3JvdXBzIHdob3NlIHZhcmlhbmNlcyBkaWZmZXIuCXRvZGFpIGMyNTMtbTIgY2FsaWJyYXRpb24tY29uZGl0aW9ubmVsbGUKV2hhdCBkb2VzIHRoZSBxdW90aWVudCBvZiB0aGUgdGFyZ2V0IGxvY2FsIHZhcmlhbmNlIGFuZCB0aGUgY29uZGl0aW9uYWwgbWVhbiBvZiBWIGdpdmU/CVRoZSBkaW1lbnNpb25sZXNzIHNxdWFyZSBvZiB0aGUgbGV2ZXJhZ2UsIGlmIHRoZSBtZWFuIGlzIGZpbml0ZSBhbmQgc3RyaWN0bHkgcG9zaXRpdmUuIFRoZSBwb3NpdGl2ZSBsZXZlcmFnZSBpcyBpdHMgc3F1YXJlIHJvb3QuIFRoZSBudW1lcmF0b3IgaXMgdGhlIHNxdWFyZSBvZiB0aGUgbG9jYWwgdm9sYXRpbGl0eSwgcmF0aGVyIHRoYW4gdGhlIHZvbGF0aWxpdHkgaXRzZWxmLgl0b2RhaSBjMjUzLW0yIGNhcnJlLWR1LWxldmllcgpIb3cgY2FuIHRoZSByZXN1bHQgYmUgY2hlY2tlZCBiZXlvbmQgc2ltcGx5IHJlcmVhZGluZyB0aGUgcXVvdGllbnQ/CU11bHRpcGx5IGVhY2ggdmFyaWFuY2UgaW4gdGhlIGdyb3VwIGJ5IHRoZSBzcXVhcmUgb2YgdGhlIGxldmVyYWdlLCByZWNhbGN1bGF0ZSB0aGUgbWVhbiB1c2luZyB0aGUgc2FtZSB3ZWlnaHRzIGFuZCBzdWJ0cmFjdCB0aGUgdGFyZ2V0LiBUaGlzIGNoZWNrIHZlcmlmaWVzIHRoZSBhbGdlYnJhIGFuZCB0aGUgZ3JvdXAgc2VsZWN0ZWQgZm9yIHRoZSBmcm96ZW4gZGlzdHJpYnV0aW9uLgl0b2RhaSBjMjUzLW0yIGNvbnRyb2xlLWNvbmRpdGlvbm5lbApXaHkgd3JpdGUgbV9MIHJhdGhlciB0aGFuIGEgbWVhbiBpbmRlcGVuZGVudCBvZiB0aGUgbGV2ZXJhZ2U/CVRoZSBsZXZlcmFnZSBjaGFuZ2VzIHRoZSBwcmljZSBwYXRocyBhbmQgY2FuIGNoYW5nZSB0aGUgam9pbnQgZGlzdHJpYnV0aW9uIG9mIHByaWNlIGFuZCB2YXJpYW5jZS4gVGhlIHN0YXRlcyBmb3VuZCBhdCB0aGUgc2FtZSBwcmljZSBjYW4gdGhlcmVmb3JlIGRpZmZlci4gVGhlIGNvbnN0cmFpbnQgbXVzdCBiZSBjaGVja2VkIHVzaW5nIHRoZSBkaXN0cmlidXRpb24gaW5kdWNlZCBieSB0aGUgY2FuZGlkYXRlIGxldmVyYWdlLgl0b2RhaSBjMjUzLW0yIGNvaGVyZW5jZS1kdS1sZXZpZXIKRG9lcyBhIGNlbGwgd2l0aCBubyBwYXJ0aWNsZSBqdXN0aWZ5IGEgbWVhbiB2YXJpYW5jZSBvZiAwPwlOby4gVGhlIGVtcGlyaWNhbCBtZWFuIGlzIG5vdCBlc3RpbWF0ZWQgdGhlcmUuIEEgbmVpZ2hib3Job29kIHJ1bGUgb3IgaW50ZXJwb2xhdGlvbiByZXF1aXJlcyBkZWNsYXJlZCBhc3N1bXB0aW9ucyBhbmQgY2hlY2tzLiBBIHRydWUgMCBtZWFuIHdpdGggYSBwb3NpdGl2ZSB0YXJnZXQgd291bGQgYmUgYSBkaWZmZXJlbnQgcHJvYmxlbTogbm8gZmluaXRlIGxldmVyYWdlIHdvdWxkIHNhdGlzZnkgdGhlIGNvbnN0cmFpbnQuCXRvZGFpIGMyNTMtbTIgY2FzZS1ub24tZXN0aW1lZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eygdam qgotvd paab</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Calibrate a calculation and prepare its validation</h3><dl><div><dt>You understand</dt><dd>The selected group and the assumptions are part of the calculation. An exact quotient on a frozen slice is insufficient to validate the model that will produce the next slice. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bjdoxy hmxbae vbhaqo dndfbw hgckwn ldjeat yxepgu lbvcoy emrcxf suukof zihdke frbolw pxgmfu om</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rmgyrv eycsvz ypdafx srpkmx vrhovr rgefxh icxhip vgtyyh jmhhbn sgkwcd ncjjvz gvqnua oumfdg wierkz qhpmcc zmuegf hxrfqk cbajfx vibzpl ohlmqg ngqbsm lzwjsu yzhvpv hvtshf</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 4 to prepare for: repeat the quotient with the correct units, diagnose a global mean and an empty cell, then explain how the mean depends on the leverage. Reading or giving an assisted answer never constitutes an achieved level. Repeating the exercises without support on another day provides evidence of reconstruction that remains to be collected.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rjufqv msbjqi hnjrbp brukob ixojbs nvuzof epobfz uewgvx kptdwy qxoblr gmezvm lspbil bswxse yupuwc gnvshu isyaea qiwpku tlfdzu vehnhp kfzjjf kvfagu dhyyeb bwclzo vragko</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the check without help, then study densities in the next unit. To extend the connection to the project, the construction of the groups and the consumer of the result would need to be examined separately, followed by planning an authorized validation. This page does not launch or change the project.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c253-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c253-m1.html">Previous</a> · <a href="c253-m3.html">Next</a></nav>
+<footer><p>Course book · C253·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

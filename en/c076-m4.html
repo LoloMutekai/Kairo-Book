@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Extract a string while keeping its position, calculate the empirical entropy of a small file, and state what hypothesis these indicators can only help prepare.">
+<title>C076·M4 · Strings, entropy and indicators — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">emnigt ojleaq eihj</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C076·M4</p><h1>Strings, entropy and indicators</h1><p class="objectif"><span>Your goal</span>Extract a string while keeping its position, calculate the empirical entropy of a small file, and state what hypothesis these indicators can only help prepare.</p><p class="prerequis"><strong>Before you start</strong><br>c069-m5 : congruences and Euclid · c019-m5 : clocks and persistence · c053-m5 : proxy, construct and validity · c076-m1 : bits, bytes and representation · c076-m2 : endianness, offset and structure · c076-m3 : header and section table</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You receive balise.bin, a fictional file whose bytes are all known to us. Without executing it, you first see 8 NUL bytes, then the characters ABABCDCD. This small object does not claim to represent any real executable format. It helps separate what the bytes show from what we imagine about them.</p><p>An extracted string is a contiguous sequence of bytes that a rule chooses to read as text. Here, the rule accepts printable ASCII characters, including spaces, and keeps sequences of at least 6 bytes. It finds ABABCDCD. Keeping the string together with its position lets you return to the region that produced it. Being able to read it does not mean a program will use it.</p><p>Entropy answers another question: if you randomly select a position in the region, how predictable do the frequencies make its byte value? Many repetitions concentrate the frequencies; a more uniform distribution spreads them out. The calculation looks at the count of each value, without keeping the order of the positions.</p><p>These observations are indicators: they guide a check. A region that is hard to read and has high entropy may contain compressed data, encrypted data or other varied data. A string may be a label or unused text. Neither readability nor entropy alone gives a verdict on how the file is used.</p><div class="schemas"><figure><svg viewBox="0 0 360 255" xmlns="http://www.w3.org/2000/svg" role="img"><title>A file with identifiable regions</title><desc>balise.bin contains 16 bytes. At positions 0 to 7, it contains NUL bytes. At positions 8 to 15, it contains ABABCDCD, a printable ASCII sequence of 8 bytes.</desc><text x="180" y="25" text-anchor="middle">balise.bin · 16 bytes</text><rect x="25" y="46" width="310" height="70" rx="7" class="cadre-neutre" /><text x="180" y="72" text-anchor="middle">8 × NUL</text><text x="180" y="99" text-anchor="middle" class="petite-etiquette">Positions 0 to 7</text><line x1="180" y1="116" x2="180" y2="138" class="trait" /><rect x="25" y="138" width="310" height="70" rx="7" class="cadre-resultat" /><text x="180" y="165" text-anchor="middle">ABABCDCD</text><text x="180" y="192" text-anchor="middle" class="petite-etiquette">Positions 8 to 15</text><text x="180" y="239" text-anchor="middle" class="petite-etiquette">String kept: length ≥ 6</text></svg><figcaption>The drawing follows the order of the file, from top to bottom. Positions are byte offsets counted from 0; the text starts at offset 8. NUL means the byte value 0, not the printable character “0”.</figcaption></figure><figure><svg viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" role="img"><title>Counts ignore order</title><desc>Across the whole file, NUL occurs 8 times and each of the letters A, B, C and D occurs 2 times. The bars show the counts, using the same scale for all values.</desc><text x="180" y="25" text-anchor="middle">Count across the whole file</text><text x="18" y="66">NUL</text><rect x="78" y="45" width="208" height="26" class="cadre-prediction" /><text x="310" y="65">8</text><text x="18" y="109">A</text><rect x="78" y="88" width="52" height="26" class="cadre-resultat" /><text x="149" y="108">2</text><text x="18" y="152">B</text><rect x="78" y="131" width="52" height="26" class="cadre-resultat" /><text x="149" y="151">2</text><text x="18" y="195">C</text><rect x="78" y="174" width="52" height="26" class="cadre-resultat" /><text x="149" y="194">2</text><text x="18" y="238">D</text><rect x="78" y="217" width="52" height="26" class="cadre-resultat" /><text x="149" y="237">2</text><text x="180" y="270" text-anchor="middle" class="petite-etiquette">Total: 16 bytes; no verdict</text></svg><figcaption>The bars represent occurrences, not probabilities of danger. Moving the same bytes would change the readable sequences but keep these counts and the entropy calculated over the whole file.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Keep the exact region and the reading rule; count before calculating; connect each indicator to a hypothesis that still needs checking.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From a readable region to a numerical indicator</h3><p>The fictional file contains 8 NUL bytes followed by exactly ABABCDCD. In the ASCII encoding used here, A has value 65, B has value 66, C has value 67 and D has value 68, in decimal notation. There are no additional bytes or hidden headers. Let us calculate over this entire file, then keep track of the limits of the observation.</p><ol class="etapes"><li><h3>Set the scope and extract the sequence</h3><p>A byte contains 8 bits and can take 256 values. For this extraction, a byte b is printable if 32 ≤ b &lt; 127. Here, the letter b denotes an integer value with no physical unit; the offset denotes a position, in bytes from the start. We look only for ASCII: text in another encoding may escape this rule.</p><p>NUL bytes interrupt any printable sequence. The sequence ABABCDCD starts at offset 8, is 8 bytes long and meets the minimum 6. We keep the triple “ABABCDCD; offset 8 bytes; length 8 bytes”. The last character occupies 15; the exclusive end is 16, since 8 + 8 = 16.</p></li><li><h3>Go from counts to frequencies</h3><p>N denotes the number of bytes in the region, here 16. S is the set of byte values actually present. For each b in S, c(b) counts its occurrences and p(b) = c(b)/N is its frequency, which has no unit. In the formula, p with subscript b denotes the same frequency p(b). We select a position uniformly from the positions in the region; its value then follows exactly these frequencies. This does not assume that the file was produced randomly.</p><p>NUL occurs 8 times: p_NUL = 8/16 = 1/2 = 0.500. Each of the 4 letters occurs 2 times: p_lettre = 2/16 = 1/8 = 0.125. “p_lettre” denotes the frequency of each letter, not of their group.</p><p>Count check: 8 + 4 × 2 = 16 bytes. Frequency check: 1/2 + 4 × 1/8 = 1/2 + 1/2 = 1. A sum other than 1 would require counting again.</p></li><li><h3>Define the entropy being calculated</h3><p>The empirical entropy Ĥ is the average information content −log of the frequency, calculated for individual bytes. The hat reminds us that the frequencies come from the observed region. Using log to base 2 gives a result in bits per byte selected. The sum Σ runs over each distinct value b in S once; its count is already included in p(b).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>H</mi><mo>^</mo></mover><mo>=</mo><mo>−</mo><msub><mo>∑</mo><mrow><mi>b</mi><mo>∈</mo><mi>S</mi></mrow></msub><msub><mi>p</mi><mi>b</mi></msub><msub><mi>log</mi><mn>2</mn></msub><mo>(</mo><msub><mi>p</mi><mi>b</mi></msub><mo>)</mo></mrow></math></div><p>We assume that N is strictly positive and that all counts use the same scope. Absent values do not belong to S, so we do not need to calculate the logarithm of 0. For a byte alphabet, Ĥ is between 0 and 8 bits/byte. The upper bound corresponds to uniform frequencies over the 256 values; our very small file does not achieve this situation.</p><p>This calculation describes a distribution of individual bytes. Interpreting it as a property of future data would require an additional model of how those data are produced. It calculates neither the size achieved by a real compressor nor a probability that the file is dangerous.</p></li><li><h3>Calculate the logarithms without rounding</h3><p>The logarithm to base 2 finds the exponent of a power of 2. For −log(p), we can find log(1/p). NUL has frequency 1/2; its reciprocal is 2 = 2 to the power 1, so its information content is 1 bit. Each letter has frequency 1/8; its reciprocal is 8 = 2 to the power 3, so it provides 3 bits.</p><p>We weight each information content by its frequency because Ĥ is an average over positions. NUL contributes 1/2 × 1 = 1/2 bit/byte. Each letter contributes 1/8 × 3 = 3/8 bit/byte. The 4 letters together contribute 4 × 3/8 = 3/2 bit/byte.</p></li><li><h3>Add and check using positions</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mover><mi>H</mi><mo>^</mo></mover><mo>=</mo><mn>1/2</mn><mo>+</mo><mn>3/2</mn><mo>=</mo><mn>2.00</mn><mtext> bits/octet</mtext></mrow></math></div><p>Let us check by starting from positions rather than categories: the 8 NUL bytes each provide 1 bit of information and the 8 printable positions each provide 3 bits. The average (8 × 1 + 8 × 3)/16 again gives 2 bits/byte. The units are indeed bits per byte selected, and the result stays within the stated interval.</p><p>Another mental check: if the whole region consisted of NUL bytes, its only frequency would be 1, and its entropy would be 0 bit/byte. The certain repetition of the same value brings no surprise in this model.</p></li><li><h3>Write a conclusion supported by the indicator</h3><p>Observed conclusion: “Over the 16 bytes of balise.bin, the ASCII rule with minimum 6 keeps ABABCDCD at offset 8; the empirical entropy of individual bytes is 2.00 bits/byte.” These results are reproducible from the stated data.</p><p>Permitted hypothesis: the final region could hold text or a marker. Check to prepare: compare its position and content with the documented structure of the format, if it becomes available. Here, no format description lets us determine its role. The low entropy of the file does not prove it is harmless; the presence of letters does not prove any action. The next unit will address the scope of a more complete static analysis.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Explain why a letter contributes less than its information content alone, then why a permutation can keep the entropy while destroying the extracted string. End with a conclusion that separates observation, hypothesis and the check still needed.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I found a readable string: the program does what it says.”</h3><p>The rule guarantees only a sequence of bytes compatible with the chosen ASCII rule. Keep the offset and length, then look for its role in a documented structure. An unused label also meets the rule. In our file, no role for ABABCDCD has been established.</p><a href="#exemple">Review the extraction and conclusion in the example</a></li><li><h3>“There are 4 different letters, so their frequencies are 1/4 everywhere.”</h3><p>Choose the region first. Across the whole file, NUL occupies positions and the denominator is 16: each letter has frequency 1/8. The frequency 1/4 applies only to the final region of 8 bytes. The exercise on windows asks you to make this choice again.</p><a href="#exercices">Repeat the calculation over the separate regions</a></li><li><h3>“Entropy decides whether the file is encrypted or dangerous.”</h3><p>Entropy summarizes frequencies without keeping order or describing behaviour. Compressed data can have high entropy; a file with low entropy can still be dangerous. Write the result with its scope, then a hypothesis and the evidence that would allow you to check it.</p><a href="#intuition">Reread what the indicators observe</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-chaine"><p class="repere">Exercise 1 · Identification</p>
+<h3>Find the string and its boundary</h3><p>In the unchanged balise.bin, apply the minimum 6 to printable ASCII sequences. Give the string, its offset, its length and its exclusive end. Explain why NUL is not part of the text.</p>
+<label for="reponse-ex-chaine">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-chaine" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-chaine" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-chaine" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-chaine" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first character follows 8 bytes. Positions start at 0.</p></details><details class="indice"><summary>Hint 2</summary><p>The exclusive end is the starting offset plus the length; it is not the position of the last character.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>ABABCDCD is a sequence of 8 bytes, so it reaches the minimum 6. It starts at offset 8 bytes. Its exclusive end is 8 + 8 = 16, and its last position is 15.</p><p>NUL has value 0, below the first printable ASCII value 32. It breaks the sequence. The character “0” would be a different byte: writing the name NUL on the page does not make it text present in the file.</p><p class="petit-titre">Check your reasoning</p><ul><li>Keep the text, offset 8 bytes and length 8 bytes together.</li><li>Distinguish the exclusive end 16 from the last position 15.</li><li>Justify rejecting NUL using the character rule, without assigning it a hidden meaning.</li></ul></details></article><article class="exercice" id="ex-fenetres"><p class="repere">Exercise 2 · Calculation and checking</p>
+<h3>Changing the region changes the frequencies</h3><p>Split the same file into its initial block of 8 NUL bytes and its final block ABABCDCD of 8 bytes. Calculate the entropy of each block. Since their sizes are equal, average the results. Do you recover the entropy of the whole file? Justify your answer.</p>
+<label for="reponse-ex-fenetres">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fenetres" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fenetres" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fenetres" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fenetres" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In the first block, the value NUL has frequency 1. In the second, divide each count by 8, without using 16.</p></details><details class="indice"><summary>Hint 2</summary><p>The reciprocal of 1/4 is 4, which is 2 to the power 2. Then compare an average of local calculations with the calculation of global frequencies.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The initial block has only one value present: its entropy is 0 bit/byte. In the final block, each letter has frequency 2/8 = 1/4 = 0.25. Its information content is 2 bits; its contribution is 1/4 × 2 = 1/2 bit/byte. The 4 contributions give 2.00 bits/byte.</p><p>The blocks have the same size, so the average of their entropies is (0 + 2)/2 = 1 bit/byte. It differs from the global calculation 2 bits/byte. The local calculation already knows which block contains the position: in the first, NUL is certain. The global calculation must also distinguish NUL from the letters. By averaging entropies calculated separately, we lose this part of the global uncertainty.</p><p>We therefore cannot report the entropy of a file by averaging the entropies of its regions without justification. The scope is part of the result, even when all bytes have been read.</p><p class="petit-titre">Check your reasoning</p><ul><li>Change the denominator with the region and obtain 0 then 2 bits/byte.</li><li>Calculate the local average 1 bit/byte without confusing it with 2 bits/byte over the whole file.</li><li>Explain that knowing the block already provides information.</li></ul></details></article><article class="exercice" id="ex-permutation"><p class="repere">Exercise 3 · Transfer and challenge</p>
+<h3>Same entropy, string gone</h3><p>Only reorder the bytes of balise.bin as follows: NUL A NUL B NUL A NUL B NUL C NUL D NUL C NUL D. Without repeating the whole logarithmic sum, predict the global entropy and the extraction result with the same minimum 6. Someone concludes: “No string left, so the file is encrypted.” Respond and suggest evidence to look for.</p>
+<label for="reponse-ex-permutation">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-permutation" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-permutation" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-permutation" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-permutation" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Count each value again; the order changes, but do the counts change?</p></details><details class="indice"><summary>Hint 2</summary><p>Find the maximum length of a printable sequence. A change in order alone is enough here to make the retained strings disappear.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The counts remain 8 NUL bytes and 2 occurrences of each letter: the frequencies, and then the global entropy, remain 2.00 bits/byte. No new sum is needed because the formula depends only on these counts.</p><p>Each letter is now separated from the others by NUL. The longest printable sequence is 1 byte long, below the minimum 6: 0 strings kept. We obtained this result by an explicit permutation, without any encryption operation. It refutes the inference “no string implies encryption”.</p><p>A suitable conclusion keeps the rule and its limits: no sufficiently long ASCII sequence is found, leaving other encodings or a different organization possible. To examine the hypothesis of text in another encoding, we would look for a description of its encoding and its position within the format. This evidence is not provided for our fictional file, so we leave the hypothesis open.</p><p class="petit-titre">Check your reasoning</p><ul><li>Justify the unchanged entropy using the counts, not visual resemblance.</li><li>Compare the maximum length 1 with the minimum 6.</li><li>Refute the encryption verdict using the known permutation and name a check suited to the remaining hypothesis.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="chaine"><summary><span class="repere">Recall 1</span><span>What must you keep with an extracted string so that the observation can be checked?</span></summary><p>The region examined, the character and length rule, the retained text, its offset and its length. A readable sequence alone proves neither its role nor its use.</p></details><details class="carte" data-carte="frequence"><summary><span class="repere">Recall 2</span><span>Why does the frequency of A change when you go from the whole file to just the final block?</span></summary><p>Its count remains 2, but the number of reference positions goes from 16 to 8: its frequency goes from 1/8 to 1/4. The scope determines the denominator.</p></details><details class="carte" data-carte="entropie"><summary><span class="repere">Recall 3</span><span>Reconstruct the entropy calculation for balise.bin and state its unit.</span></summary><p>NUL has frequency 1/2 and provides 1 bit; each letter has frequency 1/8 and provides 3 bits. The average is 1/2 × 1 + 4 × 1/8 × 3 = 2 bits/byte. It summarizes the frequencies of individual bytes over the region.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 4</span><span>Why can a permutation destroy the retained strings without changing the global entropy?</span></summary><p>A string depends on characters being contiguous; a permutation changes their neighbours. The entropy of individual bytes depends only on counts, which a permutation preserves.</p></details><details class="carte" data-carte="inference"><summary><span class="repere">Recall 5</span><span>What conclusion is supported by a region with high entropy and no retained ASCII string?</span></summary><p>It provides indicators compatible with several explanations, including compression, encryption or another organization of the data. You must keep the scope and rules, formulate a hypothesis, then look for evidence specific to it. No verdict of danger follows from these indicators alone.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the method: define the region and extraction rule; keep the text, offset and length; count the bytes and normalize their counts; weight the logarithms to obtain bits/byte; check the sum of frequencies and the dependence on scope; separate observation, hypothesis and missing evidence. Fluent reading or an answer after a hint remains an assisted performance. Trying again without support after at least 2 days prepares you for an assessment, without automatically awarding an achieved level.</p></div><div class="exports"><a class="bouton" download="c076-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTQ6Y2hhaW5lIiwKICAgICAgInVuaXRlIjogImMwNzYtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjaGFpbmUtZXh0cmFpdGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBtdXN0IHlvdSBrZWVwIHdpdGggYW4gZXh0cmFjdGVkIHN0cmluZyBzbyB0aGF0IHRoZSBvYnNlcnZhdGlvbiBjYW4gYmUgY2hlY2tlZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcmVnaW9uIGV4YW1pbmVkLCB0aGUgY2hhcmFjdGVyIGFuZCBsZW5ndGggcnVsZSwgdGhlIHJldGFpbmVkIHRleHQsIGl0cyBvZmZzZXQgYW5kIGl0cyBsZW5ndGguIEEgcmVhZGFibGUgc2VxdWVuY2UgYWxvbmUgcHJvdmVzIG5laXRoZXIgaXRzIHJvbGUgbm9yIGl0cyB1c2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTQ6ZnJlcXVlbmNlIiwKICAgICAgInVuaXRlIjogImMwNzYtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmcmVxdWVuY2Utb2N0ZXQiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgdGhlIGZyZXF1ZW5jeSBvZiBBIGNoYW5nZSB3aGVuIHlvdSBnbyBmcm9tIHRoZSB3aG9sZSBmaWxlIHRvIGp1c3QgdGhlIGZpbmFsIGJsb2NrPyIsCiAgICAgICJyZXBvbnNlIjogIkl0cyBjb3VudCByZW1haW5zIDIsIGJ1dCB0aGUgbnVtYmVyIG9mIHJlZmVyZW5jZSBwb3NpdGlvbnMgZ29lcyBmcm9tIDE2IHRvIDg6IGl0cyBmcmVxdWVuY3kgZ29lcyBmcm9tIDEvOCB0byAxLzQuIFRoZSBzY29wZSBkZXRlcm1pbmVzIHRoZSBkZW5vbWluYXRvci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ni1tNDplbnRyb3BpZSIsCiAgICAgICJ1bml0ZSI6ICJjMDc2LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZW50cm9waWUtZW1waXJpcXVlIiwKICAgICAgInF1ZXN0aW9uIjogIlJlY29uc3RydWN0IHRoZSBlbnRyb3B5IGNhbGN1bGF0aW9uIGZvciBiYWxpc2UuYmluIGFuZCBzdGF0ZSBpdHMgdW5pdC4iLAogICAgICAicmVwb25zZSI6ICJOVUwgaGFzIGZyZXF1ZW5jeSAxLzIgYW5kIHByb3ZpZGVzIDEgYml0OyBlYWNoIGxldHRlciBoYXMgZnJlcXVlbmN5IDEvOCBhbmQgcHJvdmlkZXMgMyBiaXRzLiBUaGUgYXZlcmFnZSBpcyAxLzIgw5cgMSArIDQgw5cgMS84IMOXIDMgPSAyIGJpdHMvYnl0ZS4gSXQgc3VtbWFyaXplcyB0aGUgZnJlcXVlbmNpZXMgb2YgaW5kaXZpZHVhbCBieXRlcyBvdmVyIHRoZSByZWdpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTQ6b3JkcmUiLAogICAgICAidW5pdGUiOiAiYzA3Ni1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm9yZHJlLWV0LWluZGljZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2FuIGEgcGVybXV0YXRpb24gZGVzdHJveSB0aGUgcmV0YWluZWQgc3RyaW5ncyB3aXRob3V0IGNoYW5naW5nIHRoZSBnbG9iYWwgZW50cm9weT8iLAogICAgICAicmVwb25zZSI6ICJBIHN0cmluZyBkZXBlbmRzIG9uIGNoYXJhY3RlcnMgYmVpbmcgY29udGlndW91czsgYSBwZXJtdXRhdGlvbiBjaGFuZ2VzIHRoZWlyIG5laWdoYm91cnMuIFRoZSBlbnRyb3B5IG9mIGluZGl2aWR1YWwgYnl0ZXMgZGVwZW5kcyBvbmx5IG9uIGNvdW50cywgd2hpY2ggYSBwZXJtdXRhdGlvbiBwcmVzZXJ2ZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTQ6aW5mZXJlbmNlIiwKICAgICAgInVuaXRlIjogImMwNzYtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbmRpY2UtZXQtaHlwb3RoZXNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgY29uY2x1c2lvbiBpcyBzdXBwb3J0ZWQgYnkgYSByZWdpb24gd2l0aCBoaWdoIGVudHJvcHkgYW5kIG5vIHJldGFpbmVkIEFTQ0lJIHN0cmluZz8iLAogICAgICAicmVwb25zZSI6ICJJdCBwcm92aWRlcyBpbmRpY2F0b3JzIGNvbXBhdGlibGUgd2l0aCBzZXZlcmFsIGV4cGxhbmF0aW9ucywgaW5jbHVkaW5nIGNvbXByZXNzaW9uLCBlbmNyeXB0aW9uIG9yIGFub3RoZXIgb3JnYW5pemF0aW9uIG9mIHRoZSBkYXRhLiBZb3UgbXVzdCBrZWVwIHRoZSBzY29wZSBhbmQgcnVsZXMsIGZvcm11bGF0ZSBhIGh5cG90aGVzaXMsIHRoZW4gbG9vayBmb3IgZXZpZGVuY2Ugc3BlY2lmaWMgdG8gaXQuIE5vIHZlcmRpY3Qgb2YgZGFuZ2VyIGZvbGxvd3MgZnJvbSB0aGVzZSBpbmRpY2F0b3JzIGFsb25lLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c076-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IHlvdSBrZWVwIHdpdGggYW4gZXh0cmFjdGVkIHN0cmluZyBzbyB0aGF0IHRoZSBvYnNlcnZhdGlvbiBjYW4gYmUgY2hlY2tlZD8JVGhlIHJlZ2lvbiBleGFtaW5lZCwgdGhlIGNoYXJhY3RlciBhbmQgbGVuZ3RoIHJ1bGUsIHRoZSByZXRhaW5lZCB0ZXh0LCBpdHMgb2Zmc2V0IGFuZCBpdHMgbGVuZ3RoLiBBIHJlYWRhYmxlIHNlcXVlbmNlIGFsb25lIHByb3ZlcyBuZWl0aGVyIGl0cyByb2xlIG5vciBpdHMgdXNlLgl0b2RhaSBjMDc2LW00IGNoYWluZS1leHRyYWl0ZQpXaHkgZG9lcyB0aGUgZnJlcXVlbmN5IG9mIEEgY2hhbmdlIHdoZW4geW91IGdvIGZyb20gdGhlIHdob2xlIGZpbGUgdG8ganVzdCB0aGUgZmluYWwgYmxvY2s/CUl0cyBjb3VudCByZW1haW5zIDIsIGJ1dCB0aGUgbnVtYmVyIG9mIHJlZmVyZW5jZSBwb3NpdGlvbnMgZ29lcyBmcm9tIDE2IHRvIDg6IGl0cyBmcmVxdWVuY3kgZ29lcyBmcm9tIDEvOCB0byAxLzQuIFRoZSBzY29wZSBkZXRlcm1pbmVzIHRoZSBkZW5vbWluYXRvci4JdG9kYWkgYzA3Ni1tNCBmcmVxdWVuY2Utb2N0ZXQKUmVjb25zdHJ1Y3QgdGhlIGVudHJvcHkgY2FsY3VsYXRpb24gZm9yIGJhbGlzZS5iaW4gYW5kIHN0YXRlIGl0cyB1bml0LglOVUwgaGFzIGZyZXF1ZW5jeSAxLzIgYW5kIHByb3ZpZGVzIDEgYml0OyBlYWNoIGxldHRlciBoYXMgZnJlcXVlbmN5IDEvOCBhbmQgcHJvdmlkZXMgMyBiaXRzLiBUaGUgYXZlcmFnZSBpcyAxLzIgw5cgMSArIDQgw5cgMS84IMOXIDMgPSAyIGJpdHMvYnl0ZS4gSXQgc3VtbWFyaXplcyB0aGUgZnJlcXVlbmNpZXMgb2YgaW5kaXZpZHVhbCBieXRlcyBvdmVyIHRoZSByZWdpb24uCXRvZGFpIGMwNzYtbTQgZW50cm9waWUtZW1waXJpcXVlCldoeSBjYW4gYSBwZXJtdXRhdGlvbiBkZXN0cm95IHRoZSByZXRhaW5lZCBzdHJpbmdzIHdpdGhvdXQgY2hhbmdpbmcgdGhlIGdsb2JhbCBlbnRyb3B5PwlBIHN0cmluZyBkZXBlbmRzIG9uIGNoYXJhY3RlcnMgYmVpbmcgY29udGlndW91czsgYSBwZXJtdXRhdGlvbiBjaGFuZ2VzIHRoZWlyIG5laWdoYm91cnMuIFRoZSBlbnRyb3B5IG9mIGluZGl2aWR1YWwgYnl0ZXMgZGVwZW5kcyBvbmx5IG9uIGNvdW50cywgd2hpY2ggYSBwZXJtdXRhdGlvbiBwcmVzZXJ2ZXMuCXRvZGFpIGMwNzYtbTQgb3JkcmUtZXQtaW5kaWNlCldoYXQgY29uY2x1c2lvbiBpcyBzdXBwb3J0ZWQgYnkgYSByZWdpb24gd2l0aCBoaWdoIGVudHJvcHkgYW5kIG5vIHJldGFpbmVkIEFTQ0lJIHN0cmluZz8JSXQgcHJvdmlkZXMgaW5kaWNhdG9ycyBjb21wYXRpYmxlIHdpdGggc2V2ZXJhbCBleHBsYW5hdGlvbnMsIGluY2x1ZGluZyBjb21wcmVzc2lvbiwgZW5jcnlwdGlvbiBvciBhbm90aGVyIG9yZ2FuaXphdGlvbiBvZiB0aGUgZGF0YS4gWW91IG11c3Qga2VlcCB0aGUgc2NvcGUgYW5kIHJ1bGVzLCBmb3JtdWxhdGUgYSBoeXBvdGhlc2lzLCB0aGVuIGxvb2sgZm9yIGV2aWRlbmNlIHNwZWNpZmljIHRvIGl0LiBObyB2ZXJkaWN0IG9mIGRhbmdlciBmb2xsb3dzIGZyb20gdGhlc2UgaW5kaWNhdG9ycyBhbG9uZS4JdG9kYWkgYzA3Ni1tNCBpbmRpY2UtZXQtaHlwb3RoZXNlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">emnigt ojleaq eihj</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ndvlyv knlfkv fklcmm uvounk xxevlw unrqrg xijt</span></span></h3><dl><div><dt>You understand</dt><dd>A string is retained by a reading rule; entropy summarizes frequencies over a region. These indicators guide hypotheses without establishing behaviour or intent.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ksavdg koqsri tgchgw zluszo fnzxqx nujyuu kbjtrz wscsnu drmqlc aasbvp hiyagp lcvwcy eqjvjr upebck tbtgjx zephsp qzoarz xqtqkz jomjkz fjchok zrcoiq jdutwd iqcibs aevurt zysjye kcrsxr jhavho gxrarl qqqcbq ilvgiy ndwnsq qaxfak mohikb aqusvv hsihnn jdmdpy yfwnzy ug</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iljtwp bmqnyi qijiqz debgks hbsqfh jawkte vhpxyd zdgqqs hdyjpv hdvwai xsxfuv rvcitq myeelm rc</span></span> This unit prepares only strings and entropy. The additional prerequisites for level c remain C053·M5, C072·M5 and C075·M5. Neither reading the page nor an assisted answer counts as an achieved level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wkcnbf ljzxhf vasbyx efnjeh vowoow fhgfuu oqckwd orkgzq zagjjq yqgpbt znluvk hsytys fhvnoz rvofql jqcylu zxibuu ydheoq khvsby xmpkfw cpdfjb cmghae ciozoh gtdwff pbjtse</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the extraction, calculation and permutation counterexample without support, then continue with C076·M5 on the limits of inference. Preparing a future artifact will require an authorized synthetic set of files and a separate check of the path actually used. This reading activates no mechanism.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c076-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c076-m3.html">Previous</a> · <a href="c076-m5.html">Next</a></nav>
+<footer><p>Course book · C076·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

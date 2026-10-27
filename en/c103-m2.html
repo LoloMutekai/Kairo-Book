@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate an activation, explain why it changes the shape of a network, and trace its effect on the slope passed through it.">
+<title>C103·M2 · Activations — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wemkzg buagzd xkdk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C103·M2</p><h1>Activations</h1><p class="objectif"><span>Your goal</span>Calculate an activation, explain why it changes the shape of a network, and trace its effect on the slope passed through it.</p><p class="prerequis"><strong>Before you start</strong><br>c102-m5 : finite difference checking · c099-m5 : probability calibration · c067-m5 : pipeline · c103-m1 : initialization</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a fictional greenhouse, a small network receives a heat indicator and produces a ventilation score. We want a contribution that stays at 0 when it is cool enough, then increases when the heat exceeds a threshold. A rule that always multiplies and adds in the same way cannot create this bend.</p><p>A neuron starts by weighting its input and adding a bias: this is its affine calculation. The activation then transforms this result. ReLU, or rectified linear unit, replaces a negative result with 0 and keeps a positive result. It resembles a ramp preceded by a floor.</p><p>With our settings, the indicator x = 2 gives the intermediate score z = 3. The ramp keeps it. With x = 0, z = -1: the floor blocks it. However, the final score keeps a baseline term even when this contribution becomes 0.</p><p>All the data and weights are fictional and chosen by hand. The indicator and scores are dimensionless; none measures a flow rate, an opening percentage, or a probability. We calculate a forward pass through the network without training its weights or controlling a fan.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>The score passes through three transformations</title><desc>For the heat indicator x equal to 2, the affine calculation gives z equal to 3. ReLU keeps this value: a equals 3. The final calculation gives y equal to 10. All these quantities are dimensionless.</desc><rect x="45" y="12" width="270" height="44" rx="7" class="cadre-neutre" /><text x="180" y="40" text-anchor="middle">Heat: x = 2</text><path d="M180 56v22m-5-5 5 5 5-5" class="trait" /><rect x="45" y="80" width="270" height="44" rx="7" class="cadre-prediction" /><text x="180" y="108" text-anchor="middle">Affine calculation: z = 3</text><path d="M180 124v22m-5-5 5 5 5-5" class="trait" /><rect x="45" y="148" width="270" height="44" rx="7" class="cadre-resultat" /><text x="180" y="176" text-anchor="middle">ReLU: a = 3</text><path d="M180 192v22m-5-5 5 5 5-5" class="trait" /><rect x="45" y="216" width="270" height="44" rx="7" class="cadre-neutre" /><text x="180" y="244" text-anchor="middle">Final score: y = 10</text><text x="180" y="286" text-anchor="middle" class="petite-etiquette">Read from top to bottom</text></svg><figcaption>The boxes distinguish the affine calculation, the activation, and the final calculation. Their values can coincide without making their roles interchangeable.</figcaption></figure><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>The bend in ReLU</title><desc>The output a is 0 for every negative input z, then follows a equals z for positive z. The join at z equal to 0 is continuous, but its slope changes. The point z equal to 3 gives a equal to 3. Both axes show dimensionless scores.</desc><line x1="22" y1="190" x2="330" y2="190" class="trait" /><line x1="120" y1="207" x2="120" y2="29" class="trait" /><path d="M28 190H120L300 46" class="chemin-correction" /><circle cx="270" cy="70" r="5" class="resultat" /><text x="125" y="19">output a</text><text x="330" y="229" text-anchor="end">input z</text><text x="106" y="215" text-anchor="end">0</text><text x="58" y="166" text-anchor="middle">a = 0</text><text x="254" y="127">a = z</text><text x="270" y="215" text-anchor="middle">3</text><text x="103" y="76" text-anchor="end">3</text></svg><figcaption>The horizontal axis shows z, the score before activation, rather than the greenhouse input x. The thick line shows the floor followed by the ramp; the words and shape are enough to distinguish them without color.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Calculate the affine score, apply the activation to that score, then continue. The shape of the activation also changes the slope propagated back through the network.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From heat signal to ventilation score</h3><p>We fix w = 2, b = -1, v = 3, and c = 1. For x = 2, let us calculate z = wx + b, a = φ(z), then y = va + c with φ equal to ReLU. We will then compare other inputs to the same network without changing these weights.</p><ol class="etapes"><li><h3>Define the network and what the activation adds</h3><p>x is the incoming indicator; w is its weight; b is the added bias; z is the score before activation, also called the preactivation. φ denotes the activation function, and a its output. v is the weight that multiplies a; c is the final bias; y is the final score. All quantities are real and dimensionless. The weights and biases stay fixed during our calculations.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mi>w</mi><mi>x</mi><mo>+</mo><mi>b</mi><mo>;</mo><mi>a</mi><mo>=</mo><mi>φ</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>;</mo><mi>y</mi><mo>=</mo><mi>v</mi><mi>a</mi><mo>+</mo><mi>c</mi></mrow></math></div><p>If the activation were the identity, φ(z) = z, expanding would give y = v(wx + b) + c = (vw)x + vb + c. We would still have a single affine rule with a constant slope. With our settings, vw = 6, vb = -3, and vb + c = -2. Stacking affine transformations is therefore not enough to create a bend. The same conclusion holds for matrices: their composition remains affine.</p></li><li><h3>Apply the floor after the bias</h3><p>max means “take the largest of the values.” The ReLU rule is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>φ</mi><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>z</mi><mo>)</mo><mo>=</mo><mo>{</mo><mtable><mtr><mtd><mn>0</mn></mtd><mtd><mtext>si </mtext><mi>z</mi><mo>≤</mo><mn>0</mn></mtd></mtr><mtr><mtd><mi>z</mi></mtd><mtd><mtext>si </mtext><mi>z</mi><mo>&gt;</mo><mn>0</mn></mtd></mtr></mtable></mrow></math></div><p>For the hot input, first apply the weight: wx = 2 × 2 = 4. Then add the bias: z = 4 + (-1) = 3. Since z is positive, a = z = 3. The sign to examine is that of z, after adding the bias; examining only x would give the wrong boundary.</p></li><li><h3>Continue to the final score and check</h3><p>The activated contribution is multiplied by v, then we add the baseline score c:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>y</mi><mo>=</mo><mn>3</mn><mo>×</mo><mn>3</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>9</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>10</mn></mrow></math></div><p>Reverse check: subtracting c from 10 gives 9 again; dividing by v gives a = 3 again. On this branch, replacing the activation with the identity also gives y = 6 × 2 + (-2) = 10. This local equality does not prove that the activation is unnecessary for all inputs.</p></li><li><h3>Find the threshold in the input space</h3><p>For x = 0, wx = 0, then z = -1. ReLU produces a = 0; the contribution va equals 0, and y = 1. The output of the neuron is 0, but the final bias remains.</p><p>The boundary satisfies wx + b = 0. Since w is strictly positive, it lies at x⋆ = −b/w; the symbol ⋆ marks this boundary input. Here, −b = 1, so x⋆ = 1/2 = 0.50. Below it, y = c; above it, y = v(wx + b) + c. At the join, both expressions give c: the output is continuous.</p></li><li><h3>Prove the change in shape in the same greenhouse</h3><p>At the intermediate input x = 1, we obtain wx = 2, z = 1, a = 1, then y = 3 + 1 = 4. For the evenly spaced inputs 0, 1, 2, the outputs are therefore 1, 4, 10.</p><p>The first output increase equals 4 − 1 = 3; the next equals 10 − 4 = 6. An affine rule would have equal increases for equal input intervals. They differ: our network is indeed nonaffine on this set. ReLU is piecewise affine, but a single straight line does not describe both branches together.</p></li><li><h3>Trace the slope through the activation</h3><p>Here, the derivative measures the local change in the score for a small change in its input. Away from the join, φ′(z) = 0 on the negative part and φ′(z) = 1 on the positive part. The prime symbol denotes the derivative. By the chain rule, keeping the weights fixed:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mi>d</mi><mi>y</mi></mrow><mrow><mi>d</mi><mi>x</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mi>d</mi><mi>y</mi></mrow><mrow><mi>d</mi><mi>a</mi></mrow></mfrac><mo>×</mo><mfrac><mrow><mi>d</mi><mi>a</mi></mrow><mrow><mi>d</mi><mi>z</mi></mrow></mfrac><mo>×</mo><mfrac><mrow><mi>d</mi><mi>z</mi></mrow><mrow><mi>d</mi><mi>x</mi></mrow></mfrac><mo>=</mo><mi>v</mi><mi>φ</mi><mo>′</mo><mo>(</mo><mi>z</mi><mo>)</mo><mi>w</mi></mrow></math></div><p>At the hot point, this gives 3 × 1 × 2 = 6. At the cool point, the ReLU factor is 0, so the slope passed back to x is 0. These slopes are dimensionless. ReLU does not bound positive values: a = 3 already exceeds 1.</p><p>To propagate an error back to the weights, the same rule uses ∂a/∂w = φ′(z)x and ∂a/∂b = φ′(z), where ∂ means that only the named parameter varies. A negative preactivation therefore makes this derivative path 0 for this example. A single inactive example is not enough to say that the neuron will remain inactive for all inputs.</p></li><li><h3>Recognize the point where the derivative does not exist</h3><p>At z = 0, the value of ReLU is fully defined. However, the slope from the left equals 0 and the slope from the right equals 1: there is no unique derivative at the join. To calculate backpropagation, we can adopt the convention 0 at this point; this convention is not a classical derivative.</p><p>In the greenhouse, the join is at x⋆ = 0.50. The slopes of y on either side are 0 and 6. A centered finite difference that crosses this join mixes the branches. The diagnostic exercise will show why it does not verify a derivative at the kink.</p></li><li><h3>Choose an activation according to the role of the output</h3><p>If the objective changes and we want a bounded output to represent the probability of a need for ventilation, we can apply a sigmoid to a dimensionless real score s. This score and the probability then refer to a defined event; they do not become physical measurements. The sigmoid σ is defined by:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>σ</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mi>exp</mi><mo>(</mo><mo>−</mo><mi>s</mi><mo>)</mo></mrow></mfrac><mo>;</mo><mi>σ</mi><mo>′</mo><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mi>σ</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>[</mo><mn>1</mn><mo>−</mo><mi>σ</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>]</mo></mrow></math></div><p>exp is the exponential function: it is positive and exp(0) = 1. For every finite real s, the mathematical sigmoid is strictly between 0 and 1. For s = 0, its denominator equals 2, its output equals 0.50, and its slope equals 0.50 × 0.50 = 0.25. These values and slopes are dimensionless.</p><p>The sigmoid flattens as s becomes very positive or very negative: its slope approaches 0. This is saturation. Small derivative factors can weaken the signal propagated back through several activations. ReLU avoids this flattening on its positive branch, but its negative branch passes back a 0 slope.</p><p>The choice therefore depends on the role: a ReLU can form an internal representation; a sigmoid can bound a binary output. An output in this interval is not, by itself, a calibrated probability: the stated probabilities must be compared with event frequencies on validation data. We do not claim that either choice improves this greenhouse without evaluation.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without rereading, explain why the network can be affine around the hot input while being nonaffine as a whole. Then distinguish the value at the join, its derivative, and a computational convention.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The activation checks whether the input x is positive.”</h3><p>It receives z = wx + b. Include the bias in the calculation before choosing the branch: the boundary for our indicator is x⋆ = 0.50, whereas the boundary of ReLU itself is z = 0.</p><a href="#exemple">Find the threshold calculation again</a></li><li><h3>“A 0 ReLU output means that the entire network is dead.”</h3><p>For this example alone, the contribution of the neuron and its derivative path become 0. The final bias remains, and other inputs can activate the neuron. To speak of persistent inactivity, we would need to examine the preactivations on the relevant training inputs.</p><a href="#exercices">Recalculate the inactive branch</a></li><li><h3>“A positive activation already provides a probability.”</h3><p>ReLU can exceed 1. The sigmoid bounds an output, but its interval does not prove calibration. Define the predicted event and distinguish the output constraint from empirical validity.</p><a href="#exemple">Compare ReLU and sigmoid</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-branche"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Does the score stay at 0 when the contribution switches off?</h3><p>In the same greenhouse, take x = 0 with the same weights. Calculate z, a, and y separately. Justify the choice of branch and explain why y can remain positive.</p>
+<label for="reponse-ex-branche">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-branche" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-branche" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-branche" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-branche" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with wx + b. It is this result that is compared with the floor.</p></details><details class="indice"><summary>Hint 2</summary><p>Even if a equals 0, the final calculation still adds c.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>wx = 2 × 0 = 0, then z = 0 + (-1) = -1. This result is negative; ReLU gives a = 0. Finally, y = 3 × 0 + 1 = 1.</p><p>The baseline score c remains. The network has not sent an actual command, and this isolated result does not establish that the neuron is inactive for other inputs.</p><p class="petit-titre">Check your reasoning</p><ul><li>I wrote the values of z, a, and y without confusing them.</li><li>I justified the branch using the sign of z.</li><li>I kept c after the activation.</li></ul></details></article><article class="exercice" id="ex-pente"><p class="repere">Exercise 2 · Local reasoning</p>
+<h3>Propagate a change back</h3><p>Give dy/dx at x = 2, then at x = 0. Write all the factors in the chain. Why can we not extend the slope at the hot point to all inputs?</p>
+<label for="reponse-ex-pente">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-pente" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-pente" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-pente" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-pente" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First identify the sign of z at each point; neither is at the join.</p></details><details class="indice"><summary>Hint 2</summary><p>The final slope is the product v × φ′(z) × w.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>At the hot point, z = 3 is positive: dy/dx = 3 × 1 × 2 = 6. At the cool point, z = -1 is negative: dy/dx = 3 × 0 × 2 = 0. Everything is dimensionless.</p><p>The local slope describes only the branch being visited. The network moves from the constant branch to the increasing branch when x crosses 0.50. This is why the derivative at the hot point does not describe the entire function.</p><p class="petit-titre">Check your reasoning</p><ul><li>I related the factors v, φ′(z), and w to their transformations.</li><li>I distinguished the point being evaluated from the entire function.</li><li>I did not equate a 0 derivative on one example with a general inability to learn.</li></ul></details></article><article class="exercice" id="ex-raccord"><p class="repere">Exercise 3 · Diagnosis using finite differences</p>
+<h3>An average slope at the bend</h3><p>At the join x⋆ = 0.50, take ε = 0.10, where ε denotes a small positive input offset. Calculate y(x⋆ − ε) and y(x⋆ + ε), the left and right slopes over these intervals, then their centered finite difference. Does this demonstrate the existence of a derivative at the join?</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><mfrac><mrow><mi>y</mi><mo>(</mo><mi>x</mi><mo>⋆</mo><mo>+</mo><mi>ε</mi><mo>)</mo><mo>−</mo><mi>y</mi><mo>(</mo><mi>x</mi><mo>⋆</mo><mo>−</mo><mi>ε</mi><mo>)</mo></mrow><mrow><mn>2</mn><mi>ε</mi></mrow></mfrac></mrow></math></div>
+<label for="reponse-ex-raccord">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-raccord" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-raccord" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-raccord" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-raccord" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The inputs are 0.40 and 0.60. Calculate z before applying ReLU.</p></details><details class="indice"><summary>Hint 2</summary><p>At the join, y(x⋆) = c. Each one-sided slope uses an interval of width ε.</p></details><details class="indice"><summary>Hint 3</summary><p>D measures a slope between the two endpoints. Compare the slopes of the branches before calling it a derivative.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>On the left: x = 2/5 = 0.40, wx = 4/5, z = -1/5, so a = 0 and y = 1. On the right: x = 3/5 = 0.60, wx = 6/5, z = 1/5, so a = 1/5. The contribution equals 3/5, then y = 8/5 = 1.60. At the join, y(x⋆) = 1.</p><p>Left slope: (1 − 1)/1/10 = 0/1/10 = 0. Right slope: (8/5 − 1)/1/10 = 3/5/1/10 = 6. These slopes differ: there is no classical derivative at the join.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>D</mi><mo>=</mo><mfrac><mrow><mn>8/5</mn><mo>−</mo><mn>1</mn></mrow><mn>1/5</mn></mfrac><mo>=</mo><mfrac><mn>3/5</mn><mn>1/5</mn></mfrac><mo>=</mo><mn>3</mn></mrow></math></div><p>D is an average slope over an interval that crosses the bend. Even when ε is reduced while staying on either side of this join, it remains midway between the slopes of the branches; this does not make them equal. To check a branch derivative using finite differences, choose a point and a step that do not cross the join. For the kink, state the convention used by the program separately.</p><p class="petit-titre">Check your reasoning</p><ul><li>I chose the branches using -1/5 and 1/5.</li><li>I obtain 0, 6, and 3, naming what each measures.</li><li>I explain why the centered difference does not create a derivative where none exists.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="role"><summary><span class="repere">Recall 1</span><span>Why does stacking affine calculations without a nonlinear activation fail to create a bend?</span></summary><p>The composition remains affine: v(wx + b) + c = (vw)x + vb + c. A nonaffine activation allows us to leave this family; its effect also depends on the weights and the inputs visited.</p></details><details class="carte" data-carte="relu"><summary><span class="repere">Recall 2</span><span>To which quantity is ReLU applied, and what does it do?</span></summary><p>To the score z = wx + b, after the bias. It gives max(0, z): a 0 floor for negative z, the identity for positive z. It does not bound positive values.</p></details><details class="carte" data-carte="derivee"><summary><span class="repere">Recall 3</span><span>How does ReLU affect the slope of y with respect to x?</span></summary><p>dy/dx = vφ′(z)w. Away from the join, φ′ equals 0 on the negative branch and 1 on the positive branch. At the join, the value exists but the classical derivative does not; a computational convention must be distinguished.</p></details><details class="carte" data-carte="sigmoide"><summary><span class="repere">Recall 4</span><span>What does the sigmoid add to an output, and what evidence is still needed?</span></summary><p>σ(s) = 1/(1 + exp(−s)) bounds the mathematical output between 0 and 1 for a finite real score. This allows a binary probabilistic representation, but does not prove calibration for the target event.</p></details><details class="carte" data-carte="raccord"><summary><span class="repere">Recall 5</span><span>Why can a centered finite difference be misleading at the bend?</span></summary><p>It mixes the two branches. In the greenhouse, it equals 3, whereas the one-sided slopes equal 0 and 6. An average of the slopes does not demonstrate a derivative at the join.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without support: name x, z, a, and y; expand the network without activation; explain the bend in ReLU; repeat an active pass and an inactive pass; write the slope factors; distinguish the join from a convention; choose between an unrestricted score and a bounded output. Reading or answering after a hint remains preparation. Repeating the procedure without help on another day comes before any validation of a level.</p></div><div class="exports"><a class="bouton" download="c103-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTI6cm9sZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicm9sZS1hY3RpdmF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIHN0YWNraW5nIGFmZmluZSBjYWxjdWxhdGlvbnMgd2l0aG91dCBhIG5vbmxpbmVhciBhY3RpdmF0aW9uIGZhaWwgdG8gY3JlYXRlIGEgYmVuZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgY29tcG9zaXRpb24gcmVtYWlucyBhZmZpbmU6IHYod3ggKyBiKSArIGMgPSAodncpeCArIHZiICsgYy4gQSBub25hZmZpbmUgYWN0aXZhdGlvbiBhbGxvd3MgdXMgdG8gbGVhdmUgdGhpcyBmYW1pbHk7IGl0cyBlZmZlY3QgYWxzbyBkZXBlbmRzIG9uIHRoZSB3ZWlnaHRzIGFuZCB0aGUgaW5wdXRzIHZpc2l0ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTI6cmVsdSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVsdSIsCiAgICAgICJxdWVzdGlvbiI6ICJUbyB3aGljaCBxdWFudGl0eSBpcyBSZUxVIGFwcGxpZWQsIGFuZCB3aGF0IGRvZXMgaXQgZG8/IiwKICAgICAgInJlcG9uc2UiOiAiVG8gdGhlIHNjb3JlIHogPSB3eCArIGIsIGFmdGVyIHRoZSBiaWFzLiBJdCBnaXZlcyBtYXgoMCwgeik6IGEgMCBmbG9vciBmb3IgbmVnYXRpdmUgeiwgdGhlIGlkZW50aXR5IGZvciBwb3NpdGl2ZSB6LiBJdCBkb2VzIG5vdCBib3VuZCBwb3NpdGl2ZSB2YWx1ZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTI6ZGVyaXZlZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGVyaXZlZS1hY3RpdmF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBkb2VzIFJlTFUgYWZmZWN0IHRoZSBzbG9wZSBvZiB5IHdpdGggcmVzcGVjdCB0byB4PyIsCiAgICAgICJyZXBvbnNlIjogImR5L2R4ID0gds+G4oCyKHopdy4gQXdheSBmcm9tIHRoZSBqb2luLCDPhuKAsiBlcXVhbHMgMCBvbiB0aGUgbmVnYXRpdmUgYnJhbmNoIGFuZCAxIG9uIHRoZSBwb3NpdGl2ZSBicmFuY2guIEF0IHRoZSBqb2luLCB0aGUgdmFsdWUgZXhpc3RzIGJ1dCB0aGUgY2xhc3NpY2FsIGRlcml2YXRpdmUgZG9lcyBub3Q7IGEgY29tcHV0YXRpb25hbCBjb252ZW50aW9uIG11c3QgYmUgZGlzdGluZ3Vpc2hlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMy1tMjpzaWdtb2lkZSIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2lnbW9pZGUtc29ydGllIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgc2lnbW9pZCBhZGQgdG8gYW4gb3V0cHV0LCBhbmQgd2hhdCBldmlkZW5jZSBpcyBzdGlsbCBuZWVkZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiz4MocykgPSAxLygxICsgZXhwKOKIknMpKSBib3VuZHMgdGhlIG1hdGhlbWF0aWNhbCBvdXRwdXQgYmV0d2VlbiAwIGFuZCAxIGZvciBhIGZpbml0ZSByZWFsIHNjb3JlLiBUaGlzIGFsbG93cyBhIGJpbmFyeSBwcm9iYWJpbGlzdGljIHJlcHJlc2VudGF0aW9uLCBidXQgZG9lcyBub3QgcHJvdmUgY2FsaWJyYXRpb24gZm9yIHRoZSB0YXJnZXQgZXZlbnQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDMtbTI6cmFjY29yZCIsCiAgICAgICJ1bml0ZSI6ICJjMTAzLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGlmZmVyZW5jZS1maW5pZS1yYWNjb3JkIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBjYW4gYSBjZW50ZXJlZCBmaW5pdGUgZGlmZmVyZW5jZSBiZSBtaXNsZWFkaW5nIGF0IHRoZSBiZW5kPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IG1peGVzIHRoZSB0d28gYnJhbmNoZXMuIEluIHRoZSBncmVlbmhvdXNlLCBpdCBlcXVhbHMgMywgd2hlcmVhcyB0aGUgb25lLXNpZGVkIHNsb3BlcyBlcXVhbCAwIGFuZCA2LiBBbiBhdmVyYWdlIG9mIHRoZSBzbG9wZXMgZG9lcyBub3QgZGVtb25zdHJhdGUgYSBkZXJpdmF0aXZlIGF0IHRoZSBqb2luLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c103-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGRvZXMgc3RhY2tpbmcgYWZmaW5lIGNhbGN1bGF0aW9ucyB3aXRob3V0IGEgbm9ubGluZWFyIGFjdGl2YXRpb24gZmFpbCB0byBjcmVhdGUgYSBiZW5kPwlUaGUgY29tcG9zaXRpb24gcmVtYWlucyBhZmZpbmU6IHYod3ggKyBiKSArIGMgPSAodncpeCArIHZiICsgYy4gQSBub25hZmZpbmUgYWN0aXZhdGlvbiBhbGxvd3MgdXMgdG8gbGVhdmUgdGhpcyBmYW1pbHk7IGl0cyBlZmZlY3QgYWxzbyBkZXBlbmRzIG9uIHRoZSB3ZWlnaHRzIGFuZCB0aGUgaW5wdXRzIHZpc2l0ZWQuCXRvZGFpIGMxMDMtbTIgcm9sZS1hY3RpdmF0aW9uClRvIHdoaWNoIHF1YW50aXR5IGlzIFJlTFUgYXBwbGllZCwgYW5kIHdoYXQgZG9lcyBpdCBkbz8JVG8gdGhlIHNjb3JlIHogPSB3eCArIGIsIGFmdGVyIHRoZSBiaWFzLiBJdCBnaXZlcyBtYXgoMCwgeik6IGEgMCBmbG9vciBmb3IgbmVnYXRpdmUgeiwgdGhlIGlkZW50aXR5IGZvciBwb3NpdGl2ZSB6LiBJdCBkb2VzIG5vdCBib3VuZCBwb3NpdGl2ZSB2YWx1ZXMuCXRvZGFpIGMxMDMtbTIgcmVsdQpIb3cgZG9lcyBSZUxVIGFmZmVjdCB0aGUgc2xvcGUgb2YgeSB3aXRoIHJlc3BlY3QgdG8geD8JZHkvZHggPSB2z4bigLIoeil3LiBBd2F5IGZyb20gdGhlIGpvaW4sIM+G4oCyIGVxdWFscyAwIG9uIHRoZSBuZWdhdGl2ZSBicmFuY2ggYW5kIDEgb24gdGhlIHBvc2l0aXZlIGJyYW5jaC4gQXQgdGhlIGpvaW4sIHRoZSB2YWx1ZSBleGlzdHMgYnV0IHRoZSBjbGFzc2ljYWwgZGVyaXZhdGl2ZSBkb2VzIG5vdDsgYSBjb21wdXRhdGlvbmFsIGNvbnZlbnRpb24gbXVzdCBiZSBkaXN0aW5ndWlzaGVkLgl0b2RhaSBjMTAzLW0yIGRlcml2ZWUtYWN0aXZhdGlvbgpXaGF0IGRvZXMgdGhlIHNpZ21vaWQgYWRkIHRvIGFuIG91dHB1dCwgYW5kIHdoYXQgZXZpZGVuY2UgaXMgc3RpbGwgbmVlZGVkPwnPgyhzKSA9IDEvKDEgKyBleHAo4oiScykpIGJvdW5kcyB0aGUgbWF0aGVtYXRpY2FsIG91dHB1dCBiZXR3ZWVuIDAgYW5kIDEgZm9yIGEgZmluaXRlIHJlYWwgc2NvcmUuIFRoaXMgYWxsb3dzIGEgYmluYXJ5IHByb2JhYmlsaXN0aWMgcmVwcmVzZW50YXRpb24sIGJ1dCBkb2VzIG5vdCBwcm92ZSBjYWxpYnJhdGlvbiBmb3IgdGhlIHRhcmdldCBldmVudC4JdG9kYWkgYzEwMy1tMiBzaWdtb2lkZS1zb3J0aWUKV2h5IGNhbiBhIGNlbnRlcmVkIGZpbml0ZSBkaWZmZXJlbmNlIGJlIG1pc2xlYWRpbmcgYXQgdGhlIGJlbmQ/CUl0IG1peGVzIHRoZSB0d28gYnJhbmNoZXMuIEluIHRoZSBncmVlbmhvdXNlLCBpdCBlcXVhbHMgMywgd2hlcmVhcyB0aGUgb25lLXNpZGVkIHNsb3BlcyBlcXVhbCAwIGFuZCA2LiBBbiBhdmVyYWdlIG9mIHRoZSBzbG9wZXMgZG9lcyBub3QgZGVtb25zdHJhdGUgYSBkZXJpdmF0aXZlIGF0IHRoZSBqb2luLgl0b2RhaSBjMTAzLW0yIGRpZmZlcmVuY2UtZmluaWUtcmFjY29yZAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wemkzg buagzd xkdk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Code reading · recognize a score transformation</h3><dl><div><dt>You understand</dt><dd>An activation transforms a preactivation and controls its local slope. A sigmoid can also transform a score outside a neural network; recognizing its formula is therefore not enough to recognize an architecture.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zsivty mnwrug hzpgzi upwnjt mdcuip nakvrl ofzbwp vpepqn twnlwz oqbmpt qeqlxi gnxidv qlxotf jaqqvv ilkkvh imvxjr qvztxd fmltqm eoykjb xfgdoj lkbuxc smikzx qqsxqg qpxupo yriaxt qyhfhd wngyqa liwaee pjxbpj rznyhl vevvjy hryjog kdxwdg qtmvml ljqyjz ngkdtm wkzqsr gq</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Prepare for the canonical level of this unit: repeat the forward pass and the slopes without support, then explain the equivalence of the two source branches. No level is awarded for reading, expanding the answers, or an assisted attempt. No numbered milestone is created.</dd></div><div><dt>Evidence and what remains open</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tdbvxd yhfbyb cjfenk kcndqv kgnrsz fjvhpl bahklq cbmkdg zlyctu kfjkof jewnbl xowzzo ocpstz vkvruv ptxczn xoqbds nbhjah jrwcvv hsejri gzuzxz pujqzx dtjqst rzgclq xzhhpe</span></span></dd></div><div><dt>Next step</dt><dd>Reproduce the calculations from memory on another day. The canonical next unit concerns optimizers; it will use the slope while distinguishing the calculation of a derivative from a change in weights. Future evidence from an application will require a separate mandate to trace the caller, its inputs, and an authorized execution.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c103-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c103-m1.html">Previous</a> · <a href="c103-m3.html">Next</a></nav>
+<footer><p>Course book · C103·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

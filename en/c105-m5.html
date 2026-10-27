@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate the work and storage required by dense attention, then distinguish this budget from how faithfully an answer follows the document.">
+<title>C105·M5 · Cost and limits — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zbcdkl aejwhs oawv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C105·M5</p><h1>Cost and limits</h1><p class="objectif"><span>Your goal</span>Calculate the work and storage required by dense attention, then distinguish this budget from how faithfully an answer follows the document.</p><p class="prerequis"><strong>Before you start</strong><br>c104-m5 : temporal validation · c102-m5 : finite difference check · c050-m5 : conditioning · c105-m1 : queries–keys–values · c105-m2 : multi-head attention · c105-m3 : positions · c105-m4 : encoder and decoder</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You ask a model whether a Saturday booking can be moved. The fictional notice for a workshop room says: “A booking can be moved up to the day before. Exception: Saturday bookings cannot be moved.” A faithful answer must respect this exception. Before even judging the answer, the text must fit within the computation. All lengths and budgets in this scene are fictional, chosen for calculations with pencil and paper.</p><p>A token is a unit of text produced by the model’s tokenization; it can be part of a word. We therefore do not convert words or characters into tokens using a fixed ratio. Tokenization provides the number of positions. The short version of the input contains 32 tokens; an expanded version contains 64. These counts include the question and the notice in our exercise.</p><p>In dense attention, each position compares its query with the keys of all allowed positions. For now, imagine the full square table, before any causal restriction. Adding positions adds rows and columns. Doubling the length also introduces comparisons between the old and new passages: it does more than simply double a list.</p><p>The drawing shows the table for a single head. Heads are distinct learned comparisons, rather than sections of the document that divide the positions among them. Even if the input fits within the budget, the presence of the exception does not guarantee that the model uses it correctly. Computational capacity and fidelity to the document require different checks.</p><div class="schemas"><figure><svg viewBox="0 0 360 380" xmlns="http://www.w3.org/2000/svg" role="img"><title>Lengthen both sides of the table</title><desc>For a single head, 32 queries compared with 32 keys give 1024 cells. With 64 positions, both sides double and the square contains 4096 cells. The interior lines divide the large square into 4 blocks the size of the small square.</desc><text x="24" y="27">One table per head</text><text x="76" y="58" text-anchor="middle" class="petite-etiquette">32 keys</text><rect x="40" y="74" width="72" height="72" class="cadre-prediction" /><text x="150" y="98">32 queries</text><text x="150" y="126" class="prediction">1024 cells</text><text x="112" y="195" text-anchor="middle" class="petite-etiquette">64 keys</text><rect x="40" y="211" width="144" height="144" class="cadre-resultat" /><line x1="112" y1="211" x2="112" y2="355" class="trait" /><line x1="40" y1="283" x2="184" y2="283" class="trait" /><text x="210" y="242" class="petite-etiquette">64 queries</text><text x="210" y="273" class="resultat">4096 cells</text><text x="210" y="310" class="petite-etiquette">× 4 cells</text></svg><figcaption>The side of the large square is 2 times that of the small square; its area is 4 times the initial area. These are the cells for a single head. We still need to count the 4 heads.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>First specify what you are counting: pairs, multiplications or bytes. State the dimensions and how the computation is performed, then assess separately whether the answer respects the exception in the notice.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>What budget is needed to read the whole notice?</h3><p>Let us count 1 layer for 1 document, with h = 4 heads. Each query, key and value has d = 8 components per head. The score table is explicitly stored, using b = 2 bytes per cell. We compare n = 32 with n = 64 positions, using the same widths and storage. These lengths are fictional parameters; the quoted sentences have not actually been tokenized.</p><ol class="etapes"><li><h3>Define the scope of the count</h3><p>n is a number of positions; h, a number of heads; d, a number of components per head, the same here for keys and values. These are counts without physical units. D = h × d = 4 × 8 = 32 is the total width across the heads. b is expressed in bytes per scalar, where a scalar here is a stored number.</p><p>For each head, Q contains the queries and K the keys: these matrices have n rows and d columns. V contains the values and has the same dimensions here. Kᵀ is the transpose of K, obtained by exchanging rows and columns. QKᵀ contains the dot products of the queries and keys. A denotes the unitless weights obtained after scaling and normalization of these scores: it has n rows and n columns. The head’s output is AV, with dimensions n rows and d columns. The components of Q, K, V and this output are model numbers, with no physical unit assigned here.</p><p>We count the scalar multiplications in the products QKᵀ and AV. Additions, score scaling, normalization, the projections that construct Q, K, V and the output projection fall outside this count. We therefore calculate neither the full cost of the Transformer nor seconds of latency.</p></li><li><h3>Count the comparisons</h3><p>Each query has n keys to compare with. There are n queries in each head, and h heads. Let S be the combined number of cells in their score tables. A cell is a query–key comparison, even if its numerical values have not yet been calculated.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><mi>h</mi><msup><mi>n</mi><mn>2</mn></msup><mo>=</mo><mn>4</mn><mo>×</mo><mn>32</mn><mo>×</mo><mn>32</mn><mo>=</mo><mn>4096</mn><mtext> cases</mtext></mrow></math></div><p>Check by grouping: each head contains 1024 cells; 4 tables of this size do indeed give 4096 cells. Dividing the width among several heads does not divide the positions among them.</p></li><li><h3>Go from cells to multiplications</h3><p>Each query–key dot product multiplies d pairs of components. The product QKᵀ therefore requires S × d = 4096 × 8 = 32768 multiplications. For AV, each position produces d components, each by combining n values: h × n × d × n = 32768 additional multiplications.</p><p>C denotes their sum, in scalar multiplications. Since keys and values have the same width here, the counts are equal. With different widths, we would need to keep them separate.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>C</mi><mo>=</mo><mn>2</mn><mi>h</mi><msup><mi>n</mi><mn>2</mn></msup><mi>d</mi><mo>=</mo><mn>2</mn><msup><mi>n</mi><mn>2</mn></msup><mi>D</mi><mo>=</mo><mn>32768</mn><mo>+</mo><mn>32768</mn><mo>=</mo><mn>65536</mn></mrow></math></div><p>At a fixed width D, this work is quadratic in n: the number of multiplications is proportional to the square of the length. This relationship does not provide a measured execution time. Projections also have a cost: their work grows linearly with n when the widths are fixed. Leaving them out of this focused count does not mean they are free.</p></li><li><h3>Count the bytes actually included in the estimate</h3><p>M denotes only the memory for the score table of all heads in this layer. Each stored cell takes b bytes, so we multiply the number of cells by this size.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>M</mi><mo>=</mo><mi>b</mi><mi>S</mi><mo>=</mo><mn>2</mn><mo>×</mo><mn>4096</mn><mo>=</mo><mn>8192</mn><mtext> octets</mtext></mrow></math></div><p>A kibibyte, written KiB, equals 1024 bytes. M = 8192 ÷ 1024 = 8 KiB. This division changes the unit; it does not reduce the space occupied. The weight table A, Q, K, V, the parameters and the other layers are not counted. Training also requires, among other things, information needed to calculate gradients.</p><p>Quadratic storage describes our fictional implementation, which materializes the whole table. A computation organized in blocks can avoid keeping this entire table while still evaluating the same pairs. We must therefore state how the computation is organized before applying this memory estimate to real software.</p></li><li><h3>Lengthen the notice and check the factor</h3><p>The expanded version has 64 positions. Per head: 64 × 64 = 4096 cells. For all heads: 4 × 4096 = 16384 cells. The scores occupy 2 × 16384 = 32768 bytes, or 32 KiB.</p><p>QKᵀ requires 16384 × 8 = 131072 multiplications; AV requires 131072. Their sum is 262144 multiplications. The length ratio is 2, the cell ratio 4 and the multiplication ratio 4. Score memory also follows the factor 4, since b remains fixed.</p><p>Another check, without repeating the products: the large table in the drawing can be divided into 4 blocks. They cover old–old, old–new, new–old and new–new. Each is the size of the old table. The factor we recover is indeed 4. This factor does not predict an identical slowdown for the whole program.</p></li><li><h3>Distinguish the mask from the execution mode</h3><p>A causal mask prevents a position from reading later positions; here, the position itself is allowed. The numbers of allowed keys per row run from 1 to n. Their sum is n × (n + 1) ÷ 2: we recover this formula by pairing the first and last rows, then pairing the next rows in turn.</p><p>At n = 32, this gives 32 × 33 ÷ 2 = 528 allowed pairs per head, instead of 1024 cells in the square. The other 496 cells are masked. A program may nevertheless calculate the whole square, then mask it; the mask alone therefore proves no saving in work or storage.</p><p>Our square count still describes this full dense computation. A program that actually avoids forbidden pairs would have a different exact count, but would still show quadratic growth for a full reading of an increasingly long input.</p></li><li><h3>Separate full reading, generation and training</h3><p>The initial reading processes the positions in the supplied text. During causal generation, the model can keep the keys and values already calculated: this is the key–value cache. For a new position after n retained positions, it then calculates only a new query compared with the n + 1 keys, including its own key.</p><p>With the same widths, the new query–key products require (n + 1) × D multiplications; combining the values requires just as many. Their sum is 2 × (n + 1) × D. This count per new token grows linearly with the length already present, assuming that the cache is reused. It does not replace the cost of the initial reading; generating an entire sequence accumulates these steps.</p><p>The cache itself occupies memory: it retains the keys and values of past positions. Training also calculates gradients to modify the parameters. We do not assign it the cost of a single forward pass. Finally, evaluating the answer means checking it against the notice and the question; none of these arithmetic operations provides that verdict.</p></li><li><h3>Return to the Saturday exception</h3><p>The expanded version may contain the exception missing from the short version. This makes a faithful answer possible, without making it certain. The model may ignore a clause, confuse the general rule with its exception or produce an answer unsupported by the text. Encoded positions and normalized weights are not proof of correct reasoning.</p><p>If the context is reduced to fit the budget, we must look at what disappears. Keeping only recent passages or passages resembling the question may discard an exception worded differently. This selection bias means that the selection rule favors some passages at the expense of others; it can exist even if the attention calculation is exact.</p><p>A check to prepare for our notice: keep the reference text, identify the rule and the exception, then ask for an answer that justifies the Saturday case using these passages. Comparing the versions on this same question and recording the clauses actually supplied distinguishes an input limitation from an error in using the input. No actual trial or success rate is reported here.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Reconstruct the factors that count positions, heads, components and bytes. Then explain how a correct memory estimate can accompany a wrong answer about Saturday.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The text is twice as long, so the cost is twice as large.”</h3><p>For the dense attention products over the full passage, rows and columns grow together. At fixed dimensions, going from 32 to 64 positions multiplies the cells and our multiplications by 4. Always specify whether you are counting a full reading or a new token with a cache.</p><a href="#exemple">Revisit the division of the square and the execution modes</a></li><li><h3>“The scores occupy 8 KiB, so the model fits in that memory.”</h3><p>This number concerns only a single table in a single layer. Q, K, V, the attention weights, the parameters, the other layers and requirements specific to the execution mode are outside the count. Restate the scope of M before inferring a capacity from it.</p><a href="#exemple">Reread exactly what M includes</a></li><li><h3>“The notice fits in the context: the answer about Saturday must be correct.”</h3><p>Check that the exception has been retained, then that the answer respects its scope. Meeting a budget proves material feasibility under our assumptions; fidelity is checked against the notice. An attention weight does not certify the truth of a sentence.</p><a href="#exercices">Compare budget, selection and justification in the exercises</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-longueur"><p class="repere">Exercise 1 · Application · non-integer factor</p>
+<h3>A notice of intermediate length</h3><p>The same input now contains 48 positions. Keep h = 4, d = 8 and b = 2 bytes. Calculate the score cells and their memory in bytes and KiB. Before calculating, predict whether memory is proportional to length.</p>
+<label for="reponse-ex-longueur">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-longueur" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-longueur" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-longueur" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-longueur" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Count the rows and columns of a single head, then multiply by the number of heads.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the ratio 48 ÷ 32 with the ratio of the memory amounts; the first factor acts on both sides of the square.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Per head: 48 × 48 = 2304 cells. All heads: 4 × 2304 = 9216 cells. M = 2 × 9216 = 18432 bytes, or 18432 ÷ 1024 = 18 KiB.</p><p>The length is multiplied by 1.50, but score memory is multiplied by 2.25. The second factor is the square of the first. Memory is therefore not proportional to length in this storage mode.</p><p class="petit-titre">Check your reasoning</p><ul><li>You distinguish the 2304 cells of a single head from the 9216 cells of all heads.</li><li>You provide 18432 bytes and 18 KiB and justify the units.</li><li>You explain why the length factor appears twice.</li></ul></details></article><article class="exercice" id="ex-budget"><p class="repere">Exercise 2 · Reasoned decision · budget and fidelity</p>
+<h3>What a score budget allows</h3><p>A fictional budget of 20000 bytes is reserved solely for the scores in this layer. Compare inputs of 48 and 64 positions. The intermediate version discards the Saturday exception; the long version contains it. Which version meets this budget? Can we say that it is sufficient to answer faithfully? Propose a next step that retains the decisive clause.</p>
+<label for="reponse-ex-budget">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-budget" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-budget" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-budget" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-budget" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare each memory amount with the budget in the same unit, without rounding the KiB.</p></details><details class="indice"><summary>Hint 2</summary><p>A clause can still be missing even if not all available bytes are occupied.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The intermediate version uses 18432 bytes. There are 20000 − 18432 = 1568 bytes left in this score budget. The long version requires 32768 bytes and exceeds the budget by 32768 − 20000 = 12768 bytes.</p><p>Only the intermediate version meets the stated budget, but its selection removes precisely the useful exception. It is not sufficient to establish a faithful answer about Saturday. The positive margin also does not prove that the whole model fits in memory.</p><p>We can prepare a shorter selection that keeps the general rule and its exception, then recount the tokens actually obtained and recalculate M. A different organization of the computation could also change the storage. None of these approaches removes the need to check the answer against the retained clauses; we do not invent their outcome.</p><p class="petit-titre">Check your reasoning</p><ul><li>You identify the version that fits and calculate the margin or excess without confusing bytes and KiB.</li><li>You refuse to infer fidelity solely from meeting the budget.</li><li>Your next step explicitly retains the exception and includes a new count and a check of the answer.</li></ul></details></article><article class="exercice" id="ex-cache"><p class="repere">Exercise 3 · Transfer · changing the scope</p>
+<h3>Add a token without rereading the whole square</h3><p>After the 32 positions of the short input, the model processes a new position by reusing the key–value cache. It compares its query with the 33 keys, including the new one. With the same h and d, calculate the query–key multiplications and then the multiplications for combining with V. Explain why this result gives neither total latency nor answer quality.</p>
+<label for="reponse-ex-cache">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-cache" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-cache" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-cache" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-cache" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>There is only a single new query row per head; the old keys and values are reused.</p></details><details class="indice"><summary>Hint 2</summary><p>Each head requires 33 × 8 multiplications for the scores and just as many to combine the values.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The total width is D = 32. The new row requires 33 × 32 = 1056 query–key multiplications. Combining with the values requires just as many. The focused total is 2 × 1056 = 2112 multiplications.</p><p>There is no new full square because the previous keys and values are reused and there is only a single new query per head. If the cache is not reused, this reasoning no longer describes the computation performed.</p><p>The count omits, among other things, the projections, the rest of the network and memory transfers; it does not convert directly into seconds. Nor does it tell us whether the exception appears in the short input or whether the output respects it. The initial reading, the new token and answer evaluation remain distinct scopes.</p><p class="petit-titre">Check your reasoning</p><ul><li>You find 1056 multiplications for each product and 2112 for their sum.</li><li>You relate the count to a new query and the actual reuse of the cache.</li><li>You name at least one excluded cost and one fidelity check still needed.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="carre"><summary><span class="repere">Recall 1</span><span>Why does a full reading of a longer input make the number of pairs grow quadratically?</span></summary><p>Each head compares n queries with n keys. Both axes grow with n: there are h × n × n cells. The length factor therefore multiplies both axes, with the number of heads fixed.</p></details><details class="carte" data-carte="frontiere"><summary><span class="repere">Recall 2</span><span>What must be specified before announcing memory of b × h × n × n?</span></summary><p>b is the size of a score in bytes; h counts heads and n counts positions. The count assumes that the full table is explicitly stored, for the stated layer and document. It excludes other tables and does not represent the memory of the whole model.</p></details><details class="carte" data-carte="cache"><summary><span class="repere">Recall 3</span><span>Why does a new token with a cache have a different count from a full initial reading?</span></summary><p>The old keys and values are reused; only a new query per head is compared with the available keys. The attention work in this step grows linearly with the current length at fixed dimensions. The initial reading and the accumulation of steps still need to be counted.</p></details><details class="carte" data-carte="masque"><summary><span class="repere">Recall 4</span><span>Is a causal mask enough to prove a saving in memory or time?</span></summary><p>It forbids dependencies on future positions. Software may calculate and store the full square and then mask it. Savings depend on the operations and allocations actually avoided.</p></details><details class="carte" data-carte="fidelite"><summary><span class="repere">Recall 5</span><span>What must be checked after establishing that the notice meets a budget?</span></summary><p>That the selection contains the necessary rule and exception, then that the answer respects these clauses. The allowed length, the presence of a passage and its correct use are distinct facts.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path: positions and dimensions → pairs compared → multiplications included → bytes explicitly stored → execution mode → clauses retained → answer checked against the notice. Recover the factor for doubling and explain why neither the budget nor attention guarantees fidelity. An assisted answer remains an attempt to repeat without support on another day; reading does not confer any achieved level.</p></div><div class="exports"><a class="bouton" download="c105-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTU6Y2FycmUiLAogICAgICAidW5pdGUiOiAiYzEwNS1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvdXQtYXR0ZW50aW9uLWRlbnNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGEgZnVsbCByZWFkaW5nIG9mIGEgbG9uZ2VyIGlucHV0IG1ha2UgdGhlIG51bWJlciBvZiBwYWlycyBncm93IHF1YWRyYXRpY2FsbHk/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCBoZWFkIGNvbXBhcmVzIG4gcXVlcmllcyB3aXRoIG4ga2V5cy4gQm90aCBheGVzIGdyb3cgd2l0aCBuOiB0aGVyZSBhcmUgaCDDlyBuIMOXIG4gY2VsbHMuIFRoZSBsZW5ndGggZmFjdG9yIHRoZXJlZm9yZSBtdWx0aXBsaWVzIGJvdGggYXhlcywgd2l0aCB0aGUgbnVtYmVyIG9mIGhlYWRzIGZpeGVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW01OmZyb250aWVyZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic3RvY2thZ2UtZGVzLXNjb3JlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgYmUgc3BlY2lmaWVkIGJlZm9yZSBhbm5vdW5jaW5nIG1lbW9yeSBvZiBiIMOXIGggw5cgbiDDlyBuPyIsCiAgICAgICJyZXBvbnNlIjogImIgaXMgdGhlIHNpemUgb2YgYSBzY29yZSBpbiBieXRlczsgaCBjb3VudHMgaGVhZHMgYW5kIG4gY291bnRzIHBvc2l0aW9ucy4gVGhlIGNvdW50IGFzc3VtZXMgdGhhdCB0aGUgZnVsbCB0YWJsZSBpcyBleHBsaWNpdGx5IHN0b3JlZCwgZm9yIHRoZSBzdGF0ZWQgbGF5ZXIgYW5kIGRvY3VtZW50LiBJdCBleGNsdWRlcyBvdGhlciB0YWJsZXMgYW5kIGRvZXMgbm90IHJlcHJlc2VudCB0aGUgbWVtb3J5IG9mIHRoZSB3aG9sZSBtb2RlbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNS1tNTpjYWNoZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaW5mZXJlbmNlLWF2ZWMtY2FjaGUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgYSBuZXcgdG9rZW4gd2l0aCBhIGNhY2hlIGhhdmUgYSBkaWZmZXJlbnQgY291bnQgZnJvbSBhIGZ1bGwgaW5pdGlhbCByZWFkaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBvbGQga2V5cyBhbmQgdmFsdWVzIGFyZSByZXVzZWQ7IG9ubHkgYSBuZXcgcXVlcnkgcGVyIGhlYWQgaXMgY29tcGFyZWQgd2l0aCB0aGUgYXZhaWxhYmxlIGtleXMuIFRoZSBhdHRlbnRpb24gd29yayBpbiB0aGlzIHN0ZXAgZ3Jvd3MgbGluZWFybHkgd2l0aCB0aGUgY3VycmVudCBsZW5ndGggYXQgZml4ZWQgZGltZW5zaW9ucy4gVGhlIGluaXRpYWwgcmVhZGluZyBhbmQgdGhlIGFjY3VtdWxhdGlvbiBvZiBzdGVwcyBzdGlsbCBuZWVkIHRvIGJlIGNvdW50ZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTU6bWFzcXVlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJtYXNxdWUtZXQtZXhlY3V0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIklzIGEgY2F1c2FsIG1hc2sgZW5vdWdoIHRvIHByb3ZlIGEgc2F2aW5nIGluIG1lbW9yeSBvciB0aW1lPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGZvcmJpZHMgZGVwZW5kZW5jaWVzIG9uIGZ1dHVyZSBwb3NpdGlvbnMuIFNvZnR3YXJlIG1heSBjYWxjdWxhdGUgYW5kIHN0b3JlIHRoZSBmdWxsIHNxdWFyZSBhbmQgdGhlbiBtYXNrIGl0LiBTYXZpbmdzIGRlcGVuZCBvbiB0aGUgb3BlcmF0aW9ucyBhbmQgYWxsb2NhdGlvbnMgYWN0dWFsbHkgYXZvaWRlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNS1tNTpmaWRlbGl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlcy1kdS1jb250ZXh0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgYmUgY2hlY2tlZCBhZnRlciBlc3RhYmxpc2hpbmcgdGhhdCB0aGUgbm90aWNlIG1lZXRzIGEgYnVkZ2V0PyIsCiAgICAgICJyZXBvbnNlIjogIlRoYXQgdGhlIHNlbGVjdGlvbiBjb250YWlucyB0aGUgbmVjZXNzYXJ5IHJ1bGUgYW5kIGV4Y2VwdGlvbiwgdGhlbiB0aGF0IHRoZSBhbnN3ZXIgcmVzcGVjdHMgdGhlc2UgY2xhdXNlcy4gVGhlIGFsbG93ZWQgbGVuZ3RoLCB0aGUgcHJlc2VuY2Ugb2YgYSBwYXNzYWdlIGFuZCBpdHMgY29ycmVjdCB1c2UgYXJlIGRpc3RpbmN0IGZhY3RzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c105-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGRvZXMgYSBmdWxsIHJlYWRpbmcgb2YgYSBsb25nZXIgaW5wdXQgbWFrZSB0aGUgbnVtYmVyIG9mIHBhaXJzIGdyb3cgcXVhZHJhdGljYWxseT8JRWFjaCBoZWFkIGNvbXBhcmVzIG4gcXVlcmllcyB3aXRoIG4ga2V5cy4gQm90aCBheGVzIGdyb3cgd2l0aCBuOiB0aGVyZSBhcmUgaCDDlyBuIMOXIG4gY2VsbHMuIFRoZSBsZW5ndGggZmFjdG9yIHRoZXJlZm9yZSBtdWx0aXBsaWVzIGJvdGggYXhlcywgd2l0aCB0aGUgbnVtYmVyIG9mIGhlYWRzIGZpeGVkLgl0b2RhaSBjMTA1LW01IGNvdXQtYXR0ZW50aW9uLWRlbnNlCldoYXQgbXVzdCBiZSBzcGVjaWZpZWQgYmVmb3JlIGFubm91bmNpbmcgbWVtb3J5IG9mIGIgw5cgaCDDlyBuIMOXIG4/CWIgaXMgdGhlIHNpemUgb2YgYSBzY29yZSBpbiBieXRlczsgaCBjb3VudHMgaGVhZHMgYW5kIG4gY291bnRzIHBvc2l0aW9ucy4gVGhlIGNvdW50IGFzc3VtZXMgdGhhdCB0aGUgZnVsbCB0YWJsZSBpcyBleHBsaWNpdGx5IHN0b3JlZCwgZm9yIHRoZSBzdGF0ZWQgbGF5ZXIgYW5kIGRvY3VtZW50LiBJdCBleGNsdWRlcyBvdGhlciB0YWJsZXMgYW5kIGRvZXMgbm90IHJlcHJlc2VudCB0aGUgbWVtb3J5IG9mIHRoZSB3aG9sZSBtb2RlbC4JdG9kYWkgYzEwNS1tNSBzdG9ja2FnZS1kZXMtc2NvcmVzCldoeSBkb2VzIGEgbmV3IHRva2VuIHdpdGggYSBjYWNoZSBoYXZlIGEgZGlmZmVyZW50IGNvdW50IGZyb20gYSBmdWxsIGluaXRpYWwgcmVhZGluZz8JVGhlIG9sZCBrZXlzIGFuZCB2YWx1ZXMgYXJlIHJldXNlZDsgb25seSBhIG5ldyBxdWVyeSBwZXIgaGVhZCBpcyBjb21wYXJlZCB3aXRoIHRoZSBhdmFpbGFibGUga2V5cy4gVGhlIGF0dGVudGlvbiB3b3JrIGluIHRoaXMgc3RlcCBncm93cyBsaW5lYXJseSB3aXRoIHRoZSBjdXJyZW50IGxlbmd0aCBhdCBmaXhlZCBkaW1lbnNpb25zLiBUaGUgaW5pdGlhbCByZWFkaW5nIGFuZCB0aGUgYWNjdW11bGF0aW9uIG9mIHN0ZXBzIHN0aWxsIG5lZWQgdG8gYmUgY291bnRlZC4JdG9kYWkgYzEwNS1tNSBpbmZlcmVuY2UtYXZlYy1jYWNoZQpJcyBhIGNhdXNhbCBtYXNrIGVub3VnaCB0byBwcm92ZSBhIHNhdmluZyBpbiBtZW1vcnkgb3IgdGltZT8JSXQgZm9yYmlkcyBkZXBlbmRlbmNpZXMgb24gZnV0dXJlIHBvc2l0aW9ucy4gU29mdHdhcmUgbWF5IGNhbGN1bGF0ZSBhbmQgc3RvcmUgdGhlIGZ1bGwgc3F1YXJlIGFuZCB0aGVuIG1hc2sgaXQuIFNhdmluZ3MgZGVwZW5kIG9uIHRoZSBvcGVyYXRpb25zIGFuZCBhbGxvY2F0aW9ucyBhY3R1YWxseSBhdm9pZGVkLgl0b2RhaSBjMTA1LW01IG1hc3F1ZS1ldC1leGVjdXRpb24KV2hhdCBtdXN0IGJlIGNoZWNrZWQgYWZ0ZXIgZXN0YWJsaXNoaW5nIHRoYXQgdGhlIG5vdGljZSBtZWV0cyBhIGJ1ZGdldD8JVGhhdCB0aGUgc2VsZWN0aW9uIGNvbnRhaW5zIHRoZSBuZWNlc3NhcnkgcnVsZSBhbmQgZXhjZXB0aW9uLCB0aGVuIHRoYXQgdGhlIGFuc3dlciByZXNwZWN0cyB0aGVzZSBjbGF1c2VzLiBUaGUgYWxsb3dlZCBsZW5ndGgsIHRoZSBwcmVzZW5jZSBvZiBhIHBhc3NhZ2UgYW5kIGl0cyBjb3JyZWN0IHVzZSBhcmUgZGlzdGluY3QgZmFjdHMuCXRvZGFpIGMxMDUtbTUgbGltaXRlcy1kdS1jb250ZXh0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zbcdkl aejwhs oawv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">srrnvh ewjpkw vdma</span></span> · compare cost, fidelity and context selection</h3><dl><div><dt>You understand</dt><dd>Reducing the context can decrease attention work while discarding a decisive clause. A budget, a relevant selection and a faithful answer require separate justifications. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tdyhff xniiqk awzhmx fyqhtx dcewcf izcmbk ypmx</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jglcsa dxtvbc qxsmdp gmjzlm wtvxrt tblvlb obhycm ivsikw zaudqq wmktel qpqruc bbnghs gnpyip jgaarw xdpnno zbngtq kyxpki xgyppl ukamsq byjgsl sfhcaj jmjivj rkqamd khyttg</span></span></dd></div><div><dt>The level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ajpdgy ezruss dgrxdc tlmsjr cvwfft btpgru wnmt</span></span> Prepare to reconstruct the counts independently, then explain an exception lost through selection. Reading the page, consulting a hint or recognizing the code does not validate any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zppwmy qvbmuy vwnaeu ofetkt uadxbw rjuotl tbgerv tsaaxg ribkdw yocjvk wvwjml wucaem qyzhgf tcksgw ielmiq qaqebf rchyki cbzsur zczqau sdfajx nlsjxt ekxqcx rwxhda jmbmcb</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the exercises without support on another day. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">akqddo jkhioh grzheu eyupxk igiyjp iobnvr wedgzt vasrwj lfiqbe hbvtib xahxom ikddxb tilqik nq</span></span> C119·M4 prepares the dated artifact and its provenance at the next level. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fipnaw tzfoyt iehmdx qhkdei utnvlz mkavlr awyw</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c105-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c105-m4.html">Previous</a> · <a href="c106-m1.html">Next</a></nav>
+<footer><p>Course book · C105·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

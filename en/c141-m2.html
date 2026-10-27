@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build and read a regular expression using its three operations (choice, concatenation, star), test a whole word, count words of a given length, then distinguish recognizing a whole word from searching for a pattern in text.">
+<title>C141·M2 · Regular expressions — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ejdcrk xiiowo xxki</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C141·M2</p><h1>Regular expressions</h1><p class="objectif"><span>Your goal</span>Build and read a regular expression using its three operations (choice, concatenation, star), test a whole word, count words of a given length, then distinguish recognizing a whole word from searching for a pattern in text.</p><p class="prerequis"><strong>Before you start</strong><br>c070-m5 : minimum spanning tree · c069-m5 : congruences and Euclid · c025-m5 : O, Omega and Theta · c141-m1 : languages</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A log filter needs to identify decimal numbers written with at least 3 digits after the decimal point so that they can be rounded later. Describing this form in a sentence leaves room for doubt; a regular expression describes it precisely enough to test a word and even count the possible words. The setting is fictional and deliberately simplified: we use d for any digit and p for the decimal point, without ever handling an actual reading.</p><p>Imagine a recipe with three operations. Choose: one thing or the other, written with a vertical bar. Concatenate: one thing followed by the other, written by placing them next to each other. Repeat: do something 0, one or more times, written with a star. A word is recognized when its entire sequence of symbols can be read as the result of the recipe. A single matching part is not enough.</p><p>An alphabet Σ is a finite set of symbols, a word is a finite sequence of symbols, and a language is a set of words. The regular expression r describes the language L(r), which we define recursively below. A language described by a regular expression is called regular. The connection with state machines belongs to the next unit on automata; it is not proved here.</p><p>Limits: programming libraries add shortcuts, character classes such as “a digit”, and options. We keep the mathematical core and expand only the useful shortcuts. Library features that go beyond this core are not covered.</p><div class="schemas"><figure><svg viewBox="0 0 540 200" xmlns="http://www.w3.org/2000/svg" role="img"><title>A regular expression as a recipe in three blocks</title><desc>Three blocks concatenated from left to right. The block d d* requires at least 1 digit, the block p requires 1 decimal point, and the block d d d d* requires at least 3 digits after the decimal point. The shortest word has 5 symbols.</desc><rect x="15" y="30" width="190" height="80" rx="8" class="cadre-prediction" /><text x="110" y="65" text-anchor="middle">d d*</text><text x="110" y="92" text-anchor="middle" class="petite-etiquette">at least 1 d</text><rect x="225" y="30" width="90" height="80" rx="8" class="cadre-resultat" /><text x="270" y="65" text-anchor="middle">p</text><text x="270" y="92" text-anchor="middle" class="petite-etiquette">1 point</text><rect x="335" y="30" width="190" height="80" rx="8" class="cadre-prediction" /><text x="430" y="65" text-anchor="middle">d d d d*</text><text x="430" y="92" text-anchor="middle" class="petite-etiquette">at least 3 d</text><line x1="205" y1="70" x2="225" y2="70" class="trait" /><line x1="315" y1="70" x2="335" y2="70" class="trait" /><text x="270" y="150" text-anchor="middle">Shortest word: dpddd</text><text x="270" y="178" text-anchor="middle" class="petite-etiquette">length 5 = 1 + 1 + 3</text></svg><figcaption>Three concatenated blocks describe the required form. Each star only allows room for more d symbols; it removes none of the minimum requirements.</figcaption></figure><figure><svg viewBox="0 0 460 215" xmlns="http://www.w3.org/2000/svg" role="img"><title>An accepted word and a rejected word</title><desc>The word dpddd is accepted: 3 d symbols follow p. The word ddpdd is rejected: only 2 d symbols follow p, so 1 is missing.</desc><text x="20" y="28">Accepted: 3 d after p, minimum 3</text><rect x="20" y="42" width="44" height="40" rx="5" class="cadre-prediction" /><text x="42" y="69" text-anchor="middle">d</text><rect x="70" y="42" width="44" height="40" rx="5" class="cadre-resultat" /><text x="92" y="69" text-anchor="middle">p</text><rect x="120" y="42" width="44" height="40" rx="5" class="cadre-prediction" /><text x="142" y="69" text-anchor="middle">d</text><rect x="170" y="42" width="44" height="40" rx="5" class="cadre-prediction" /><text x="192" y="69" text-anchor="middle">d</text><rect x="220" y="42" width="44" height="40" rx="5" class="cadre-prediction" /><text x="242" y="69" text-anchor="middle">d</text><text x="20" y="118">Rejected: 2 d after p, minimum 3</text><rect x="20" y="132" width="44" height="40" rx="5" class="cadre-neutre" /><text x="42" y="159" text-anchor="middle">d</text><rect x="70" y="132" width="44" height="40" rx="5" class="cadre-neutre" /><text x="92" y="159" text-anchor="middle">d</text><rect x="120" y="132" width="44" height="40" rx="5" class="cadre-resultat" /><text x="142" y="159" text-anchor="middle">p</text><rect x="170" y="132" width="44" height="40" rx="5" class="cadre-neutre" /><text x="192" y="159" text-anchor="middle">d</text><rect x="220" y="132" width="44" height="40" rx="5" class="cadre-neutre" /><text x="242" y="159" text-anchor="middle">d</text><text x="20" y="200" class="petite-etiquette">1 d is missing after p.</text></svg><figcaption>The two words have the same length. Only the position of p changes the split and therefore the answer: the last block still needs another d.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>A regular expression reads like a recipe made of symbols, choices, concatenations and repetitions; a word belongs to its language only if the entire string can be split according to that recipe.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Recognizing decimals with many digits over a two-symbol alphabet</h3><p>Fictional setting. A log filter needs to identify numbers written with at least 1 digit before the decimal point and at least 3 digits after it. To calculate by hand, we reduce the alphabet to Σ = {d, p}: d represents any digit, and p the decimal point. We write r = d d* p d d d d*, test words, count those of length 8, then check this count.</p><ol class="etapes"><li><h3>Define the alphabet, words and syntax</h3><p>Our alphabet is Σ, consisting of the two symbols d and p. A word is a finite sequence of symbols. The empty word, written ε, contains no symbols: its length is 0. The word uv is the word u followed by the word v. A language is a set of words.</p><p>A regular expression over Σ is built using three rules. A symbol of Σ is an expression. If r and s are expressions, then r|s (choice), rs (concatenation) and r* (star) are expressions too. Star takes precedence over concatenation, which takes precedence over choice. Assumptions: the alphabet is finite, words are finite, and the vertical bar and star characters are operators, rather than symbols of Σ.</p></li><li><h3>Define the language of an expression</h3><p>The language L(r) is the set of words that r describes. It is defined recursively over the construction of r.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><mi>a</mi><mo>)</mo><mo>=</mo><mo>{</mo><mi>a</mi><mo>}</mo><mtext> pour tout symbole </mtext><mi>a</mi><mtext> de </mtext><mi>Σ</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><mi>r</mi><mo>|</mo><mi>s</mi><mo>)</mo><mo>=</mo><mi>L</mi><mo>(</mo><mi>r</mi><mo>)</mo><mo>∪</mo><mi>L</mi><mo>(</mo><mi>s</mi><mo>)</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><mi>r</mi><mi>s</mi><mo>)</mo><mo>=</mo><mo>{</mo><mi>u</mi><mi>v</mi><mtext> pour </mtext><mi>u</mi><mo>∈</mo><mi>L</mi><mo>(</mo><mi>r</mi><mo>)</mo><mtext> et </mtext><mi>v</mi><mo>∈</mo><mi>L</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>}</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>(</mo><msup><mi>r</mi><mo>*</mo></msup><mo>)</mo><mo>=</mo><msub><mo>⋃</mo><mrow><mi>k</mi><mo>≥</mo><mn>0</mn></mrow></msub><msup><mrow><mi>L</mi><mo>(</mo><mi>r</mi><mo>)</mo></mrow><mi>k</mi></msup><mtext> avec </mtext><msup><mrow><mi>L</mi><mo>(</mo><mi>r</mi><mo>)</mo></mrow><mn>0</mn></msup><mo>=</mo><mo>{</mo><mi>ε</mi><mo>}</mo></mrow></math></div><p>L(r) to the power k denotes the words obtained by concatenating k words from L(r), for an integer k. When k equals 0, we obtain only the empty word. Star therefore allows 0 repetitions: the empty word always belongs to L(r*).</p></li><li><h3>Expand library shortcuts</h3><p>Libraries write d+ for “at least one d” and d{m,} for “at least m d symbols”, where m is an integer. These are abbreviations: d+ means d d*, and d{m,} means m copies of d followed by d*. With m equal to 3, the form d+ p d{m,} becomes:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>r</mi><mo>=</mo><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup><mi>p</mi><mi>d</mi><mi>d</mi><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup></mrow></math></div><p>The first block requires at least 1 d, the decimal point requires 1 p, and the last block requires at least 3 d symbols. Minimum length: 1 + 1 = 2, then 2 + 3 = 5. No word in L(r) is shorter than dpddd, of length 5. The stars never remove these requirements.</p></li><li><h3>Test words by splitting the entire string</h3><p>Testing a word means looking for a split of the entire string, symbol by symbol, according to the blocks of r.</p><p>dpddd: the block d d* reads d with 0 extra d symbols, p is read by the block p, then ddd is read by d d d d* with 0 extra d symbols. All symbols are used: the word belongs to L(r).</p><p>ddpdd: after p, 2 d symbols remain, but the last block requires at least 3. There is 1 missing: the word does not belong to L(r).</p><p>pddd: the first block requires at least 1 d before p and the word begins with p, so it is rejected. dddd: there is no p, but the block p must read exactly one symbol p, so it is rejected. Since p is the only letter that the block p can read, its position fixes the split: a single attempt is enough to reject the word.</p></li><li><h3>Count words of a given length</h3><p>Let us find the words in L(r) of length 8. The shortest word has 5 symbols, so there are 8 − 5 = 3 d symbols left to place in the two stars: the first follows the initial d, and the second follows the group ddd.</p><p>If x symbols go into the first star, 3 − x remain for the second, and x takes values from 0 to 3. This gives 3 + 1 = 4 words.</p><p>Necessary assumption: each word has a unique split, because it contains a single p and the stars contain only d symbols. Otherwise, we would be counting splits rather than words.</p><p>Here are the 4 words, with their numbers of d symbols before and after p, respectively: dpdddddd (1 and 6), ddpddddd (2 and 5), dddpdddd (3 and 4), ddddpddd (4 and 3). Each pair sums to 7 = 8 − 1, since p occupies one position out of 8.</p></li><li><h3>Check using another method</h3><p>Each position in a word of length 8 takes d or p, giving 2 choices. The total is therefore 2 × 2 = 4, then 4 × 4 = 16, then 16 × 16 = 256 possible words.</p><p>A checking script supplied with the page constructs L(r) directly from the recursive definition in step two, then separately tests the 256 words using a small state machine written by hand. Both methods find 4 words, exactly those in the list. The count of 4 out of 256 describes this toy model; it says nothing about an actual log.</p></li><li><h3>Searching for a pattern differs from recognizing a whole word</h3><p>Take w = dpdpdddd, of length 8. It contains two p symbols, whereas every word in L(r) contains exactly one: w does not belong to L(r).</p><p>Yet from symbol 3 to symbol 8, the substring dpdddd belongs to L(r). Its length is 8 − 3 + 1, or 5 + 1 = 6. A search therefore finds a pattern in w, while whole-word recognition rejects it.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mtext> contient un morceau de </mtext><mi>L</mi><mo>(</mo><mi>r</mi><mo>)</mo><mo>⇔</mo><mi>w</mi><mo>∈</mo><mi>L</mi><mo>(</mo><msup><mrow><mo>(</mo><mi>d</mi><mo>|</mo><mi>p</mi><mo>)</mo></mrow><mo>*</mo></msup><mi>r</mi><msup><mrow><mo>(</mo><mi>d</mi><mo>|</mo><mi>p</mi><mo>)</mo></mrow><mo>*</mo></msup><mo>)</mo></mrow></math></div><p>Searching therefore amounts to recognizing a larger language, with arbitrary symbols before and after the pattern. This lesson does not specify which substring a library returns first when there are several.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the formula libres + un count words rather than splits? What would happen if the expression contained two stars over d next to each other? And why is the word w in the last step both searched successfully and rejected as a whole word?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Star means at least once.”</h3><p>Star allows 0, one or more repetitions, so the empty word belongs to L(r*). To require at least once, write r r*, which libraries abbreviate as r+. This is why the first block in the example is d d* rather than d*.</p><a href="#exemple">Review the definition of star and the expansion of shortcuts</a></li><li><h3>“If the expression finds a pattern in the text, the entire text belongs to its language.”</h3><p>Finding a recognized substring amounts to recognizing the larger language in which arbitrary symbols surround L(r). The entire text belongs to L(r) only if the entire string can be split according to r; the word w with two p symbols is a counterexample.</p><a href="#exemple">Review the step on searching and whole-word recognition</a></li><li><h3>“To count the words in a language, just count the ways to read the expression.”</h3><p>The same word can have several splits when the expression is ambiguous, as with two consecutive stars over d. In that case, we count splits rather than words. First check that there is a unique split for each word, or adjust the count.</p><a href="#exercices">Go to the exercise on multiple splits</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-seuil"><p class="repere">Exercise 1 · Application with explanation</p>
+<h3>A lower threshold</h3><p>The same fictional setting, but the filter now requires only 2 digits after the decimal point. The expression becomes r′ below. What is its shortest word? How many words of length 6 does it describe?</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>r</mi><mo>′</mo></msup><mo>=</mo><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup><mi>p</mi><mi>d</mi><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup></mrow></math></div>
+<label for="reponse-ex-seuil">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-seuil" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-seuil" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-seuil" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-seuil" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add the minimum requirement of each of the three blocks, as in step three of the example.</p></details><details class="indice"><summary>Hint 2</summary><p>Subtract this minimum length from 6: the remainder is distributed between the two stars, and each distribution gives one word.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Minimum length: 1 + 1 + 2 = 4, so the shortest word is dpdd.</p><p>There are 6 − 4 = 2 d symbols left to place. With x in the first star, the second receives 2 − x, and x ranges from 0 to 2: 2 + 1 = 3 words.</p><p>Check by writing them out: dpdddd, ddpddd, dddpdd. Each has length 6, a single p, at least 1 d before it and at least 2 d symbols after it. The unique p guarantees a unique split for each word.</p><p class="petit-titre">Check your reasoning</p><ul><li>Add the minimum requirements of the three blocks.</li><li>Distribute the remaining symbols between the two stars and add one for the value 0.</li><li>Check the count by writing out the words.</li></ul></details></article><article class="exercice" id="ex-etoile-seule"><p class="repere">Exercise 2 · Variation to justify</p>
+<h3>A number that can start with the decimal point</h3><p>Replace d d* with d* at the start: r″ below therefore accepts a word that starts with p. What is the shortest word? How many words have length 8? Why is there one more word than in the example, with the same threshold?</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>r</mi><mo>″</mo></msup><mo>=</mo><msup><mi>d</mi><mo>*</mo></msup><mi>p</mi><mi>d</mi><mi>d</mi><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup></mrow></math></div>
+<label for="reponse-ex-etoile-seule">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-etoile-seule" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-etoile-seule" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-etoile-seule" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-etoile-seule" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Star alone requires no d: what is the minimum length now?</p></details><details class="indice"><summary>Hint 2</summary><p>Compare with the minimum number of d symbols before p in the example, and count the possible values of this number.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Minimum length: 1 + 3 = 4, with the word pddd. There are 8 − 4 = 4 d symbols left, distributed between the two stars: 4 + 1 = 5 words.</p><p>There are 5 words here compared with 4 in the example. The number of d symbols before p can be 0 here; it could not in the example, where the block d d* required at least 1. This extra value adds exactly one word, pddddddd.</p><p>The split remains unique: a single p, and the stars read only d symbols.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recognize that d* alone requires no d.</li><li>Find the minimum length, then the count by distribution.</li><li>Explain the difference from the example using the value 0 before p.</li></ul></details></article><article class="exercice" id="ex-decoupages"><p class="repere">Exercise 3 · Critique of an argument</p>
+<h3>Two stars next to each other</h3><p>A reader writes t below and claims: “t has the same language as r″, and for length 8 there are as many words as ways to read t.” A split places each d before p in one of the first two stars, keeping the order. Check both claims for length 8.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>t</mi><mo>=</mo><msup><mi>d</mi><mo>*</mo></msup><msup><mi>d</mi><mo>*</mo></msup><mi>p</mi><mi>d</mi><mi>d</mi><mi>d</mi><msup><mi>d</mi><mo>*</mo></msup></mrow></math></div>
+<label for="reponse-ex-decoupages">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-decoupages" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-decoupages" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-decoupages" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-decoupages" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A word in L(t) has k d symbols before p. In how many ways can these k symbols be split between the two stars?</p></details><details class="indice"><summary>Hint 2</summary><p>Add these numbers of splits for all possible values of k, from 0 to 4.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Same language: concatenating d* and d* allows any number of d symbols, including 0, before p. The words of t are those of r″: 5 words of length 8.</p><p>With k d symbols before p, the split between the two stars can come after 0, 1, … or k symbols: k + 1 splits. For k from 0 to 4, add 1 + 2 = 3, then 3 + 3 = 6, then 6 + 4 = 10, then 10 + 5 = 15.</p><p>There are therefore 5 words but 15 splits: the second claim is false. Counting readings of the expression counts words only if each word has a single reading.</p><p class="petit-titre">Check your reasoning</p><ul><li>Show that d* d* describes the same language as d*.</li><li>Count the splits for each number of d symbols before p.</li><li>Conclude that words and splits have different counts and explain why.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="trois-gestes"><summary><span class="repere">Recall 1</span><span>What operations build a regular expression, and what language does each describe?</span></summary><p>A symbol describes the language consisting of that symbol alone. Choice r|s takes the union of the languages. Concatenation rs forms the words uv with u in L(r) and v in L(s). Star r* concatenates words from L(r) 0, one or more times.</p></details><details class="carte" data-carte="etoile"><summary><span class="repere">Recall 2</span><span>What do d* and d+ denote, and which contains the empty word?</span></summary><p>d* means 0, one or more d symbols and contains the empty word. d+ means d d*: at least one d, without the empty word.</p></details><details class="carte" data-carte="raccourci"><summary><span class="repere">Recall 3</span><span>How can d{m,} be expanded using only concatenation and star?</span></summary><p>As m copies of d followed by d*. With m equal to 3, this gives d d d d*, with minimum length 3.</p></details><details class="carte" data-carte="mot-entier"><summary><span class="repere">Recall 4</span><span>What is the difference between recognizing a whole word and searching for a pattern in text?</span></summary><p>Recognition requires the entire string to belong to L(r). Searching succeeds if a substring belongs to it, which amounts to recognizing the larger language in which arbitrary symbols surround L(r).</p></details><details class="carte" data-carte="compter"><summary><span class="repere">Recall 5</span><span>Why does counting words of a given length amount here to distributing d symbols between two stars?</span></summary><p>The p is unique and the stars contain only d symbols: each word has a unique split. The d symbols beyond the minimum are distributed between the two stars, giving a word count equal to the number of extra d symbols plus one.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Define the alphabet, words and languages; build the expression using symbols, choice, concatenation and star; read its language using the recursive definition; expand shortcuts; test a word by splitting the entire string; count while checking that the split is unique; distinguish recognizing a whole word from searching for a pattern.</p></div><div class="exports"><a class="bouton" download="c141-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDEtbTI6dHJvaXMtZ2VzdGVzIiwKICAgICAgInVuaXRlIjogImMxNDEtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb25zdHJ1Y3Rpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBvcGVyYXRpb25zIGJ1aWxkIGEgcmVndWxhciBleHByZXNzaW9uLCBhbmQgd2hhdCBsYW5ndWFnZSBkb2VzIGVhY2ggZGVzY3JpYmU/IiwKICAgICAgInJlcG9uc2UiOiAiQSBzeW1ib2wgZGVzY3JpYmVzIHRoZSBsYW5ndWFnZSBjb25zaXN0aW5nIG9mIHRoYXQgc3ltYm9sIGFsb25lLiBDaG9pY2UgcnxzIHRha2VzIHRoZSB1bmlvbiBvZiB0aGUgbGFuZ3VhZ2VzLiBDb25jYXRlbmF0aW9uIHJzIGZvcm1zIHRoZSB3b3JkcyB1diB3aXRoIHUgaW4gTChyKSBhbmQgdiBpbiBMKHMpLiBTdGFyIHIqIGNvbmNhdGVuYXRlcyB3b3JkcyBmcm9tIEwocikgMCwgb25lIG9yIG1vcmUgdGltZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDEtbTI6ZXRvaWxlIiwKICAgICAgInVuaXRlIjogImMxNDEtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldG9pbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkbyBkKiBhbmQgZCsgZGVub3RlLCBhbmQgd2hpY2ggY29udGFpbnMgdGhlIGVtcHR5IHdvcmQ/IiwKICAgICAgInJlcG9uc2UiOiAiZCogbWVhbnMgMCwgb25lIG9yIG1vcmUgZCBzeW1ib2xzIGFuZCBjb250YWlucyB0aGUgZW1wdHkgd29yZC4gZCsgbWVhbnMgZCBkKjogYXQgbGVhc3Qgb25lIGQsIHdpdGhvdXQgdGhlIGVtcHR5IHdvcmQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDEtbTI6cmFjY291cmNpIiwKICAgICAgInVuaXRlIjogImMxNDEtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyYWNjb3VyY2kiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiBke20sfSBiZSBleHBhbmRlZCB1c2luZyBvbmx5IGNvbmNhdGVuYXRpb24gYW5kIHN0YXI/IiwKICAgICAgInJlcG9uc2UiOiAiQXMgbSBjb3BpZXMgb2YgZCBmb2xsb3dlZCBieSBkKi4gV2l0aCBtIGVxdWFsIHRvIDMsIHRoaXMgZ2l2ZXMgZCBkIGQgZCosIHdpdGggbWluaW11bSBsZW5ndGggMy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzE0MS1tMjptb3QtZW50aWVyIiwKICAgICAgInVuaXRlIjogImMxNDEtbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZWNvbm5haXNzYW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gcmVjb2duaXppbmcgYSB3aG9sZSB3b3JkIGFuZCBzZWFyY2hpbmcgZm9yIGEgcGF0dGVybiBpbiB0ZXh0PyIsCiAgICAgICJyZXBvbnNlIjogIlJlY29nbml0aW9uIHJlcXVpcmVzIHRoZSBlbnRpcmUgc3RyaW5nIHRvIGJlbG9uZyB0byBMKHIpLiBTZWFyY2hpbmcgc3VjY2VlZHMgaWYgYSBzdWJzdHJpbmcgYmVsb25ncyB0byBpdCwgd2hpY2ggYW1vdW50cyB0byByZWNvZ25pemluZyB0aGUgbGFyZ2VyIGxhbmd1YWdlIGluIHdoaWNoIGFyYml0cmFyeSBzeW1ib2xzIHN1cnJvdW5kIEwocikuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxNDEtbTI6Y29tcHRlciIsCiAgICAgICJ1bml0ZSI6ICJjMTQxLW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29tcHRhZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgY291bnRpbmcgd29yZHMgb2YgYSBnaXZlbiBsZW5ndGggYW1vdW50IGhlcmUgdG8gZGlzdHJpYnV0aW5nIGQgc3ltYm9scyBiZXR3ZWVuIHR3byBzdGFycz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcCBpcyB1bmlxdWUgYW5kIHRoZSBzdGFycyBjb250YWluIG9ubHkgZCBzeW1ib2xzOiBlYWNoIHdvcmQgaGFzIGEgdW5pcXVlIHNwbGl0LiBUaGUgZCBzeW1ib2xzIGJleW9uZCB0aGUgbWluaW11bSBhcmUgZGlzdHJpYnV0ZWQgYmV0d2VlbiB0aGUgdHdvIHN0YXJzLCBnaXZpbmcgYSB3b3JkIGNvdW50IGVxdWFsIHRvIHRoZSBudW1iZXIgb2YgZXh0cmEgZCBzeW1ib2xzIHBsdXMgb25lLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c141-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBvcGVyYXRpb25zIGJ1aWxkIGEgcmVndWxhciBleHByZXNzaW9uLCBhbmQgd2hhdCBsYW5ndWFnZSBkb2VzIGVhY2ggZGVzY3JpYmU/CUEgc3ltYm9sIGRlc2NyaWJlcyB0aGUgbGFuZ3VhZ2UgY29uc2lzdGluZyBvZiB0aGF0IHN5bWJvbCBhbG9uZS4gQ2hvaWNlIHJ8cyB0YWtlcyB0aGUgdW5pb24gb2YgdGhlIGxhbmd1YWdlcy4gQ29uY2F0ZW5hdGlvbiBycyBmb3JtcyB0aGUgd29yZHMgdXYgd2l0aCB1IGluIEwocikgYW5kIHYgaW4gTChzKS4gU3RhciByKiBjb25jYXRlbmF0ZXMgd29yZHMgZnJvbSBMKHIpIDAsIG9uZSBvciBtb3JlIHRpbWVzLgl0b2RhaSBjMTQxLW0yIGNvbnN0cnVjdGlvbgpXaGF0IGRvIGQqIGFuZCBkKyBkZW5vdGUsIGFuZCB3aGljaCBjb250YWlucyB0aGUgZW1wdHkgd29yZD8JZCogbWVhbnMgMCwgb25lIG9yIG1vcmUgZCBzeW1ib2xzIGFuZCBjb250YWlucyB0aGUgZW1wdHkgd29yZC4gZCsgbWVhbnMgZCBkKjogYXQgbGVhc3Qgb25lIGQsIHdpdGhvdXQgdGhlIGVtcHR5IHdvcmQuCXRvZGFpIGMxNDEtbTIgZXRvaWxlCkhvdyBjYW4gZHttLH0gYmUgZXhwYW5kZWQgdXNpbmcgb25seSBjb25jYXRlbmF0aW9uIGFuZCBzdGFyPwlBcyBtIGNvcGllcyBvZiBkIGZvbGxvd2VkIGJ5IGQqLiBXaXRoIG0gZXF1YWwgdG8gMywgdGhpcyBnaXZlcyBkIGQgZCBkKiwgd2l0aCBtaW5pbXVtIGxlbmd0aCAzLgl0b2RhaSBjMTQxLW0yIHJhY2NvdXJjaQpXaGF0IGlzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gcmVjb2duaXppbmcgYSB3aG9sZSB3b3JkIGFuZCBzZWFyY2hpbmcgZm9yIGEgcGF0dGVybiBpbiB0ZXh0PwlSZWNvZ25pdGlvbiByZXF1aXJlcyB0aGUgZW50aXJlIHN0cmluZyB0byBiZWxvbmcgdG8gTChyKS4gU2VhcmNoaW5nIHN1Y2NlZWRzIGlmIGEgc3Vic3RyaW5nIGJlbG9uZ3MgdG8gaXQsIHdoaWNoIGFtb3VudHMgdG8gcmVjb2duaXppbmcgdGhlIGxhcmdlciBsYW5ndWFnZSBpbiB3aGljaCBhcmJpdHJhcnkgc3ltYm9scyBzdXJyb3VuZCBMKHIpLgl0b2RhaSBjMTQxLW0yIHJlY29ubmFpc3NhbmNlCldoeSBkb2VzIGNvdW50aW5nIHdvcmRzIG9mIGEgZ2l2ZW4gbGVuZ3RoIGFtb3VudCBoZXJlIHRvIGRpc3RyaWJ1dGluZyBkIHN5bWJvbHMgYmV0d2VlbiB0d28gc3RhcnM/CVRoZSBwIGlzIHVuaXF1ZSBhbmQgdGhlIHN0YXJzIGNvbnRhaW4gb25seSBkIHN5bWJvbHM6IGVhY2ggd29yZCBoYXMgYSB1bmlxdWUgc3BsaXQuIFRoZSBkIHN5bWJvbHMgYmV5b25kIHRoZSBtaW5pbXVtIGFyZSBkaXN0cmlidXRlZCBiZXR3ZWVuIHRoZSB0d28gc3RhcnMsIGdpdmluZyBhIHdvcmQgY291bnQgZXF1YWwgdG8gdGhlIG51bWJlciBvZiBleHRyYSBkIHN5bWJvbHMgcGx1cyBvbmUuCXRvZGFpIGMxNDEtbTIgY29tcHRhZ2UK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ejdcrk xiiowo xxki</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zkfnoq jtxbxx tvuzkg dfozev ppkzuz wruxgx jvlj</span></span></h3><dl><div><dt>What you understand</dt><dd>A regular expression describes a language using symbols, choices, concatenations and repetitions. You can expand it, test a whole word, count words under a uniqueness assumption, and say whether the code searches for a substring or recognizes the entire string.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yjzwqh coyfty lcnfci xwsrxh qgpedj hcjqvf raygtv fmxfsh zsruwm midywz afijbj qxokyq fznkdn ekidyv didvks qvpsub bdgwnf mrjcmf ldhmde jghgku ojkpxu xzlvrh zpbdzc lcybkd zxyjyh ijkovh wdhwvz zmvoyh dytcyg lwjhjr owukrf zdcwuc cfgdcx yydyts ijguhs wrgfiu mkvibp gu</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: expand d+ and d{m,} without help, test a word by splitting the entire string, then count while justifying the uniqueness of the split. Reading this lesson or obtaining an answer after a hint does not award any attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xpzbqj rigtdl fnmowv ragsxy ybwfmo pqbycm nwvokz ewvfoc elntfk euzkrq mwncky atnsgu xvtaea tjetya hqlrjg mpmzse jrsaom dbplre zsusbn crwmnl jfzsua dkkvgs zrmyat uajmwq</span></span></dd></div><div><dt>To continue</dt><dd>Expand the shortcuts and repeat the count in the example without support, then read the next unit on automata. Before changing a pattern in the code, test its edge cases separately on authorized inputs and check how it is connected.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c141-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c141-m1.html">Previous</a> · <a href="c141-m3.html">Next</a></nav>
+<footer><p>Course book · C141·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Reconstruct the order of timestamped readings, convert their time reference and calculate the durations between them without confusing measurement with reception.">
+<title>C090·M1 · Timestamping — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">keickn hhkrph npgb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C090·M1</p><h1>Timestamping</h1><p class="objectif"><span>Your goal</span>Reconstruct the order of timestamped readings, convert their time reference and calculate the durations between them without confusing measurement with reception.</p><p class="prerequis"><strong>Before you start</strong><br>c066-m5 : standard errors and diagnostics · c060-m5 : approximations and assumptions · c037-m5 : controlled cleaning</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A sensor on a shelf sends readings to a data logger. Reading B waits while C has already reached its destination. If you read the file in arrival order A, C, B, the last row therefore does not contain the last temperature measured.</p><p>Timestamping means attaching a date and time to an event in a stated time reference. You must also name the event: “the sensor took a reading” and “the data logger received it” do not refer to the same instant. A temperature without this reference does not tell you when it was observed.</p><p>In this entirely fictional scene, A, B and C are reading identifiers. Their values are 20 °C, 20.5 °C and 21 °C respectively. They were measured 0, 1 and 4 min after the first reading. The drawing respects these durations: the last interval is longer.</p><p>A row number is only a position in a sequence. Adjacent rows may be separated by a long wait. We will keep each temperature together with its measurement time, then measure the time gaps on a common clock. We will not yet try to explain the change in temperature.</p><div class="schemas"><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>The chronology of readings</title><desc>Readings A, B and C occur 0, 60 and 240 seconds after A. The interval from A to B is 60 seconds, and that from B to C is 180 seconds. The distances drawn are proportional to the durations.</desc><text x="18" y="26">Same sensor, same date</text><text x="40" y="65" text-anchor="middle">A</text><text x="112" y="65" text-anchor="middle">B</text><text x="328" y="65" text-anchor="middle">C</text><text x="40" y="88" text-anchor="middle" class="petite-etiquette">20 °C</text><text x="112" y="88" text-anchor="middle" class="petite-etiquette">20.5 °C</text><text x="328" y="88" text-anchor="middle" class="petite-etiquette">21 °C</text><line x1="40" y1="112" x2="328" y2="112" class="trait" /><circle cx="40" cy="112" r="5" class="point-prediction" /><circle cx="112" cy="112" r="5" class="point-mesure" /><circle cx="328" cy="112" r="5" class="resultat" /><text x="40" y="141" text-anchor="middle">0 s</text><text x="112" y="141" text-anchor="middle">60 s</text><text x="328" y="141" text-anchor="middle">240 s</text><path d="M40 155v9h72v-9M112 155v9h216v-9" class="trait" /><text x="76" y="190" text-anchor="middle">60 s</text><text x="220" y="190" text-anchor="middle">180 s</text><text x="180" y="220" text-anchor="middle" class="petite-etiquette">Elapsed time since A</text></svg><figcaption>Horizontal position represents elapsed time since A, in seconds. The letters and values identify the points independently of their colour.</figcaption></figure><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>The arrival order is different</title><desc>Measured from reading A, the data logger receives A at 5 seconds, then C at 248 seconds, then B at 270 seconds. This list describes receptions rather than the order of the readings.</desc><text x="18" y="26">The data logger receives</text><rect x="20" y="43" width="320" height="43" rx="6" class="cadre-neutre" /><text x="180" y="71" text-anchor="middle">A at 5 s after reading A</text><path d="M180 87v14m-5-5 5 5 5-5" class="trait" /><rect x="20" y="104" width="320" height="43" rx="6" class="cadre-resultat" /><text x="180" y="132" text-anchor="middle">C at 248 s after reading A</text><path d="M180 148v14m-5-5 5 5 5-5" class="trait" /><rect x="20" y="165" width="320" height="43" rx="6" class="cadre-prediction" /><text x="180" y="193" text-anchor="middle">B at 270 s after reading A</text></svg><figcaption>This list gives only the arrival order; its vertical spacing does not represent durations. B was measured before C but received after it.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Before comparing readings, name the timestamped event, convert the timestamps to a common reference, sort the time–value pairs and calculate their time gaps.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Place the sensor readings in time</h3><p>On 20/10/2026 (day/month/year), the sensor measures A at 9 h 0 min, B at 9 h 1 min and C at 9 h 4 min. The seconds are 0. The display uses UTC + 2 h. The delays between measurement and reception are 5 s, 210 s and 8 s respectively. Let us calculate the chronology, intervals and reception order.</p><ol class="etapes"><li><h3>Define what the timestamps mean and state the assumptions</h3><p>UTC stands for Coordinated Universal Time, our common reference. An offset of UTC + 2 h means that the local display is 2 h ahead of this reference. The numerical offset applies to the stated date; a country name or a time without a date would not be enough to determine it.</p><p>We assume synchronised clocks, a resolution of 1 s and no change of offset or clock adjustment during this short period. Resolution indicates the smallest displayed step; it does not guarantee clock accuracy. In this scene, we treat the fictional times as exact.</p><p>The pair (tᵢ, yᵢ) links a reading to its timestamp: i is its position after sorting and has no unit, tᵢ is its time in seconds since the start of the UTC day, and yᵢ is the temperature in °C. The symbol Δ means “difference”. Δtᵢ is the duration between the reading at position i and the previous reading. A position counts readings, not seconds.</p></li><li><h3>Convert the times to a common reference</h3><p>To convert the local display back to UTC, subtract the amount it is ahead: 9 − 2 = 7 h. Here, this conversion keeps the same date. If it crossed midnight, the date would also need to change; subtracting hours while ignoring the day would distort the order.</p><p>Let s<sub>h</sub> be the number of seconds in an hour, and d the offset in seconds. We have s<sub>h</sub> = 60 × 60 = 3600 s/h, then d = 2 h × 3600 s/h = 7200 s. The displayed time of the first reading is 9 × 3600 = 32400 s since the start of the local day. Its time within the UTC day is therefore 32400 − 7200 = 25200 s.</p><p>The minutes for B and C add 1 × 60 = 60 s and 4 × 60 = 240 s respectively to this time. We obtain t_A = 25200 s, t_B = 25260 s and t_C = 25440 s since the start of the same UTC day. Here, the subscripts A, B, C identify the named readings rather than their positions.</p></li><li><h3>Sort the pairs while keeping the temperatures attached</h3><p>The times satisfy 25200 &lt; 25260 &lt; 25440 s. The reading sequence is therefore A, B, C: (25200 s ; 20 °C), (25260 s ; 20.5 °C), (25440 s ; 21 °C). Move each complete row: sorting only the timestamp column would assign some temperatures to the wrong times.</p><p>We can also place A at 0 s and subtract t_A from the other timestamps. This gives 60 s for B and 240 s for C. Changing the origin makes the numbers smaller without changing the order or durations.</p></li><li><h3>Subtract times, not positions</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Δt</mi><mi>i</mi></msub><mo>=</mo><msub><mi>t</mi><mi>i</mi></msub><mo>−</mo><msub><mi>t</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></math></div><p>Positions start at 1; this formula applies from position 2 onwards. It subtracts the previous time from the current time, using the same unit and origin. A to B: 25260 − 25200 = 60 s. B to C: 25440 − 25260 = 180 s.</p><p>The last interval is 180/60 = 3 times the first. Sampling, meaning the choice of times at which sensor readings are taken, is therefore irregular. The 3 readings do not form a grid with constant spacing. Do not infer from the gap that a reading must have been lost: the intended schedule is not provided.</p></li><li><h3>Calculate reception times separately</h3><p>Let rᵢ denote the reception time and ℓᵢ the delay, both in seconds; rᵢ and tᵢ have the same origin. The delay is the elapsed time between the events “taking a reading” and “receiving it”.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>ℓ</mi><mi>i</mi></msub><mo>=</mo><msub><mi>r</mi><mi>i</mi></msub><mo>−</mo><msub><mi>t</mi><mi>i</mi></msub><mo>;</mo><msub><mi>r</mi><mi>i</mi></msub><mo>=</mo><msub><mi>t</mi><mi>i</mi></msub><mo>+</mo><msub><mi>ℓ</mi><mi>i</mi></msub></mrow></math></div><p>To simplify the calculation, subtract the time t_A from both measurement and reception times. Measured from reading A, the reception of A occurs at 0 + 5 = 5 s; that of B at 60 + 210 = 270 s; that of C at 240 + 8 = 248 s. Since 5 &lt; 248 &lt; 270 s, the arrival order is A, C, B. The delay of B is enough to reverse these arrivals without changing the order of the readings.</p></li><li><h3>Check the results and preserve what remains uncertain</h3><p>First check, using another method: from the start A to the end C, we can read directly 4 − 0 = 4 min, or 240 s. The sum of the intervals is also 60 + 180 = 240 s. The two methods agree.</p><p>Second check: converting back to the initial display adds the offset. 7 + 2 = 9 h. The minutes remain those of each reading. Third check: all delays are positive, as required by our scene in which the data logger receives each reading after it is taken.</p><p>Before any further analysis, keep the identifier, original measurement timestamp, standardised time reference, temperature and reception timestamp. A missing timestamp remains unknown; a repeated timestamp calls for an examination of identifiers, resolution and provenance. Neither row order nor formatting alone can fix an inaccurate clock.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations and redraw the readings, then the arrivals. Explain why B keeps its place between A and C despite arriving late. Find the total duration in two ways and name the assumptions that make your subtractions valid.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The last row received is the last reading taken.”</h3><p>B is received 270 s after A, after C is received at 248 s, even though B was measured before C. First name the timestamped event; then sort the sequence by the timestamp of that event, keeping complete rows together.</p><a href="#intuition">Compare the chronology with the arrivals</a></li><li><h3>“The same amount of time always passes between adjacent rows.”</h3><p>The gaps between readings are 60 s, then 180 s. Subtract the standardised timestamps; do not replace these gaps with a difference in row positions. A gap does not prove a loss unless the intended measurement schedule is known.</p><a href="#exemple">Revisit the interval calculations</a></li><li><h3>“The timestamp format guarantees that the clock is correct.”</h3><p>A precise display can come from a clock that is offset. The UTC reference makes timestamps comparable if their conversion is correct; it does not prove their accuracy. Check the date, offset and synchronisation before interpreting a delay.</p><a href="#exemple">Review the time reference and assumptions</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-intervalle"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Find an actual time gap</h3><p>The timestamps of B and C are 25260 s and 25440 s since the start of the same UTC day. Calculate the duration from B to C, then compare it with A to B, which is 60 s. What can you say about the spacing of the readings?</p>
+<label for="reponse-ex-intervalle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-intervalle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-intervalle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-intervalle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-intervalle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtract the starting time from the ending time; the two numbers have the same origin.</p></details><details class="indice"><summary>Hint 2</summary><p>To compare the durations, divide B to C by A to B. No row position appears in either calculation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>B to C is 25440 − 25260 = 180 s. The ratio is 180/60 = 3. The last interval therefore lasts 3 times as long as the first: the readings are irregularly spaced.</p><p>This calculation proves neither a sensor failure nor a missing temperature reading. It shows only that the observed timestamps do not form a grid with constant spacing.</p><p class="petit-titre">Check your reasoning</p><ul><li>Write a subtraction in the correct direction and obtain 180 s.</li><li>Justify the irregular spacing by comparing 60 s and 180 s.</li><li>Leave the reason for the larger interval unknown.</li></ul></details></article><article class="exercice" id="ex-repere"><p class="repere">Exercise 2 · Change of representation</p>
+<h3>C changes its display, not its time</h3><p>A copy of the same reading C is displayed at 8 h 4 min in UTC + 1 h, on the same day. B is still displayed at 9 h 1 min in UTC + 2 h. The displayed hour for C looks smaller: has it become earlier than B? Convert and check.</p>
+<label for="reponse-ex-repere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-repere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-repere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-repere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-repere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtract each time’s own UTC offset from it.</p></details><details class="indice"><summary>Hint 2</summary><p>Then convert the hours and minutes to seconds since the start of the UTC day, as in the example.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For C: 8 − 1 = 7 h UTC. In seconds, (8 × 3600) − (1 × 3600) + (4 × 60) = 28800 − 3600 + 240 = 25440 s. C returns to exactly its original time, 25440 s.</p><p>B remains at 7 h 1 min UTC, or 25260 s. C is therefore still 180 s later than B. Comparing only the displayed hours would have compared two different time references.</p><p>The reverse check adds 1 h to the UTC hour of C to recover 8 h. Keeping the original representation lets you check the conversion instead of overwriting its provenance.</p><p class="petit-titre">Check your reasoning</p><ul><li>Use the offset specific to each timestamp.</li><li>Recover 25440 s and recognise the same instant as C.</li><li>Conclude that B comes before C using the UTC timestamps, with a reverse check.</li></ul></details></article><article class="exercice" id="ex-audit"><p class="repere">Exercise 3 · Reasoned diagnosis</p>
+<h3>Assess a proposed file repair</h3><p>The data logger receives A, C, B. Someone proposes replacing all measurement timestamps with reception timestamps to “put time back in order”, then deleting a row if the timestamp of B appears twice. Respond using the delays and durations in our scene. What must be checked before deleting a row?</p>
+<label for="reponse-ex-audit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-audit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-audit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-audit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-audit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Sorting by reception answers “when was it available?”. Sorting by measurement answers a different question.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the delay of B from its position 60 s and its reception at 270 s. Identical timestamps can also result from the clock’s resolution.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>B was measured 60 s after A, then received at 270 s: its delay is 270 − 60 = 210 s, or exactly 7/2 min, or 3.50 min in decimal form. It arrives 270 − 248 = 22 s after C. This is a late arrival, not a shift of the reading in time.</p><p>Replacing the measurement timestamp with the reception timestamp would make the temperature series describe arrivals. Keep both fields and choose the sorting order that answers the question. For the chronology of the temperature, the order remains A, B, C.</p><p>A repetition of t_B would give a gap of 25260 − 25260 = 0 s between these rows. This may indicate a copy, but it may also indicate distinct events that cannot be distinguished at second resolution. Check identifiers, values, precision and provenance; keep the original records. An identical timestamp is not enough to justify deletion or to impose a physical order on these events.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find the delay of 210 s for B and the gap of 22 s after the reception of C.</li><li>Distinguish reordering by measurement time from a sequence of arrivals.</li><li>Explain at least two possible causes of a repeated timestamp and require evidence before deleting.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="evenement"><summary><span class="repere">Recall 1</span><span>What must you specify before saying that a reading is timestamped?</span></summary><p>The timestamped event, the full date, the time and its reference. In our scene, measurement time and reception time are separate fields; they do not answer the same question.</p></details><details class="carte" data-carte="decalage"><summary><span class="repere">Recall 2</span><span>Why do we subtract a positive offset to return to UTC?</span></summary><p>The displayed time is ahead of UTC: subtract this advance. Then check by adding the offset back, and preserve any date change if the conversion crosses midnight.</p></details><details class="carte" data-carte="intervalle"><summary><span class="repere">Recall 3</span><span>How do you distinguish a row’s position from the duration between readings?</span></summary><p>The position counts rows and has no unit of time. Calculate the duration by subtracting their times in the same reference. Here, the intervals are 60 s, then 180 s despite consecutive positions.</p></details><details class="carte" data-carte="resolution"><summary><span class="repere">Recall 4</span><span>Does a timestamp with second resolution prove clock accuracy and event uniqueness?</span></summary><p>No. Resolution indicates the displayed step; the clock may be offset. Distinct events can share the same displayed timestamp. You must check synchronisation, identifiers and provenance to go further.</p></details><details class="carte" data-carte="reception"><summary><span class="repere">Recall 5</span><span>Why does B remain between A and C in the reading sequence?</span></summary><p>Its measurement timestamp precedes that of C. Its delay of 210 s explains why it is received after C; this wait does not change the instant when the sensor measured the temperature.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the example, reconstruct the chain: timestamped event → known date and offset → common reference → sorted time–value pairs → checked time differences. Then explain why the arrivals A, C, B do not impose that order on the readings, and name what a repeated timestamp leaves unknown. Reading the lesson or giving an assisted answer does not establish an attained level; try again without support on another day.</p></div><div class="exports"><a class="bouton" download="c090-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTAtbTE6ZXZlbmVtZW50IiwKICAgICAgInVuaXRlIjogImMwOTAtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJldmVuZW1lbnQtZGF0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgeW91IHNwZWNpZnkgYmVmb3JlIHNheWluZyB0aGF0IGEgcmVhZGluZyBpcyB0aW1lc3RhbXBlZD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdGltZXN0YW1wZWQgZXZlbnQsIHRoZSBmdWxsIGRhdGUsIHRoZSB0aW1lIGFuZCBpdHMgcmVmZXJlbmNlLiBJbiBvdXIgc2NlbmUsIG1lYXN1cmVtZW50IHRpbWUgYW5kIHJlY2VwdGlvbiB0aW1lIGFyZSBzZXBhcmF0ZSBmaWVsZHM7IHRoZXkgZG8gbm90IGFuc3dlciB0aGUgc2FtZSBxdWVzdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5MC1tMTpkZWNhbGFnZSIsCiAgICAgICJ1bml0ZSI6ICJjMDkwLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmVwZXJlLXV0YyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG8gd2Ugc3VidHJhY3QgYSBwb3NpdGl2ZSBvZmZzZXQgdG8gcmV0dXJuIHRvIFVUQz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZGlzcGxheWVkIHRpbWUgaXMgYWhlYWQgb2YgVVRDOiBzdWJ0cmFjdCB0aGlzIGFkdmFuY2UuIFRoZW4gY2hlY2sgYnkgYWRkaW5nIHRoZSBvZmZzZXQgYmFjaywgYW5kIHByZXNlcnZlIGFueSBkYXRlIGNoYW5nZSBpZiB0aGUgY29udmVyc2lvbiBjcm9zc2VzIG1pZG5pZ2h0LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDkwLW0xOmludGVydmFsbGUiLAogICAgICAidW5pdGUiOiAiYzA5MC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImludGVydmFsbGUtdGVtcG9yZWwiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBkaXN0aW5ndWlzaCBhIHJvd+KAmXMgcG9zaXRpb24gZnJvbSB0aGUgZHVyYXRpb24gYmV0d2VlbiByZWFkaW5ncz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcG9zaXRpb24gY291bnRzIHJvd3MgYW5kIGhhcyBubyB1bml0IG9mIHRpbWUuIENhbGN1bGF0ZSB0aGUgZHVyYXRpb24gYnkgc3VidHJhY3RpbmcgdGhlaXIgdGltZXMgaW4gdGhlIHNhbWUgcmVmZXJlbmNlLiBIZXJlLCB0aGUgaW50ZXJ2YWxzIGFyZSA2MCBzLCB0aGVuIDE4MCBzIGRlc3BpdGUgY29uc2VjdXRpdmUgcG9zaXRpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDkwLW0xOnJlc29sdXRpb24iLAogICAgICAidW5pdGUiOiAiYzA5MC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlc29sdXRpb24tZXQtZXhhY3RpdHVkZSIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIGEgdGltZXN0YW1wIHdpdGggc2Vjb25kIHJlc29sdXRpb24gcHJvdmUgY2xvY2sgYWNjdXJhY3kgYW5kIGV2ZW50IHVuaXF1ZW5lc3M/IiwKICAgICAgInJlcG9uc2UiOiAiTm8uIFJlc29sdXRpb24gaW5kaWNhdGVzIHRoZSBkaXNwbGF5ZWQgc3RlcDsgdGhlIGNsb2NrIG1heSBiZSBvZmZzZXQuIERpc3RpbmN0IGV2ZW50cyBjYW4gc2hhcmUgdGhlIHNhbWUgZGlzcGxheWVkIHRpbWVzdGFtcC4gWW91IG11c3QgY2hlY2sgc3luY2hyb25pc2F0aW9uLCBpZGVudGlmaWVycyBhbmQgcHJvdmVuYW5jZSB0byBnbyBmdXJ0aGVyLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDkwLW0xOnJlY2VwdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDkwLW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWVzdXJlLWV0LXJlY2VwdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBCIHJlbWFpbiBiZXR3ZWVuIEEgYW5kIEMgaW4gdGhlIHJlYWRpbmcgc2VxdWVuY2U/IiwKICAgICAgInJlcG9uc2UiOiAiSXRzIG1lYXN1cmVtZW50IHRpbWVzdGFtcCBwcmVjZWRlcyB0aGF0IG9mIEMuIEl0cyBkZWxheSBvZiAyMTAgcyBleHBsYWlucyB3aHkgaXQgaXMgcmVjZWl2ZWQgYWZ0ZXIgQzsgdGhpcyB3YWl0IGRvZXMgbm90IGNoYW5nZSB0aGUgaW5zdGFudCB3aGVuIHRoZSBzZW5zb3IgbWVhc3VyZWQgdGhlIHRlbXBlcmF0dXJlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c090-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IHlvdSBzcGVjaWZ5IGJlZm9yZSBzYXlpbmcgdGhhdCBhIHJlYWRpbmcgaXMgdGltZXN0YW1wZWQ/CVRoZSB0aW1lc3RhbXBlZCBldmVudCwgdGhlIGZ1bGwgZGF0ZSwgdGhlIHRpbWUgYW5kIGl0cyByZWZlcmVuY2UuIEluIG91ciBzY2VuZSwgbWVhc3VyZW1lbnQgdGltZSBhbmQgcmVjZXB0aW9uIHRpbWUgYXJlIHNlcGFyYXRlIGZpZWxkczsgdGhleSBkbyBub3QgYW5zd2VyIHRoZSBzYW1lIHF1ZXN0aW9uLgl0b2RhaSBjMDkwLW0xIGV2ZW5lbWVudC1kYXRlCldoeSBkbyB3ZSBzdWJ0cmFjdCBhIHBvc2l0aXZlIG9mZnNldCB0byByZXR1cm4gdG8gVVRDPwlUaGUgZGlzcGxheWVkIHRpbWUgaXMgYWhlYWQgb2YgVVRDOiBzdWJ0cmFjdCB0aGlzIGFkdmFuY2UuIFRoZW4gY2hlY2sgYnkgYWRkaW5nIHRoZSBvZmZzZXQgYmFjaywgYW5kIHByZXNlcnZlIGFueSBkYXRlIGNoYW5nZSBpZiB0aGUgY29udmVyc2lvbiBjcm9zc2VzIG1pZG5pZ2h0Lgl0b2RhaSBjMDkwLW0xIHJlcGVyZS11dGMKSG93IGRvIHlvdSBkaXN0aW5ndWlzaCBhIHJvd+KAmXMgcG9zaXRpb24gZnJvbSB0aGUgZHVyYXRpb24gYmV0d2VlbiByZWFkaW5ncz8JVGhlIHBvc2l0aW9uIGNvdW50cyByb3dzIGFuZCBoYXMgbm8gdW5pdCBvZiB0aW1lLiBDYWxjdWxhdGUgdGhlIGR1cmF0aW9uIGJ5IHN1YnRyYWN0aW5nIHRoZWlyIHRpbWVzIGluIHRoZSBzYW1lIHJlZmVyZW5jZS4gSGVyZSwgdGhlIGludGVydmFscyBhcmUgNjAgcywgdGhlbiAxODAgcyBkZXNwaXRlIGNvbnNlY3V0aXZlIHBvc2l0aW9ucy4JdG9kYWkgYzA5MC1tMSBpbnRlcnZhbGxlLXRlbXBvcmVsCkRvZXMgYSB0aW1lc3RhbXAgd2l0aCBzZWNvbmQgcmVzb2x1dGlvbiBwcm92ZSBjbG9jayBhY2N1cmFjeSBhbmQgZXZlbnQgdW5pcXVlbmVzcz8JTm8uIFJlc29sdXRpb24gaW5kaWNhdGVzIHRoZSBkaXNwbGF5ZWQgc3RlcDsgdGhlIGNsb2NrIG1heSBiZSBvZmZzZXQuIERpc3RpbmN0IGV2ZW50cyBjYW4gc2hhcmUgdGhlIHNhbWUgZGlzcGxheWVkIHRpbWVzdGFtcC4gWW91IG11c3QgY2hlY2sgc3luY2hyb25pc2F0aW9uLCBpZGVudGlmaWVycyBhbmQgcHJvdmVuYW5jZSB0byBnbyBmdXJ0aGVyLgl0b2RhaSBjMDkwLW0xIHJlc29sdXRpb24tZXQtZXhhY3RpdHVkZQpXaHkgZG9lcyBCIHJlbWFpbiBiZXR3ZWVuIEEgYW5kIEMgaW4gdGhlIHJlYWRpbmcgc2VxdWVuY2U/CUl0cyBtZWFzdXJlbWVudCB0aW1lc3RhbXAgcHJlY2VkZXMgdGhhdCBvZiBDLiBJdHMgZGVsYXkgb2YgMjEwIHMgZXhwbGFpbnMgd2h5IGl0IGlzIHJlY2VpdmVkIGFmdGVyIEM7IHRoaXMgd2FpdCBkb2VzIG5vdCBjaGFuZ2UgdGhlIGluc3RhbnQgd2hlbiB0aGUgc2Vuc29yIG1lYXN1cmVkIHRoZSB0ZW1wZXJhdHVyZS4JdG9kYWkgYzA5MC1tMSBtZXN1cmUtZXQtcmVjZXB0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">keickn hhkrph npgb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare the chronology before <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yrzizq bokszk deey</span></span> and <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yrzizq bokszk deey</span></span></h3><dl><div><dt>What you understand</dt><dd>A sequence of state snapshots must preserve the meaning of its timestamps and their references to allow comparison over time. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mhlhda czyzhu cngmxu voeqkn lncccz ghegyx xcdp</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">reqwxe okdxvg zyvxna onrluj mbcjpn brzldx nkqkyy zzlxwq cqnoox aohhcy dcrxge qaovfl hrusuk kwcluc mqdndp gmdugm iiesxw blvtqu ghkvtu bfkxca gqwlgh vfikow pqlyog baoxiy</span></span></dd></div><div><dt>Your level</dt><dd>Prepare for level 2 of this unit: reconstruct both chronologies, convert time references and justify intervals without help. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">icmbru ejhrkn dkgxjl vgcfya zrkumf pqrepp uqhc</span></span> Reading the lesson or succeeding with a hint does not establish an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lpfnjp oqfqur urlfvx fuhbaf gwacnz iyqmuu zoahdi jsxsvw qzwwke muqsda kuqsbu xfcfjr hjlxpk rfljzb ehrebg benyjx vebxgo ojbqbd onjifw qlmpgv xwvqqz udotqp xtfzgw vmtzxw awmpvy jsklgl wxfnjs svffwb bocfpa qwjfbb zbdwsg lgafgl fxzjcx laxjug uzetux vuvwce hvqeui uv</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the conversions and the audit of B without support on another day. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lohkch qgwzzk nkuuva vijuur mfjbpn lnikux yuxmyq ifyxrj oxnyyx vjfbfk sihmuc xluggx xczfmw jx</span></span> The next unit introduces autocovariance from an explicitly defined chronology.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c090-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c087-m5.html">Previous</a> · <a href="c090-m2.html">Next</a></nav>
+<footer><p>Course book · C090·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

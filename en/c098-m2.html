@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Keep a small ledger of cash and units, calculate its total value at each point in time using the price known then, and distinguish a trade from a price change.">
+<title>C098·M2 · Cash, units and total value — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fdlahd wivnii yafy</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C098·M2</p><h1>Cash, units and total value</h1><p class="objectif"><span>Your goal</span>Keep a small ledger of cash and units, calculate its total value at each point in time using the price known then, and distinguish a trade from a price change.</p><p class="prerequis"><strong>Before you start</strong><br>c097-m5 : risk and horizon · c067-m5 : pipeline · c090-m5 : stationarity · c037-m5 : controlled cleaning · c098-m1 : chronology, delay and available information</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Imagine a practice ledger with just two columns: the cash kept in a drawer and the number of units of a fictional asset that you hold. Each row of the ledger represents a point in time. To find what the ledger is worth at that point, you need to express both columns in the same unit of measurement, here the fictional euro.</p><p>The cash is already in euros. Units of the asset are counted as units; to convert them, multiply them by the price of a unit, in euros per unit. The product units × euros per unit gives euros, and only then does adding it to the cash make sense. Adding a number of units directly to a number of euros would mix two units of measurement.</p><p>When you buy at the displayed price, cash falls by the cost of the units, and the units held are worth that same amount: the ledger has changed in form but its value is unchanged. Selling reverses this process. The total value changes only if the known price changes while units are held. As in C098·M1, the value at a point in time uses only the price known at that point.</p><p>The values on this page are fictional: they illustrate a calculation and describe neither a real market nor an achieved result. Ledger assumptions: a single asset, one price at each point in time, trades executed at the displayed price, indivisible units and cash that is never negative. Fees, slippage and the end of the simulation are left to the next unit.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two ledger columns and their total</title><desc>The cash is worth 520 euros. The 8 units are worth 480 euros at a price of 60 euros per unit. The total value is the sum of the two: 1000 euros.</desc><rect x="14" y="14" width="160" height="92" rx="7" class="cadre-prediction" /><text x="94" y="42" text-anchor="middle">Cash C</text><text x="94" y="70" text-anchor="middle">520 €</text><text x="94" y="94" text-anchor="middle" class="petite-etiquette">in euros</text><rect x="186" y="14" width="160" height="92" rx="7" class="cadre-neutre" /><text x="266" y="42" text-anchor="middle">Units N × price P</text><text x="266" y="70" text-anchor="middle">8 × 60 = 480 €</text><text x="266" y="94" text-anchor="middle" class="petite-etiquette">units × €/unit = €</text><line x1="94" y1="106" x2="94" y2="150" class="trait" /><line x1="266" y1="106" x2="266" y2="150" class="trait" /><line x1="94" y1="150" x2="266" y2="150" class="trait" /><line x1="180" y1="150" x2="180" y2="162" class="trait" /><rect x="60" y="162" width="240" height="74" rx="7" class="cadre-resultat" /><text x="180" y="192" text-anchor="middle">Total value V</text><text x="180" y="222" text-anchor="middle">520 + 480 = 1000 €</text></svg><figcaption>Two columns, one unit of measurement: cash is in euros, the units held are converted into euros using the price, and the two amounts are then added. The values are fictional.</figcaption></figure><figure><svg viewBox="0 0 400 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Five points in the ledger</title><desc>The ledger goes from 1000 euros to 1000 euros after the purchase, 1040 after the rise, 1040 after the sale and then 990 after the fall. Cash changes only during trades; the price changes only the value of the units held.</desc><rect x="10" y="8" width="380" height="54" rx="7" class="cadre-neutre" /><text x="22" y="31">Start</text><text x="378" y="31" text-anchor="end">V = 1000 €</text><text x="22" y="52" class="petite-etiquette">cash 1000 € · 0 units · price 60 €/unit</text><rect x="10" y="70" width="380" height="54" rx="7" class="cadre-neutre" /><text x="22" y="93">Purchase</text><text x="378" y="93" text-anchor="end">V = 1000 €</text><text x="22" y="114" class="petite-etiquette">cash 520 € · 8 units · price 60 €/unit</text><rect x="10" y="132" width="380" height="54" rx="7" class="cadre-resultat" /><text x="22" y="155">Price rise</text><text x="378" y="155" text-anchor="end">V = 1040 €</text><text x="22" y="176" class="petite-etiquette">cash 520 € · 8 units · price 65 €/unit</text><rect x="10" y="194" width="380" height="54" rx="7" class="cadre-neutre" /><text x="22" y="217">Partial sale</text><text x="378" y="217" text-anchor="end">V = 1040 €</text><text x="22" y="238" class="petite-etiquette">cash 715 € · 5 units · price 65 €/unit</text><rect x="10" y="256" width="380" height="54" rx="7" class="cadre-prediction" /><text x="22" y="279">Price fall</text><text x="378" y="279" text-anchor="end">V = 990 €</text><text x="22" y="300" class="petite-etiquette">cash 715 € · 5 units · price 55 €/unit</text></svg><figcaption>The example ledger at five points in time. The total stays the same during the purchase and the sale; it changes only when the price changes while units are held. Fictional values.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>The total value is the cash plus the number of units multiplied by the price known at that point in time; a trade at the displayed price transfers value between cash and units without changing the total, and only a new price changes it.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A small ledger tracked at five points in time</h3><p>A fictional ledger starts with 1000 € in cash and 0 units. It buys 8 units at a price of 60 € per unit. The price then rises to 65 €. The ledger sells 3 units at this price, and then the price falls to 55 €. Let us calculate cash, units and total value at each point in time, then check the result using a second method.</p><ol class="etapes"><li><h3>Name the quantities and set the assumptions</h3><p>C is the cash in the ledger, in fictional euros (€). N is the number of units held, a nonnegative integer, measured in units. P is the price of a unit at the point in time being considered, in euros per unit (€/unit), as known at that point. V is the total value of the ledger, in euros.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>V</mi><mo>=</mo><mi>C</mi><mo>+</mo><mi>N</mi><mo>×</mo><mi>P</mi></mrow></math></div><p>The product N × P is expressed in units × €/unit, which gives euros: it can be added to C. Assumptions: a single fictional asset, one price at each point in time, trades executed at the displayed price, indivisible units and cash that is never negative. This value is a valuation at the known price rather than an amount received in cash.</p></li><li><h3>Value the starting position</h3><p>At the start, the ledger contains 1000 € and 0 units. The units are converted using the price at that point in time: 0 units are worth 0 euros, whatever the price.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>départ</mtext></msub><mo>=</mo><mn>1000</mn><mo>+</mo><mn>0</mn><mo>×</mo><mn>60</mn><mo>=</mo><mn>1000</mn><mo>+</mo><mn>0</mn><mo>=</mo><mn>1000</mn><mtext> €</mtext></mrow></math></div><p>The entire ledger is then cash: the total value is 1000 €.</p></li><li><h3>Buy at the displayed price</h3><p>The purchase costs 8 × 60 = 480 €. Cash decreases by this cost and the number of units increases by the number bought: 1000 − 480 = 520 € and 0 + 8 = 8 units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>achat</mtext></msub><mo>=</mo><mn>520</mn><mo>+</mo><mn>8</mn><mo>×</mo><mn>60</mn><mo>=</mo><mn>520</mn><mo>+</mo><mn>480</mn><mo>=</mo><mn>1000</mn><mtext> €</mtext></mrow></math></div><p>Check: the total value has changed by 1000 − 1000 = 0 €. Cash has fallen by 480 €, and the units add exactly 480 € at the same price.</p></li><li><h3>Let the price rise</h3><p>No trade takes place: cash remains 520 € and the number of units remains 8. Only the known price changes to 65 €, so the units are worth 8 × 65 = 520 €.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>hausse</mtext></msub><mo>=</mo><mn>520</mn><mo>+</mo><mn>520</mn><mo>=</mo><mn>1040</mn><mtext> €</mtext></mrow></math></div><p>Check using the change: the rise is 65 − 60 = 5 € per unit, and 8 × 5 = 40 €. This equals the difference 1040 − 1000 between the two total values.</p></li><li><h3>Sell some units at the known price</h3><p>Selling 3 units brings in 3 × 65 = 195 €. Cash increases and the number of units decreases: 520 + 195 = 715 € and 8 − 3 = 5 units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>vente</mtext></msub><mo>=</mo><mn>715</mn><mo>+</mo><mn>5</mn><mo>×</mo><mn>65</mn><mo>=</mo><mn>715</mn><mo>+</mo><mn>325</mn><mo>=</mo><mn>1040</mn><mtext> €</mtext></mrow></math></div><p>Check: the total value stays at 1040 €, as at the previous point in time (1040 €). A trade at the displayed price neither creates nor destroys value.</p></li><li><h3>Let the price fall</h3><p>The known price changes to 55 €. The 5 remaining units are worth 5 × 55 = 275 €, and cash remains 715 €.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>V</mi><mtext>baisse</mtext></msub><mo>=</mo><mn>715</mn><mo>+</mo><mn>275</mn><mo>=</mo><mn>990</mn><mtext> €</mtext></mrow></math></div><p>The ledger is now worth 990 €, which is 10 € less than at the start. Until the units are sold, this difference remains a change in valuation.</p></li><li><h3>Check using a second method</h3><p>Let us recalculate without using the totals again. Between the rise and the fall, the price dropped by 65 − 55 = 10 € per unit, on 5 units held: 5 × 10 = 50 €. The rise had added 40 €.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>50</mn><mo>−</mo><mn>40</mn><mo>=</mo><mn>10</mn><mtext> €</mtext><mo>=</mo><mn>1000</mn><mo>−</mo><mn>990</mn></mrow></math></div><p>Both methods give 10 €. Cash changed only during trades, and the total value changed only through price changes affecting the units held at the time. The agreement validates the arithmetic rather than the choice of model.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the purchase leave the total value unchanged even though cash falls? What actually changed the total value in this sequence, and why does the number of units held matter at that point?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The cash shown is the value of the ledger.”</h3><p>After the purchase, cash is 520 € while the total value is 1000 €: the 8 units are still worth 480 €. Always add units × price to cash before drawing a conclusion.</p><a href="#exemple">Review the purchase step by step</a></li><li><h3>“Buying loses value because cash falls.”</h3><p>Cash falls by 480 € but the units are worth 480 € at the same price: the change in total value is 0 €. Only a new price, applied to units held, changes the total.</p><a href="#intuition">Reread the exchange of cash for units</a></li><li><h3>“Units remain valued at the purchase price until they are sold.”</h3><p>Each point in time uses the price known then. Using the purchase price, the value after the fall would be 715 + 5 × 60 = 1015 € instead of 990 €: the ledger would seem worth more than it is at the latest known price.</p><a href="#exemple">Revisit the price fall</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-reevaluer"><p class="repere">Exercise 1 · Direct application</p>
+<h3>Revalue after a rise</h3><p>Return to the ledger just after the purchase: cash 520 €, 8 units. The known price changes to 70 € per unit (a fictional value). Calculate the total value, then check it using the price change.</p>
+<label for="reponse-ex-reevaluer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reevaluer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reevaluer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reevaluer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reevaluer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Convert the units into euros using the current price before adding them to cash.</p></details><details class="indice"><summary>Hint 2</summary><p>To check, calculate the price rise per unit, multiply it by the number of units held and compare with the value just after the purchase.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Value of the units: 8 × 70 = 560 €. Total value: 520 + 560 = 1080 €.</p><p>Check: the rise is 70 − 60 = 10 € per unit, so 8 × 10 = 80 €. And 1080 − 1000 = 80 €. The two methods agree; cash has stayed the same because no trade took place.</p><p class="petit-titre">Check your reasoning</p><ul><li>The units are converted into euros before the addition.</li><li>Cash stays unchanged when there is no trade.</li><li>The value is checked using a price change.</li></ul></details></article><article class="exercice" id="ex-acheter-max"><p class="repere">Exercise 2 · Application with a constraint</p>
+<h3>Buy as many units as possible</h3><p>In the final state of the example (cash 715 €, 5 units), the known price is 50 € per unit (a fictional value). You buy the largest whole number of units that the cash allows, without making cash negative. Give this number, the remaining cash and the total value before and after the purchase.</p>
+<label for="reponse-ex-acheter-max">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-acheter-max" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-acheter-max" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-acheter-max" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-acheter-max" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Divide cash by price, then keep only the integer part: a unit cannot be split in this ledger.</p></details><details class="indice"><summary>Hint 2</summary><p>After the purchase, add the units bought to the units already held before valuing them.</p></details><details class="indice"><summary>Hint 3</summary><p>Compare the two total values: a trade at the displayed price should leave them unchanged.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Quotient: 715 ÷ 50 = 14.3. Only 14 whole units can be bought: 14 × 50 = 700 € does not exceed the cash available, whereas one more unit would exceed it.</p><p>Remaining cash: 715 − 700 = 15 €. Units held: 5 + 14 = 19. Value after: 15 + 19 × 50 = 15 + 950 = 965 €.</p><p>Value before: 715 + 5 × 50 = 715 + 250 = 965 €. The two values are identical: the purchase has only changed the form of the ledger.</p><p class="petit-titre">Check your reasoning</p><ul><li>The number of units is an integer and cash remains nonnegative.</li><li>Cash and units are updated in opposite directions.</li><li>The values before and after are compared in the same unit of measurement.</li></ul></details></article><article class="exercice" id="ex-double-compte"><p class="repere">Exercise 3 · Ledger diagnosis</p>
+<h3>Find the double counting</h3><p>A worksheet states, after the price fall in the example, V = 715 + 8 × 55 = 1155 €. The cash amount of 715 € is correct. Find the error, give the correct value, measure the overestimate and explain its cause.</p>
+<label for="reponse-ex-double-compte">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-double-compte" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-double-compte" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-double-compte" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-double-compte" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Count the units actually held after the sale, rather than just those that were bought.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the overestimate with the value, at the current price, of the units sold.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The worksheet uses 8 units even though 3 have been sold: 5 remain. The correct value is 715 + 5 × 55 = 990 €.</p><p>The overestimate is 1155 − 990 = 165 €, which is 3 × 55 = 165 €. The units sold are counted twice: their sale proceeds are already in cash, and the worksheet still values them as units held.</p><p class="petit-titre">Check your reasoning</p><ul><li>The number of units held is recalculated after the sale.</li><li>The overestimate is linked to the units sold and valued at the current price.</li><li>The double counting is explained in terms of cash and units.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="valeur-totale"><summary><span class="repere">Recall 1</span><span>How do you calculate the total value of a ledger of cash and units?</span></summary><p>V = C + N × P: cash plus the number of units multiplied by the price known at that point in time, all in euros.</p></details><details class="carte" data-carte="unites"><summary><span class="repere">Recall 2</span><span>What units of measurement do C, N, P and N × P have, and what can be added?</span></summary><p>C is in euros, N in units, P in euros per unit and N × P in euros. Only N × P can be added to C.</p></details><details class="carte" data-carte="echange"><summary><span class="repere">Recall 3</span><span>Why does a purchase at the displayed price leave the total value unchanged?</span></summary><p>Cash falls by the purchase cost and the units bought are worth exactly that cost at the same price: value passes from cash to units.</p></details><details class="carte" data-carte="prix-connu"><summary><span class="repere">Recall 4</span><span>What can change the total value without any trade?</span></summary><p>A new known price: the change equals the number of units held multiplied by the price change.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Name cash, units and price with their units of measurement; value each point in time using only the price known then; write V = C + N × P; update cash and units in opposite directions for a trade at the displayed price; check that the total value changes only through a price change affecting the units held; reject negative cash and fractional units in this ledger.</p></div><div class="exports"><a class="bouton" download="c098-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTgtbTI6dmFsZXVyLXRvdGFsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDk4LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidmFsZXVyLXRvdGFsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGNhbGN1bGF0ZSB0aGUgdG90YWwgdmFsdWUgb2YgYSBsZWRnZXIgb2YgY2FzaCBhbmQgdW5pdHM/IiwKICAgICAgInJlcG9uc2UiOiAiViA9IEMgKyBOIMOXIFA6IGNhc2ggcGx1cyB0aGUgbnVtYmVyIG9mIHVuaXRzIG11bHRpcGxpZWQgYnkgdGhlIHByaWNlIGtub3duIGF0IHRoYXQgcG9pbnQgaW4gdGltZSwgYWxsIGluIGV1cm9zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk4LW0yOnVuaXRlcyIsCiAgICAgICJ1bml0ZSI6ICJjMDk4LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidW5pdGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgdW5pdHMgb2YgbWVhc3VyZW1lbnQgZG8gQywgTiwgUCBhbmQgTiDDlyBQIGhhdmUsIGFuZCB3aGF0IGNhbiBiZSBhZGRlZD8iLAogICAgICAicmVwb25zZSI6ICJDIGlzIGluIGV1cm9zLCBOIGluIHVuaXRzLCBQIGluIGV1cm9zIHBlciB1bml0IGFuZCBOIMOXIFAgaW4gZXVyb3MuIE9ubHkgTiDDlyBQIGNhbiBiZSBhZGRlZCB0byBDLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk4LW0yOmVjaGFuZ2UiLAogICAgICAidW5pdGUiOiAiYzA5OC1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVjaGFuZ2UiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgYSBwdXJjaGFzZSBhdCB0aGUgZGlzcGxheWVkIHByaWNlIGxlYXZlIHRoZSB0b3RhbCB2YWx1ZSB1bmNoYW5nZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiQ2FzaCBmYWxscyBieSB0aGUgcHVyY2hhc2UgY29zdCBhbmQgdGhlIHVuaXRzIGJvdWdodCBhcmUgd29ydGggZXhhY3RseSB0aGF0IGNvc3QgYXQgdGhlIHNhbWUgcHJpY2U6IHZhbHVlIHBhc3NlcyBmcm9tIGNhc2ggdG8gdW5pdHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTgtbTI6cHJpeC1jb25udSIsCiAgICAgICJ1bml0ZSI6ICJjMDk4LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJpeC1jb25udSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNhbiBjaGFuZ2UgdGhlIHRvdGFsIHZhbHVlIHdpdGhvdXQgYW55IHRyYWRlPyIsCiAgICAgICJyZXBvbnNlIjogIkEgbmV3IGtub3duIHByaWNlOiB0aGUgY2hhbmdlIGVxdWFscyB0aGUgbnVtYmVyIG9mIHVuaXRzIGhlbGQgbXVsdGlwbGllZCBieSB0aGUgcHJpY2UgY2hhbmdlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c098-m2-cartes.tsv" href="data:text/tab-separated-values;base64,SG93IGRvIHlvdSBjYWxjdWxhdGUgdGhlIHRvdGFsIHZhbHVlIG9mIGEgbGVkZ2VyIG9mIGNhc2ggYW5kIHVuaXRzPwlWID0gQyArIE4gw5cgUDogY2FzaCBwbHVzIHRoZSBudW1iZXIgb2YgdW5pdHMgbXVsdGlwbGllZCBieSB0aGUgcHJpY2Uga25vd24gYXQgdGhhdCBwb2ludCBpbiB0aW1lLCBhbGwgaW4gZXVyb3MuCXRvZGFpIGMwOTgtbTIgdmFsZXVyLXRvdGFsZQpXaGF0IHVuaXRzIG9mIG1lYXN1cmVtZW50IGRvIEMsIE4sIFAgYW5kIE4gw5cgUCBoYXZlLCBhbmQgd2hhdCBjYW4gYmUgYWRkZWQ/CUMgaXMgaW4gZXVyb3MsIE4gaW4gdW5pdHMsIFAgaW4gZXVyb3MgcGVyIHVuaXQgYW5kIE4gw5cgUCBpbiBldXJvcy4gT25seSBOIMOXIFAgY2FuIGJlIGFkZGVkIHRvIEMuCXRvZGFpIGMwOTgtbTIgdW5pdGVzCldoeSBkb2VzIGEgcHVyY2hhc2UgYXQgdGhlIGRpc3BsYXllZCBwcmljZSBsZWF2ZSB0aGUgdG90YWwgdmFsdWUgdW5jaGFuZ2VkPwlDYXNoIGZhbGxzIGJ5IHRoZSBwdXJjaGFzZSBjb3N0IGFuZCB0aGUgdW5pdHMgYm91Z2h0IGFyZSB3b3J0aCBleGFjdGx5IHRoYXQgY29zdCBhdCB0aGUgc2FtZSBwcmljZTogdmFsdWUgcGFzc2VzIGZyb20gY2FzaCB0byB1bml0cy4JdG9kYWkgYzA5OC1tMiBlY2hhbmdlCldoYXQgY2FuIGNoYW5nZSB0aGUgdG90YWwgdmFsdWUgd2l0aG91dCBhbnkgdHJhZGU/CUEgbmV3IGtub3duIHByaWNlOiB0aGUgY2hhbmdlIGVxdWFscyB0aGUgbnVtYmVyIG9mIHVuaXRzIGhlbGQgbXVsdGlwbGllZCBieSB0aGUgcHJpY2UgY2hhbmdlLgl0b2RhaSBjMDk4LW0yIHByaXgtY29ubnUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fdlahd wivnii yafy</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>C098·M2 milestone · recognize the cash and units ledger in the code</h3><dl><div><dt>You understand</dt><dd>A ledger is read through two columns, cash and units, converted into a single value using the price known at that point in time. A trade at the displayed price transfers value between them; only a price change alters the total.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ctgdmx grkktr cxybng dxkjsb rntkgv jwdgbl ryrjsb qtvyzo hgbvhw tspbex azjbnn ojpuqn wojwbb ctgwgu zeskcs kefmrp rqscpa vfuzuo bxrwaq vyyhjx agyctk jpytsj iblgee ynphxh</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: replay the ledger without support, justify each unit of measurement in V = C + N × P, reject negative cash or a fraction of a unit, then find the double counting in the exercise. Reading the course and the code does not award any attained level; an answer after a hint remains distinct from an independent answer.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lltcjh mqfcdp wpzzje eywqea oqinyg sjmdry lzqeot wnlyjv uxeoeo zwmvgp cgrszj exfgqy hpdvnu vnqmqj khedkr wvufrb lqjvnr svyxvy rwtvwd gpseys bhdcpe szqtvw qrydcn kmniyc vohwrs fgqeid uxrfyo jowpzy dzazqv yjqozw vcfkoz ltkjfa dwlrfw ovlvik dqrapx dnzmrs pzhrnf yy</span></span></dd></div><div><dt>To continue</dt><dd>Redo the ledger and the three exercises without hints, then read unit C098·M3 on fees, slippage and the terminal assumption. Before claiming that a code function is used, its call and its tests will need to be checked separately on authorized data.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c098-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c098-m1.html">Previous</a> · <a href="c098-m3.html">Next</a></nav>
+<footer><p>Course book · C098·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

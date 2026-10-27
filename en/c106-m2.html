@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish positions from channels, calculate a color mixture, and work out the shape and parameter count of a convolutional layer.">
+<title>C106·M2 · Channels — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fsknjw xbncfk cjaj</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C106·M2</p><h1>Channels</h1><p class="objectif"><span>Your goal</span>Distinguish positions from channels, calculate a color mixture, and work out the shape and parameter count of a convolutional layer.</p><p class="prerequis"><strong>Before you start</strong><br>c103-m5 : regularization · c036-m5 : annotated graphs · c106-m1 : discrete convolution</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a photograph of a red cube on a table, look at a pixel on the cube, then a pixel in the background. A position does not carry only a brightness value: a color image can associate red, green, and blue with that position. These values belong to the same place in the scene.</p><p>A channel is an array of values distributed over positions. The red channel collects all the red components; the green and blue channels occupy the same grid. Stacking these arrays preserves the correspondence: cell A in red and cell A in blue describe the same pixel, rather than neighboring pixels.</p><p>A filter can combine the channels at each position. Another filter can use different weights on the same inputs. Each filter then produces an output map: the number of output channels depends on the number of filters and does not have to remain equal to the number of colors.</p><p>We use a fictional patch with 1 row and 2 columns, A and B. The encoded intensities range from 0 to 1, with no physical unit. All the numbers and filters on this page are chosen for the exercise; they do not come from a measured photograph or a trained model.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Channels share their positions</title><desc>Each row in the drawing represents a channel of the same image. In column A: red 0.8, green 0.2, blue 0.1. In column B: red 0.2, green 0.4, blue 0.8. The patch contains 2 positions and 6 values.</desc><text x="175" y="28" text-anchor="middle">A</text><text x="282" y="28" text-anchor="middle">B</text><text x="15" y="72">Red R</text><rect x="128" y="42" width="94" height="44" rx="5" class="cadre-prediction" /><rect x="235" y="42" width="94" height="44" rx="5" class="cadre-prediction" /><text x="175" y="71" text-anchor="middle">0.8</text><text x="282" y="71" text-anchor="middle">0.2</text><text x="15" y="134">Green V</text><rect x="128" y="104" width="94" height="44" rx="5" class="cadre-neutre" /><rect x="235" y="104" width="94" height="44" rx="5" class="cadre-neutre" /><text x="175" y="133" text-anchor="middle">0.2</text><text x="282" y="133" text-anchor="middle">0.4</text><text x="15" y="196">Blue B</text><rect x="128" y="166" width="94" height="44" rx="5" class="cadre-neutre" /><rect x="235" y="166" width="94" height="44" rx="5" class="cadre-neutre" /><text x="175" y="195" text-anchor="middle">0.1</text><text x="282" y="195" text-anchor="middle">0.8</text><text x="180" y="239" text-anchor="middle" class="petite-etiquette">2 positions · 3 channels · 6 values</text></svg><figcaption>Read vertically to find the components of a pixel, and horizontally to follow a channel. The name of column B and the letter B for blue have different roles.</figcaption></figure><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same inputs feed several filters</title><desc>The 3 input channels feed the alpha and beta filters. Each produces a channel: alpha is 0.60 at A and -0.20 at B; beta is 0.25 at A and 0.70 at B. The 2 positions are preserved.</desc><rect x="22" y="12" width="316" height="58" rx="7" class="cadre-neutre" /><text x="180" y="37" text-anchor="middle">Image: R, V, B</text><text x="180" y="59" text-anchor="middle" class="petite-etiquette">Same grid, 3 channels</text><path d="M180 70L180 86L95 86L95 104M180 86L265 86L265 104" class="trait" /><rect x="20" y="104" width="150" height="59" rx="7" class="cadre-prediction" /><rect x="190" y="104" width="150" height="59" rx="7" class="cadre-prediction" /><text x="95" y="130" text-anchor="middle">Filter α</text><text x="95" y="151" text-anchor="middle" class="petite-etiquette">red − green</text><text x="265" y="130" text-anchor="middle">Filter β</text><text x="265" y="151" text-anchor="middle" class="petite-etiquette">mixture + bias</text><line x1="95" y1="163" x2="95" y2="187" class="trait" /><line x1="265" y1="163" x2="265" y2="187" class="trait" /><rect x="20" y="187" width="150" height="70" rx="7" class="cadre-resultat" /><rect x="190" y="187" width="150" height="70" rx="7" class="cadre-resultat" /><text x="95" y="212" text-anchor="middle">Map α</text><text x="265" y="212" text-anchor="middle">Map β</text><text x="95" y="242" text-anchor="middle">0.60 ; -0.20</text><text x="265" y="242" text-anchor="middle">0.25 ; 0.70</text><text x="180" y="282" text-anchor="middle" class="petite-etiquette">In each map: A on the left, B on the right</text></svg><figcaption>Each branch receives the entire input. Map α compares red and green; map β combines green and blue with an offset. These maps are calculated scores with no required color meaning.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To produce a channel, a filter sums the contributions from the input channels, then adds its bias. Repeating this calculation with several filters gives several output channels.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the color patch to maps α and β</h3><p>Pixel A has components (R, V, B) = (0.8, 0.2, 0.1); pixel B has (0.2, 0.4, 0.8). Let us calculate a full layer with 2 filters of spatial size 1 × 1, then count its parameters.</p><ol class="etapes"><li><h3>Specify the axes and assumptions</h3><p>X denotes the input. We arrange it by height H, width L, then channel: shape H × L × C<sub>e</sub>, where C<sub>e</sub> is the number of input channels. Here H = 1 pixel, L = 2 pixels, and C<sub>e</sub> = 3. An array with multiple axes is called a tensor. We consider a single image with no additional batch axis.</p><p>Channel c runs through R, V, B in that order: R denotes red, V green, and B blue. The index h identifies a row and ℓ a column. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jswtdw fevjzz yphvos mzpmov ozmmyh fxqjtn wujf</span></span> The indices h, ℓ, and c identify cells; they are not intensities. Other software arranges the axes differently: read its convention before passing it the array.</p><p>Our kernels cover 1 × 1 position: they mix the channels of the same pixel without looking at its neighbors. We advance by 1 pixel without adding padding, so the height and width remain unchanged. All input channels connect to every filter. The weights are shared between A and B. We study the output before any activation function, meaning before any possible additional transformation of the scores.</p></li><li><h3>Write the mixture for an output channel</h3><p>o identifies the output filter, here α or β, and C<sub>s</sub> counts the output channels. W_{o,c} is the weight of channel c in filter o; b_o is its bias, added once per position after the sum. Y_o(h, ℓ) is the score obtained at the same location in channel o. The intensities, weights, biases, and scores are all dimensionless in this example.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mi>o</mi></msub><mo>(</mo><mi>h</mi><mo>,</mo><mi>ℓ</mi><mo>)</mo><mo>=</mo><msub><mi>b</mi><mi>o</mi></msub><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>c</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>C</mi><mi>e</mi></msub></msubsup><msub><mi>W</mi><mrow><mi>o</mi><mo>,</mo><mi>c</mi></mrow></msub><msub><mi>X</mi><mi>c</mi></msub><mo>(</mo><mi>h</mi><mo>,</mo><mi>ℓ</mi><mo>)</mo></mrow></math></div><p>The symbol ∑ tells us to add the products for all channels c. For a larger spatial kernel, each contribution is itself the spatial sum encountered in the previous unit. Here that sum reduces to the current position: only the sum over channels remains visible.</p><p>For α, choose weights (1, -1, 0) on (R, V, B), with bias 0. For β, choose weights (0, 1/2, 1/2), with bias 1/10. These coefficients are fixed to help us understand the calculation; no learning takes place.</p></li><li><h3>Calculate α at pixel A</h3><p>Multiply each component by its own weight, then add. The negative weight subtracts green; the 0 weight cancels the contribution from blue. This filter has 0 bias.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mi>α</mi></msub><mo>(</mo><mi>A</mi><mo>)</mo><mo>=</mo><mn>1</mn><mo>×</mo><mn>4/5</mn><mo>+</mo><mo>(</mo><mn>-1</mn><mo>)</mo><mo>×</mo><mn>1/5</mn><mo>+</mo><mn>0</mn><mo>×</mo><mn>1/10</mn><mo>+</mo><mn>0</mn><mo>=</mo><mn>3/5</mn></mrow></math></div><p>Yα(A) is shorthand for the score at pixel A. It is exactly 3/5, or 0.60 with no unit. Red exceeds green here. This does not prove that the pixel represents a cube: several objects can have the same components.</p></li><li><h3>Calculate β at the same pixel</h3><p>The red component does not contribute to this filter. Green contributes 1/2 × 1/5 = 1/10; blue contributes 1/2 × 1/10 = 1/20. Their sum is 3/20. The bias shifts this mixture after summation without changing its weights.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mi>β</mi></msub><mo>(</mo><mi>A</mi><mo>)</mo><mo>=</mo><mn>0</mn><mo>×</mo><mn>4/5</mn><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>×</mo><mn>1/5</mn><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>×</mo><mn>1/10</mn><mo>+</mo><mn>1/10</mn><mo>=</mo><mn>1/4</mn></mrow></math></div><p>We obtain 3/20 + 1/10 = 1/4, or 0.25 with no unit. Another way to check: first add V and B, divide this sum by 2, then add the bias to recover the same score. Without bias, the mixture is 0.15; with bias, it increases by exactly 0.10.</p></li><li><h3>Reuse the same weights at pixel B</h3><p>For α: 1/5 − 2/5 = -1/5, or -0.20 with no unit. This negative score is allowed because we have applied no transformation that would remove negative values. This output channel is therefore neither a red intensity nor a probability.</p><p>For β: green contributes 1/2 × 2/5 = 1/5, and blue contributes 1/2 × 4/5 = 2/5. The sum is 3/5; with the bias, 3/5 + 1/10 = 7/10, or 0.70 with no unit.</p><p>The complete maps, read from A to B, are Yα = (0.60 ; -0.20) and Yβ = (0.25 ; 0.70). In height–width–channel order, the output has shape 1 × 2 × 2. At each position, we store the α score followed by the β score together.</p></li><li><h3>Count the weights and biases</h3><p>k<sub>h</sub> and kℓ are the height and width of the kernel, in pixels. For a convolution connecting all channels, a filter has C<sub>e</sub> × k<sub>h</sub> × kℓ weights, plus 1 bias. With C<sub>s</sub> filters and a bias per filter, the total parameter count P is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>=</mo><msub><mi>C</mi><mi>s</mi></msub><mo>(</mo><msub><mi>C</mi><mi>e</mi></msub><msub><mi>k</mi><mi>h</mi></msub><msub><mi>k</mi><mi>ℓ</mi></msub><mo>+</mo><mn>1</mn><mo>)</mo></mrow></math></div><p>The kernel area is 1 × 1 = 1 position. Each filter has 3 × 1 = 3 weights, then 3 + 1 = 4 parameters including the bias. In total: 2 × 4 = 8 parameters, consisting of 6 weights and 2 biases. Coefficients chosen to be 0 remain parameter slots in this layer; they have not been removed from its structure.</p><p>Check by listing: write the row of weights for α, the row for β, then their biases to obtain the same count. It is not multiplied by the number of pixels: the same parameters serve at A and B. For a larger kernel, the weights can be arranged as output × input × kernel height × kernel width; declaring this order does not imply that a library uses it.</p></li><li><h3>Check the shapes and the meaning of the outputs</h3><p>The grid has 1 × 2 = 2 positions. The input contains 2 × 3 = 6 values; the output contains 2 × 2 = 4. The number of output values and the number of parameters answer different questions: 4 calculated scores, 8 reused coefficients.</p><p>To check mixture β independently of the separate products, average green and blue at each pixel, then add 1/10. Before the bias, this average must stay between the mixed components, because the positive weights are each 1/2 and sum to 1. At both A and B, the calculated scores pass this check.</p><p>An output map collects the responses of the same filter at all positions. In another layer, its inputs might already be calculated maps: a channel therefore does not necessarily denote a color. This calculation says nothing about the quality of a real detector.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the maps. Redraw the input axes, then the output axes, and explain why summing over channels produces a single value per filter and per pixel. Then justify why moving the filter creates no additional parameters.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A filter on a color image automatically produces a channel per color.”</h3><p>A filter combines the contributions from all input channels in a sum. It produces a single output channel. Here the 2 filters produce 2 maps from 3 input channels. Revisit the diagram with both branches, then identify the sum over c.</p><a href="#intuition">Review the shared channels and output branches</a></li><li><h3>“The kernel is only a pixel in size: it cannot mix anything.”</h3><p>Its spatial size 1 × 1 covers no neighbor, but it has a weight per input channel. At pixel A, the same location supplies R, V, and B; β combines green and blue. Repeating this calculation clearly separates spatial mixing from channel mixing.</p><a href="#exemple">Repeat mixture β at the same pixel</a></li><li><h3>“I can swap red and blue as long as the array shape stays the same.”</h3><p>The shape does not describe what each cell means. Each weight must still multiply its intended color. If the values arrive in a different order, either restore the channel order or permute the corresponding weights. The diagnostic exercise lets you check this through the scores.</p><a href="#exercices">Diagnose the channel swap</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-formes"><p class="repere">Exercise 1 · Identification and counting</p>
+<h3>A grid with several depths</h3><p>Without changing the patch or filters, write the input and output shapes in height–width–channel order. Count the values stored in each array, then the layer parameters. Explain why these counts differ.</p>
+<label for="reponse-ex-formes">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-formes" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-formes" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-formes" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-formes" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A channel axis indicates how many values are associated with each position.</p></details><details class="indice"><summary>Hint 2</summary><p>Write the weights and bias of each filter; do not copy them for every pixel.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Input: 1 × 2 × 3, giving 6 values. Output: 1 × 2 × 2, giving 4 values. Spatial size is preserved, and the number of filters determines the final output axis.</p><p>Each filter has 3 weights and 1 bias: 4 parameters. The 2 filters have 8 parameters in total. Their values are shared between A and B: counting cells in the activation arrays does not count the layer coefficients.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name the axes and preserve their order.</li><li>Relate output channels to filters.</li><li>Count calculated data and shared parameters separately.</li></ul></details></article><article class="exercice" id="ex-bleu"><p class="repere">Exercise 2 · Calculation and local checking</p>
+<h3>Blue increases at pixel A</h3><p>In the same scene, increase only the blue component of A by 0.1. Keep red, green, the weights, and the biases unchanged. First predict which scores will change, then calculate the new scores at A. Should pixel B change?</p>
+<label for="reponse-ex-bleu">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-bleu" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-bleu" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-bleu" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-bleu" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Find the weight for blue in each filter.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate the product of the weight and the increase, then add this change to the previous output.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new blue value is 1/10 + 1/10 = 1/5, or 0.20 with no unit. The weight for blue in α is 0: its score remains 0.60. In β, the change is 1/2 × 1/10 = 1/20, or 0.05.</p><p>The β score becomes 1/4 + 1/20 = 3/10, or 0.30 with no unit. Direct check: take half of V and half of the new B, then add the bias to recover 3/10.</p><p>The scores at pixel B remain -0.20 and 0.70. The spatial kernel 1 × 1 does not look at its neighbor A: changing A changes only its own scores here. This conclusion depends on the chosen kernel size.</p><p class="petit-titre">Check your reasoning</p><ul><li>Justify the unchanged output by a 0 weight.</li><li>Distinguish the change in blue from the change in score β.</li><li>Check the result by direct calculation and justify the spatial extent of the effect.</li></ul></details></article><article class="exercice" id="ex-ordre"><p class="repere">Exercise 3 · Diagnosis and repair</p>
+<h3>The correct shape can hide the wrong order</h3><p>At the original pixel A, a reader supplies (B, V, R) = (0.1, 0.2, 0.8), but the layer still applies its weights as if the cells were in (R, V, B) order. Calculate the incorrect scores. Then propose a repair to the inputs and an equivalent repair to the weights, explaining why they work.</p>
+<label for="reponse-ex-ordre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ordre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ordre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ordre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ordre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The weight for red ends up applied to blue; the weight for blue is applied to red.</p></details><details class="indice"><summary>Hint 2</summary><p>To repair the weights, write the coefficient that should multiply each cell in the order actually received. Green keeps its place.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The incorrect calculation of α is B − V = 1/10 − 1/5 = -1/10, or -0.10 with no unit. The calculation of β uses half of green, 1/10, and half of red, 2/5. Their sum is 1/2; after the bias, the score is 3/5, or 0.60. Yet the array shape was correct.</p><p>First repair: restore the inputs to (R, V, B) order before the layer. Second repair: keep the inputs (B, V, R), but use weights (0, -1, 1) for α and (1/2, 1/2, 0) for β. The biases remain 0 and 1/10: they belong to the outputs.</p><p>Check: α returns to 0 × B − V + R = 3/5, and β returns to 1/2 × B + 1/2 × V + 0 × R + 1/10 = 1/4. Applying either repair alone restores the association between colors and weights. Applying both would introduce the swap again.</p><p class="petit-titre">Check your reasoning</p><ul><li>Show numerically the effect of the incorrect order.</li><li>Give the repaired weights in the order actually received.</li><li>Verify the original scores and keep the biases associated with the outputs.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="canal"><summary><span class="repere">Recall 1</span><span>What is a channel, and what do the channels of an image share?</span></summary><p>An array of values over the positions of the image. The channels share their grid: at the same location, we find the components of the same pixel. Calculated channels are not necessarily colors.</p></details><details class="carte" data-carte="filtre"><summary><span class="repere">Recall 2</span><span>How does a filter combine channels, and what determines the number of output channels?</span></summary><p>It sums the weighted contributions of all input channels, then adds its bias. Each filter produces a map; the number of filters determines the number of output channels.</p></details><details class="carte" data-carte="ponctuel"><summary><span class="repere">Recall 3</span><span>What can a 1 × 1 kernel do without looking at a neighboring pixel?</span></summary><p>Combine the channels of the current pixel. It can calculate red minus green, for example, but does not compare neighboring positions and therefore cannot detect their spatial contrast on its own.</p></details><details class="carte" data-carte="parametres"><summary><span class="repere">Recall 4</span><span>How do you count parameters, and why does the number of positions not multiply them?</span></summary><p>With all channels connected and a bias per filter: number of filters × (input channels × kernel area + 1). The same coefficients serve at all positions. Here we count 8 parameters.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 5</span><span>Why is checking the shape of an input insufficient to check its channels?</span></summary><p>The shape counts cells without saying which color occupies each. The data order must match the weight order; otherwise a score can change without any dimension error.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct this path: a grid of positions → several aligned channels → a weight per channel in each filter → sum of contributions, then bias → a map per filter. Recover the shapes of our patch, its scores, and its parameter count; finish by checking the color order. Reading this synthesis or answering with a hint does not establish mastery of a level.</p></div><div class="exports"><a class="bouton" download="c106-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTI6Y2FuYWwiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNhbmFsIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgYSBjaGFubmVsLCBhbmQgd2hhdCBkbyB0aGUgY2hhbm5lbHMgb2YgYW4gaW1hZ2Ugc2hhcmU/IiwKICAgICAgInJlcG9uc2UiOiAiQW4gYXJyYXkgb2YgdmFsdWVzIG92ZXIgdGhlIHBvc2l0aW9ucyBvZiB0aGUgaW1hZ2UuIFRoZSBjaGFubmVscyBzaGFyZSB0aGVpciBncmlkOiBhdCB0aGUgc2FtZSBsb2NhdGlvbiwgd2UgZmluZCB0aGUgY29tcG9uZW50cyBvZiB0aGUgc2FtZSBwaXhlbC4gQ2FsY3VsYXRlZCBjaGFubmVscyBhcmUgbm90IG5lY2Vzc2FyaWx5IGNvbG9ycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNi1tMjpmaWx0cmUiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZpbHRyZS1jYW5hdXgiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvZXMgYSBmaWx0ZXIgY29tYmluZSBjaGFubmVscywgYW5kIHdoYXQgZGV0ZXJtaW5lcyB0aGUgbnVtYmVyIG9mIG91dHB1dCBjaGFubmVscz8iLAogICAgICAicmVwb25zZSI6ICJJdCBzdW1zIHRoZSB3ZWlnaHRlZCBjb250cmlidXRpb25zIG9mIGFsbCBpbnB1dCBjaGFubmVscywgdGhlbiBhZGRzIGl0cyBiaWFzLiBFYWNoIGZpbHRlciBwcm9kdWNlcyBhIG1hcDsgdGhlIG51bWJlciBvZiBmaWx0ZXJzIGRldGVybWluZXMgdGhlIG51bWJlciBvZiBvdXRwdXQgY2hhbm5lbHMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDYtbTI6cG9uY3R1ZWwiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1lbGFuZ2UtcG9uY3R1ZWwiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBjYW4gYSAxIMOXIDEga2VybmVsIGRvIHdpdGhvdXQgbG9va2luZyBhdCBhIG5laWdoYm9yaW5nIHBpeGVsPyIsCiAgICAgICJyZXBvbnNlIjogIkNvbWJpbmUgdGhlIGNoYW5uZWxzIG9mIHRoZSBjdXJyZW50IHBpeGVsLiBJdCBjYW4gY2FsY3VsYXRlIHJlZCBtaW51cyBncmVlbiwgZm9yIGV4YW1wbGUsIGJ1dCBkb2VzIG5vdCBjb21wYXJlIG5laWdoYm9yaW5nIHBvc2l0aW9ucyBhbmQgdGhlcmVmb3JlIGNhbm5vdCBkZXRlY3QgdGhlaXIgc3BhdGlhbCBjb250cmFzdCBvbiBpdHMgb3duLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA2LW0yOnBhcmFtZXRyZXMiLAogICAgICAidW5pdGUiOiAiYzEwNi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBhcmFtZXRyZXMtcGFydGFnZXMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHlvdSBjb3VudCBwYXJhbWV0ZXJzLCBhbmQgd2h5IGRvZXMgdGhlIG51bWJlciBvZiBwb3NpdGlvbnMgbm90IG11bHRpcGx5IHRoZW0/IiwKICAgICAgInJlcG9uc2UiOiAiV2l0aCBhbGwgY2hhbm5lbHMgY29ubmVjdGVkIGFuZCBhIGJpYXMgcGVyIGZpbHRlcjogbnVtYmVyIG9mIGZpbHRlcnMgw5cgKGlucHV0IGNoYW5uZWxzIMOXIGtlcm5lbCBhcmVhICsgMSkuIFRoZSBzYW1lIGNvZWZmaWNpZW50cyBzZXJ2ZSBhdCBhbGwgcG9zaXRpb25zLiBIZXJlIHdlIGNvdW50IDggcGFyYW1ldGVycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNi1tMjpvcmRyZSIsCiAgICAgICJ1bml0ZSI6ICJjMTA2LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAib3JkcmUtY2FuYXV4IiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBjaGVja2luZyB0aGUgc2hhcGUgb2YgYW4gaW5wdXQgaW5zdWZmaWNpZW50IHRvIGNoZWNrIGl0cyBjaGFubmVscz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc2hhcGUgY291bnRzIGNlbGxzIHdpdGhvdXQgc2F5aW5nIHdoaWNoIGNvbG9yIG9jY3VwaWVzIGVhY2guIFRoZSBkYXRhIG9yZGVyIG11c3QgbWF0Y2ggdGhlIHdlaWdodCBvcmRlcjsgb3RoZXJ3aXNlIGEgc2NvcmUgY2FuIGNoYW5nZSB3aXRob3V0IGFueSBkaW1lbnNpb24gZXJyb3IuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c106-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyBhIGNoYW5uZWwsIGFuZCB3aGF0IGRvIHRoZSBjaGFubmVscyBvZiBhbiBpbWFnZSBzaGFyZT8JQW4gYXJyYXkgb2YgdmFsdWVzIG92ZXIgdGhlIHBvc2l0aW9ucyBvZiB0aGUgaW1hZ2UuIFRoZSBjaGFubmVscyBzaGFyZSB0aGVpciBncmlkOiBhdCB0aGUgc2FtZSBsb2NhdGlvbiwgd2UgZmluZCB0aGUgY29tcG9uZW50cyBvZiB0aGUgc2FtZSBwaXhlbC4gQ2FsY3VsYXRlZCBjaGFubmVscyBhcmUgbm90IG5lY2Vzc2FyaWx5IGNvbG9ycy4JdG9kYWkgYzEwNi1tMiBjYW5hbApIb3cgZG9lcyBhIGZpbHRlciBjb21iaW5lIGNoYW5uZWxzLCBhbmQgd2hhdCBkZXRlcm1pbmVzIHRoZSBudW1iZXIgb2Ygb3V0cHV0IGNoYW5uZWxzPwlJdCBzdW1zIHRoZSB3ZWlnaHRlZCBjb250cmlidXRpb25zIG9mIGFsbCBpbnB1dCBjaGFubmVscywgdGhlbiBhZGRzIGl0cyBiaWFzLiBFYWNoIGZpbHRlciBwcm9kdWNlcyBhIG1hcDsgdGhlIG51bWJlciBvZiBmaWx0ZXJzIGRldGVybWluZXMgdGhlIG51bWJlciBvZiBvdXRwdXQgY2hhbm5lbHMuCXRvZGFpIGMxMDYtbTIgZmlsdHJlLWNhbmF1eApXaGF0IGNhbiBhIDEgw5cgMSBrZXJuZWwgZG8gd2l0aG91dCBsb29raW5nIGF0IGEgbmVpZ2hib3JpbmcgcGl4ZWw/CUNvbWJpbmUgdGhlIGNoYW5uZWxzIG9mIHRoZSBjdXJyZW50IHBpeGVsLiBJdCBjYW4gY2FsY3VsYXRlIHJlZCBtaW51cyBncmVlbiwgZm9yIGV4YW1wbGUsIGJ1dCBkb2VzIG5vdCBjb21wYXJlIG5laWdoYm9yaW5nIHBvc2l0aW9ucyBhbmQgdGhlcmVmb3JlIGNhbm5vdCBkZXRlY3QgdGhlaXIgc3BhdGlhbCBjb250cmFzdCBvbiBpdHMgb3duLgl0b2RhaSBjMTA2LW0yIG1lbGFuZ2UtcG9uY3R1ZWwKSG93IGRvIHlvdSBjb3VudCBwYXJhbWV0ZXJzLCBhbmQgd2h5IGRvZXMgdGhlIG51bWJlciBvZiBwb3NpdGlvbnMgbm90IG11bHRpcGx5IHRoZW0/CVdpdGggYWxsIGNoYW5uZWxzIGNvbm5lY3RlZCBhbmQgYSBiaWFzIHBlciBmaWx0ZXI6IG51bWJlciBvZiBmaWx0ZXJzIMOXIChpbnB1dCBjaGFubmVscyDDlyBrZXJuZWwgYXJlYSArIDEpLiBUaGUgc2FtZSBjb2VmZmljaWVudHMgc2VydmUgYXQgYWxsIHBvc2l0aW9ucy4gSGVyZSB3ZSBjb3VudCA4IHBhcmFtZXRlcnMuCXRvZGFpIGMxMDYtbTIgcGFyYW1ldHJlcy1wYXJ0YWdlcwpXaHkgaXMgY2hlY2tpbmcgdGhlIHNoYXBlIG9mIGFuIGlucHV0IGluc3VmZmljaWVudCB0byBjaGVjayBpdHMgY2hhbm5lbHM/CVRoZSBzaGFwZSBjb3VudHMgY2VsbHMgd2l0aG91dCBzYXlpbmcgd2hpY2ggY29sb3Igb2NjdXBpZXMgZWFjaC4gVGhlIGRhdGEgb3JkZXIgbXVzdCBtYXRjaCB0aGUgd2VpZ2h0IG9yZGVyOyBvdGhlcndpc2UgYSBzY29yZSBjYW4gY2hhbmdlIHdpdGhvdXQgYW55IGRpbWVuc2lvbiBlcnJvci4JdG9kYWkgYzEwNi1tMiBvcmRyZS1jYW5hdXgK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fsknjw xbncfk cjaj</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for the vision milestone: recognize the model boundary</h3><dl><div><dt>What you understand</dt><dd>You can distinguish a position, its components, and the maps produced by filters. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xajqkq vnrfbo kczsej gxwjhy gxkxvc xgmbjb wtei</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ogppbu gvirsk qetfmz kejpmn vunyir ucgtsm rdkapa hzdqar zwzfba ukjkeh kntiue zrjjfm bbhvtd ioupye ddjjca ulgdhn lyjcpa vuwdcp ceaymz wcdmaa wqjjsw ezoaih wsmxyk dnqpez</span></span></dd></div><div><dt>Level to prepare for</dt><dd>To prepare for level 3 of this unit, reconstruct a mixture, its shapes, and its parameters without support, then repair a channel swap. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wmxrkh dltkic dmobdu ttszmx fginkk fasvqe iyye</span></span> Reading and an assisted answer remain insufficient.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qqvqhj ibgeek hqkhvn wlkrds qiqenp vxsdql toxray lmzpyx yseksz ztbfij ctlnyw xwlzgw fbdqgl oyuyey ighkwp azacio lmzzkm zbdnyw xukkar aoprms hiezfv xhosva hffgfm djxzzj</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the exercises without help on another day, then approach spatial reduction in the next unit. Before interpreting the maps of a real model, its input format and preprocessing will still need to be documented from an authorized source, and its invocation and outputs during execution will then need to be established separately under an appropriate mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c106-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c106-m1.html">Previous</a> · <a href="c106-m3.html">Next</a></nav>
+<footer><p>Course book · C106·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

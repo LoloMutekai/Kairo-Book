@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a step of an LSTM and a GRU, then distinguish memory retention, writing, and visible output.">
+<title>C104·M4 · LSTM and GRU — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dvfrzo kdpuwf omrv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C104·M4</p><h1>LSTM and GRU</h1><p class="objectif"><span>Your goal</span>Calculate a step of an LSTM and a GRU, then distinguish memory retention, writing, and visible output.</p><p class="prerequis"><strong>Before you start</strong><br>c103-m5 : regularization · c101-m5 : rolling-origin forecasting · c060-m5 : approximations and assumptions · c104-m1 : sequences · c104-m2 : embeddings · c104-m3 : RNN</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Read “The parcel, despite the heavy rains, has arrived.” To choose the ending “has arrived”, the subject is still “parcel”, even though “rains” is closer. A recurrent network carries a state from word to word; it must also prevent transient information from replacing information that will be needed later.</p><p>Imagine a note kept alongside the current word. An LSTM, a long short-term memory network, separately controls what it retains in the note, what it writes into it, and what it exposes from it. Its gates are continuous multipliers: a small opening reduces what passes through, while a large opening lets more through.</p><p>A GRU, a gated recurrent unit, carries a single state. It first controls how the previous state is used to prepare a candidate, then the share of this candidate in the new state. The retention path is separate from the path that produces the candidate.</p><p>The entire numerical scenario is fictional. We will follow a coordinate at the word “rains”, using gates chosen for the calculation. The sign of this coordinate does not universally encode singular or plural; the diagrams illustrate a mechanism without claiming to reproduce a trained English language model. The LSTM example will even show an unwanted cancellation, which the exercise will then try to reduce.</p><div class="schemas"><figure><svg viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" role="img"><title>LSTM: memory and output are separate</title><desc>At the word rains, the previous memory is 1/2 and the candidate is -3/4. The forget gate retains 3/8, and writing adds -3/8: the memory becomes 0. After tanh and the output gate 1/2, h is 0.</desc><text x="180" y="24" text-anchor="middle">LSTM · “rains”</text><rect x="15" y="40" width="150" height="56" rx="7" class="cadre-prediction" /><text x="90" y="63" text-anchor="middle">Previous c</text><text x="90" y="86" text-anchor="middle">1/2</text><rect x="195" y="40" width="150" height="56" rx="7" class="cadre-neutre" /><text x="270" y="63" text-anchor="middle">Candidate g</text><text x="270" y="86" text-anchor="middle">-3/4</text><path d="M90 96v32m180-32v32" class="trait" /><rect x="15" y="128" width="150" height="64" rx="7" class="cadre-prediction" /><text x="90" y="152" text-anchor="middle">× 3/4</text><text x="90" y="178" text-anchor="middle">3/8</text><rect x="195" y="128" width="150" height="64" rx="7" class="cadre-neutre" /><text x="270" y="152" text-anchor="middle">× 1/2</text><text x="270" y="178" text-anchor="middle">-3/8</text><path d="M90 192v20h180v-20M180 212v24" class="trait" /><rect x="55" y="236" width="250" height="44" rx="7" class="cadre-resultat" /><text x="180" y="264" text-anchor="middle">Sum: c = 0</text><text x="180" y="305" text-anchor="middle" class="petite-etiquette">tanh, then output gate × 1/2</text><rect x="55" y="318" width="250" height="36" rx="7" class="cadre-resultat" /><text x="180" y="343" text-anchor="middle">Output h = 0</text></svg><figcaption>Addition can cancel a memory even with an open forget gate. The output is calculated afterwards; it is not another write into c. All values are dimensionless.</figcaption></figure><figure><svg viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" role="img"><title>GRU: two complementary weights for a single state</title><desc>For the same word, the previous state is 1/2. Resetting prepares a 0 candidate here. The chosen convention assigns weight 3/4 to the previous state and 1/4 to the candidate. The contributions 3/8 and 0 give h equal to 3/8.</desc><text x="180" y="24" text-anchor="middle">GRU · “rains”</text><rect x="15" y="40" width="150" height="56" rx="7" class="cadre-prediction" /><text x="90" y="63" text-anchor="middle">Previous h</text><text x="90" y="86" text-anchor="middle">1/2</text><rect x="195" y="40" width="150" height="56" rx="7" class="cadre-neutre" /><text x="270" y="63" text-anchor="middle">Candidate g</text><text x="270" y="86" text-anchor="middle">0</text><path d="M90 96v32m180-32v32" class="trait" /><rect x="15" y="128" width="150" height="64" rx="7" class="cadre-prediction" /><text x="90" y="152" text-anchor="middle">× (1 − 1/4)</text><text x="90" y="178" text-anchor="middle">3/8</text><rect x="195" y="128" width="150" height="64" rx="7" class="cadre-neutre" /><text x="270" y="152" text-anchor="middle">× 1/4</text><text x="270" y="178" text-anchor="middle">0</text><path d="M90 192v20h180v-20M180 212v24" class="trait" /><rect x="55" y="236" width="250" height="44" rx="7" class="cadre-resultat" /><text x="180" y="264" text-anchor="middle">Sum: h = 3/8</text><text x="180" y="310" text-anchor="middle" class="petite-etiquette">r acts within the candidate.</text><text x="180" y="338" text-anchor="middle" class="petite-etiquette">z controls the final mixture.</text></svg><figcaption>Here z weights the candidate. The weights of the final mixture add up to 1. The gate r acts before this mixture, while preparing g; the calculation below details this path.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>LSTM: retain and write into c, then expose an output h. GRU: prepare a candidate with r, then mix the previous state and the candidate with z. Always read which term each gate multiplies.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>What happens to the trace when “rains” is processed?</h3><p>We calculate a step of each cell separately on the same sentence. For the LSTM, previous c = 1/2 and previous h = 1/4; f = 3/4, i = o = 1/2, g = -3/4. For the GRU, previous h = 1/2, r = 1/2 and z = 1/4. These values are fictional and dimensionless. The LSTM gates and candidate are supplied after activation; no learned matrix is inferred from this sentence.</p><ol class="etapes"><li><h3>Name the states, gates, and their dimensions</h3><p>t identifies the current word; t − 1 identifies the previous word. x<sub>t</sub> is the vector representation of the word, with dimension d. h<sub>t</sub> is the state passed on, with dimension n; an LSTM also retains a memory c<sub>t</sub> with dimension n. We calculate the case n = 1. The coordinates, parameters, and function arguments have no physical units. h is neither a probability of grammatical agreement nor the final text output: a prediction layer, outside this calculation, would still need to use it.</p><p>The LSTM gates are f<sub>t</sub> for forgetting, i<sub>t</sub> for writing, and o<sub>t</sub> for output. g<sub>t</sub> is the candidate to be written. A gate depends on the word and the previous state, with the same parameters at each step. W transforms x, U transforms previous h, and b is a learned bias. For each subscript q, W_q has shape n × d, U_q has shape n × n, and b_q has dimension n. The subscript q labels a parameter set; it is not a factor to multiply by.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>q</mi><mi>t</mi></msub><mo>=</mo><mi>σ</mi><mo>(</mo><msub><mi>W</mi><mi>q</mi></msub><msub><mi>x</mi><mi>t</mi></msub><mo>+</mo><msub><mi>U</mi><mi>q</mi></msub><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>b</mi><mi>q</mi></msub><mo>)</mo><mo>,</mo><mtext> q ∈ {f, i, o}</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>g</mi><mi>t</mi></msub><mo>=</mo><mi>tanh</mi><mo>(</mo><msub><mi>W</mi><mi>g</mi></msub><msub><mi>x</mi><mi>t</mi></msub><mo>+</mo><msub><mi>U</mi><mi>g</mi></msub><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>b</mi><mi>g</mi></msub><mo>)</mo></mrow></math></div><p>σ is the sigmoid: it gives an opening between 0 and 1. tanh, the hyperbolic tangent, transforms its argument into a signed candidate between -1 and 1. These bounds are not reached for finite real arguments. The functions act coordinate by coordinate. For a real argument s, with exp denoting the natural exponential:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>σ</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mi>exp</mi><mo>(</mo><mo>−</mo><mi>s</mi><mo>)</mo></mrow></mfrac></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>tanh</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>exp</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>−</mo><mi>exp</mi><mo>(</mo><mo>−</mo><mi>s</mi><mo>)</mo></mrow><mrow><mi>exp</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>+</mo><mi>exp</mi><mo>(</mo><mo>−</mo><mi>s</mi><mo>)</mo></mrow></mfrac></mrow></math></div><p>We use an LSTM with no direct connection from c to the gates. This is not an attempt to list all variants. A gate value is a learned coefficient; calling it “forgetting” does not mean that the network consciously decides what matters.</p></li><li><h3>Retain, then write into the LSTM memory</h3><p>The symbol ⊙ denotes a product taken coordinate by coordinate between vectors of the same dimension. In our scalar case, it is ordinary multiplication. The new memory adds a portion of the previous memory and a portion of the candidate:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>c</mi><mi>t</mi></msub><mo>=</mo><msub><mi>f</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>c</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>i</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>g</mi><mi>t</mi></msub></mrow></math></div><p>Retain: 3/4 × 1/2 = 3/8, or 0.375, dimensionless. Write: 1/2 × (-3/4) = -3/8, or -0.375, dimensionless. The candidate is negative, so writing can reduce a positive memory.</p><p>Add: 3/8 + (-3/8) = 0. The trace carried by this coordinate is cancelled. Check: the contributions have the same denominator and opposite numerators. The gates are not complementary: f + i = 5/4, greater than 1. The LSTM memory is therefore not generally a weighted average of the previous memory and the candidate; it can also fall outside their interval.</p></li><li><h3>Calculate the LSTM output and distinguish it from c</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>t</mi></msub><mo>=</mo><msub><mi>o</mi><mi>t</mi></msub><mo>⊙</mo><mi>tanh</mi><mo>(</mo><msub><mi>c</mi><mi>t</mi></msub><mo>)</mo></mrow></math></div><p>A compressed version of the memory is exposed, and gate o then controls this passage. Here exp(0) = 1, so tanh(0) = (1 − 1)/(1 + 1) = 0. The output is 1/2 × 0 = 0, dimensionless. The LSTM step is complete: the pair to pass on is (c, h) = (0, 0).</p><p>Check: a positive output gate cannot recreate a memory that has already been cancelled. Conversely, in the ideal limit o → 0, a nonzero memory can remain hidden in c with an output h close to 0. Closing the output therefore does not directly erase c at this step; it can affect future gates, since they use h.</p><p>We used tanh(s) = s only for s = 0, where this identity is exact. Systematically replacing tanh with its argument would be an error.</p></li><li><h3>Prepare the GRU candidate with resetting</h3><p>For the GRU, r<sub>t</sub> is the reset gate and z<sub>t</sub> is the update gate. They are calculated using the same sigmoid form as before, with q in {r, z} and their own parameters W_q, U_q, b_q. The dimensions remain n × d, n × n, and n. Here we choose the variant that applies r to previous h before multiplying by U_g:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>g</mi><mi>t</mi></msub><mo>=</mo><mi>tanh</mi><mo>(</mo><msub><mi>W</mi><mi>g</mi></msub><msub><mi>x</mi><mi>t</mi></msub><mo>+</mo><msub><mi>U</mi><mi>g</mi></msub><mo>(</mo><msub><mi>r</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>)</mo><mo>+</mo><msub><mi>b</mi><mi>g</mi></msub><mo>)</mo></mrow></math></div><p>In the scalar calculation, let a = W_g x<sub>t</sub> + b_g be the contribution of the word and the bias. We are given a = -1/4 and U_g = 1. Partial resetting: r × previous h = 1/2 × 1/2 = 1/4. The argument before tanh is a + U_g × r × previous h = -1/4 + 1 × 1/4 = 0. The candidate is therefore g = tanh(0) = 0.</p><p>Check: a is the exact opposite of the recurrent contribution. Gate r has not yet affected the retention path in the final mixture. In multiple dimensions, applying r before or after matrix U_g does not generally give the same candidate; the position of this gate is part of the chosen mechanism. The parameter sets of the cells being compared are distinct.</p></li><li><h3>Mix the previous state and the GRU candidate</h3><p>Our convention assigns z the weight of the new candidate. With 1 representing the vector whose components all equal unity in dimension n, the rule is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>h</mi><mi>t</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>z</mi><mi>t</mi></msub><mo>)</mo><mo>⊙</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>z</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>g</mi><mi>t</mi></msub></mrow></math></div><p>Previous-state weight: 1 − 1/4 = 3/4. Previous-state contribution: 3/4 × 1/2 = 3/8. New contribution: 1/4 × 0 = 0. Sum: h = 3/8 + 0 = 3/8, or 0.375, dimensionless. This single state passes to the next word.</p><p>Check using another expression: previous h + z × (g − previous h) = 1/2 + 1/4 × (0 − 1/2) = 3/8. The positive weights add up to 1: each new coordinate stays between the previous coordinate and the candidate coordinate. Our result is indeed between 0 and 1/2.</p><p>If an implementation writes z × previous h + (1 − z) × g, its z weights the previous state. A value of z must be read with its accompanying equation. The convention changes the interpretation of “open gate”, but the terms still need to be checked.</p></li><li><h3>What the retention path allows us to conclude</h3><p>An LSTM passes on a pair (c, h), with 3 gates; a GRU passes on h, with 2 gates. In the standard LSTM described here, c is not compressed by tanh at every write: tanh acts on the candidate and then on the readout of c. In the GRU, the final mixture directly retains a portion of previous h. With the same dimensions d and n, the GRU described uses fewer affine parameter sets; this is not enough to conclude that it will suit the task better.</p><p>To understand the benefit of the additive path of c, imagine a small initial difference in memory and freeze the gates and candidates. A step transmits f times this difference through the direct path. Over 2 intervening words with f = 3/4 at each step, the direct factor is 3/4 × 3/4 = 9/16, or 0.5625, dimensionless. The difference still decreases; a gate close to 1 preserves it better along this path.</p><p>This factor is not the total gradient of the network: the gates and candidate also depend on the previous state. Gates offer an adjustable transmission path without guaranteeing perfect memory or removing all training problems. The numbers in our example, including the cancelled LSTM memory compared with the nonzero GRU state, do not measure any linguistic quality. Comparing predictions would require separate data and temporal validation, the subject of the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Redraw the direct path of c for the LSTM, then that of h for the GRU. Explain why the negative candidate cancels c, why r does not multiply the entire GRU state, and why the output h alone does not tell us what remains in c.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The output gate closes, so the LSTM memory is erased.”</h3><p>Gate o multiplies tanh(c) to produce h; it does not multiply c in its write equation. A small output can hide a memory. In our example, c is 0 for another reason: the previous contents and the write cancelled each other. Trace these operations in this order.</p><a href="#exemple">Separate writing to c from reading out to h</a></li><li><h3>“LSTM gates are probabilities, and their weights must add up to unity.”</h3><p>f and i come from separate sigmoids, with no constraint on their sum. Here f + i = 5/4. The GRU studied here, by contrast, imposes complementary weights z and 1 − z on the final mixture. An opening in the unit interval is a coefficient, with no automatic probabilistic interpretation.</p><a href="#exemple">Compare the addition rules of the cells</a></li><li><h3>“Setting r close to 0 forces the GRU to forget its entire previous state.”</h3><p>r reduces the previous state only while preparing the candidate. The final mixture still retains the term (1 − z) × previous h. In our convention, z close to 0 almost preserves the previous state, whatever r is. Check the limiting case in the exercise.</p><a href="#exercices">Test r and z separately</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-ecriture"><p class="repere">Exercise 1 · Application · exact calculation</p>
+<h3>Reduce the unwanted write</h3><p>At the same word “rains”, start again from the initial LSTM with previous c = 1/2, f = 3/4 and g = -3/4. Replace only i = 1/2 with i = 1/4. Calculate c and compare it with 0. Could a very small output gate o directly cancel this new memory?</p>
+<label for="reponse-ex-ecriture">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ecriture" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ecriture" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ecriture" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ecriture" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The previous-memory contribution remains 3/8. Only the product i × g changes.</p></details><details class="indice"><summary>Hint 2</summary><p>The candidate is negative. Reducing its multiplier makes its contribution less negative. Then find which equation involves o.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Previous: 3/4 × 1/2 = 3/8. New: 1/4 × (-3/4) = -3/16. Their sum is 3/16, or 0.1875, dimensionless, instead of 0. Here the smaller write limits cancellation by the negative candidate; this is not a universal rule for choosing good settings.</p><p>Check: f + i is now 1 and c is between -3/4 and 1/2, as expected for these particular complementary weights. A small output gate o would make h small without directly changing c at this step. The exact output would be o × tanh(3/16); replacing tanh(3/16) with 3/16 would not be exact.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate 3/8 and -3/16 separately before adding them to obtain 3/16.</li><li>Explain the effect of the sign of the candidate.</li><li>Distinguish retained memory from the visibility of its readout, without linearizing tanh.</li></ul></details></article><article class="exercice" id="ex-reset"><p class="repere">Exercise 2 · Application · limiting cases</p>
+<h3>Open r and close z</h3><p>Start again from the GRU with previous h = 1/2, a = -1/4 and U_g = 1. In the ideal limit r → 1, calculate the argument of tanh and state the sign of the candidate. Then also take the limit z → 0 in our convention: what state h is passed on? These bounds are mathematical limits of sigmoids, not outputs reached at a finite argument.</p>
+<label for="reponse-ex-reset">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-reset" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-reset" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-reset" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-reset" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Replace r with its limiting value in a + U_g × r × previous h before applying tanh.</p></details><details class="indice"><summary>Hint 2</summary><p>The final mixture multiplies the previous state by 1 − z and the candidate by z. tanh of a positive argument is positive and remains bounded.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The recurrent contribution tends to 1 × 1/2 = 1/2. The argument therefore tends to -1/4 + 1/2 = 1/4, greater than 0. It increases by 1/4 compared with 0. The candidate tends to tanh(1/4), which is positive; it is not exactly 1/4.</p><p>When z also tends to 0, the previous-state contribution tends to (1 − 0) × 1/2 = 1/2. The contribution of the bounded candidate tends to 0. Therefore h tends to 1/2, whatever this candidate is. Opening r changes the proposed candidate but does not force it to be written.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain the argument 1/4 before tanh without presenting it as the value of tanh.</li><li>Justify each contribution to the final mixture separately.</li><li>Find the limit h = 1/2 and specify that these are ideal gates.</li></ul></details></article><article class="exercice" id="ex-portee"><p class="repere">Exercise 3 · Reasoning · scope of a proof</p>
+<h3>Is memory guaranteed?</h3><p>Over 2 intervening words in the same sentence, freeze the LSTM gates at f = 3/4 and keep identical writes in two trajectories whose initial memories differ by 1, dimensionless. What difference remains through the direct path? Someone concludes: “The LSTM retains the subject perfectly and will be better than the GRU.” Respond by separating the calculation, the assumptions, and the linguistic comparison.</p>
+<label for="reponse-ex-portee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-portee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-portee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-portee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-portee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Subtracting the trajectories eliminates the identical writes. Multiply only their difference by f at each step.</p></details><details class="indice"><summary>Hint 2</summary><p>A difference in coordinates does not measure whether the sentence ending is correct. What happens if the gates depend on the state, as in a real network?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>After the first word, the direct difference is 3/4 × 1 = 3/4. After the next word, it is 3/4 × 3/4 = 9/16, or 0.5625, dimensionless. This result is smaller than the initial difference 1: even this simplified path does not preserve the difference perfectly.</p><p>The subtraction relies on frozen gates and identical writes. In the full network, changing the previous state can change the gates and the candidate: the calculated product is not the total gradient. Finally, neither this difference nor the outputs of the fictional step prove correct prediction of “has arrived” or superiority over the GRU. A protocol for temporal comparison on held-out examples would be needed; no such measurement is provided here.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover 9/16 using exact operations and compare it with 1.</li><li>Name the assumptions that allow the writes to be eliminated by subtraction.</li><li>Separate direct transmission, the behavior of the full network, and prediction quality.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="etats"><summary><span class="repere">Recall 1</span><span>Why does an LSTM pass on c and h separately?</span></summary><p>c is the memory updated by f × previous c + i × g. h is its readout o × tanh(c), used in subsequent steps. A small output does not prove that c is 0.</p></details><details class="carte" data-carte="portes"><summary><span class="repere">Recall 2</span><span>Why is the LSTM update not always a weighted average?</span></summary><p>f and i are independent gates; their sum is not constrained to 1. They multiply the previous c and the candidate g before addition. In our example, their sum is 5/4.</p></details><details class="carte" data-carte="gru"><summary><span class="repere">Recall 3</span><span>Where do r and z act in our GRU?</span></summary><p>r reduces the use of previous h in the candidate, before the recurrent matrix. The final mixture is (1 − z) × previous h + z × g: z weights the new candidate here, with no separate state c.</p></details><details class="carte" data-carte="convention"><summary><span class="repere">Recall 4</span><span>What should you check before saying that a high z retains memory?</span></summary><p>Read the equation: here a high z favors the candidate; in z × previous h + (1 − z) × g, it favors the previous state. The name of the gate is not enough.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>What does the product of forget gates over several words prove?</span></summary><p>It gives transmission through the direct path of c if the gates and candidates are frozen. On its own, it does not give the total gradient, perfect memory, or measured linguistic quality.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking, reconstruct the equations for c and h in the LSTM, then those for the candidate and the mixture in the GRU. Name each gate and the term it multiplies. Recover the LSTM cancellation and the partial GRU retention in our sentence; explain why these fictional calculations do not rank the models. An answer read or obtained after a hint remains assisted. Try again without support on another day before claiming to have achieved a level.</p></div><div class="exports"><a class="bouton" download="c104-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTQ6ZXRhdHMiLAogICAgICAidW5pdGUiOiAiYzEwNC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1lbW9pcmUtZXQtc29ydGllIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGFuIExTVE0gcGFzcyBvbiBjIGFuZCBoIHNlcGFyYXRlbHk/IiwKICAgICAgInJlcG9uc2UiOiAiYyBpcyB0aGUgbWVtb3J5IHVwZGF0ZWQgYnkgZiDDlyBwcmV2aW91cyBjICsgaSDDlyBnLiBoIGlzIGl0cyByZWFkb3V0IG8gw5cgdGFuaChjKSwgdXNlZCBpbiBzdWJzZXF1ZW50IHN0ZXBzLiBBIHNtYWxsIG91dHB1dCBkb2VzIG5vdCBwcm92ZSB0aGF0IGMgaXMgMC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNC1tNDpwb3J0ZXMiLAogICAgICAidW5pdGUiOiAiYzEwNC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBvcnRlcy1pbmRlcGVuZGFudGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyB0aGUgTFNUTSB1cGRhdGUgbm90IGFsd2F5cyBhIHdlaWdodGVkIGF2ZXJhZ2U/IiwKICAgICAgInJlcG9uc2UiOiAiZiBhbmQgaSBhcmUgaW5kZXBlbmRlbnQgZ2F0ZXM7IHRoZWlyIHN1bSBpcyBub3QgY29uc3RyYWluZWQgdG8gMS4gVGhleSBtdWx0aXBseSB0aGUgcHJldmlvdXMgYyBhbmQgdGhlIGNhbmRpZGF0ZSBnIGJlZm9yZSBhZGRpdGlvbi4gSW4gb3VyIGV4YW1wbGUsIHRoZWlyIHN1bSBpcyA1LzQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTQ6Z3J1IiwKICAgICAgInVuaXRlIjogImMxMDQtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZXNldC1ldC1tZWxhbmdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoZXJlIGRvIHIgYW5kIHogYWN0IGluIG91ciBHUlU/IiwKICAgICAgInJlcG9uc2UiOiAiciByZWR1Y2VzIHRoZSB1c2Ugb2YgcHJldmlvdXMgaCBpbiB0aGUgY2FuZGlkYXRlLCBiZWZvcmUgdGhlIHJlY3VycmVudCBtYXRyaXguIFRoZSBmaW5hbCBtaXh0dXJlIGlzICgxIOKIkiB6KSDDlyBwcmV2aW91cyBoICsgeiDDlyBnOiB6IHdlaWdodHMgdGhlIG5ldyBjYW5kaWRhdGUgaGVyZSwgd2l0aCBubyBzZXBhcmF0ZSBzdGF0ZSBjLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA0LW00OmNvbnZlbnRpb24iLAogICAgICAidW5pdGUiOiAiYzEwNC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnZlbnRpb24tZGUtcG9ydGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBzaG91bGQgeW91IGNoZWNrIGJlZm9yZSBzYXlpbmcgdGhhdCBhIGhpZ2ggeiByZXRhaW5zIG1lbW9yeT8iLAogICAgICAicmVwb25zZSI6ICJSZWFkIHRoZSBlcXVhdGlvbjogaGVyZSBhIGhpZ2ggeiBmYXZvcnMgdGhlIGNhbmRpZGF0ZTsgaW4geiDDlyBwcmV2aW91cyBoICsgKDEg4oiSIHopIMOXIGcsIGl0IGZhdm9ycyB0aGUgcHJldmlvdXMgc3RhdGUuIFRoZSBuYW1lIG9mIHRoZSBnYXRlIGlzIG5vdCBlbm91Z2guIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDQtbTQ6bGltaXRlIiwKICAgICAgInVuaXRlIjogImMxMDQtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0cmFuc21pc3Npb24tZGlyZWN0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIHByb2R1Y3Qgb2YgZm9yZ2V0IGdhdGVzIG92ZXIgc2V2ZXJhbCB3b3JkcyBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBnaXZlcyB0cmFuc21pc3Npb24gdGhyb3VnaCB0aGUgZGlyZWN0IHBhdGggb2YgYyBpZiB0aGUgZ2F0ZXMgYW5kIGNhbmRpZGF0ZXMgYXJlIGZyb3plbi4gT24gaXRzIG93biwgaXQgZG9lcyBub3QgZ2l2ZSB0aGUgdG90YWwgZ3JhZGllbnQsIHBlcmZlY3QgbWVtb3J5LCBvciBtZWFzdXJlZCBsaW5ndWlzdGljIHF1YWxpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c104-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGRvZXMgYW4gTFNUTSBwYXNzIG9uIGMgYW5kIGggc2VwYXJhdGVseT8JYyBpcyB0aGUgbWVtb3J5IHVwZGF0ZWQgYnkgZiDDlyBwcmV2aW91cyBjICsgaSDDlyBnLiBoIGlzIGl0cyByZWFkb3V0IG8gw5cgdGFuaChjKSwgdXNlZCBpbiBzdWJzZXF1ZW50IHN0ZXBzLiBBIHNtYWxsIG91dHB1dCBkb2VzIG5vdCBwcm92ZSB0aGF0IGMgaXMgMC4JdG9kYWkgYzEwNC1tNCBtZW1vaXJlLWV0LXNvcnRpZQpXaHkgaXMgdGhlIExTVE0gdXBkYXRlIG5vdCBhbHdheXMgYSB3ZWlnaHRlZCBhdmVyYWdlPwlmIGFuZCBpIGFyZSBpbmRlcGVuZGVudCBnYXRlczsgdGhlaXIgc3VtIGlzIG5vdCBjb25zdHJhaW5lZCB0byAxLiBUaGV5IG11bHRpcGx5IHRoZSBwcmV2aW91cyBjIGFuZCB0aGUgY2FuZGlkYXRlIGcgYmVmb3JlIGFkZGl0aW9uLiBJbiBvdXIgZXhhbXBsZSwgdGhlaXIgc3VtIGlzIDUvNC4JdG9kYWkgYzEwNC1tNCBwb3J0ZXMtaW5kZXBlbmRhbnRlcwpXaGVyZSBkbyByIGFuZCB6IGFjdCBpbiBvdXIgR1JVPwlyIHJlZHVjZXMgdGhlIHVzZSBvZiBwcmV2aW91cyBoIGluIHRoZSBjYW5kaWRhdGUsIGJlZm9yZSB0aGUgcmVjdXJyZW50IG1hdHJpeC4gVGhlIGZpbmFsIG1peHR1cmUgaXMgKDEg4oiSIHopIMOXIHByZXZpb3VzIGggKyB6IMOXIGc6IHogd2VpZ2h0cyB0aGUgbmV3IGNhbmRpZGF0ZSBoZXJlLCB3aXRoIG5vIHNlcGFyYXRlIHN0YXRlIGMuCXRvZGFpIGMxMDQtbTQgcmVzZXQtZXQtbWVsYW5nZQpXaGF0IHNob3VsZCB5b3UgY2hlY2sgYmVmb3JlIHNheWluZyB0aGF0IGEgaGlnaCB6IHJldGFpbnMgbWVtb3J5PwlSZWFkIHRoZSBlcXVhdGlvbjogaGVyZSBhIGhpZ2ggeiBmYXZvcnMgdGhlIGNhbmRpZGF0ZTsgaW4geiDDlyBwcmV2aW91cyBoICsgKDEg4oiSIHopIMOXIGcsIGl0IGZhdm9ycyB0aGUgcHJldmlvdXMgc3RhdGUuIFRoZSBuYW1lIG9mIHRoZSBnYXRlIGlzIG5vdCBlbm91Z2guCXRvZGFpIGMxMDQtbTQgY29udmVudGlvbi1kZS1wb3J0ZQpXaGF0IGRvZXMgdGhlIHByb2R1Y3Qgb2YgZm9yZ2V0IGdhdGVzIG92ZXIgc2V2ZXJhbCB3b3JkcyBwcm92ZT8JSXQgZ2l2ZXMgdHJhbnNtaXNzaW9uIHRocm91Z2ggdGhlIGRpcmVjdCBwYXRoIG9mIGMgaWYgdGhlIGdhdGVzIGFuZCBjYW5kaWRhdGVzIGFyZSBmcm96ZW4uIE9uIGl0cyBvd24sIGl0IGRvZXMgbm90IGdpdmUgdGhlIHRvdGFsIGdyYWRpZW50LCBwZXJmZWN0IG1lbW9yeSwgb3IgbWVhc3VyZWQgbGluZ3Vpc3RpYyBxdWFsaXR5Lgl0b2RhaSBjMTA0LW00IHRyYW5zbWlzc2lvbi1kaXJlY3RlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dvfrzo kdpuwf omrv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare to read a sequential engine while distinguishing its interface from its architecture</h3><dl><div><dt>What you understand</dt><dd>You distinguish the cell equations, their learned parameters, and the interface that would request a prediction. The sentence about the parcel is fictional; a gate value is not a measure of language understanding.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">semmwy ikfqpw yzatzj dsgtlt ebtpmz hatxku uriojl gvhmvv dmlzgf wznizl baicwa vgcrye gnufov lqydmy qkmznw iuigxd plpzzy ptynmv jlnbdk yiacnh judmur mbduuz lqunbm zhsvqh</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: redo a step of each cell without support, explain gate conventions, and distinguish a transcription interface from the architecture of the model called. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ubadxt cmzizj ubsrpd nhnfxv ucigqz atqvhr gefe</span></span> Reading and an assisted answer do not establish any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jijakp oevyqw egnhhg ojcudv urpkqa sivtfq kfynjz bbgdrg oiydtv hvbgyg szzpqn dbfhri pnlfbz tvhxvt ckhkai xqzyrx noebnp sfjtur wrgkoj ognwqw ilxnoe ckzijw mzgdzd jvmgld</span></span></dd></div><div><dt>Next step</dt><dd>Reproduce the calculations and respond to an objection without help in a later session. Continue with C104·M5 for temporal validation. Any real comparison would then require a separate review of the model actually called and evidence of its use and quality, under an appropriate mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c104-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c104-m3.html">Previous</a> · <a href="c104-m5.html">Next</a></nav>
+<footer><p>Course book · C104·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

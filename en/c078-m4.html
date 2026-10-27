@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Convert the landmarks predicted by an external model into the image coordinate system, then check this adaptation without confusing correct conversion with accurate prediction.">
+<title>C078·M4 · External model and adaptation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hzmdvz dhodqf yipv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C078·M4</p><h1>External model and adaptation</h1><p class="objectif"><span>Your goal</span>Convert the landmarks predicted by an external model into the image coordinate system, then check this adaptation without confusing correct conversion with accurate prediction.</p><p class="prerequis"><strong>Before you start</strong><br>c027-m5 : complex numbers · c040-m5 : least squares · c036-m5 : annotated graphs · c022-m5 : untrusted inputs and injection · c078-m1 : pixels, coordinates and normalization · c078-m2 : coordinate systems, segments and angles · c078-m3 : degenerate geometry and missing points</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You want to draw the segments of a jointed arm on a photograph of it. An external model proposes positions for the shoulder, elbow and wrist. However, it received only a cropped area, scaled down before analysis. If you place its points directly on the full photograph, they may end up in the wrong place, even if the model located the joints perfectly within the area it received.</p><p>Here, an external model is a separately supplied prediction program whose parameters have already been learned from other images. We use its outputs without studying that learning process. The adapter translates between what this program provides and what our geometry calculation expects: point names, order, units and coordinate system. This adaptation does not change the parameters learned by the model.</p><p>Imagine an address marked on a map of a neighbourhood: you need to know where that neighbourhood lies in the city to transfer the address to the city map. The crop plays this role. Keeping its origin and dimensions lets you place the points back in the full image; losing them prevents you from determining their positions in that image with certainty.</p><p>The whole scene is fictional: the photograph, dimensions and outputs of the Arti model, version A. This model is an invented exercise contract, rather than a tool claimed to be available. E, C and P denote the shoulder, elbow and wrist, respectively, of the same jointed arm. A predicted point remains a proposal; an exact conversion does not guarantee that it identifies the correct joint.</p><p>Before calculating, follow the diagrams: the model proposes points, the adapter converts and checks them, then the geometry uses the accepted points. If the output is missing or incompatible, the process stops with an explicit reason; it does not invent a position.</p><div class="schemas"><figure><svg viewBox="0 0 360 316" xmlns="http://www.w3.org/2000/svg" role="img"><title>The boundary between prediction and geometry</title><desc>The fictional model proposes landmarks for the jointed arm. The adapter recovers their names and coordinates in the photograph, or rejects incompatible output. The geometry then uses the accepted points.</desc><rect x="20" y="20" width="320" height="70" rx="7" class="cadre-prediction" /><text x="180" y="48" text-anchor="middle">Fictional external model</text><text x="180" y="73" text-anchor="middle" class="petite-etiquette">Propose arm points</text><path d="M180 90v38m-5-7 5 7 5-7" class="trait" /><rect x="20" y="128" width="320" height="70" rx="7" class="cadre-resultat" /><text x="180" y="156" text-anchor="middle">Adapter</text><text x="180" y="181" text-anchor="middle" class="petite-etiquette">Name · convert · check</text><path d="M180 198v38m-5-7 5 7 5-7" class="trait" /><rect x="20" y="236" width="320" height="70" rx="7" class="cadre-neutre" /><text x="180" y="264" text-anchor="middle">Local geometry</text><text x="180" y="289" text-anchor="middle" class="petite-etiquette">Measure accepted segments</text></svg><figcaption>The segment calculation does not depend on the provider’s particular format: the adapter supplies named points in the declared coordinate system. Rejection stops this process.</figcaption></figure><figure><svg viewBox="0 0 360 316" xmlns="http://www.w3.org/2000/svg" role="img"><title>Place the arm back in the full photograph</title><desc>The photograph measures 800 by 600 pixels. The crop rectangle starts at x-coordinate 100 and y-coordinate 50 pixels, with a width of 400 and a height of 200 pixels. After adaptation, E is at (200 ; 100), C at (200 ; 200), P at (400 ; 200) pixels. The image axes point right and down. The drawing preserves the proportions.</desc><text x="180" y="22" text-anchor="middle" class="petite-etiquette">Image: 800 × 600 px</text><rect x="20" y="35" width="320" height="240" rx="3" class="cadre-neutre" /><rect x="60" y="55" width="160" height="80" class="cadre-prediction" /><circle cx="60" cy="55" r="3" class="point-prediction" /><text x="60" y="48" class="petite-etiquette">Crop origin</text><path d="M100 75v40h80" class="trait" /><circle cx="100" cy="75" r="4" class="resultat" /><circle cx="100" cy="115" r="4" class="resultat" /><circle cx="180" cy="115" r="4" class="resultat" /><text x="87" y="79">E</text><text x="86" y="129">C</text><text x="190" y="121">P</text><text x="245" y="92" class="petite-etiquette">Cropped</text><text x="245" y="113" class="petite-etiquette">area</text><line x1="220" y1="100" x2="237" y2="100" class="trait" /><path d="M36 187h78m-7-5 7 5-7 5M36 187v62m-5-7 5 7 5-7" class="trait" /><text x="122" y="192" class="petite-etiquette">x</text><text x="49" y="253" class="petite-etiquette">y</text><text x="180" y="302" text-anchor="middle" class="petite-etiquette">The crop has its own origin.</text></svg><figcaption>E and C have the same x-coordinate; C and P have the same y-coordinate. The pink rectangle is the only part analysed. Yet the final coordinates describe the full photograph.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>An external output has meaning only with its contract: landmark identities, coordinate format and image transformations. Translate this contract before taking measurements.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Recover the wrist position after cropping</h3><p>The fictional photograph measures 800 × 600 px. The analysed area starts at (100 ; 50) px and measures 400 × 200 px. It is scaled down to 200 × 100 px for the model. The output gives, in this order: wrist (0.75 ; 0.75), shoulder (0.25 ; 0.25), elbow (0.25 ; 0.75). These pairs are normalized by the dimensions of the received image, so they are dimensionless. Let us recover E, C and P in pixels of the full photograph.</p><ol class="etapes"><li><h3>Establish the contract before using the numbers</h3><p>Our fictional contract associates each output position with its name: first P, then E, then C. The geometry calculation expects the names E, C, P; the adapter therefore reorders the complete associations, never the numbers in isolation. With a real provider, the list of names and the output version must come from a reviewed source. They cannot be guessed from an image.</p><p>In the contract for this scene, u denotes the normalized x-coordinate pointing right and v the normalized y-coordinate pointing down, from the top left corner of the received area. The values are finite and between 0 and 1, inclusive. The adapter also checks that the 3 expected landmarks are each present exactly once. This choice of bounds belongs to our exercise; it is not imposed on every external model.</p><p>We use continuous positions: the right edge is at the rectangle’s width and the bottom edge at its height. These are not integer indices used to read an array element. Scaling down adds no padding and applies neither rotation nor reflection. These assumptions make the conversion below valid. With added padding or a flipped image, those transformations would first have to be reversed.</p></li><li><h3>Keep the crop dimensions and origin</h3><p>W and H denote the width and height of the full photograph, in pixels: W = 800 px and H = 600 px. The top left corner of the crop has coordinates x<sub>0</sub> = 100 px and y<sub>0</sub> = 50 px. The crop rectangle has width w = 400 px and height h = 200 px, measured in the original photograph.</p><p>The right edge of the crop rectangle is at 100 + 400 = 500 px; the bottom is at 50 + 200 = 250 px. They lie within the photograph. The dimensions are strictly positive. We keep this information with the output: a normalized pair alone does not say which area it refers to.</p></li><li><h3>Derive the conversion, then apply it to the wrist</h3><p>x and y will be the point’s coordinates in the full photograph, in pixels. Multiplying u by w recovers its horizontal displacement within the original crop; multiplying v by h recovers its vertical displacement. Adding the corner of the crop rectangle then expresses the position relative to the photograph’s origin.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>x</mi><mo>=</mo><msub><mi>x</mi><mn>0</mn></msub><mo>+</mo><mi>u</mi><mi>w</mi><mo>;</mo><mi>y</mi><mo>=</mo><msub><mi>y</mi><mn>0</mn></msub><mo>+</mo><mi>v</mi><mi>h</mi></mrow></math></div><p>For P, the displacements are 3/4 × 400 = 300 px and 3/4 × 200 = 150 px. Each multiplication combines a dimensionless number with a dimension in pixels. We do not use W and H: u and v describe the cropped area.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>=</mo><mo>(</mo><mn>100</mn><mo>+</mo><mn>300</mn><mo>;</mo><mn>50</mn><mo>+</mo><mn>150</mn><mo>)</mo><mo>=</mo><mo>(</mo><mn>400</mn><mo>;</mo><mn>200</mn><mo>)</mo><mtext> px</mtext></mrow></math></div><p>The scaled input dimensions do not appear in the final formula: their effect cancels when the output is already normalized by those dimensions, under our assumptions. This would not hold for coordinates supplied directly in pixels of the model’s input image.</p></li><li><h3>Convert the other landmarks and put the names in order</h3><p>For E, 1/4 × 400 = 100 px and 1/4 × 200 = 50 px. After adding the origin, E = (200 ; 100) px. For C, the normalized x-coordinate is the same as E’s; its final x-coordinate is therefore 200 px. Its y-coordinate is 50 + 3/4 × 200 = 200 px.</p><p>The named internal output is therefore E = (200 ; 100) px, C = (200 ; 200) px, P = (400 ; 200) px. The segment from C to P is horizontal, with length 400 − 200 = 200 px. The segment from E to C is vertical, with length 200 − 100 = 100 px. The values can be compared in the same unit and coordinate system.</p><p>The adapter has not decided that these positions are the correct joints. It has converted the positions proposed by the model. An identification error by the model would simply be carried through to this point.</p></li><li><h3>Check through another calculation route</h3><p>Now let us go through the pixels of the scaled image. The wrist is at 3/4 × 200 = 150 px and 3/4 × 100 = 75 px in that image. To return to the original crop rectangle, the horizontal ratio is 400/200 = 2 and the vertical ratio is 200/100 = 2. These ratios are dimensionless.</p><p>We recover the displacements 150 × 2 = 300 px and 75 × 2 = 150 px, then the point (100 + 300 ; 50 + 150) = (400 ; 200) px. The result matches the direct route.</p><p>Let us also check the direction: u = 0 would give the left edge x<sub>0</sub>, u = 1 the right edge x<sub>0</sub> + w; the middle of the crop rectangle must fall halfway between these edges. For v, the same check concerns the top and bottom. These reference points check the origin and scale; merely checking that a point stays inside the photograph would be less demanding.</p></li><li><h3>Choose the internal output and keep the limits explicit</h3><p>Our geometry calculation expects pixels of the full image. If it expected normalized coordinates for that image, we would still have to divide x by W and y by H. For P: 400/800 = 1/2, or 0.50 dimensionless, and 200/600 = 1/3, exactly, dimensionless. We therefore could not pass it the initial pair (0.75 ; 0.75).</p><p>If a landmark is missing, a value is non-finite or the version does not establish the order, the conversion does not provide a usable set: we return “landmarks unavailable” with the reason. We never replace a missing point with (0 ; 0), which is a possible actual position. Degenerate segments must still be rejected before calculating an angle, as in the previous unit.</p><p>Checking the adaptation concerns the contract and the change of coordinate system. The accuracy of the predicted landmarks requires a separate comparison with suitable references. Our fictional calculations establish neither model performance, nor real measurement accuracy, nor any effect on the arm.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Explain why we multiply by the crop dimensions, why we add its origin, then why reordering names does not improve the accuracy of predicted points. Recover the wrist position through both routes.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Normalized always means normalized by the full photograph.”</h3><p>Ask which image served as the model’s reference. Here, its pairs describe the scaled crop. Work through u × w, v × h, then add the corner of the crop rectangle. The order and units of the operations are justified in the example.</p><a href="#exemple">Revisit the conversion and the check through scaled image pixels</a></li><li><h3>“The first point can become E, since my calculation expects E first.”</h3><p>In our contract, the first point is P. Associate each pair with its original name before arranging E, C, P. If the version changes without a description of the order, reject the input rather than guessing a correspondence.</p><a href="#exercices">Explicitly reorder the associations in the first exercise</a></li><li><h3>“The point is inside the photograph, so the adaptation and model are validated.”</h3><p>The last exercise constructs an incorrect conversion that stays inside the photograph. A known reference point provides a better check of the coordinate system. Even correct adaptation does not prove that the model found the correct joint; these checks concern different things.</p><a href="#exercices">Diagnose the plausible conversion in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-contrat"><p class="repere">Exercise 1 · Identify the contract</p>
+<h3>Attach a name to each pair</h3><p>The same model returns the list [wrist, shoulder, elbow], with the pairs from the example. The calculation expects E, C, P, in that order and in pixels of the full image. First write the normalized pairs in the required internal order. Then say whether reordering them is enough to pass them to the calculation.</p>
+<label for="reponse-ex-contrat">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-contrat" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-contrat" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-contrat" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-contrat" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write each name next to its pair before moving an association.</p></details><details class="indice"><summary>Hint 2</summary><p>After reordering, does the coordinate system still need to be changed?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>E receives (0.25 ; 0.25), C receives (0.25 ; 0.75), P receives (0.75 ; 0.75). The order E, C, P is restored, with pairs that are still dimensionless and relative to the crop.</p><p>Passing them to the calculation must wait until they have been converted into pixels of the full image: apply the crop rectangle’s transformation to each named point. Reordering converts neither the units nor the coordinate system.</p><p class="petit-titre">Check your reasoning</p><ul><li>Preserve each name–pair association during reordering.</li><li>Distinguish reordering from geometric conversion.</li><li>State that the intermediate pairs are dimensionless.</li></ul></details></article><article class="exercice" id="ex-variante"><p class="repere">Exercise 2 · Independent calculation</p>
+<h3>The wrist changes position in the same image</h3><p>In a fictional variant of the same photograph, keep exactly the same crop and scaling. Only the wrist prediction changes to u = 0.50 and v = 0.25, dimensionless. Calculate its coordinates in the full photograph. Check the x-coordinate separately using the middle of the crop rectangle.</p>
+<label for="reponse-ex-variante">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-variante" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-variante" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-variante" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-variante" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The horizontal displacement is u times the width of the crop rectangle; then add the x-coordinate of its origin.</p></details><details class="indice"><summary>Hint 2</summary><p>The horizontal midpoint lies halfway between 100 px and 500 px.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Horizontally, the displacement is 1/2 × 400 = 200 px. Relative to the photograph’s origin, x = 100 + 200 = 300 px. Vertically, y = 50 + 1/4 × 200 = 50 + 50 = 100 px. The new wrist position is therefore (300 ; 100) px.</p><p>Another check of x: (100 + 500)/2 = 300 px. This is indeed the horizontal midpoint of the crop. The y-coordinate lies a quarter of its height down from its top edge; it is not a quarter of the full photograph’s height.</p><p class="petit-titre">Check your reasoning</p><ul><li>Use the dimensions of the original crop.</li><li>Add both coordinates of its origin.</li><li>Give both final coordinates in pixels.</li><li>Check the x-coordinate using the edges of the crop rectangle, without repeating the same multiplication.</li></ul></details></article><article class="exercice" id="ex-audit"><p class="repere">Exercise 3 · Diagnosis and limits of evidence</p>
+<h3>An incorrect conversion can stay within bounds</h3><p>Return to the initial wrist position, u = v = 0.75. An adapter multiplies directly by the width and height of the full photograph and reports P = (600 ; 450) px. It checks only that the point stays inside the photograph. Explain the fault, calculate the differences from the correct conversion and propose a check that detects it. Then state what to return if the elbow is missing from the output.</p>
+<label for="reponse-ex-audit">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-audit" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-audit" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-audit" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-audit" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate the difference from the wrist in the example, coordinate by coordinate.</p></details><details class="indice"><summary>Hint 2</summary><p>Which corner in the photograph should the normalized corner (0 ; 0) correspond to?</p></details><details class="indice"><summary>Hint 3</summary><p>Do a 0 coordinate and an unknown coordinate mean the same thing?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The program used the full image as its normalization reference: 3/4 × 800 = 600 px and 3/4 × 600 = 450 px. The correct conversion returns (400 ; 200) px. The signed differences are therefore 600 − 400 = 200 px horizontally and 450 − 200 = 250 px vertically. These are differences between two conversions of the same point, rather than a measurement of the model’s error on a real joint.</p><p>The incorrect point stays between the photograph’s edges: the stated check passes despite the fault. Yet it is outside our crop. A test of the local corner (0 ; 0) must return (100 ; 50) px; the faulty adapter would return (0 ; 0) px. This known case detects the lost origin. Testing the opposite corner must also recover (500 ; 250) px to check the scale.</p><p>If C is missing, return an indication that the segments depending on C are unavailable, naming the missing landmark. E and P may be kept as available points according to the internal contract, but no elbow angle is reported and no fictional C is created at the origin. Reading a solution or producing an answer after a hint still counts as an assisted answer.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify the wrong reference image and the lost origin.</li><li>Calculate the conversion differences in both directions, in pixels.</li><li>Explain why staying inside the photograph is not enough.</li><li>Propose reference points with expected positions and keep the missing elbow explicit.</li><li>Avoid treating the conversion diagnosis as validation of the model’s accuracy.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="contrat"><summary><span class="repere">Recall 1</span><span>What information gives meaning to the pairs from an external model?</span></summary><p>The version and landmark names, their order, the units, the origin and axis directions, the reference image and the transformations applied to that image. Rules for presence and validity are also part of the contract.</p></details><details class="carte" data-carte="conversion"><summary><span class="repere">Recall 2</span><span>How do you recover a point in the full image from an output normalized to the crop?</span></summary><p>With no padding, rotation or reflection: multiply the normalized x-coordinate by the width of the original crop rectangle and the y-coordinate by its height, then add the coordinates of the rectangle’s top left corner. The final positions are in pixels of the full image.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 3</span><span>What check detects a forgotten crop origin?</span></summary><p>The local corner (0 ; 0) must recover the corner of the crop rectangle, here (100 ; 50) px. An incorrect point can stay inside the photograph; this bounds check alone is insufficient.</p></details><details class="carte" data-carte="absence"><summary><span class="repere">Recall 4</span><span>Why should you not replace a missing elbow with a 0 pair?</span></summary><p>The pair (0 ; 0) denotes a position, whereas absence means that no usable position is available. Inventing this point could produce segments and an angle without a basis.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>What does a correct geometric conversion prove, and what remains to be checked?</span></summary><p>It establishes the conversion of the supplied points under a given contract. The accuracy of the model’s landmarks, its actual use and the quality of a real measurement require their own evidence. Reading or giving an assisted answer does not establish an attained level.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the route from photograph to segment: name the image actually analysed, attach each pair to its landmark, reverse the scaling and cropping, state the final coordinate system, check against known positions, then preserve missing points as missing. Finally, explain why an exact conversion can carry through an incorrect prediction. Repeat this reasoning without help at least 2 days later; reading and immediate success are not enough to establish an attained level.</p></div><div class="exports"><a class="bouton" download="c078-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzgtbTQ6Y29udHJhdCIsCiAgICAgICJ1bml0ZSI6ICJjMDc4LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJhdC1hZGFwdGF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaW5mb3JtYXRpb24gZ2l2ZXMgbWVhbmluZyB0byB0aGUgcGFpcnMgZnJvbSBhbiBleHRlcm5hbCBtb2RlbD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdmVyc2lvbiBhbmQgbGFuZG1hcmsgbmFtZXMsIHRoZWlyIG9yZGVyLCB0aGUgdW5pdHMsIHRoZSBvcmlnaW4gYW5kIGF4aXMgZGlyZWN0aW9ucywgdGhlIHJlZmVyZW5jZSBpbWFnZSBhbmQgdGhlIHRyYW5zZm9ybWF0aW9ucyBhcHBsaWVkIHRvIHRoYXQgaW1hZ2UuIFJ1bGVzIGZvciBwcmVzZW5jZSBhbmQgdmFsaWRpdHkgYXJlIGFsc28gcGFydCBvZiB0aGUgY29udHJhY3QuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzgtbTQ6Y29udmVyc2lvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDc4LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaW52ZXJzaW9uLXJlY2FkcmFnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IHJlY292ZXIgYSBwb2ludCBpbiB0aGUgZnVsbCBpbWFnZSBmcm9tIGFuIG91dHB1dCBub3JtYWxpemVkIHRvIHRoZSBjcm9wPyIsCiAgICAgICJyZXBvbnNlIjogIldpdGggbm8gcGFkZGluZywgcm90YXRpb24gb3IgcmVmbGVjdGlvbjogbXVsdGlwbHkgdGhlIG5vcm1hbGl6ZWQgeC1jb29yZGluYXRlIGJ5IHRoZSB3aWR0aCBvZiB0aGUgb3JpZ2luYWwgY3JvcCByZWN0YW5nbGUgYW5kIHRoZSB5LWNvb3JkaW5hdGUgYnkgaXRzIGhlaWdodCwgdGhlbiBhZGQgdGhlIGNvb3JkaW5hdGVzIG9mIHRoZSByZWN0YW5nbGXigJlzIHRvcCBsZWZ0IGNvcm5lci4gVGhlIGZpbmFsIHBvc2l0aW9ucyBhcmUgaW4gcGl4ZWxzIG9mIHRoZSBmdWxsIGltYWdlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc4LW00OmNvbnRyb2xlIiwKICAgICAgInVuaXRlIjogImMwNzgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1yZXBlcmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBjaGVjayBkZXRlY3RzIGEgZm9yZ290dGVuIGNyb3Agb3JpZ2luPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBsb2NhbCBjb3JuZXIgKDAgOyAwKSBtdXN0IHJlY292ZXIgdGhlIGNvcm5lciBvZiB0aGUgY3JvcCByZWN0YW5nbGUsIGhlcmUgKDEwMCA7IDUwKSBweC4gQW4gaW5jb3JyZWN0IHBvaW50IGNhbiBzdGF5IGluc2lkZSB0aGUgcGhvdG9ncmFwaDsgdGhpcyBib3VuZHMgY2hlY2sgYWxvbmUgaXMgaW5zdWZmaWNpZW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc4LW00OmFic2VuY2UiLAogICAgICAidW5pdGUiOiAiYzA3OC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFic2VuY2UtcHJlc2VydmVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBzaG91bGQgeW91IG5vdCByZXBsYWNlIGEgbWlzc2luZyBlbGJvdyB3aXRoIGEgMCBwYWlyPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBwYWlyICgwIDsgMCkgZGVub3RlcyBhIHBvc2l0aW9uLCB3aGVyZWFzIGFic2VuY2UgbWVhbnMgdGhhdCBubyB1c2FibGUgcG9zaXRpb24gaXMgYXZhaWxhYmxlLiBJbnZlbnRpbmcgdGhpcyBwb2ludCBjb3VsZCBwcm9kdWNlIHNlZ21lbnRzIGFuZCBhbiBhbmdsZSB3aXRob3V0IGEgYmFzaXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzgtbTQ6cHJldXZlIiwKICAgICAgInVuaXRlIjogImMwNzgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb3J0ZWUtYWRhcHRhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBjb3JyZWN0IGdlb21ldHJpYyBjb252ZXJzaW9uIHByb3ZlLCBhbmQgd2hhdCByZW1haW5zIHRvIGJlIGNoZWNrZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgZXN0YWJsaXNoZXMgdGhlIGNvbnZlcnNpb24gb2YgdGhlIHN1cHBsaWVkIHBvaW50cyB1bmRlciBhIGdpdmVuIGNvbnRyYWN0LiBUaGUgYWNjdXJhY3kgb2YgdGhlIG1vZGVs4oCZcyBsYW5kbWFya3MsIGl0cyBhY3R1YWwgdXNlIGFuZCB0aGUgcXVhbGl0eSBvZiBhIHJlYWwgbWVhc3VyZW1lbnQgcmVxdWlyZSB0aGVpciBvd24gZXZpZGVuY2UuIFJlYWRpbmcgb3IgZ2l2aW5nIGFuIGFzc2lzdGVkIGFuc3dlciBkb2VzIG5vdCBlc3RhYmxpc2ggYW4gYXR0YWluZWQgbGV2ZWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c078-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpbmZvcm1hdGlvbiBnaXZlcyBtZWFuaW5nIHRvIHRoZSBwYWlycyBmcm9tIGFuIGV4dGVybmFsIG1vZGVsPwlUaGUgdmVyc2lvbiBhbmQgbGFuZG1hcmsgbmFtZXMsIHRoZWlyIG9yZGVyLCB0aGUgdW5pdHMsIHRoZSBvcmlnaW4gYW5kIGF4aXMgZGlyZWN0aW9ucywgdGhlIHJlZmVyZW5jZSBpbWFnZSBhbmQgdGhlIHRyYW5zZm9ybWF0aW9ucyBhcHBsaWVkIHRvIHRoYXQgaW1hZ2UuIFJ1bGVzIGZvciBwcmVzZW5jZSBhbmQgdmFsaWRpdHkgYXJlIGFsc28gcGFydCBvZiB0aGUgY29udHJhY3QuCXRvZGFpIGMwNzgtbTQgY29udHJhdC1hZGFwdGF0aW9uCkhvdyBkbyB5b3UgcmVjb3ZlciBhIHBvaW50IGluIHRoZSBmdWxsIGltYWdlIGZyb20gYW4gb3V0cHV0IG5vcm1hbGl6ZWQgdG8gdGhlIGNyb3A/CVdpdGggbm8gcGFkZGluZywgcm90YXRpb24gb3IgcmVmbGVjdGlvbjogbXVsdGlwbHkgdGhlIG5vcm1hbGl6ZWQgeC1jb29yZGluYXRlIGJ5IHRoZSB3aWR0aCBvZiB0aGUgb3JpZ2luYWwgY3JvcCByZWN0YW5nbGUgYW5kIHRoZSB5LWNvb3JkaW5hdGUgYnkgaXRzIGhlaWdodCwgdGhlbiBhZGQgdGhlIGNvb3JkaW5hdGVzIG9mIHRoZSByZWN0YW5nbGXigJlzIHRvcCBsZWZ0IGNvcm5lci4gVGhlIGZpbmFsIHBvc2l0aW9ucyBhcmUgaW4gcGl4ZWxzIG9mIHRoZSBmdWxsIGltYWdlLgl0b2RhaSBjMDc4LW00IGludmVyc2lvbi1yZWNhZHJhZ2UKV2hhdCBjaGVjayBkZXRlY3RzIGEgZm9yZ290dGVuIGNyb3Agb3JpZ2luPwlUaGUgbG9jYWwgY29ybmVyICgwIDsgMCkgbXVzdCByZWNvdmVyIHRoZSBjb3JuZXIgb2YgdGhlIGNyb3AgcmVjdGFuZ2xlLCBoZXJlICgxMDAgOyA1MCkgcHguIEFuIGluY29ycmVjdCBwb2ludCBjYW4gc3RheSBpbnNpZGUgdGhlIHBob3RvZ3JhcGg7IHRoaXMgYm91bmRzIGNoZWNrIGFsb25lIGlzIGluc3VmZmljaWVudC4JdG9kYWkgYzA3OC1tNCBjb250cm9sZS1yZXBlcmUKV2h5IHNob3VsZCB5b3Ugbm90IHJlcGxhY2UgYSBtaXNzaW5nIGVsYm93IHdpdGggYSAwIHBhaXI/CVRoZSBwYWlyICgwIDsgMCkgZGVub3RlcyBhIHBvc2l0aW9uLCB3aGVyZWFzIGFic2VuY2UgbWVhbnMgdGhhdCBubyB1c2FibGUgcG9zaXRpb24gaXMgYXZhaWxhYmxlLiBJbnZlbnRpbmcgdGhpcyBwb2ludCBjb3VsZCBwcm9kdWNlIHNlZ21lbnRzIGFuZCBhbiBhbmdsZSB3aXRob3V0IGEgYmFzaXMuCXRvZGFpIGMwNzgtbTQgYWJzZW5jZS1wcmVzZXJ2ZWUKV2hhdCBkb2VzIGEgY29ycmVjdCBnZW9tZXRyaWMgY29udmVyc2lvbiBwcm92ZSwgYW5kIHdoYXQgcmVtYWlucyB0byBiZSBjaGVja2VkPwlJdCBlc3RhYmxpc2hlcyB0aGUgY29udmVyc2lvbiBvZiB0aGUgc3VwcGxpZWQgcG9pbnRzIHVuZGVyIGEgZ2l2ZW4gY29udHJhY3QuIFRoZSBhY2N1cmFjeSBvZiB0aGUgbW9kZWzigJlzIGxhbmRtYXJrcywgaXRzIGFjdHVhbCB1c2UgYW5kIHRoZSBxdWFsaXR5IG9mIGEgcmVhbCBtZWFzdXJlbWVudCByZXF1aXJlIHRoZWlyIG93biBldmlkZW5jZS4gUmVhZGluZyBvciBnaXZpbmcgYW4gYXNzaXN0ZWQgYW5zd2VyIGRvZXMgbm90IGVzdGFibGlzaCBhbiBhdHRhaW5lZCBsZXZlbC4JdG9kYWkgYzA3OC1tNCBwb3J0ZWUtYWRhcHRhdGlvbgo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hzmdvz dhodqf yipv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vedkxx oqvcpt qxvo</span></span> · recognize the adaptation boundary</h3><dl><div><dt>What you understand</dt><dd>A model output requires a contract and a conversion before measurements. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mytzib nfxedh cvryzh cpndvc qppfxh rvrltk jsfohh prvmah uepknj smvzwe fijpph qhilrq gwqjxx vt</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">krxsqt vjsmhz mgmebz dwrxdf kwdmuc stmrsx ngtkwd auzfyg wtsaae icgeoj tkpmae ztlqgc tdvdxl fvdijj rpynaq rsnxax hfxdcc oadxkq pnmiqc mqezll xccxjh ymwljz lpoafz xehhfc</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dwxjtf tpitzn eukcjc idhsba qygvqn yhfpfz dumwke qjefsk iegmyf gjyjki giegjk jrqcmw zxvgbn kk</span></span> Here, reconstructing the conversion and its checks without help remains to be demonstrated. Neither reading, nor the presence of code, nor an assisted solution establishes an attained level.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xyjlff nuextz pgvylw eczpfg jsggao hcwjxi tvxpek jibumx rvwvkp sfxgsd vafbjm pewujk cotjgb ctvlmx upobpn qlnzau txxriy ecvcnj mjyzao cceiyz rwlddv ghrruv qthrjy tnyxas</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the adaptation for the jointed arm and challenge it with a known point, a lost origin and a missing elbow. Continue with C078·M5 on consent and measurement error. For real use, the invoked code path and provider’s contract will still need to be reviewed, followed by separate evidence of operation and accuracy, within an authorized scope.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c078-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c078-m3.html">Previous</a> · <a href="c078-m5.html">Next</a></nav>
+<footer><p>Course book · C078·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

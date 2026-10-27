@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct a low-rank approximation by truncating the SVD, calculate its loss and decide whether it suits the question being asked.">
+<title>C050·M4 · Low rank — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kvehfu stgkiq aphk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C050·M4</p><h1>Low rank</h1><p class="objectif"><span>Your goal</span>Construct a low-rank approximation by truncating the SVD, calculate its loss and decide whether it suits the question being asked.</p><p class="prerequis"><strong>Before you start</strong><br>c048-m5 : positivity · c040-m5 : least squares · c050-m1 : Cholesky · c050-m2 : SVD · c050-m3 : pseudoinverse</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You compare the energy use of 2 circuits in a workshop during 2 time slots of equal duration. The North circuit uses 5 then 3 kWh; the South circuit uses 3 then 5 kWh. The table has a common background: each circuit uses roughly the same amount in each time slot. It also has a contrast: North uses more at the start, South at the end.</p><p>To keep only the common background, you can replace each entry with 4 kWh. The columns become identical: a single profile is enough to describe them. This is an approximation of rank 1. It simplifies the structure, but removes precisely the contrast you might want to monitor.</p><p>Rank counts the linearly independent columns: those that add a new direction, which cannot be formed by combining the previous ones. A rank is low relative to the dimensions of the table. Here, going from 2 to 1 provides a miniature model; it does not demonstrate any storage saving on such a small table.</p><p>All energy use figures are fictional. We work with the raw table, without subtracting its means, using the same unit and the same weight for each entry. We assume neither random noise nor a known hidden truth. A component with a small amplitude may be useful for a decision.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>The table before approximation</title><desc>The rows represent the North and South circuits; the columns represent the start and end. In kilowatt-hours: North 5, 3; South 3, 5. The contrast reverses between the time slots.</desc><text x="180" y="26" text-anchor="middle">Fictional energy use</text><text x="174" y="60" text-anchor="middle">Start</text><text x="281" y="60" text-anchor="middle">End</text><text x="18" y="112">North</text><text x="18" y="181">South</text><rect x="126" y="77" width="96" height="57" rx="6" class="cadre-prediction" /><rect x="233" y="77" width="96" height="57" rx="6" class="cadre-neutre" /><rect x="126" y="146" width="96" height="57" rx="6" class="cadre-neutre" /><rect x="233" y="146" width="96" height="57" rx="6" class="cadre-prediction" /><text x="174" y="112" text-anchor="middle">5 kWh</text><text x="281" y="112" text-anchor="middle">3 kWh</text><text x="174" y="181" text-anchor="middle">3 kWh</text><text x="281" y="181" text-anchor="middle">5 kWh</text><text x="180" y="237" text-anchor="middle">Common background and contrast</text><text x="180" y="260" text-anchor="middle" class="petite-etiquette">The circuit with higher use changes.</text></svg><figcaption>The values and names are enough to read the table without relying on colours. The columns are not proportional.</figcaption></figure><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>A common background retained, a contrast lost</title><desc>The approximation puts 4 kilowatt-hours in each entry. The residual, the original table minus the approximation, is 1 on the diagonal and -1 off the diagonal. Adding the tables recovers each energy use figure.</desc><text x="180" y="26" text-anchor="middle">Two tables to add</text><rect x="22" y="44" width="316" height="90" rx="7" class="cadre-resultat" /><text x="180" y="68" text-anchor="middle">Common background · kWh</text><text x="142" y="95" text-anchor="middle">4</text><text x="218" y="95" text-anchor="middle">4</text><text x="142" y="121" text-anchor="middle">4</text><text x="218" y="121" text-anchor="middle">4</text><text x="180" y="158" text-anchor="middle">+</text><rect x="22" y="172" width="316" height="90" rx="7" class="cadre-prediction" /><text x="180" y="196" text-anchor="middle">Residual · kWh</text><text x="142" y="223" text-anchor="middle">+1</text><text x="218" y="223" text-anchor="middle">-1</text><text x="142" y="249" text-anchor="middle">-1</text><text x="218" y="249" text-anchor="middle">+1</text></svg><figcaption>Each position keeps the same meaning: North then South, start then end. The residual can be negative without representing negative energy use.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Choose a rank, keep the dominant SVD modes, then measure and identify what has been removed. Whether this loss is useful depends on the task.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Summarising the workshop with a single mode</h3><p>Matrix A places the circuits in rows and the time slots in columns. Let us construct an approximation Aᵣ of rank at most r = 1, then evaluate its error over the 4 entries, all in kWh.</p><ol class="etapes"><li><h3>Set out the table and its exact rank</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>A</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>5</mn></mtd><mtd><mn>3</mn></mtd></mtr><mtr><mtd><mn>3</mn></mtd><mtd><mn>5</mn></mtd></mtr></mtable><mo>]</mo><mtext> kWh</mtext></mrow></math></div><p>A has 2 rows and 2 columns. Its determinant is 5 × 5 − 3 × 3 = 25 − 9 = 16 kWh squared. It is nonzero: the columns are independent, so the exact rank is 2. The original matrix does not have rank 1; we are going to approximate it with another matrix.</p></li><li><h3>Recover the SVD modes</h3><p>An SVD writes a real m × n matrix A as UΣVᵀ: m counts the rows, n the columns. In this full form, U has size m × m, Σ has size m × n and V has size n × n. The columns of U and V give orthogonal unit directions; the diagonal of Σ contains the nonnegative singular values, ordered from largest to smallest. The symbol ᵀ transposes: it exchanges rows and columns. The directions have no units; the singular values here have the unit kWh.</p><p>For our symmetric positive matrix, the left and right directions coincide. Call the common direction p and the contrast direction q; σc and σd denote their amplitudes. Their components are:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>=</mo><mfrac><mn>1</mn><msqrt><mn>2</mn></msqrt></mfrac><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo><mo>,</mo><mi>q</mi><mo>=</mo><mfrac><mn>1</mn><msqrt><mn>2</mn></msqrt></mfrac><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mo>−</mo><mn>1</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>The normalization factor gives pᵀp = qᵀq = 1 and pᵀq = 0. Multiplying A by p adds the entries of each row: σc = 5 + 3 = 8 kWh. Multiplying A by q subtracts them: σd = 5 − 3 = 2 kWh. Thus Ap = σc p and Aq = σd q; the amplitudes are positive and σc is the larger one.</p></li><li><h3>Choose what truncation means</h3><p>The decomposition is A = σc ppᵀ + σd qqᵀ. A product such as ppᵀ is a table: its entry in row i and column j is the product of components pᵢ and pⱼ. Each of its columns is a multiple of p, so this nonzero product has rank 1.</p><p>Truncating the SVD at r means retaining the r largest singular values and their directions, then removing the other terms. In our example, r = 1: we retain σc ppᵀ. We remove neither a circuit nor a time slot; we remove a mode that affected every entry.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>A</mi><mi>r</mi></msub><mo>=</mo><msub><mi>σ</mi><mi>c</mi></msub><mi>p</mi><msup><mi>p</mi><mi>T</mi></msup><mtext> pour </mtext><mi>r</mi><mo>=</mo><mn>1</mn></mrow></math></div></li><li><h3>Calculate all the retained entries</h3><p>Each entry of ppᵀ is 1/2 = 1/2. Multiplying this table by σc gives 8 × 1/2 = 4 kWh per entry. The determinant becomes 16 − 16 = 0; the columns are identical and nonzero, so the rank is exactly 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>A</mi><mi>r</mi></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd></mtr><mtr><mtd><mn>4</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable><mo>]</mo><mtext> kWh</mtext></mrow></math></div><p>We retain the direction shared by the circuits. Simply setting small entries to 0 would not have imposed this dependence between columns.</p></li><li><h3>Subtract to see the loss</h3><p>The residual E denotes A − Aᵣ, in the same unit. The diagonal loses 5 − 4 = 1 kWh; off the diagonal, the calculation gives 3 − 4 = -1 kWh. The negative sign indicates that the approximation overestimates this energy use.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>-1</mn></mtd></mtr><mtr><mtd><mn>-1</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo><mtext> kWh</mtext></mrow></math></div><p>Check by recombining: 4 + 1 = 5 and 4 + (-1) = 3 kWh. Symmetry recovers the original rows. The loss is therefore the mode σd qqᵀ, rather than a calculation error.</p></li><li><h3>Measure an error that does not cancel out</h3><p>The signed sum of the entries of E is 0: overestimates offset underestimates. To measure the overall difference, the Frobenius norm, written ∥E∥F, takes the square root of the sum of the squares of all entries. In the formula, eᵢⱼ is the entry of E in row i, column j; the two sums run over all rows and all columns.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mrow><mo>∥</mo><mi>E</mi><mo>∥</mo></mrow><mi>F</mi><mn>2</mn></msubsup><mo>=</mo><msub><mo>∑</mo><mi>i</mi></msub><msub><mo>∑</mo><mi>j</mi></msub><msubsup><mi>e</mi><mrow><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup></mrow></math></div><p>For each row, the squares give 1 + 1 = 2 kWh squared. The 2 rows give 2 × 2 = 4 kWh squared. The square root is 2 kWh, since 2 × 2 = 4. This is neither the sum of the signed errors nor the maximum error of an entry.</p><p>Another check: the only removed mode has amplitude 2 kWh; its square is 4, equal to the sum of the squares of the residual. For the whole of A, the sum of the squares is 8 squared + 2 squared = 64 + 4 = 68 kWh squared. The fraction of this sum that is lost is 4/68 = 1/17. It does not denote the fraction of energy use lost.</p></li><li><h3>Understand why we keep the larger mode</h3><p>SVD truncation minimises the Frobenius norm of A − B among matrices B of rank at most r. The choice of norm and the allowed rank are part of the problem: “best” has no meaning without them. Here is a justification for our table, without recalculating the whole SVD.</p><p>Any matrix B of rank at most 1 on this 2-dimensional space maps at least one unit direction w to 0: Bw = 0. Writing w = αp + βq, with α and β its dimensionless coordinates and α squared + β squared = 1, gives ∥Aw∥ squared = 64α squared + 4β squared, hence at least 4 kWh squared. Here ∥Aw∥ denotes the Euclidean length of the vector Aw. The norm ∥A − B∥F is at least the length of (A − B)w = Aw: it is therefore at least 2 kWh. To justify the inequality, apply Cauchy–Schwarz to each row: the square of the dot product of a row with a unit vector does not exceed the sum of the squares of that row. Then add these bounds over the rows.</p><p>Our Aᵣ attains this bound: its error is 2 kWh. This establishes optimality in this case. It does not prove that the removed contrast is noise. If the question is “which circuit uses more in each time slot?”, our summary has removed exactly that information.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculated matrices. Reconstruct the common background, its residual and the norm of the error. Explain why a 0 signed sum does not make the reconstruction exact and why optimality does not determine usefulness.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The SVD shows that the table already had low rank.”</h3><p>The determinant 16 is nonzero: A has rank 2. Truncation constructs a new matrix of rank 1 and produces a nonzero residual. Distinguish exact rank, chosen rank and closeness between matrices.</p><a href="#exemple">Revisit the determinant and the choice of rank</a></li><li><h3>“The errors cancel out, so no information has been lost.”</h3><p>Adding the signed errors gives 0, but adding their squares gives 4 kWh squared. Total energy use can remain correct while its distribution is wrong.</p><a href="#exemple">Revisit the residual and its Frobenius norm</a></li><li><h3>“The small mode is noise, so I can definitely discard it.”</h3><p>The contrast mode has a smaller amplitude, but it tells us which circuit uses more. Its singular value does not establish its nature. Set the task and the tolerance before accepting the loss.</p><a href="#exercices">Test a requirement for each entry</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-rang"><p class="repere">Exercise 1 · Identify, then justify</p>
+<h3>How many directions remain?</h3><p>Without redoing the SVD, give the exact rank of the original table and that of the table in which each entry is 4 kWh. Justify both answers and say what happens to the North–South contrast.</p>
+<label for="reponse-ex-rang">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-rang" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-rang" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-rang" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-rang" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For A, use the determinant. For Aᵣ, compare the columns and check that they are nonzero.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For A: 5 × 5 − 3 × 3 = 16, which is nonzero; its rank is 2. For Aᵣ: the columns are identical to (4, 4)ᵀ, so only one nonzero direction remains; its rank is 1.</p><p>The contrast changed sign between start and end. In Aᵣ, the circuits have equal energy use in each time slot: this information has disappeared, even though each row total is preserved.</p><p class="petit-titre">Check your reasoning</p><ul><li>You justify the original rank using a nonzero determinant.</li><li>You combine dependence and nonzero columns to establish the rank of the summary.</li><li>You identify the information removed from the scene.</li></ul></details></article><article class="exercice" id="ex-autre-mode"><p class="repere">Exercise 2 · Compare calculations</p>
+<h3>What if we kept only the contrast?</h3><p>For the same table A, take B = σd qqᵀ: keep the mode with amplitude 2 kWh and remove the mode with amplitude 8 kWh. Calculate B, then the sum of the squares of A − B and its Frobenius norm. Compare with Aᵣ.</p>
+<label for="reponse-ex-autre-mode">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-autre-mode" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-autre-mode" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-autre-mode" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-autre-mode" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In qqᵀ, the diagonal entries are 1/2 and the other entries are their negatives.</p></details><details class="indice"><summary>Hint 2</summary><p>The residual A − B is the common background. Its 4 entries are identical.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The diagonal of B is 2/2 = 1 kWh; the off-diagonal entries are -1 kWh. Its columns are negatives of each other and nonzero: B also has rank 1. The negative values are mode contributions; B alone does not respect the positivity of energy use.</p><p>A − B has 4 kWh in every entry. The sum of the squares is 4 × 16 = 64 kWh squared. Its square root is 8 kWh. It exceeds the 2 kWh obtained by keeping the common mode.</p><p>The two candidates have the same rank. Their reconstruction quality differs because one retains the larger amplitude and the other the smaller one. This calculation compares these candidates; the bound proved in the example establishes the minimum among all candidates of the allowed rank.</p><p class="petit-titre">Check your reasoning</p><ul><li>You give the signs of the entries of B and justify its rank.</li><li>You calculate the residual before summing its squares.</li><li>You distinguish the sum of the squares in kWh squared from the norm in kWh.</li></ul></details></article><article class="exercice" id="ex-tolerance"><p class="repere">Exercise 3 · Decide and defend</p>
+<h3>A limit on each energy use figure</h3><p>The workshop manager accepts an absolute difference of at most 0.5 kWh in each entry. Can we provide an approximation of rank at most 1? First test Aᵣ, then determine whether another candidate of this rank could meet this limit. What decision should we make for this table?</p>
+<label for="reponse-ex-tolerance">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-tolerance" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-tolerance" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-tolerance" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-tolerance" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Aᵣ has an absolute difference of 1 kWh in each entry. Rejecting it is not enough on its own to rule out all candidates.</p></details><details class="indice"><summary>Hint 2</summary><p>If each difference were at most 0.5 kWh, the sum of their squares would be at most 4 × (0.5 squared). Compare this bound with the proved minimum error.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Aᵣ fails: 1 kWh exceeds 0.5 kWh. For any candidate that met the limit, the sum of the squares would be at most 4 × 1/2 × 1/2 = 1 kWh squared; its norm would be at most 1 kWh.</p><p>Yet every approximation of rank at most 1 here has an error norm of at least 2 kWh. No candidate of this rank therefore meets all the limits per entry. Keeping the 2 modes recovers A exactly, with an error of 0: we must retain rank 2 to meet this requirement for this table.</p><p>This decision concerns a reconstruction of the fictional values provided. It validates neither physical readings nor the ability to predict another time slot. After a hint or reading the worked solution, record the answer as an assisted answer and redo the proof without support on another day.</p><p class="petit-titre">Check your reasoning</p><ul><li>You reject Aᵣ using a difference per entry, in the correct unit.</li><li>You rule out the other candidates using an overall bound rather than a simple assertion.</li><li>You state the rank to retain and the limited scope of this decision.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="rang"><summary><span class="repere">Recall 1</span><span>What is the difference between the rank of A and the rank r chosen for its summary?</span></summary><p>The rank of A counts its independent directions: here 2. Choosing r = 1 imposes a constraint on the new table Aᵣ; it does not retroactively change the rank of A.</p></details><details class="carte" data-carte="troncature"><summary><span class="repere">Recall 2</span><span>Does truncating the SVD mean removing a column from the table?</span></summary><p>No. We retain the modes associated with the r largest singular values and remove the other products of directions. The dimensions of the reconstructed table remain the same.</p></details><details class="carte" data-carte="erreur"><summary><span class="repere">Recall 3</span><span>How can we measure the loss without letting the signs cancel each other out?</span></summary><p>Form E = A − Aᵣ, add the squares of all its entries, then take the square root. Here the sum is 4 kWh squared and the norm is 2 kWh. The removed singular value provides another check.</p></details><details class="carte" data-carte="critere"><summary><span class="repere">Recall 4</span><span>What does the best approximation of a fixed rank guarantee, and what remains to be decided?</span></summary><p>Truncation minimises the Frobenius error for the allowed rank on the given table, with the selected weights. We still need to check the tolerance needed for the task and the meaning of the removed modes. A small amplitude does not prove that something is noise.</p></details><details class="carte" data-carte="reconstruire"><summary><span class="repere">Recall 5</span><span>What sequence should you reconstruct without support before claiming to understand the method?</span></summary><p>Identify rows, columns, units and weights; choose r; construct the retained modes; subtract; calculate and check the loss; assess it against the task. An assisted answer or a page read does not constitute an achieved level.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>On paper, reconstruct the sequence table → modes → chosen rank → reconstruction → residual → check → decision. Recover the workshop values and explain where the contrast disappears. Try again without support after at least 2 days; distinguish this independent attempt from reading or an assisted answer.</p></div><div class="exports"><a class="bouton" download="c050-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTAtbTQ6cmFuZyIsCiAgICAgICJ1bml0ZSI6ICJjMDUwLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmFuZy1leGFjdC1ldC1yYW5nLWNob2lzaSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gdGhlIHJhbmsgb2YgQSBhbmQgdGhlIHJhbmsgciBjaG9zZW4gZm9yIGl0cyBzdW1tYXJ5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSByYW5rIG9mIEEgY291bnRzIGl0cyBpbmRlcGVuZGVudCBkaXJlY3Rpb25zOiBoZXJlIDIuIENob29zaW5nIHIgPSAxIGltcG9zZXMgYSBjb25zdHJhaW50IG9uIHRoZSBuZXcgdGFibGUgQeG1ozsgaXQgZG9lcyBub3QgcmV0cm9hY3RpdmVseSBjaGFuZ2UgdGhlIHJhbmsgb2YgQS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1MC1tNDp0cm9uY2F0dXJlIiwKICAgICAgInVuaXRlIjogImMwNTAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0cm9uY2F0dXJlLXN2ZCIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIHRydW5jYXRpbmcgdGhlIFNWRCBtZWFuIHJlbW92aW5nIGEgY29sdW1uIGZyb20gdGhlIHRhYmxlPyIsCiAgICAgICJyZXBvbnNlIjogIk5vLiBXZSByZXRhaW4gdGhlIG1vZGVzIGFzc29jaWF0ZWQgd2l0aCB0aGUgciBsYXJnZXN0IHNpbmd1bGFyIHZhbHVlcyBhbmQgcmVtb3ZlIHRoZSBvdGhlciBwcm9kdWN0cyBvZiBkaXJlY3Rpb25zLiBUaGUgZGltZW5zaW9ucyBvZiB0aGUgcmVjb25zdHJ1Y3RlZCB0YWJsZSByZW1haW4gdGhlIHNhbWUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNTAtbTQ6ZXJyZXVyIiwKICAgICAgInVuaXRlIjogImMwNTAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJub3JtZS1mcm9iZW5pdXMiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB3ZSBtZWFzdXJlIHRoZSBsb3NzIHdpdGhvdXQgbGV0dGluZyB0aGUgc2lnbnMgY2FuY2VsIGVhY2ggb3RoZXIgb3V0PyIsCiAgICAgICJyZXBvbnNlIjogIkZvcm0gRSA9IEEg4oiSIEHhtaMsIGFkZCB0aGUgc3F1YXJlcyBvZiBhbGwgaXRzIGVudHJpZXMsIHRoZW4gdGFrZSB0aGUgc3F1YXJlIHJvb3QuIEhlcmUgdGhlIHN1bSBpcyA0IGtXaCBzcXVhcmVkIGFuZCB0aGUgbm9ybSBpcyAyIGtXaC4gVGhlIHJlbW92ZWQgc2luZ3VsYXIgdmFsdWUgcHJvdmlkZXMgYW5vdGhlciBjaGVjay4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1MC1tNDpjcml0ZXJlIiwKICAgICAgInVuaXRlIjogImMwNTAtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvcHRpbWFsaXRlLWV0LXVzYWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgYmVzdCBhcHByb3hpbWF0aW9uIG9mIGEgZml4ZWQgcmFuayBndWFyYW50ZWUsIGFuZCB3aGF0IHJlbWFpbnMgdG8gYmUgZGVjaWRlZD8iLAogICAgICAicmVwb25zZSI6ICJUcnVuY2F0aW9uIG1pbmltaXNlcyB0aGUgRnJvYmVuaXVzIGVycm9yIGZvciB0aGUgYWxsb3dlZCByYW5rIG9uIHRoZSBnaXZlbiB0YWJsZSwgd2l0aCB0aGUgc2VsZWN0ZWQgd2VpZ2h0cy4gV2Ugc3RpbGwgbmVlZCB0byBjaGVjayB0aGUgdG9sZXJhbmNlIG5lZWRlZCBmb3IgdGhlIHRhc2sgYW5kIHRoZSBtZWFuaW5nIG9mIHRoZSByZW1vdmVkIG1vZGVzLiBBIHNtYWxsIGFtcGxpdHVkZSBkb2VzIG5vdCBwcm92ZSB0aGF0IHNvbWV0aGluZyBpcyBub2lzZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA1MC1tNDpyZWNvbnN0cnVpcmUiLAogICAgICAidW5pdGUiOiAiYzA1MC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlY29uc3RydWN0aW9uLWF1dG9ub21lIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgc2VxdWVuY2Ugc2hvdWxkIHlvdSByZWNvbnN0cnVjdCB3aXRob3V0IHN1cHBvcnQgYmVmb3JlIGNsYWltaW5nIHRvIHVuZGVyc3RhbmQgdGhlIG1ldGhvZD8iLAogICAgICAicmVwb25zZSI6ICJJZGVudGlmeSByb3dzLCBjb2x1bW5zLCB1bml0cyBhbmQgd2VpZ2h0czsgY2hvb3NlIHI7IGNvbnN0cnVjdCB0aGUgcmV0YWluZWQgbW9kZXM7IHN1YnRyYWN0OyBjYWxjdWxhdGUgYW5kIGNoZWNrIHRoZSBsb3NzOyBhc3Nlc3MgaXQgYWdhaW5zdCB0aGUgdGFzay4gQW4gYXNzaXN0ZWQgYW5zd2VyIG9yIGEgcGFnZSByZWFkIGRvZXMgbm90IGNvbnN0aXR1dGUgYW4gYWNoaWV2ZWQgbGV2ZWwuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c050-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyB0aGUgZGlmZmVyZW5jZSBiZXR3ZWVuIHRoZSByYW5rIG9mIEEgYW5kIHRoZSByYW5rIHIgY2hvc2VuIGZvciBpdHMgc3VtbWFyeT8JVGhlIHJhbmsgb2YgQSBjb3VudHMgaXRzIGluZGVwZW5kZW50IGRpcmVjdGlvbnM6IGhlcmUgMi4gQ2hvb3NpbmcgciA9IDEgaW1wb3NlcyBhIGNvbnN0cmFpbnQgb24gdGhlIG5ldyB0YWJsZSBB4bWjOyBpdCBkb2VzIG5vdCByZXRyb2FjdGl2ZWx5IGNoYW5nZSB0aGUgcmFuayBvZiBBLgl0b2RhaSBjMDUwLW00IHJhbmctZXhhY3QtZXQtcmFuZy1jaG9pc2kKRG9lcyB0cnVuY2F0aW5nIHRoZSBTVkQgbWVhbiByZW1vdmluZyBhIGNvbHVtbiBmcm9tIHRoZSB0YWJsZT8JTm8uIFdlIHJldGFpbiB0aGUgbW9kZXMgYXNzb2NpYXRlZCB3aXRoIHRoZSByIGxhcmdlc3Qgc2luZ3VsYXIgdmFsdWVzIGFuZCByZW1vdmUgdGhlIG90aGVyIHByb2R1Y3RzIG9mIGRpcmVjdGlvbnMuIFRoZSBkaW1lbnNpb25zIG9mIHRoZSByZWNvbnN0cnVjdGVkIHRhYmxlIHJlbWFpbiB0aGUgc2FtZS4JdG9kYWkgYzA1MC1tNCB0cm9uY2F0dXJlLXN2ZApIb3cgY2FuIHdlIG1lYXN1cmUgdGhlIGxvc3Mgd2l0aG91dCBsZXR0aW5nIHRoZSBzaWducyBjYW5jZWwgZWFjaCBvdGhlciBvdXQ/CUZvcm0gRSA9IEEg4oiSIEHhtaMsIGFkZCB0aGUgc3F1YXJlcyBvZiBhbGwgaXRzIGVudHJpZXMsIHRoZW4gdGFrZSB0aGUgc3F1YXJlIHJvb3QuIEhlcmUgdGhlIHN1bSBpcyA0IGtXaCBzcXVhcmVkIGFuZCB0aGUgbm9ybSBpcyAyIGtXaC4gVGhlIHJlbW92ZWQgc2luZ3VsYXIgdmFsdWUgcHJvdmlkZXMgYW5vdGhlciBjaGVjay4JdG9kYWkgYzA1MC1tNCBub3JtZS1mcm9iZW5pdXMKV2hhdCBkb2VzIHRoZSBiZXN0IGFwcHJveGltYXRpb24gb2YgYSBmaXhlZCByYW5rIGd1YXJhbnRlZSwgYW5kIHdoYXQgcmVtYWlucyB0byBiZSBkZWNpZGVkPwlUcnVuY2F0aW9uIG1pbmltaXNlcyB0aGUgRnJvYmVuaXVzIGVycm9yIGZvciB0aGUgYWxsb3dlZCByYW5rIG9uIHRoZSBnaXZlbiB0YWJsZSwgd2l0aCB0aGUgc2VsZWN0ZWQgd2VpZ2h0cy4gV2Ugc3RpbGwgbmVlZCB0byBjaGVjayB0aGUgdG9sZXJhbmNlIG5lZWRlZCBmb3IgdGhlIHRhc2sgYW5kIHRoZSBtZWFuaW5nIG9mIHRoZSByZW1vdmVkIG1vZGVzLiBBIHNtYWxsIGFtcGxpdHVkZSBkb2VzIG5vdCBwcm92ZSB0aGF0IHNvbWV0aGluZyBpcyBub2lzZS4JdG9kYWkgYzA1MC1tNCBvcHRpbWFsaXRlLWV0LXVzYWdlCldoYXQgc2VxdWVuY2Ugc2hvdWxkIHlvdSByZWNvbnN0cnVjdCB3aXRob3V0IHN1cHBvcnQgYmVmb3JlIGNsYWltaW5nIHRvIHVuZGVyc3RhbmQgdGhlIG1ldGhvZD8JSWRlbnRpZnkgcm93cywgY29sdW1ucywgdW5pdHMgYW5kIHdlaWdodHM7IGNob29zZSByOyBjb25zdHJ1Y3QgdGhlIHJldGFpbmVkIG1vZGVzOyBzdWJ0cmFjdDsgY2FsY3VsYXRlIGFuZCBjaGVjayB0aGUgbG9zczsgYXNzZXNzIGl0IGFnYWluc3QgdGhlIHRhc2suIEFuIGFzc2lzdGVkIGFuc3dlciBvciBhIHBhZ2UgcmVhZCBkb2VzIG5vdCBjb25zdGl0dXRlIGFuIGFjaGlldmVkIGxldmVsLgl0b2RhaSBjMDUwLW00IHJlY29uc3RydWN0aW9uLWF1dG9ub21lCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kvehfu stgkiq aphk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">edvtol zmuxft zdipfv rhnfmf pqomhx dcystx rqsp</span></span></h3><dl><div><dt>You understand</dt><dd>An exact rank describes dependencies in a table; a chosen rank constrains an approximation. The numerical rank returned by a solver also depends on its tolerance rules. These notions do not automatically lead to the same decision.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cheygj tmeztr tpwoxl dkuieo yxdlgh rvvbjr dnlxoo wmktsm vhtpko asqqac nodbnr vjrinm gcmgvf semnjc yhharw gdgpaq vgfpsi kmgbxf rqvvhj dbyyez brryej ayvfsc qkmmhy dmxuvi</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2 to prepare for: redo the truncation and checks without support, then explain why receiving a numerical rank when solving a system does not mean having chosen a compression of rank r. Reading, open flashcards and assisted answers do not confer any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vilcqw uekjtz zxoorq txzbls eyfyly owomlr cjwuqu xcwoix ysfjbq qnftpm spnowy qvgeir zrvpmz iblvjr skzsnc hghsyb vbdfwk bsghjw aiztil btsbjj kwqtys gzkghl mlrdlq dfkrvq</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the proof of the loss in pencil, then continue with C050·M5 on conditioning. To connect this course further to the project, it would still be necessary to read the relevant tolerances and consuming code, then obtain execution evidence under a separate assignment; nothing is activated here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c050-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c050-m3.html">Previous</a> · <a href="c050-m5.html">Next</a></nav>
+<footer><p>Course book · C050·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

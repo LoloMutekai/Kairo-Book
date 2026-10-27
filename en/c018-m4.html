@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Connect a produced piece of data to the call that reads it and the effect that depends on it, then identify a broken connection.">
+<title>C018·M4 · Producer and consumer — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nhuchv odwgxo rqcf</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C018·M4</p><h1>Producer and consumer</h1><p class="objectif"><span>Your goal</span>Connect a produced piece of data to the call that reads it and the effect that depends on it, then identify a broken connection.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c015-m5 : diagnostics · c017-m5 : reproduction protocol · c012-m5 : counterexamples · c018-m1 : interface and contract · c018-m2 : composition and injection · c018-m3 : invariants and immutable states</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>At the counter of a notebook storeroom, a screen shows 12 notebooks available. Someone is given 5 of them. The stocktaking program calculates the new stock and places a record in a register. Yet the screen still shows 12 notebooks. Where did the data stop?</p><p>Here, the producer is the function that prepares and stores the stock record. The consumer is the function that reads this record to update the screen. These words describe roles in relation to a piece of data: the same component can consume an input and produce another output.</p><p>The register is the shared point through which the data passes. Storing a record makes it available to a reader; this alone does not trigger reading or display. We call the concrete connection between these components wiring: which component calls which, with which register and which record.</p><p>The scene and quantities are fictional. Consuming the stock record means using information; it does not remove any notebooks from the storeroom or delete the record in our model. The physical issue of notebooks and the computer read are different events.</p><div class="schemas"><figure><svg viewBox="0 0 360 294" xmlns="http://www.w3.org/2000/svg" role="img"><title>The path of the stock record</title><desc>The producer stores a record of 7 notebooks in the supply register. A read call uses this same record, then the screen shows 7 notebooks. The arrows indicate the operations to follow in the program.</desc><rect x="24" y="12" width="312" height="64" rx="7" class="cadre-prediction" /><text x="180" y="38" text-anchor="middle">Producer: relever</text><text x="180" y="62" text-anchor="middle">7 notebooks to publish</text><path d="M180 76v32m-5-5 5 5 5-5" class="trait" /><rect x="24" y="108" width="312" height="64" rx="7" class="cadre-neutre" /><text x="180" y="134" text-anchor="middle">Supply register</text><text x="180" y="158" text-anchor="middle">Record “current”</text><path d="M180 172v32m-5-5 5 5 5-5" class="trait" /><rect x="24" y="204" width="312" height="74" rx="7" class="cadre-resultat" /><text x="180" y="231" text-anchor="middle">Consumer: afficher</text><text x="180" y="257" text-anchor="middle">After reading: 7 notebooks</text></svg><figcaption>The lower arrow assumes a read call on the register used above. The diagram shows the connection to look for; it does not demonstrate that a real program executed it.</figcaption></figure><figure><svg viewBox="0 0 360 294" xmlns="http://www.w3.org/2000/svg" role="img"><title>Reading from the wrong register</title><desc>The producer writes 7 notebooks to supply. A distinct copy keeps 12 notebooks. The consumer reads this copy: the screen stays at 12 notebooks, a difference of 5 notebooks from the published stock record.</desc><text x="180" y="26" text-anchor="middle">After publication</text><rect x="16" y="44" width="152" height="80" rx="7" class="cadre-prediction" /><text x="92" y="76" text-anchor="middle">Supply</text><text x="92" y="104" text-anchor="middle">7 notebooks</text><rect x="192" y="44" width="152" height="80" rx="7" class="cadre-neutre" /><text x="268" y="76" text-anchor="middle">Distinct copy</text><text x="268" y="104" text-anchor="middle">12 notebooks</text><path d="M268 124v40m-5-5 5 5 5-5" class="trait" /><text x="92" y="163" text-anchor="middle" class="petite-etiquette">Supply</text><text x="92" y="184" text-anchor="middle" class="petite-etiquette">not read</text><rect x="192" y="164" width="152" height="70" rx="7" class="cadre-resultat" /><text x="268" y="192" text-anchor="middle">Screen</text><text x="268" y="218" text-anchor="middle">12 notebooks</text><text x="180" y="273" text-anchor="middle">Difference: 5 notebooks</text></svg><figcaption>The records have the same structure, but the registers are distinct: the reader can work while using old information. The name of the register type does not prove that the object passed is the same object.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Follow the same data from the producer to the register, then from the reader that is called to the expected effect. A defined function or a visible value is not enough to establish this path.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the calculated stock record to the updated screen</h3><p>In the fictional storeroom, the starting stock is 12 notebooks and 5 notebooks are issued. The screen still holds the starting stock. Follow publication and then a call to the reader, with no other stock movement along this path.</p><ol class="etapes"><li><h3>Specify the data and the calculation boundary</h3><p>The record contains the item “notebook”, a whole number of available notebooks and a record label, here “after issue”. The supply register stores this record under the key “current”: the name used to find it. A new stock record replaces the current record; we are not describing a message queue.</p><p>Let D denote the starting stock, S the quantity issued and P the published quantity. A denotes the quantity displayed at the time being considered; E denotes the signed difference A − P. All these quantities are counted in notebooks. The sign − means subtraction. The labels “before” and “after” locate the call to the reader in time; they do not indicate a change of unit.</p><p>Assumptions: the quantity issued does not exceed the stock, the quantities describe the same item, storage succeeds, reading returns the current record and no other movement occurs. The screen directly shows the quantity read, with no conversion. The actual handover of notebooks has been counted separately in this scene.</p></li><li><h3>Call the producer to calculate what remains</h3><p>The function relever describes how to calculate and publish the record. Its definition remains a recipe until a call reaches it. In our sequence, we call relever with the supply register, the stock D = 12 notebooks and the quantity issued S = 5 notebooks.</p><p>We subtract the quantity issued because these notebooks leave the storeroom. This gives P = 12 − 5 = 7 notebooks. This number is the output of the producer’s calculation; at this stage, it tells us nothing about what the reader has done.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>P</mi><mo>=</mo><mi>D</mi><mo>−</mo><mi>S</mi><mo>=</mo><mn>12</mn><mo>−</mo><mn>5</mn><mo>=</mo><mn>7</mn><mtext> cahiers</mtext></mrow></math></div></li><li><h3>Storing a record does not change the screen</h3><p>The producer saves the “after issue” record, with quantity 7, under the key “current” in the supply register. It stores a complete new record: the reader does not need to modify this record to use it.</p><p>The screen keeps its old value A before = 12 notebooks. In this model, storage does not automatically update the display. The register and the screen are distinct objects; only a call intended to display data can change the screen.</p></li><li><h3>Measure exactly what is missing</h3><p>Compare the display with the current stock record. We subtract P from A to express how much the screen exceeds the record: E before = 12 − 7 = 5 notebooks. Here, this positive difference means that the screen reports too many notebooks.</p><p>The producer’s local result is correct, but the expected effect has not yet been obtained. This does not tell us whether the reader was never called or read another record: we must follow its call.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mi>A</mi><mo>−</mo><mi>P</mi><mo>=</mo><mn>12</mn><mo>−</mo><mn>7</mn><mo>=</mo><mn>5</mn><mtext> cahiers</mtext></mrow></math></div></li><li><h3>Pass the record to the consumer</h3><p>We now call afficher with the same supply register object. The function reads the key “current”, obtains the “after issue” record, then uses its quantity field to replace the screen value. The stock record read gives A after = 7 notebooks.</p><p>The data is consumed because it is used for this display. It remains available in the register. Creating a copy register of the same type and giving it to the reader would not connect the reader to the record stored in supply: we must find the same point through which the data passes, rather than just a compatible interface.</p><p>The chain to find is therefore: call to relever → storage in supply under “current” → call to afficher with supply → reading of “after issue” → quantity assigned to the screen.</p></li><li><h3>Check the number and its origin</h3><p>Check the stock calculation: 7 notebooks remaining + 5 notebooks issued = 12 notebooks at the start. This count reconstructs the initial batch without using the screen.</p><p>Check the display: E after = 7 − 7 = 0 notebooks. The displayed quantity and the stock record agree. To attribute this agreement to the connection, our sequence must also identify the register read and the “after issue” label passed to the screen field.</p><p>A difference of 0 notebooks is necessary for this direct display, but it is not enough to prove the wiring: an old record could contain the same quantity. And a screen that matches the stock record does not prove that the initial physical count was correct. We have checked the path described in the scene without observing a real application.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the steps and draw the path of the stock record. Explain why the published quantity can be correct while the screen remains out of date. Then state which call, which register and which use of the quantity must be found.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The function afficher exists, so the stock record is consumed.”</h3><p>A definition describes possible work. Find the call that reaches afficher after publication, then the line that uses the record received. Without this path, the mere existence of the function demonstrates no reading.</p><a href="#exemple">Follow the call to the reader in the example</a></li><li><h3>“The registers have the same interface, so they share their records.”</h3><p>A shared interface guarantees a compatible way to request a read, rather than shared content. In the diagram, supply receives the new stock record and copy keeps the old one. Pass the object that actually receives the stored record to the consumer.</p><a href="#intuition">Compare supply and copy in the diagrams</a></li><li><h3>“The screen shows the right number: the connection is proven.”</h3><p>The equality can be a coincidence. Find the exact record read, then the use of its quantity. Simply noting equal values does not distinguish a read from the right register from an old value or a value fixed in advance.</p><a href="#exercices">Examine the misleading equality in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-appel"><p class="repere">Exercise 1 · Identify and explain</p>
+<h3>The path stops after storage</h3><p>The fictional trace says “relever called”, then “after issue record stored in supply”. The function afficher is defined in the program, but no call to this function occurs after storage. The screen stays at 12 notebooks. Name the producer, the intended consumer and the missing step. What is the difference from the stock record?</p>
+<label for="reponse-ex-appel">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-appel" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-appel" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-appel" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-appel" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Distinguish a function definition from a call event.</p></details><details class="indice"><summary>Hint 2</summary><p>For the difference, compare the displayed quantity with the stock published in the example.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The producer is relever, whose call prepared and stored the record. The intended consumer is afficher. What is missing is its call with the supply register, followed by reading “current” and using the quantity for the screen.</p><p>The stock record contains 7 notebooks. The difference is 12 − 7 = 5 notebooks. Defining afficher does not execute its body; storage therefore does not constitute proof of display.</p><p class="petit-titre">Check your reasoning</p><ul><li>You name the roles in relation to the stock record, distinguishing the intended reader from a completed read.</li><li>You identify the missing call and the register to pass to it.</li><li>You give 5 notebooks and explain what this difference means.</li></ul></details></article><article class="exercice" id="ex-nouveau-releve"><p class="repere">Exercise 2 · Calculation and tracing on paper</p>
+<h3>A new stock record awaits reading</h3><p>Start again from the screen updated to 7 notebooks. An additional issue of 2 notebooks is counted correctly. The function relever publishes the “next” record in supply, but afficher has not yet been called again. Calculate the new published quantity, the display before reading and its difference from the record. Then call the reader on supply and give the new display and the final difference.</p>
+<label for="reponse-ex-nouveau-releve">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-nouveau-releve" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-nouveau-releve" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-nouveau-releve" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-nouveau-releve" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The new stock starts from 7 notebooks. Storage changes the record, rather than the old screen value.</p></details><details class="indice"><summary>Hint 2</summary><p>After the call to the reader, the quantity in the “next” record replaces the screen quantity.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The storeroom had 7 notebooks. The new issue removes 2 notebooks: 7 − 2 = 5 notebooks published in “next”. Before reading, the screen stays at 7 notebooks. Its difference from the record is 7 − 5 = 2 notebooks.</p><p>The call to afficher with supply reads “current”, which now points to “next”. The screen changes to 5 notebooks. The final difference is 5 − 5 = 0 notebooks.</p><p>Independent stock check: 5 notebooks remaining + 2 notebooks from the new issue + 5 notebooks from the previous issue = 12 notebooks at the start. The “next” record also lets us distinguish this read from reuse of “after issue”.</p><p class="petit-titre">Check your reasoning</p><ul><li>You distinguish the new stock 5 from the display that still equals 7 before reading.</li><li>You justify the difference 2 before reading and 0 after reading.</li><li>You identify the record consumed and reconstruct the initial stock using the quantities issued.</li></ul></details></article><article class="exercice" id="ex-egalite"><p class="repere">Exercise 3 · Diagnosis and objection</p>
+<h3>A misleading equality</h3><p>In a variation of the same storeroom, the “after issue” record in supply and an old record in copy happen to contain 7 notebooks. The producer writes to supply and the consumer reads copy. Someone announces: “The difference is 0, so the wiring is correct.” Respond and propose a repair. What observation during the additional issue would distinguish the paths?</p>
+<label for="reponse-ex-egalite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-egalite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-egalite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-egalite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-egalite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Does equality of quantities identify the record read?</p></details><details class="indice"><summary>Hint 2</summary><p>Repeat the additional issue, leave copy unchanged and follow the label of the new stock record.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The screen can be numerically correct while ignoring the stock record produced. A difference of 0 notebooks does not prove a connection between supply and the reader: the objects and records differ. The repair is to pass supply to the reader and use the quantity returned by its read of “current”.</p><p>After the additional issue, supply publishes “next” with 5 notebooks. A read from the unchanged copy still returns 7 notebooks and leaves a difference of 2 notebooks. A read from supply can give 5 notebooks, but the number alone remains insufficient: we must observe that it obtains “next” from supply and uses this quantity for the screen.</p><p>In a real program, a trace of these steps must be connected to the same execution. Reading the code gives the possible path; it does not replace this observation. We do not run any real stock management program here.</p><p class="petit-titre">Check your reasoning</p><ul><li>You do not treat an equality as proof of origin.</li><li>You repair the object passed and the use of the data, rather than simply changing the screen text.</li><li>You distinguish the results 7 and 5 and ask for the label of the stock record actually read.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="roles"><summary><span class="repere">Recall 1</span><span>What roles do the functions relever and afficher play in relation to the stock record?</span></summary><p>In relation to the stock record, relever prepares and stores it; afficher reads it and uses its quantity. The roles are relative to this data, rather than permanently attached to a class.</p></details><details class="carte" data-carte="appel"><summary><span class="repere">Recall 2</span><span>Why does a defined reading function not prove consumption?</span></summary><p>The definition describes the work. A call must reach this read, retrieve the expected record and use the result for the desired effect.</p></details><details class="carte" data-carte="passage"><summary><span class="repere">Recall 3</span><span>What should you follow between publication and the screen?</span></summary><p>The register actually written to and then read, the key “current”, the label of the record received and the use of its quantity for the screen. An identical interface does not guarantee shared content.</p></details><details class="carte" data-carte="consommer"><summary><span class="repere">Recall 4</span><span>Does reading the stock record remove notebooks or delete the record?</span></summary><p>In our model, no. Consuming means using the information. The physical issue of notebooks is separate, and the register keeps its record after reading.</p></details><details class="carte" data-carte="egalite"><summary><span class="repere">Recall 5</span><span>Why does a screen value equal to the stock record not prove the wiring?</span></summary><p>The same quantity can come from an old record or another register. The call, the record received and its use must be connected to the same execution; the value alone does not give its origin.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path by naming the producer, the data stored, the point through which it passes, the reader called and the expected effect. Then explain how a distinct copy can give a plausible display, and what evidence would let you follow the exact stock record. Reading and an answer after a hint remain preparation: repeat this reconstruction without help on another day before requesting validation of the level.</p></div><div class="exports"><a class="bouton" download="c018-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTgtbTQ6cm9sZXMiLAogICAgICAidW5pdGUiOiAiYzAxOC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByb2R1Y3RldXItY29uc29tbWF0ZXVyIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgcm9sZXMgZG8gdGhlIGZ1bmN0aW9ucyByZWxldmVyIGFuZCBhZmZpY2hlciBwbGF5IGluIHJlbGF0aW9uIHRvIHRoZSBzdG9jayByZWNvcmQ/IiwKICAgICAgInJlcG9uc2UiOiAiSW4gcmVsYXRpb24gdG8gdGhlIHN0b2NrIHJlY29yZCwgcmVsZXZlciBwcmVwYXJlcyBhbmQgc3RvcmVzIGl0OyBhZmZpY2hlciByZWFkcyBpdCBhbmQgdXNlcyBpdHMgcXVhbnRpdHkuIFRoZSByb2xlcyBhcmUgcmVsYXRpdmUgdG8gdGhpcyBkYXRhLCByYXRoZXIgdGhhbiBwZXJtYW5lbnRseSBhdHRhY2hlZCB0byBhIGNsYXNzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDE4LW00OmFwcGVsIiwKICAgICAgInVuaXRlIjogImMwMTgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJkZWZpbml0aW9uLWV0LWFwcGVsIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGEgZGVmaW5lZCByZWFkaW5nIGZ1bmN0aW9uIG5vdCBwcm92ZSBjb25zdW1wdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZGVmaW5pdGlvbiBkZXNjcmliZXMgdGhlIHdvcmsuIEEgY2FsbCBtdXN0IHJlYWNoIHRoaXMgcmVhZCwgcmV0cmlldmUgdGhlIGV4cGVjdGVkIHJlY29yZCBhbmQgdXNlIHRoZSByZXN1bHQgZm9yIHRoZSBkZXNpcmVkIGVmZmVjdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOC1tNDpwYXNzYWdlIiwKICAgICAgInVuaXRlIjogImMwMTgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb2ludC1kZS1wYXNzYWdlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgc2hvdWxkIHlvdSBmb2xsb3cgYmV0d2VlbiBwdWJsaWNhdGlvbiBhbmQgdGhlIHNjcmVlbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcmVnaXN0ZXIgYWN0dWFsbHkgd3JpdHRlbiB0byBhbmQgdGhlbiByZWFkLCB0aGUga2V5IOKAnGN1cnJlbnTigJ0sIHRoZSBsYWJlbCBvZiB0aGUgcmVjb3JkIHJlY2VpdmVkIGFuZCB0aGUgdXNlIG9mIGl0cyBxdWFudGl0eSBmb3IgdGhlIHNjcmVlbi4gQW4gaWRlbnRpY2FsIGludGVyZmFjZSBkb2VzIG5vdCBndWFyYW50ZWUgc2hhcmVkIGNvbnRlbnQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTgtbTQ6Y29uc29tbWVyIiwKICAgICAgInVuaXRlIjogImMwMTgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ1dGlsaXNhdGlvbi1kZS1kb25uZWUiLAogICAgICAicXVlc3Rpb24iOiAiRG9lcyByZWFkaW5nIHRoZSBzdG9jayByZWNvcmQgcmVtb3ZlIG5vdGVib29rcyBvciBkZWxldGUgdGhlIHJlY29yZD8iLAogICAgICAicmVwb25zZSI6ICJJbiBvdXIgbW9kZWwsIG5vLiBDb25zdW1pbmcgbWVhbnMgdXNpbmcgdGhlIGluZm9ybWF0aW9uLiBUaGUgcGh5c2ljYWwgaXNzdWUgb2Ygbm90ZWJvb2tzIGlzIHNlcGFyYXRlLCBhbmQgdGhlIHJlZ2lzdGVyIGtlZXBzIGl0cyByZWNvcmQgYWZ0ZXIgcmVhZGluZy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOC1tNDplZ2FsaXRlIiwKICAgICAgInVuaXRlIjogImMwMTgtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwcmV1dmUtZGUtbGlhaXNvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBhIHNjcmVlbiB2YWx1ZSBlcXVhbCB0byB0aGUgc3RvY2sgcmVjb3JkIG5vdCBwcm92ZSB0aGUgd2lyaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBzYW1lIHF1YW50aXR5IGNhbiBjb21lIGZyb20gYW4gb2xkIHJlY29yZCBvciBhbm90aGVyIHJlZ2lzdGVyLiBUaGUgY2FsbCwgdGhlIHJlY29yZCByZWNlaXZlZCBhbmQgaXRzIHVzZSBtdXN0IGJlIGNvbm5lY3RlZCB0byB0aGUgc2FtZSBleGVjdXRpb247IHRoZSB2YWx1ZSBhbG9uZSBkb2VzIG5vdCBnaXZlIGl0cyBvcmlnaW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c018-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCByb2xlcyBkbyB0aGUgZnVuY3Rpb25zIHJlbGV2ZXIgYW5kIGFmZmljaGVyIHBsYXkgaW4gcmVsYXRpb24gdG8gdGhlIHN0b2NrIHJlY29yZD8JSW4gcmVsYXRpb24gdG8gdGhlIHN0b2NrIHJlY29yZCwgcmVsZXZlciBwcmVwYXJlcyBhbmQgc3RvcmVzIGl0OyBhZmZpY2hlciByZWFkcyBpdCBhbmQgdXNlcyBpdHMgcXVhbnRpdHkuIFRoZSByb2xlcyBhcmUgcmVsYXRpdmUgdG8gdGhpcyBkYXRhLCByYXRoZXIgdGhhbiBwZXJtYW5lbnRseSBhdHRhY2hlZCB0byBhIGNsYXNzLgl0b2RhaSBjMDE4LW00IHByb2R1Y3RldXItY29uc29tbWF0ZXVyCldoeSBkb2VzIGEgZGVmaW5lZCByZWFkaW5nIGZ1bmN0aW9uIG5vdCBwcm92ZSBjb25zdW1wdGlvbj8JVGhlIGRlZmluaXRpb24gZGVzY3JpYmVzIHRoZSB3b3JrLiBBIGNhbGwgbXVzdCByZWFjaCB0aGlzIHJlYWQsIHJldHJpZXZlIHRoZSBleHBlY3RlZCByZWNvcmQgYW5kIHVzZSB0aGUgcmVzdWx0IGZvciB0aGUgZGVzaXJlZCBlZmZlY3QuCXRvZGFpIGMwMTgtbTQgZGVmaW5pdGlvbi1ldC1hcHBlbApXaGF0IHNob3VsZCB5b3UgZm9sbG93IGJldHdlZW4gcHVibGljYXRpb24gYW5kIHRoZSBzY3JlZW4/CVRoZSByZWdpc3RlciBhY3R1YWxseSB3cml0dGVuIHRvIGFuZCB0aGVuIHJlYWQsIHRoZSBrZXkg4oCcY3VycmVudOKAnSwgdGhlIGxhYmVsIG9mIHRoZSByZWNvcmQgcmVjZWl2ZWQgYW5kIHRoZSB1c2Ugb2YgaXRzIHF1YW50aXR5IGZvciB0aGUgc2NyZWVuLiBBbiBpZGVudGljYWwgaW50ZXJmYWNlIGRvZXMgbm90IGd1YXJhbnRlZSBzaGFyZWQgY29udGVudC4JdG9kYWkgYzAxOC1tNCBwb2ludC1kZS1wYXNzYWdlCkRvZXMgcmVhZGluZyB0aGUgc3RvY2sgcmVjb3JkIHJlbW92ZSBub3RlYm9va3Mgb3IgZGVsZXRlIHRoZSByZWNvcmQ/CUluIG91ciBtb2RlbCwgbm8uIENvbnN1bWluZyBtZWFucyB1c2luZyB0aGUgaW5mb3JtYXRpb24uIFRoZSBwaHlzaWNhbCBpc3N1ZSBvZiBub3RlYm9va3MgaXMgc2VwYXJhdGUsIGFuZCB0aGUgcmVnaXN0ZXIga2VlcHMgaXRzIHJlY29yZCBhZnRlciByZWFkaW5nLgl0b2RhaSBjMDE4LW00IHV0aWxpc2F0aW9uLWRlLWRvbm5lZQpXaHkgZG9lcyBhIHNjcmVlbiB2YWx1ZSBlcXVhbCB0byB0aGUgc3RvY2sgcmVjb3JkIG5vdCBwcm92ZSB0aGUgd2lyaW5nPwlUaGUgc2FtZSBxdWFudGl0eSBjYW4gY29tZSBmcm9tIGFuIG9sZCByZWNvcmQgb3IgYW5vdGhlciByZWdpc3Rlci4gVGhlIGNhbGwsIHRoZSByZWNvcmQgcmVjZWl2ZWQgYW5kIGl0cyB1c2UgbXVzdCBiZSBjb25uZWN0ZWQgdG8gdGhlIHNhbWUgZXhlY3V0aW9uOyB0aGUgdmFsdWUgYWxvbmUgZG9lcyBub3QgZ2l2ZSBpdHMgb3JpZ2luLgl0b2RhaSBjMDE4LW00IHByZXV2ZS1kZS1saWFpc29uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nhuchv odwgxo rqcf</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare to read the wiring before the milestones in C018·M5</h3><dl><div><dt>What you understand</dt><dd>Storing data and using it are distinct steps. You know how to look for a producer, a reader that is called and a use of the result, without attributing consumption to the mere presence of a function.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qsjxhj fcahvg gqfvpw jseypz xdekby wuphov zsaern jeszxd nbjgrm dauqdv ylzdqw vnhcxp fbumfu xjsepp upqfqd hjfqrt tmfrva axgekq hpcgyr lytcxe nybqwy gjlgfm jbfqsp wupihb</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 1: trace a piece of data and explain a broken connection in your own words. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jwnafp lozkvc xerqsr mogpbm jethqo oqfboh ndtk</span></span> Reading or an assisted answer never constitutes an achieved level.</dd></div><div><dt>Evidence and limit</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vbpbok cyesmg nbyqnc vktoxz junrgn tjnlmt aaxrqb ovrhib lllbvd edzjot dqbuvm kfttth qiqybx mpxsmu bswiyl brqmwt dzocep djhdei ulkged jxclka woergq edaops jrcptj phnvyg bvprif gbbwcr sfcmvm puawtd lpnhrh juttmk rxophx ktgxio wqcuij roycxz vdhmej kpabkc yrfogg qp</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the storeroom path without help, then move to C018·M5 for contract tests and test doubles. The later milestones will require their own targeted reading of the factory and routing. To establish actual use of the plan, authorized evidence connecting publication, reading and effect within the same execution will still be needed.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c018-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c018-m3.html">Previous</a> · <a href="c018-m5.html">Next</a></nav>
+<footer><p>Course book · C018·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

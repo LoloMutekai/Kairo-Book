@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Expose a ranking that ignores rare cases and calculate what changes when weighting gives each class equal emphasis.">
+<title>C099·M2 · Imbalanced classes — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kicyqg zvkoky mwdb</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C099·M2</p><h1>Imbalanced classes</h1><p class="objectif"><span>Your goal</span>Expose a ranking that ignores rare cases and calculate what changes when weighting gives each class equal emphasis.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c060-m5 : approximations and assumptions · c059-m6 : deterministic discrete Bellman · c099-m1 : logistic regression</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop sorts incoming messages into “urgent” and “ordinary”. Urgent messages must be reviewed by a person. In our fictional batch, an independent check assigned 10 “urgent” labels and 90 “ordinary” labels. A class is a possible category; classes are imbalanced when their counts differ greatly.</p><p>Rule A writes “ordinary” on every message. It correctly classifies 90 messages out of 100, or 90 %, while missing every urgent message. Its good score comes from the composition of the batch. It has not learned to recognize urgent messages.</p><p>Rule B detects 8 urgent messages, misses 2, and raises 9 false alarms on ordinary messages. It makes more errors overall than A. Yet if the aim is to avoid missing urgent messages, the proportion of correct answers alone is no longer enough to decide.</p><p>We will first count every message equally, then give each class equal emphasis in another calculation. This second view changes the question the score answers. It changes neither the messages, their labels, nor the decisions already made. All counts and results are fictional: they do not measure any real tool.</p><div class="schemas"><figure><svg viewBox="0 0 360 230" xmlns="http://www.w3.org/2000/svg" role="img"><title>A batch dominated by ordinary messages</title><desc>Of 100 fictional messages, 10 are urgent and 90 ordinary. Rule A always predicts ordinary: no urgent messages detected and 90 correct classifications.</desc><text x="20" y="27">Verified batch: 100 messages</text><rect x="20" y="49" width="32" height="31" class="cadre-resultat" /><rect x="52" y="49" width="288" height="31" class="cadre-neutre" /><text x="20" y="108" class="petite-etiquette">Urgent: 10</text><text x="340" y="133" text-anchor="end" class="petite-etiquette">Ordinary: 90</text><rect x="20" y="153" width="320" height="59" rx="7" class="cadre-prediction" /><text x="180" y="177" text-anchor="middle">A: always ordinary</text><text x="180" y="200" text-anchor="middle">90 % correct; 0 urgent detected</text></svg><figcaption>The lengths represent the actual class counts in the fictional batch. The rare class is still present even when rule A never predicts it.</figcaption></figure><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>B’s decisions, separated by actual class</title><desc>Among 10 urgent messages: 8 detected and 2 missed. Among 90 ordinary messages: 9 false alarms and 81 correctly left as ordinary. The boxes organize the counts without representing their size.</desc><text x="20" y="26">B: what happens to the messages?</text><rect x="20" y="43" width="320" height="89" rx="7" class="cadre-resultat" /><text x="36" y="69">Actual urgent: 10</text><text x="36" y="94" class="petite-etiquette">Detected: 8</text><text x="36" y="118" class="petite-etiquette">Missed: 2</text><rect x="20" y="150" width="320" height="89" rx="7" class="cadre-neutre" /><text x="36" y="176">Actual ordinary: 90</text><text x="36" y="201" class="petite-etiquette">False alarms: 9</text><text x="36" y="225" class="petite-etiquette">Recognized as ordinary: 81</text></svg><figcaption>Start with the verified label and follow the decision. The boxes have the same size to make the counts readable; they do not show equal proportions.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Start with the class counts and the majority rule; keep the errors for each class separate before choosing how to weight them.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Evaluate the same decisions under two conventions</h3><p>The fictional batch is reserved for evaluation: no rule is adjusted using these messages. Each message has exactly one reference label, assumed correct for the calculation, and each rule produces exactly one decision. Both classes are present. We are studying finite counts; extrapolating to new messages will require a further check.</p><ol class="etapes"><li><h3>Measure the imbalance before looking at the score</h3><p>N is the total number of messages; nᵤ and n<sub>o</sub> count urgent and ordinary messages respectively. Subscript u means urgent and o ordinary. These quantities are expressed in messages. N = nᵤ + n<sub>o</sub> = 10 + 90 = 100 messages.</p><p>The fraction of urgent messages in the batch is nᵤ/N = 10/100 = 1/10, or 10 %. The ratio n<sub>o</sub>/nᵤ = 9 indicates that there are as many ordinary messages as in 9 groups of 10 messages. The frequency observed in this batch is not a rule guaranteed to hold every day.</p></li><li><h3>Build the majority baseline</h3><p>Accuracy a is the fraction of correct decisions; C is their count, in messages. Division cancels the unit. The percentage is 100 × a. Accuracy does not mean precision, which will be defined in the next unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>a</mi><mo>=</mo><mfrac><mi>C</mi><mi>N</mi></mfrac></mrow></math></div><p>Rule A obtains C = 90, because only ordinary messages are correctly classified. Thus a = 90/100 = 0.90, or 90 %. It misses 10 urgent messages and produces 0 false alarms. The score accurately describes the total, but on its own it hides this breakdown.</p></li><li><h3>Reconstruct all of B’s counts</h3><p>Among urgent messages, 10 − 8 = 2 are missed. Among ordinary messages, 90 − 9 = 81 are correctly classified. Add the correct classifications from both classes to obtain C = 8 + 81 = 89 messages.</p><p>B’s accuracy is 89/100 = 0.89, or 89 %. Check using the errors: 2 + 9 = 11 messages, and 89 + 11 = 100. A wins on accuracy, while B misses fewer urgent messages: these statements can both be true.</p></li><li><h3>Explicitly choose a different allocation of attention</h3><p>Let us choose to give the classes the same total weight. For a class c, n_c is its count in messages and w_c is its weight per message, with no unit. Here c can be u or o. The factor 2 is the number of classes. We require n_c to be strictly greater than 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>w</mi><mi>c</mi></msub><mo>=</mo><mfrac><mi>N</mi><mrow><mn>2</mn><msub><mi>n</mi><mi>c</mi></msub></mrow></mfrac></mrow></math></div><p>For urgent messages: 2 × 10 = 20, then wᵤ = 100/20 = 5. For ordinary messages: 2 × 90 = 180, then w<sub>o</sub> = 100/180 = 5/9. Keep this exact fraction rather than its rounded value 0.56.</p><p>Check: the urgent class has mass 10 × 5 = 50; the ordinary class has mass 90 × 5/9 = 50. Their sum is 100 weighted counting units. An urgent message weighs 9 times as much as an ordinary one: small class counts no longer disappear in the sum. This is a convention of equal attention to the classes, not an estimate of the actual cost of errors.</p></li><li><h3>Calculate the weighted error fraction</h3><p>Eᵤ and E<sub>o</sub> denote the numbers of errors among urgent and ordinary messages, expressed in messages. L is the sum of the weights of misclassified messages divided by the sum of the weights of all messages; L has no unit. An error contributes its weight, while a correct decision contributes 0 to the numerator. The smaller L is, the better the rule satisfies this convention.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><mrow><msub><mi>w</mi><mi>u</mi></msub><msub><mi>E</mi><mi>u</mi></msub><mo>+</mo><msub><mi>w</mi><mi>o</mi></msub><msub><mi>E</mi><mi>o</mi></msub></mrow><mrow><msub><mi>w</mi><mi>u</mi></msub><msub><mi>n</mi><mi>u</mi></msub><mo>+</mo><msub><mi>w</mi><mi>o</mi></msub><msub><mi>n</mi><mi>o</mi></msub></mrow></mfrac></mrow></math></div><p>For B, missed urgent messages contribute 2 × 5 = 10; false alarms contribute 9 × 5/9 = 5. The weighted error total is 10 + 5 = 15. Divide by the total mass: L = 15/100 = 3/20, or 15 % of the weighted mass.</p><p>For A, all urgent messages are missed and all ordinary messages are correctly classified: L = 50/100 = 1/2, or 50 % of the weighted mass. B is preferable under this specific criterion. The 15 % is not the raw proportion of misclassified messages: that proportion counts 11 errors out of 100 messages.</p></li><li><h3>Check by another route and limit the conclusion</h3><p>Substituting the definitions of the weights and cancelling N gives the mean of the error fractions for each class. The symbol L still represents the same criterion; there is no new parameter.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><mrow><mfrac><msub><mi>E</mi><mi>u</mi></msub><msub><mi>n</mi><mi>u</mi></msub></mfrac><mo>+</mo><mfrac><msub><mi>E</mi><mi>o</mi></msub><msub><mi>n</mi><mi>o</mi></msub></mfrac></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mrow><mfrac><mn>2</mn><mn>10</mn></mfrac><mo>+</mo><mfrac><mn>9</mn><mn>90</mn></mfrac></mrow><mn>2</mn></mfrac><mo>=</mo><mn>0.15</mn></mrow></math></div><p>This equality explains the change in ranking: each class occupies half of the calculation, whatever its size. We also check the bounds: no errors would give L = 0; misclassifying everything would give L = 1. An absent class would prevent us from calculating its weight and evaluating performance on that class.</p><p>Class weights can also change how examples contribute during training. Here we have only recalculated a criterion on fixed decisions: no training or future improvement has been demonstrated. If weights or a rule are chosen using a validation batch, keep another test batch intact for the final evaluation. Document the natural class counts and the counts for each class; do not secretly balance the test to make a score look better.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations and explain how A can have the best accuracy while missing every urgent message. Reconstruct the class masses, then justify why the denominator of L also includes correctly classified messages.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The overall score is good, so urgent messages are handled well.”</h3><p>Write the rule that always answers “ordinary”, calculate its accuracy, then count the missed urgent messages. Having many ordinary messages is enough to produce the score without detecting any urgent messages.</p><a href="#intuition">Review the batch and the majority rule</a></li><li><h3>“A weighted error of 15 % means 15 incorrect messages out of 100.”</h3><p>The weighted numerator adds weights, not just messages. B makes 11 actual errors in the fictional batch. Reconstruct the urgent and ordinary contributions separately, then divide by the total mass.</p><a href="#exemple">Recalculate the masses and the weighted error</a></li><li><h3>“Simply duplicating urgent messages in the test proves that the problem is solved.”</h3><p>Duplication changes the composition of the calculation without improving the decisions. A copy does not provide an independent observation. Keep the final evaluation test intact and state any weighting convention.</p><a href="#exercices">Examine the copied test in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-majoritaire"><p class="repere">Exercise 1 · Diagnostic</p>
+<h3>Recover what the score hides</h3><p>For the initial fictional batch, a report states only that 90 % of decisions are correct. Construct a rule that reaches this score without detecting a single urgent message. Give its errors in each class and explain what the score does not allow you to conclude.</p>
+<label for="reponse-ex-majoritaire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-majoritaire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-majoritaire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-majoritaire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-majoritaire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Try giving the same answer to every message, choosing the most frequent class.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Rule A always predicts “ordinary”. It correctly classifies the 90 ordinary messages and misses the 10 urgent messages: 90/100 × 100 = 90 %. It produces 0 false alarms.</p><p>This score is compatible with missing every urgent message. It therefore proves no ability to distinguish them; at a minimum, you need the class counts and the error counts for each class.</p><p class="petit-titre">Check your reasoning</p><ul><li>State a concrete rule without using the reference labels to decide.</li><li>Calculate accuracy using the total as the denominator.</li><li>Report missed urgent messages and false alarms separately.</li></ul></details></article><article class="exercice" id="ex-ponderer"><p class="repere">Exercise 2 · Reasoned calculation</p>
+<h3>Repeat the calculation without rounding the weights</h3><p>For B on the same batch, derive wᵤ and wₒ from the class counts, then find L as an exact fraction. Check your result using the mean of the class error fractions. Compare with A and state the convention that justifies this preference.</p>
+<label for="reponse-ex-ponderer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ponderer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ponderer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ponderer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ponderer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each class must carry the same total mass: count × weight.</p></details><details class="indice"><summary>Hint 2</summary><p>Simplify the fractions before converting to a percentage.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The weights are 100/(2 × 10) = 5 and 100/(2 × 90) = 5/9. Each class carries 50 units; the denominator is 100.</p><p>B contributes 2 × 5 + 9 × 5/9 = 15 error units. Thus L = 15/100 = 3/20. Another route: (2/10 + 9/90)/2 = 3/20.</p><p>A obtains 1/2. Since we minimize L, B is preferred when each class must have equal weight. This convention proves neither an optimal operational cost nor better performance on future messages.</p><p class="petit-titre">Check your reasoning</p><ul><li>Derive the weights from the actual class counts.</li><li>Include all messages in the denominator’s mass.</li><li>Obtain the same exact fraction by both routes.</li><li>Link the preference to an explicit convention.</li></ul></details></article><article class="exercice" id="ex-test-copie"><p class="repere">Exercise 3 · Critical transfer</p>
+<h3>A score that changes without a new decision</h3><p>A colleague creates a table in which each urgent message in the test appears 9 times in total, and each ordinary message appears only once. They reuse A’s decisions without changing them. Calculate the new counts and A’s accuracy on this table. Can this be called a new independent test, or can the natural frequency of urgent messages be inferred from it?</p>
+<label for="reponse-ex-test-copie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-test-copie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-test-copie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-test-copie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-test-copie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Distinguish copied rows from distinct messages. Rule A remains “always ordinary”.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The table contains 9 × 10 = 90 urgent rows and 90 ordinary rows, making 180 rows. A is correct only for ordinary messages: 90/180 = 1/2, or 50 %.</p><p>The initial score was 90 %. It changes because missed urgent messages are counted again, while the rule is identical. The table is still built from the same 100 distinct messages; it provides no independent observation, and its artificial distribution does not measure the natural frequency.</p><p>You can state this transformation as a calculation convention, but keep the original test and its class counts for the planned evaluation. Rebalancing training data is a separate decision and does not make copies independent.</p><p class="petit-titre">Check your reasoning</p><ul><li>Understand “9 times in total” without adding an extra copy.</li><li>Find 90 urgent rows and 180 rows in total.</li><li>Justify the new score without attributing a change to A.</li><li>Distinguish rows, distinct observations, and natural frequency.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="desequilibre"><summary><span class="repere">Recall 1</span><span>What is imbalanced before any prediction?</span></summary><p>The reference class counts: in the fictional batch, 10 urgent messages and 90 ordinary messages. Distinguish these from the counts of predicted decisions.</p></details><details class="carte" data-carte="majoritaire"><summary><span class="repere">Recall 2</span><span>Why calculate the score of a rule that always answers with the majority class?</span></summary><p>It reveals what can be achieved without distinguishing the rare class. Here A obtains 90 % accuracy and misses all urgent messages; the overall score alone does not describe how they are handled.</p></details><details class="carte" data-carte="poids"><summary><span class="repere">Recall 3</span><span>How can we give each class the same mass in our batch?</span></summary><p>For each class c present, take w_c = N/(2 × n_c). The count multiplied by its weight is N/2. The weights have no unit and represent a convention, not actual costs inferred from the class counts.</p></details><details class="carte" data-carte="denominateur"><summary><span class="repere">Recall 4</span><span>What is the denominator of the weighted error, and why?</span></summary><p>The sum of the weights of all messages, correctly or incorrectly classified. The numerator counts only the weights of errors; their ratio measures the share of mass that is misclassified, without confusing it with the raw fraction of incorrect messages.</p></details><details class="carte" data-carte="test"><summary><span class="repere">Recall 5</span><span>Why does a copied test fail to demonstrate an improvement?</span></summary><p>Decisions can remain identical while their weight in the score changes. Copies are not new independent observations; state the convention and preserve the test batch intended for the final evaluation.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without support: name the classes and their counts; invent the majority rule; recount its missed urgent messages; compare B’s decisions; reconstruct the weights, the masses, then L; finish with the difference between changing a criterion and improving decisions. Reading the summary or succeeding after a hint still counts as an assisted answer, never as an attained level. Reconstruct this again on another day without reopening the answers.</p></div><div class="exports"><a class="bouton" download="c099-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwOTktbTI6ZGVzZXF1aWxpYnJlIiwKICAgICAgInVuaXRlIjogImMwOTktbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjbGFzc2VzLWRlc2VxdWlsaWJyZWVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgaW1iYWxhbmNlZCBiZWZvcmUgYW55IHByZWRpY3Rpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHJlZmVyZW5jZSBjbGFzcyBjb3VudHM6IGluIHRoZSBmaWN0aW9uYWwgYmF0Y2gsIDEwIHVyZ2VudCBtZXNzYWdlcyBhbmQgOTAgb3JkaW5hcnkgbWVzc2FnZXMuIERpc3Rpbmd1aXNoIHRoZXNlIGZyb20gdGhlIGNvdW50cyBvZiBwcmVkaWN0ZWQgZGVjaXNpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk5LW0yOm1ham9yaXRhaXJlIiwKICAgICAgInVuaXRlIjogImMwOTktbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJyZWdsZS1tYWpvcml0YWlyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgY2FsY3VsYXRlIHRoZSBzY29yZSBvZiBhIHJ1bGUgdGhhdCBhbHdheXMgYW5zd2VycyB3aXRoIHRoZSBtYWpvcml0eSBjbGFzcz8iLAogICAgICAicmVwb25zZSI6ICJJdCByZXZlYWxzIHdoYXQgY2FuIGJlIGFjaGlldmVkIHdpdGhvdXQgZGlzdGluZ3Vpc2hpbmcgdGhlIHJhcmUgY2xhc3MuIEhlcmUgQSBvYnRhaW5zIDkwICUgYWNjdXJhY3kgYW5kIG1pc3NlcyBhbGwgdXJnZW50IG1lc3NhZ2VzOyB0aGUgb3ZlcmFsbCBzY29yZSBhbG9uZSBkb2VzIG5vdCBkZXNjcmliZSBob3cgdGhleSBhcmUgaGFuZGxlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OS1tMjpwb2lkcyIsCiAgICAgICJ1bml0ZSI6ICJjMDk5LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9pZHMtcGFyLWNsYXNzZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHdlIGdpdmUgZWFjaCBjbGFzcyB0aGUgc2FtZSBtYXNzIGluIG91ciBiYXRjaD8iLAogICAgICAicmVwb25zZSI6ICJGb3IgZWFjaCBjbGFzcyBjIHByZXNlbnQsIHRha2Ugd19jID0gTi8oMiDDlyBuX2MpLiBUaGUgY291bnQgbXVsdGlwbGllZCBieSBpdHMgd2VpZ2h0IGlzIE4vMi4gVGhlIHdlaWdodHMgaGF2ZSBubyB1bml0IGFuZCByZXByZXNlbnQgYSBjb252ZW50aW9uLCBub3QgYWN0dWFsIGNvc3RzIGluZmVycmVkIGZyb20gdGhlIGNsYXNzIGNvdW50cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA5OS1tMjpkZW5vbWluYXRldXIiLAogICAgICAidW5pdGUiOiAiYzA5OS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVycmV1ci1wb25kZXJlZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIHRoZSBkZW5vbWluYXRvciBvZiB0aGUgd2VpZ2h0ZWQgZXJyb3IsIGFuZCB3aHk/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHN1bSBvZiB0aGUgd2VpZ2h0cyBvZiBhbGwgbWVzc2FnZXMsIGNvcnJlY3RseSBvciBpbmNvcnJlY3RseSBjbGFzc2lmaWVkLiBUaGUgbnVtZXJhdG9yIGNvdW50cyBvbmx5IHRoZSB3ZWlnaHRzIG9mIGVycm9yczsgdGhlaXIgcmF0aW8gbWVhc3VyZXMgdGhlIHNoYXJlIG9mIG1hc3MgdGhhdCBpcyBtaXNjbGFzc2lmaWVkLCB3aXRob3V0IGNvbmZ1c2luZyBpdCB3aXRoIHRoZSByYXcgZnJhY3Rpb24gb2YgaW5jb3JyZWN0IG1lc3NhZ2VzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDk5LW0yOnRlc3QiLAogICAgICAidW5pdGUiOiAiYzA5OS1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInRlc3QtaW50YWN0IiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGEgY29waWVkIHRlc3QgZmFpbCB0byBkZW1vbnN0cmF0ZSBhbiBpbXByb3ZlbWVudD8iLAogICAgICAicmVwb25zZSI6ICJEZWNpc2lvbnMgY2FuIHJlbWFpbiBpZGVudGljYWwgd2hpbGUgdGhlaXIgd2VpZ2h0IGluIHRoZSBzY29yZSBjaGFuZ2VzLiBDb3BpZXMgYXJlIG5vdCBuZXcgaW5kZXBlbmRlbnQgb2JzZXJ2YXRpb25zOyBzdGF0ZSB0aGUgY29udmVudGlvbiBhbmQgcHJlc2VydmUgdGhlIHRlc3QgYmF0Y2ggaW50ZW5kZWQgZm9yIHRoZSBmaW5hbCBldmFsdWF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c099-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyBpbWJhbGFuY2VkIGJlZm9yZSBhbnkgcHJlZGljdGlvbj8JVGhlIHJlZmVyZW5jZSBjbGFzcyBjb3VudHM6IGluIHRoZSBmaWN0aW9uYWwgYmF0Y2gsIDEwIHVyZ2VudCBtZXNzYWdlcyBhbmQgOTAgb3JkaW5hcnkgbWVzc2FnZXMuIERpc3Rpbmd1aXNoIHRoZXNlIGZyb20gdGhlIGNvdW50cyBvZiBwcmVkaWN0ZWQgZGVjaXNpb25zLgl0b2RhaSBjMDk5LW0yIGNsYXNzZXMtZGVzZXF1aWxpYnJlZXMKV2h5IGNhbGN1bGF0ZSB0aGUgc2NvcmUgb2YgYSBydWxlIHRoYXQgYWx3YXlzIGFuc3dlcnMgd2l0aCB0aGUgbWFqb3JpdHkgY2xhc3M/CUl0IHJldmVhbHMgd2hhdCBjYW4gYmUgYWNoaWV2ZWQgd2l0aG91dCBkaXN0aW5ndWlzaGluZyB0aGUgcmFyZSBjbGFzcy4gSGVyZSBBIG9idGFpbnMgOTAgJSBhY2N1cmFjeSBhbmQgbWlzc2VzIGFsbCB1cmdlbnQgbWVzc2FnZXM7IHRoZSBvdmVyYWxsIHNjb3JlIGFsb25lIGRvZXMgbm90IGRlc2NyaWJlIGhvdyB0aGV5IGFyZSBoYW5kbGVkLgl0b2RhaSBjMDk5LW0yIHJlZ2xlLW1ham9yaXRhaXJlCkhvdyBjYW4gd2UgZ2l2ZSBlYWNoIGNsYXNzIHRoZSBzYW1lIG1hc3MgaW4gb3VyIGJhdGNoPwlGb3IgZWFjaCBjbGFzcyBjIHByZXNlbnQsIHRha2Ugd19jID0gTi8oMiDDlyBuX2MpLiBUaGUgY291bnQgbXVsdGlwbGllZCBieSBpdHMgd2VpZ2h0IGlzIE4vMi4gVGhlIHdlaWdodHMgaGF2ZSBubyB1bml0IGFuZCByZXByZXNlbnQgYSBjb252ZW50aW9uLCBub3QgYWN0dWFsIGNvc3RzIGluZmVycmVkIGZyb20gdGhlIGNsYXNzIGNvdW50cy4JdG9kYWkgYzA5OS1tMiBwb2lkcy1wYXItY2xhc3NlCldoYXQgaXMgdGhlIGRlbm9taW5hdG9yIG9mIHRoZSB3ZWlnaHRlZCBlcnJvciwgYW5kIHdoeT8JVGhlIHN1bSBvZiB0aGUgd2VpZ2h0cyBvZiBhbGwgbWVzc2FnZXMsIGNvcnJlY3RseSBvciBpbmNvcnJlY3RseSBjbGFzc2lmaWVkLiBUaGUgbnVtZXJhdG9yIGNvdW50cyBvbmx5IHRoZSB3ZWlnaHRzIG9mIGVycm9yczsgdGhlaXIgcmF0aW8gbWVhc3VyZXMgdGhlIHNoYXJlIG9mIG1hc3MgdGhhdCBpcyBtaXNjbGFzc2lmaWVkLCB3aXRob3V0IGNvbmZ1c2luZyBpdCB3aXRoIHRoZSByYXcgZnJhY3Rpb24gb2YgaW5jb3JyZWN0IG1lc3NhZ2VzLgl0b2RhaSBjMDk5LW0yIGVycmV1ci1wb25kZXJlZQpXaHkgZG9lcyBhIGNvcGllZCB0ZXN0IGZhaWwgdG8gZGVtb25zdHJhdGUgYW4gaW1wcm92ZW1lbnQ/CURlY2lzaW9ucyBjYW4gcmVtYWluIGlkZW50aWNhbCB3aGlsZSB0aGVpciB3ZWlnaHQgaW4gdGhlIHNjb3JlIGNoYW5nZXMuIENvcGllcyBhcmUgbm90IG5ldyBpbmRlcGVuZGVudCBvYnNlcnZhdGlvbnM7IHN0YXRlIHRoZSBjb252ZW50aW9uIGFuZCBwcmVzZXJ2ZSB0aGUgdGVzdCBiYXRjaCBpbnRlbmRlZCBmb3IgdGhlIGZpbmFsIGV2YWx1YXRpb24uCXRvZGFpIGMwOTktbTIgdGVzdC1pbnRhY3QK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kicyqg zvkoky mwdb</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zhoqpt cfhyiw mkou</span></span> · look at the classes behind the scores</h3><dl><div><dt>What you understand</dt><dd>A good overall score can accompany failure to detect a rare class. Class counts, counts for each class, and an explicit convention are needed to interpret an evaluation. The urgent message sorting on this page remains a fictional scene distinct from the project’s emotion labels.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">srgsuo rxqmnz dgijlp rqbegf hwhdav vjujmo iaybwk spxkpj ixgjpy mccmgp joyygq drpcuj rhazuo lkbcqm chkoch gpxiuh tuovrd hppddr ncmgxk puoyqz esyjab ttvobv rgyylj vydfcw</span></span></dd></div><div><dt>The level to prepare for</dt><dd>At this unit’s level, reconstruct the majority rule and both weighted error calculations without support. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wrezsz kylhty sxcvcf mwcvao pgddpx xzjlta jyrk</span></span> Reading a worked answer or giving an assisted answer establishes no mastery.</dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ureyzz xvogpq sebxam kclmxn zkvqex lcuvjs piyjnf upbpeb yocphk izciff xmxqrm mkhhxk swwjre wkprdo shhdij hgknsq ilvdim nksxti okzndp xotzwl kciobk iaimcj rwlxlx dehbwg</span></span></dd></div><div><dt>Next step</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bxgysr dqnwci yllcxr lrqqzn thqopa zvljrd zdls</span></span> To later link the selection rule to measured quality, an authorized protocol, justified reference labels, class counts, and a separate evaluation will still need to be prepared; none of this is executed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c099-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c099-m1.html">Previous</a> · <a href="c099-m3.html">Next</a></nav>
+<footer><p>Course book · C099·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

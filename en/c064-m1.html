@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish the hidden temperature from its sensor reading, write their relationship, and show why a single reading is not enough to recover the true value.">
+<title>C064·M1 · Latent state and observation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iyleql xxhezj ceia</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C064·M1</p><h1>Latent state and observation</h1><p class="objectif"><span>Your goal</span>Distinguish the hidden temperature from its sensor reading, write their relationship, and show why a single reading is not enough to recover the true value.</p><p class="prerequis"><strong>Before you start</strong><br>c060-m5 : approximations and assumptions · c061-m5 : identifiability and uncertainty · c040-m5 : least squares · c011-m5 : binomial theorem · c036-m5 : annotated graphs</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A sensor in a room displays 22 °C. This number is available; the exact temperature of the room is not. The sensor can read too high or too low. Before calculating an update, we need to separate what we are looking for from what we receive.</p><p>Here, the state is the temperature that our model aims to track. It is a latent state because the sensor reading does not give it directly. The observation is the number actually read. Measurement noise is the difference between this reading and what a perfect sensor would give at the same instant.</p><p>The scene and all its values are fictional. To make the reasoning checkable, the author knows a reference temperature of 20 °C and a difference of +2 °C. The person who receives only the reading does not have this hidden information. The first diagram reveals how the example was constructed; it does not give that person a second sensor.</p><p>The second diagram gives another explanation for the same reading. As long as both explanations satisfy the sensor assumptions, the displayed number cannot distinguish between them. An estimate will be a proposed value for the state, together with its limitations; simply renaming it will not make it the true value.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>A hidden temperature becomes a reading</title><desc>In the fictional scene, the reference temperature is 20 degrees Celsius. Noise of plus 2 degrees gives a reading of 22 degrees. Only this reading is available to the person reading the sensor.</desc><rect x="20" y="15" width="320" height="60" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">Hidden state: x = 20 °C</text><text x="180" y="63" text-anchor="middle" class="petite-etiquette">Fictional reference revealed here</text><path d="M180 75V160m-6-8 6 8 6-8" class="trait" /><text x="198" y="111">Added noise</text><text x="198" y="135">v = +2 °C</text><rect x="20" y="165" width="320" height="60" rx="7" class="cadre-neutre" /><text x="180" y="190" text-anchor="middle">Observation: z = 22 °C</text><text x="180" y="213" text-anchor="middle" class="petite-etiquette">Value received from the sensor</text><text x="180" y="250" text-anchor="middle">20 + 2 = 22 °C</text></svg><figcaption>The path goes from the state to the observation. The noise is added to the measurement; it does not warm the room. The labels distinguish the roles even without the colours.</figcaption></figure><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same reading has two explanations</title><desc>First explanation: state 20 degrees and noise plus 2 degrees. Other explanation: state 24 degrees and noise -2 degrees. Both give 22 degrees at the sensor.</desc><text x="180" y="30" text-anchor="middle">Two possible explanations</text><rect x="20" y="48" width="320" height="50" rx="7" class="cadre-prediction" /><text x="180" y="79" text-anchor="middle">20 °C with noise of +2 °C</text><rect x="20" y="116" width="320" height="50" rx="7" class="cadre-prediction" /><text x="180" y="147" text-anchor="middle">24 °C with noise of -2 °C</text><path d="M20 98H10V202H20M340 166h10v36h-10" class="trait" /><rect x="20" y="184" width="320" height="50" rx="7" class="cadre-neutre" /><text x="180" y="215" text-anchor="middle">Same observation: 22 °C</text><text x="180" y="254" text-anchor="middle" class="petite-etiquette">The display alone cannot distinguish them</text></svg><figcaption>These are competing explanations for a single reading, not successive temperatures. Choosing a state would require other information or assumptions.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Name the state being sought, the available observation, and the hidden noise separately; write their relationship before treating a reading as the true value.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>What the sensor reading actually contains</h3><p>At a fixed instant, our fictional reference temperature is 20 °C. The sensor model adds either +2 °C or -2 °C, each possibility having probability 1/2, or 0.50 with no unit. The received reading is 22 °C. Let us reconstruct how it was produced, the properties of the noise, and the limit on reconstructing the state.</p><ol class="etapes"><li><h3>Set the observation model</h3><p>x denotes the actual temperature at the measurement point; z, the sensor reading; v, its measurement noise. x and z are in °C; v is a temperature difference, also expressed in °C. We assume a direct measurement, at the same place and the same instant, with no delay or change of scale. The coefficient of x is therefore 1, with no unit.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mi>x</mi><mo>+</mo><mi>v</mi></mrow></math></div><p>For every temperature considered, we assume the same two possible values of v and the same probabilities. This is a discrete distribution chosen for the exercise. We do not assume that it has a bell shape, and we do not claim to describe all the errors of a real sensor.</p></li><li><h3>Produce the observation, then recover the difference</h3><p>In the outcome described, the noise is +2 °C. Adding this noise to the temperature explains the displayed number. Then subtracting the reference from the reading checks the sign of the difference.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>z</mi><mo>=</mo><mn>20</mn><mo>+</mo><mn>2</mn><mo>=</mo><mn>22</mn><mtext> °C</mtext></mrow></math></div><p>Check: z − x = 22 − 20 = 2 °C. Positive noise means that the reading is too high. This check uses x, which the author knows; with only the sensor, we could not calculate the actual noise in this way.</p></li><li><h3>Understand what it means for noise to have 0 mean</h3><p>E denotes expectation, meaning the weighted average using the probabilities in the model. Here, each possibility has equal weight: we can add the two noise values, then divide by 2. This average concerns the possible outcomes at a fixed temperature, not a list of measurements already taken.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><mi>v</mi><mo>]</mo><mo>=</mo><mfrac><mrow><mn>2</mn><mo>+</mo><mo>(</mo><mn>-2</mn><mo>)</mo></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mn>0</mn><mn>2</mn></mfrac><mo>=</mo><mn>0</mn><mtext> °C</mtext></mrow></math></div><p>The noise has 0 mean: its average is 0 °C. Yet every reading in this model has a nonzero error. “0 mean” means no average offset under these assumptions; it does not mean that every reading is free from error.</p></li><li><h3>Calculate the noise variance</h3><p>R denotes the noise variance, in °C²: the average squared difference between v and its mean E[v]. Since E[v] is 0 °C, here it is the average of the squares of v. Squaring prevents the signs from cancelling as they did when the mean was 0.</p><p>Positive noise squared: 2 × 2 = 4 °C². Negative noise squared: (-2) × (-2) = 4 °C². The sum of these squares is 8 °C²; we divide it by 2 because the outcomes are equally likely.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>R</mi><mo>=</mo><mi>E</mi><mo>[</mo><msup><mi>v</mi><mn>2</mn></msup><mo>]</mo><mo>=</mo><mfrac><mrow><mn>4</mn><mo>+</mo><mn>4</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mn>4</mn><mtext> °C²</mtext></mrow></math></div><p>R describes a spread predicted by our noise distribution. It is not the signed noise v of the received reading. The square of each noise value equals R here because of the particular choice of two opposite noise values with the same magnitude; this is not a general rule.</p></li><li><h3>Try to work back from the reading to the state</h3><p>Isolating x in z = x + v gives x = z − v. If the noise in the reading were known, we would recover 22 − 2 = 20 °C. But the sensor does not provide v separately.</p><p>Take the other allowed noise value, -2 °C. The same reading can then come from a state of 22 − (-2) = 24 °C. Checking in the forward direction: 24 + (-2) = 22 °C. We therefore have two allowed state–noise pairs that give exactly the same display.</p><p>This does not make these two states equally likely after the reading: no prior probability for x has been given. Nor does it prove that the model could not be identified with more information. The conclusion concerns this single observation and these assumptions.</p></li><li><h3>Check in the other direction and name the estimate</h3><p>At a fixed temperature x = 20 °C, the other possible reading is 20 + (-2) = 18 °C. The mean of the possible readings is (18 + 22)/2 = 40/2 = 20 °C. We recover the reference: the reading is correct on average under the model, even though neither of these two outcomes equals it.</p><p>Another check of R: the readings 18 °C and 22 °C differ from their mean by -2 °C and +2 °C. Squaring these differences gives 4 °C² again. A noise variance is therefore not a number of degrees to subtract from the display.</p><p>x̂, read as “x hat”, denotes an estimate of x, in °C, constructed from the available information. x remains the actual state; z remains the observation. Provisionally choosing x̂ = z would not demonstrate x̂ = x. This unit establishes these roles; propagating the estimate will come in the next unit.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Explain how the reading can be centred on the correct temperature on average while still leaving several possible states for a single reading. State when the reasoning uses the reference known only to the author.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The sensor displays 22 °C, so the state is 22 °C.”</h3><p>Write z = x + v. The pairs x = 20 °C with v = +2 °C and x = 24 °C with v = -2 °C give the same reading. Keep z as the observation and ask what information would allow you to choose x.</p><a href="#intuition">Compare the two explanations in the diagram</a></li><li><h3>“Noise with 0 mean never changes the reading.”</h3><p>Calculate the mean of +2 °C and -2 °C, then look at each outcome separately. The cancellation occurs in the mean of the model; neither noise value is 0.</p><a href="#exemple">Review the 0 mean property and its check</a></li><li><h3>“To correct the sensor, I subtract R from the reading.”</h3><p>R = 4 °C² is an average of squares. To isolate x, you would need to subtract the signed noise v, in °C, which remains hidden. Write the units before any subtraction and distinguish variance from a temperature difference.</p><a href="#exemple">Review the definitions of v and R</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-roles"><p class="repere">Exercise 1 · Identification</p>
+<h3>State what is available</h3><p>The person in front of the sensor receives only 22 °C and knows the noise distribution from the example. Classify x, z, and v: what do they read directly, what are they looking for, and which difference remains hidden? Can they state that v = +2 °C?</p>
+<label for="reponse-ex-roles">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-roles" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-roles" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-roles" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-roles" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The author knows a reference used to construct the example; the person in front of the sensor does not receive it.</p></details><details class="indice"><summary>Hint 2</summary><p>Test the other pair in the second diagram before choosing the sign of the noise.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>They read z = 22 °C. They are looking for x, the actual temperature. v is the hidden difference between observation and state. Knowing the possible values of v does not reveal which one occurred.</p><p>They cannot state the sign: v = -2 °C with x = 24 °C also explains the reading. The reference of 20 °C belongs to the construction of the fictional example, not to the information they have.</p><p class="petit-titre">Check your reasoning</p><ul><li>Associate x with the state, z with the reading, and v with the noise, including their units.</li><li>Justify why the sign is unknown by giving another allowed explanation.</li></ul></details></article><article class="exercice" id="ex-lecture-basse"><p class="repere">Exercise 2 · Calculation with checks</p>
+<h3>Reconstruct the distribution of readings</h3><p>For the fictional check, the reference x = 20 °C is now given. Keep the two equally likely noise values from the example. Recover the two possible readings, their mean, and their variance around this mean. Explain why this mean is not a guaranteed reading.</p>
+<label for="reponse-ex-lecture-basse">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-lecture-basse" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-lecture-basse" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-lecture-basse" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-lecture-basse" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Add each noise value separately to the same temperature; do not let the room change.</p></details><details class="indice"><summary>Hint 2</summary><p>For the variance, subtract the mean from each reading, then average the squares.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Low reading: 20 + (-2) = 18 °C. High reading: 20 + 2 = 22 °C. Each outcome has probability 1/2, or 0.50 with no unit.</p><p>Their mean is (18 + 22)/2 = 40/2 = 20 °C. The differences from this mean are -2 °C and +2 °C. Their variance is (4 + 4)/2 = 4 °C².</p><p>The mean describes the distribution of possible outcomes at fixed x. The only readings in this distribution are 18 °C and 22 °C; neither equals the mean. We have neither simulated nor taken a series of measurements.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain the two readings using the model z = x + v.</li><li>Show the differences before their squares and keep °C² for the variance.</li><li>Distinguish the theoretical mean from a sensor outcome.</li></ul></details></article><article class="exercice" id="ex-objection"><p class="repere">Exercise 3 · Reasoning</p>
+<h3>Is a known noise distribution enough?</h3><p>You are given only z = 22 °C and the two equally likely noise values in the model. Someone says: “The noise has 0 mean and its variance is known; we can therefore recover x exactly and assign the same probability to the possible states.” Recover all the compatible states, check each one, and discuss both claims.</p>
+<label for="reponse-ex-objection">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-objection" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-objection" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-objection" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-objection" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Rewrite x = z − v for each allowed noise value.</p></details><details class="indice"><summary>Hint 2</summary><p>The probabilities of the noise values at a fixed state do not constitute a prior probability distribution over the states.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>With v = +2 °C, x = 22 − 2 = 20 °C. With v = -2 °C, x = 22 − (-2) = 24 °C. These are all the states compatible with the only two allowed noise values.</p><p>Checks: 22 − 20 = 2 °C and 22 − 24 = -2 °C; both noise values belong to the distribution. The 0 mean and R = 4 °C² therefore do not resolve the ambiguity of this single reading.</p><p>No probability distribution for x before the reading is provided. We can list the compatible states, but cannot automatically assign them equal probabilities after the observation. We would need to specify this prior information, or obtain other information, to go further.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find the two states and check each noise value in the direction z − x.</li><li>Limit the conclusion to this observation and this discrete distribution.</li><li>Distinguish compatibility from probability after observation.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="etat-observation"><summary><span class="repere">Recall 1</span><span>In the sensor scene, what do x, z, and v denote?</span></summary><p>x is the hidden actual temperature; z is the available reading; v is the hidden measurement error, with z = x + v. x and z are in °C; v is a temperature difference in °C.</p></details><details class="carte" data-carte="centrage"><summary><span class="repere">Recall 2</span><span>Why does noise with 0 mean not guarantee an exact reading?</span></summary><p>The mean concerns the possible outcomes. Here, +2 °C and -2 °C cancel on average, but each produces a reading that differs from the state.</p></details><details class="carte" data-carte="variance-bruit"><summary><span class="repere">Recall 3</span><span>What does R describe, and why can it not be subtracted from z?</span></summary><p>R is the noise variance, in °C². It describes a spread in the model, not the signed noise of this reading. Isolating x would require v, in °C, which remains hidden.</p></details><details class="carte" data-carte="ambiguite"><summary><span class="repere">Recall 4</span><span>Construct two states compatible with the reading 22 °C, then state what you cannot deduce from them.</span></summary><p>20 °C with +2 °C of noise and 24 °C with -2 °C both give 22 °C. The reading alone does not choose the state; without a prior probability for x, it does not automatically make these states equally likely either.</p></details><details class="carte" data-carte="estimation"><summary><span class="repere">Recall 5</span><span>What distinction do you keep between x, x̂, and z?</span></summary><p>x is the actual state; x̂ is an estimate of that state based on the available information; z is the received observation. Choosing x̂ = z does not prove that this estimate equals x.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, draw the room and the sensor, place x, v, and z, then reconstruct z = x + v with the units. Explain the 0 mean property and R, recover the states compatible with the reading, and finish by distinguishing the state, its estimate, and the observation.</p></div><div class="exports"><a class="bouton" download="c064-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjQtbTE6ZXRhdC1vYnNlcnZhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDY0LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXRhdC1sYXRlbnQiLAogICAgICAicXVlc3Rpb24iOiAiSW4gdGhlIHNlbnNvciBzY2VuZSwgd2hhdCBkbyB4LCB6LCBhbmQgdiBkZW5vdGU/IiwKICAgICAgInJlcG9uc2UiOiAieCBpcyB0aGUgaGlkZGVuIGFjdHVhbCB0ZW1wZXJhdHVyZTsgeiBpcyB0aGUgYXZhaWxhYmxlIHJlYWRpbmc7IHYgaXMgdGhlIGhpZGRlbiBtZWFzdXJlbWVudCBlcnJvciwgd2l0aCB6ID0geCArIHYuIHggYW5kIHogYXJlIGluIMKwQzsgdiBpcyBhIHRlbXBlcmF0dXJlIGRpZmZlcmVuY2UgaW4gwrBDLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDY0LW0xOmNlbnRyYWdlIiwKICAgICAgInVuaXRlIjogImMwNjQtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJicnVpdC1jZW50cmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgbm9pc2Ugd2l0aCAwIG1lYW4gbm90IGd1YXJhbnRlZSBhbiBleGFjdCByZWFkaW5nPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBtZWFuIGNvbmNlcm5zIHRoZSBwb3NzaWJsZSBvdXRjb21lcy4gSGVyZSwgKzIgwrBDIGFuZCAtMiDCsEMgY2FuY2VsIG9uIGF2ZXJhZ2UsIGJ1dCBlYWNoIHByb2R1Y2VzIGEgcmVhZGluZyB0aGF0IGRpZmZlcnMgZnJvbSB0aGUgc3RhdGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjQtbTE6dmFyaWFuY2UtYnJ1aXQiLAogICAgICAidW5pdGUiOiAiYzA2NC1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInZhcmlhbmNlLWRlLW1lc3VyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgUiBkZXNjcmliZSwgYW5kIHdoeSBjYW4gaXQgbm90IGJlIHN1YnRyYWN0ZWQgZnJvbSB6PyIsCiAgICAgICJyZXBvbnNlIjogIlIgaXMgdGhlIG5vaXNlIHZhcmlhbmNlLCBpbiDCsEPCsi4gSXQgZGVzY3JpYmVzIGEgc3ByZWFkIGluIHRoZSBtb2RlbCwgbm90IHRoZSBzaWduZWQgbm9pc2Ugb2YgdGhpcyByZWFkaW5nLiBJc29sYXRpbmcgeCB3b3VsZCByZXF1aXJlIHYsIGluIMKwQywgd2hpY2ggcmVtYWlucyBoaWRkZW4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjQtbTE6YW1iaWd1aXRlIiwKICAgICAgInVuaXRlIjogImMwNjQtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvYnNlcnZhdGlvbi1hbWJpZ3VlIiwKICAgICAgInF1ZXN0aW9uIjogIkNvbnN0cnVjdCB0d28gc3RhdGVzIGNvbXBhdGlibGUgd2l0aCB0aGUgcmVhZGluZyAyMiDCsEMsIHRoZW4gc3RhdGUgd2hhdCB5b3UgY2Fubm90IGRlZHVjZSBmcm9tIHRoZW0uIiwKICAgICAgInJlcG9uc2UiOiAiMjAgwrBDIHdpdGggKzIgwrBDIG9mIG5vaXNlIGFuZCAyNCDCsEMgd2l0aCAtMiDCsEMgYm90aCBnaXZlIDIyIMKwQy4gVGhlIHJlYWRpbmcgYWxvbmUgZG9lcyBub3QgY2hvb3NlIHRoZSBzdGF0ZTsgd2l0aG91dCBhIHByaW9yIHByb2JhYmlsaXR5IGZvciB4LCBpdCBkb2VzIG5vdCBhdXRvbWF0aWNhbGx5IG1ha2UgdGhlc2Ugc3RhdGVzIGVxdWFsbHkgbGlrZWx5IGVpdGhlci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2NC1tMTplc3RpbWF0aW9uIiwKICAgICAgInVuaXRlIjogImMwNjQtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlc3RpbWF0aW9uLWV0LWV0YXQiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkaXN0aW5jdGlvbiBkbyB5b3Uga2VlcCBiZXR3ZWVuIHgsIHjMgiwgYW5kIHo/IiwKICAgICAgInJlcG9uc2UiOiAieCBpcyB0aGUgYWN0dWFsIHN0YXRlOyB4zIIgaXMgYW4gZXN0aW1hdGUgb2YgdGhhdCBzdGF0ZSBiYXNlZCBvbiB0aGUgYXZhaWxhYmxlIGluZm9ybWF0aW9uOyB6IGlzIHRoZSByZWNlaXZlZCBvYnNlcnZhdGlvbi4gQ2hvb3NpbmcgeMyCID0geiBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoaXMgZXN0aW1hdGUgZXF1YWxzIHguIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c064-m1-cartes.tsv" href="data:text/tab-separated-values;base64,SW4gdGhlIHNlbnNvciBzY2VuZSwgd2hhdCBkbyB4LCB6LCBhbmQgdiBkZW5vdGU/CXggaXMgdGhlIGhpZGRlbiBhY3R1YWwgdGVtcGVyYXR1cmU7IHogaXMgdGhlIGF2YWlsYWJsZSByZWFkaW5nOyB2IGlzIHRoZSBoaWRkZW4gbWVhc3VyZW1lbnQgZXJyb3IsIHdpdGggeiA9IHggKyB2LiB4IGFuZCB6IGFyZSBpbiDCsEM7IHYgaXMgYSB0ZW1wZXJhdHVyZSBkaWZmZXJlbmNlIGluIMKwQy4JdG9kYWkgYzA2NC1tMSBldGF0LWxhdGVudApXaHkgZG9lcyBub2lzZSB3aXRoIDAgbWVhbiBub3QgZ3VhcmFudGVlIGFuIGV4YWN0IHJlYWRpbmc/CVRoZSBtZWFuIGNvbmNlcm5zIHRoZSBwb3NzaWJsZSBvdXRjb21lcy4gSGVyZSwgKzIgwrBDIGFuZCAtMiDCsEMgY2FuY2VsIG9uIGF2ZXJhZ2UsIGJ1dCBlYWNoIHByb2R1Y2VzIGEgcmVhZGluZyB0aGF0IGRpZmZlcnMgZnJvbSB0aGUgc3RhdGUuCXRvZGFpIGMwNjQtbTEgYnJ1aXQtY2VudHJlCldoYXQgZG9lcyBSIGRlc2NyaWJlLCBhbmQgd2h5IGNhbiBpdCBub3QgYmUgc3VidHJhY3RlZCBmcm9tIHo/CVIgaXMgdGhlIG5vaXNlIHZhcmlhbmNlLCBpbiDCsEPCsi4gSXQgZGVzY3JpYmVzIGEgc3ByZWFkIGluIHRoZSBtb2RlbCwgbm90IHRoZSBzaWduZWQgbm9pc2Ugb2YgdGhpcyByZWFkaW5nLiBJc29sYXRpbmcgeCB3b3VsZCByZXF1aXJlIHYsIGluIMKwQywgd2hpY2ggcmVtYWlucyBoaWRkZW4uCXRvZGFpIGMwNjQtbTEgdmFyaWFuY2UtZGUtbWVzdXJlCkNvbnN0cnVjdCB0d28gc3RhdGVzIGNvbXBhdGlibGUgd2l0aCB0aGUgcmVhZGluZyAyMiDCsEMsIHRoZW4gc3RhdGUgd2hhdCB5b3UgY2Fubm90IGRlZHVjZSBmcm9tIHRoZW0uCTIwIMKwQyB3aXRoICsyIMKwQyBvZiBub2lzZSBhbmQgMjQgwrBDIHdpdGggLTIgwrBDIGJvdGggZ2l2ZSAyMiDCsEMuIFRoZSByZWFkaW5nIGFsb25lIGRvZXMgbm90IGNob29zZSB0aGUgc3RhdGU7IHdpdGhvdXQgYSBwcmlvciBwcm9iYWJpbGl0eSBmb3IgeCwgaXQgZG9lcyBub3QgYXV0b21hdGljYWxseSBtYWtlIHRoZXNlIHN0YXRlcyBlcXVhbGx5IGxpa2VseSBlaXRoZXIuCXRvZGFpIGMwNjQtbTEgb2JzZXJ2YXRpb24tYW1iaWd1ZQpXaGF0IGRpc3RpbmN0aW9uIGRvIHlvdSBrZWVwIGJldHdlZW4geCwgeMyCLCBhbmQgej8JeCBpcyB0aGUgYWN0dWFsIHN0YXRlOyB4zIIgaXMgYW4gZXN0aW1hdGUgb2YgdGhhdCBzdGF0ZSBiYXNlZCBvbiB0aGUgYXZhaWxhYmxlIGluZm9ybWF0aW9uOyB6IGlzIHRoZSByZWNlaXZlZCBvYnNlcnZhdGlvbi4gQ2hvb3NpbmcgeMyCID0geiBkb2VzIG5vdCBwcm92ZSB0aGF0IHRoaXMgZXN0aW1hdGUgZXF1YWxzIHguCXRvZGFpIGMwNjQtbTEgZXN0aW1hdGlvbi1ldC1ldGF0Cg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">iyleql xxhezj ceia</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pgcfge xgssjj kknq</span></span> · initial concepts before the milestone in C064·M4</h3><dl><div><dt>What you understand</dt><dd>A latent state is the quantity being sought; an observation is related to it by a measurement model. The estimate remains distinct from the true value. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dvokus mlnftv khvpsd mtgjtn awqnkk sftuty fdjo</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eggzmn llmwes nznlah mafncm lydwih qskcif axbtnp kcsrjc xebucx vhzzqv gtbimv xcskym gcajik mndcgv izprnm hjlbrm kjcftp dwjgbe piubtd dpaqcn nvetpq zjvkff aqnurm vxloke</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vuskxi cgupjp pepqss fjyewa epiukr cexzlb lzcx</span></span> Here, prepare only the state–observation–noise explanation and an objection to equating a reading with the true value. Reading a page or giving an assisted answer does not establish that any level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dectjr vcoyxq slfqnk ooounk rpmfrb ezmtrg xmtscy jzuqmb dfvsdv efkqlj gkhped gifkhp ncbjyg smqgbm dcfnsw zkahvv wdbkyg bexvtv jahgsr fajdfr rojwus pbdzcs bfmchj svbmzs</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the example and answer the objection without support on another day; if help was needed, try again independently. Continue with C064·M2, on the transition and the predicted variance. Checking the wiring and the assumptions using authorised observations remains a separate task.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c064-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c063-m5.html">Previous</a> · <a href="c064-m2.html">Next</a></nav>
+<footer><p>Course book · C064·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

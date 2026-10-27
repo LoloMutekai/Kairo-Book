@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Reconstruct a Bellman equation, calculate an expected continuation value and place the action choice at the correct time.">
+<title>C265·M3 · Probabilistic Bellman — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zwhseb nwgyal cqxk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C265·M3</p><h1>Probabilistic Bellman</h1><p class="objectif"><span>Your goal</span>Reconstruct a Bellman equation, calculate an expected continuation value and place the action choice at the correct time.</p><p class="prerequis"><strong>Before you start</strong><br>c233-m5 : verification theorem · c103-m5 : regularization · c168-m5 : Radon-Nikodym · c264-m5 : monitoring and rollback · c265-m1 : MDP · c265-m2 : value and policy</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A delivery cart leaves a depot to deliver a parcel. The direct route d costs 1 point and can lead to an open door, state A, or a blocked door, state B. The detour c costs 2 points but always leads to A. The driver chooses at the depot, before knowing the state of the door.</p><p>After arrival, a required operation remains: delivering in A earns 8 points; finding the door blocked in B costs 4 points. The mission then ends. All numbers and points are fictional: they define a mathematical problem and do not measure a real warehouse.</p><p>To assess the direct route, we must keep both of its outcomes. The probability of arriving in A is 3/4, and the probability of arriving in B is 1/4. We calculate the mean of what remains to be earned, reduce the weight of that future, then add the cost paid now. This is the Bellman decomposition: the present and the value of what follows.</p><p>The discount factor for the future is γ = 0.50, with no units. It weights points received at the next step; it does not change the probability of the door being open. The first diagram describes the randomness after d; the second works backwards to bring values to the depot. The detour provides a deterministic comparison within the same mission.</p><div class="schemas"><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Choose before knowing the door’s state</title><desc>The direct route costs 1 point. It leads to A with probability 3/4, remaining value 8 points, or to B with probability 1/4, remaining value -4 points. The detour costs 2 points and leads to A with certainty.</desc><rect x="60" y="14" width="240" height="62" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">Depot: choose d</text><text x="180" y="63" text-anchor="middle">Now: -1 point</text><path d="M180 76V94M180 94H85V153M180 94H275V153" class="trait" /><text x="85" y="123" text-anchor="middle">p = 3/4</text><text x="275" y="123" text-anchor="middle">p = 1/4</text><rect x="14" y="153" width="142" height="70" rx="7" class="cadre-resultat" /><text x="85" y="180" text-anchor="middle">A: open</text><text x="85" y="206" text-anchor="middle">Next: 8 points</text><rect x="204" y="153" width="142" height="70" rx="7" class="cadre-neutre" /><text x="275" y="180" text-anchor="middle">B: blocked</text><text x="275" y="206" text-anchor="middle">Next: -4 points</text><rect x="30" y="253" width="300" height="62" rx="7" class="cadre-neutre" /><text x="180" y="278" text-anchor="middle">Other choice: detour c</text><text x="180" y="302" text-anchor="middle">-2 points; A certain</text></svg><figcaption>The probabilities describe the outcomes of the direct route, rather than the driver’s choice. The values labelled “Next” start after the journey; they do not yet include its cost.</figcaption></figure><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>Work back to the value of the direct route</title><desc>The remaining values 8 and -4 points give a mean of 5. Multiplied by γ equal to 1/2, this is worth 5/2 points. Adding -1 gives 3/2 points at the depot.</desc><rect x="30" y="14" width="300" height="58" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">Values at arrival</text><text x="180" y="61" text-anchor="middle">A: 8; B: -4 points</text><path d="M180 72V99" class="trait" /><rect x="30" y="99" width="300" height="58" rx="7" class="cadre-prediction" /><text x="180" y="123" text-anchor="middle">Weight by 3/4 and 1/4</text><text x="180" y="146" text-anchor="middle">Mean: 5 points</text><path d="M180 157V184" class="trait" /><rect x="30" y="184" width="300" height="58" rx="7" class="cadre-neutre" /><text x="180" y="208" text-anchor="middle">Discount the future by 1/2</text><text x="180" y="231" text-anchor="middle">2.50 points at the depot</text><path d="M180 242V269" class="trait" /><rect x="30" y="269" width="300" height="48" rx="7" class="cadre-resultat" /><text x="180" y="299" text-anchor="middle">Add -1: 1.50 points</text></svg><figcaption>The mean uses the transition probabilities; γ sets the weight of the future in the objective. These are two different weightings.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>For each available action, add the contributions of all its outcomes, each weighted by its probability. Only then follow the probabilities of the fixed policy or select the action with the greatest value.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The best route does not have the lowest initial cost</h3><p>The mission lasts T = 2 decision steps, with only one action available at the last step. The cart is at the depot at t = 0, arrives in A or B at t = 1, and the mission ends at t = T. Use γ = 1/2, P(A | depot, d) = 3/4, P(B | depot, d) = 1/4 and P(A | depot, c) = 1. All other transitions from the depot have probability 0.</p><ol class="etapes"><li><h3>Define what the model can calculate</h3><p>t counts steps, with no physical duration specified. s denotes the current state, a an available action, and s′ the next state. P<sub>t</sub>(s′ | s,a) is its conditional probability, with no units: the probabilities are nonnegative and their sum over the outcomes is 1. A(s) denotes the finite set of actions allowed in s; the letter A on its own also names our “open door” state, depending on the context.</p><p>r<sub>t</sub>(s,a,s′), in points, is the mean immediate reward conditional on this transition. It is deterministic here: r_d = -1 point and r_c = -2 points at the depot. At the next step, the reward is 8 in A or -4 in B. The states summarize the relevant information: knowing s and a is enough to determine the distribution of the next transition. This is the model’s Markov assumption.</p><p>π<sub>t</sub>(a | s) is a policy: a distribution over actions, chosen before the next state is drawn. P describes randomness in the world, and π describes randomness in a possible randomized decision. The states and actions are finite, the rewards are bounded, and P and r are known in this exercise. The finite horizon allows 0 ≤ γ ≤ 1, without requiring γ to be strictly less than 1.</p></li><li><h3>Split the return after the immediate reward</h3><p>G<sub>t</sub> is the random return from t onwards, in points: the first reward, followed by later rewards with an additional power of γ at each step. S<sub>t</sub> and A<sub>t</sub> are the state and action random variables; R<sub>t+1</sub> is the reward received during the move starting at t. The convention is to date a reward by when it arrives. For t before T, the decomposition gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>G</mi><mi>t</mi></msub><mo>=</mo><msub><mi>R</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>γ</mi><msub><mi>G</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>,</mo><msub><mi>G</mi><mi>T</mi></msub><mo>=</mo><mn>0</mn></mrow></math></div><p>V<sub>t</sub>(s), with π as a superscript in the formulas, is the expectation of G<sub>t</sub> starting from s and following π. The symbol 𝔼 denotes this expectation; the vertical bar reads “given”. V is measured in points: it is neither a particular trajectory nor a probability. The terminal condition V_T = 0 means that no more points can be received after the final reward. It does not cancel the final reward itself.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>V</mi><mi>t</mi><mi>π</mi></msubsup><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><msub><mi>𝔼</mi><mi>π</mi></msub><mo>[</mo><msub><mi>G</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>S</mi><mi>t</mi></msub><mo>=</mo><mi>s</mi><mo>]</mo></mrow></math></div></li><li><h3>Write the two Bellman equations</h3><p>Let U be a function giving the value of states at the next step, in points. B<sub>t</sub>[U](s,a) is the value, also in points, of a current action followed by this continuation. The symbol ∑ means to sum over all possible next states. The letter B with a subscript is a calculation function; B without a subscript remains the “blocked door” state.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>B</mi><mi>t</mi></msub><mo>[</mo><mi>U</mi><mo>]</mo><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>=</mo><msub><mo>∑</mo><mrow><mi>s</mi><mo>′</mo></mrow></msub><msub><mi>P</mi><mi>t</mi></msub><mo>(</mo><mi>s</mi><mo>′</mo><mo>∣</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>[</mo><msub><mi>r</mi><mi>t</mi></msub><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>,</mo><mi>s</mi><mo>′</mo><mo>)</mo><mo>+</mo><mi>γ</mi><mi>U</mi><mo>(</mo><mi>s</mi><mo>′</mo><mo>)</mo><mo>]</mo></mrow></math></div><p>With a fixed policy, the second mean is over the actions available in s. The conditional expectation property justifies these successive means: first condition on the action and the outcome, then average over them to recover the original expectation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>V</mi><mi>t</mi><mi>π</mi></msubsup><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><msub><mo>∑</mo><mi>a</mi></msub><msub><mi>π</mi><mi>t</mi></msub><mo>(</mo><mi>a</mi><mo>∣</mo><mi>s</mi><mo>)</mo><msub><mi>B</mi><mi>t</mi></msub><mo>[</mo><msubsup><mi>V</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow><mi>π</mi></msubsup><mo>]</mo><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo></mrow></math></div><p>For the optimal value V with a star, we choose the best action and a continuation that is itself optimal. The maximum, written max, is over the available actions; it remains outside the sum over outcomes. A mean of action values cannot exceed their maximum: a deterministic action attaining this maximum is sufficient here.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>V</mi><mi>t</mi><mo>∗</mo></msubsup><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><msub><mi>max</mi><mrow><mi>a</mi><mo>∈</mo><mi>A</mi><mo>(</mo><mi>s</mi><mo>)</mo></mrow></msub><msub><mi>B</mi><mi>t</mi></msub><mo>[</mo><msubsup><mi>V</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow><mo>∗</mo></msubsup><mo>]</mo><mo>(</mo><mi>s</mi><mo>,</mo><mi>a</mi><mo>)</mo></mrow></math></div><p>These are identities between consistent values in a known model. Applying the formula to an arbitrary continuation table calculates a new table without making the old one exact. Here we solve backwards from the terminal state; estimation from observed transitions is not yet being taught.</p></li><li><h3>Start at the end of the mission</h3><p>At the terminal state, the continuation is worth 0 points. In A, the required action delivers the parcel: V at t = 1 is 8 + 1/2 × 0 = 8 points. In B, it records the blockage: V is -4 + 1/2 × 0 = -4 points. There is no choice to optimize at this step, so the values under π and the optimal values coincide.</p><p>We can now work back to the depot. These values include the final reward, but not the journey cost already paid. Adding it to A and B as well would charge that cost twice.</p></li><li><h3>Average over all outcomes of the direct route</h3><p>First check the probability distribution: 3/4 + 1/4 = 1. The contribution from A is 3/4 × 8 = 6 points, and the contribution from B is 1/4 × (-4) = -1 point. Their sum gives a mean continuation value of 5 points.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>𝔼</mi><mo>[</mo><msub><mi>V</mi><mn>1</mn></msub><mo>(</mo><msub><mi>S</mi><mn>1</mn></msub><mo>)</mo><mo>∣</mo><mi>d</mi><mo>]</mo><mo>=</mo><mfrac><mn>3</mn><mn>4</mn></mfrac><mo>×</mo><mn>8</mn><mo>+</mo><mfrac><mn>1</mn><mn>4</mn></mfrac><mo>×</mo><mo>(</mo><mn>-4</mn><mo>)</mo><mo>=</mo><mn>5</mn></mrow></math></div><p>Departure from the depot is implicit in this abbreviated conditioning. The mean 5 is neither the favourable outcome 8 nor the unweighted mean of the two values. It lies between -4 and 8, as a mean with positive weights summing to 1 must.</p></li><li><h3>Discount the future, then add the present</h3><p>The mean continuation value is 5 points at arrival. Its weighted value at the depot is γ × 5 = 2.50 points. Add the immediate cost as a negative reward:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>B</mi><mn>0</mn></msub><mo>[</mo><msub><mi>V</mi><mn>1</mn></msub><mo>]</mo><mo>(</mo><mi>s</mi><mo>,</mo><mi>d</mi><mo>)</mo><mo>=</mo><mn>-1</mn><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>×</mo><mn>5</mn><mo>=</mo><mfrac><mn>3</mn><mn>2</mn></mfrac><mtext> points</mtext></mrow></math></div><p>The direct route is therefore worth 3/2 points, or 1.50 points. The factor γ does not discount the cost paid now. In the general formula, r can depend on the outcome: it must then stay in each branch before averaging. Here it is identical in the branches of the direct route and can be taken outside the sum.</p></li><li><h3>Compare actions without changing their future</h3><p>The detour leads to A with certainty. Its value is -2 + 1/2 × 8 = 2 points. The maximum of 1.50 and 2.00 is 2 points: at the depot, the optimal policy chooses c. It sacrifices more points immediately but avoids the blockage. Its advantage in expectation is 1/2 points.</p><p>Another policy can choose randomly: π(d | s) = 1/2 and π(c | s) = 1/2, summing to 1. Its value is 1/2 × 3/2 + 1/2 × 2 = 3/4 + 1 = 7/4 points, or 1.750 points. Evaluating this policy does not mean replacing its choice with the maximum. The randomness of π is added to that of P; the two remain distinct.</p></li><li><h3>Check by following the trajectories</h3><p>If the direct route ends in A, the complete return is -1 + 4 = 3 points. If it ends in B, the return is -1 + (-2) = -3 points. Averaging these complete returns gives 3/4 × 3 + 1/4 × (-3) = 9/4 + (-3/4) = 3/2 points. We recover 3/2 by organizing the calculation differently.</p><p>With γ = 0, only immediate rewards would count and the direct route would become preferable: the warm-up exercise checks this. Finally, 3/2 and 7/4 are expectations; no route in this model necessarily produces those exact scores. An optimal value in this model guarantees neither a gain on every mission nor that its probabilities fit a real warehouse.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the formulas. Explain why you start at the terminal state, why the direct route retains a negative contribution, and why the maximum comes after the mean over outcomes. Also reconstruct the evaluation of the randomized policy without turning it into an optimal policy.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I take the open-door branch because it earns the most.”</h3><p>The driver chooses a route, not the state of the door. For d, keep A and B with their weights 3/4 and 1/4. The unfavourable branch contributes -1 point to the mean continuation value. Keeping only A removes a risk present in the model.</p><a href="#exemple">Revisit the mean over outcomes of the direct route</a></li><li><h3>“Bellman always takes the maximum, even for a fixed policy.”</h3><p>To evaluate π, respect its probabilities: the policy in the example is worth 7/4 points. The maximum is 2 points and answers a different question: optimization. In both cases, the continuation values must follow the stated policy.</p><a href="#exemple">Reread the two equations and the comparison of policies</a></li><li><h3>“I discount the whole sum by γ and add the delivery reward to the value of A again.”</h3><p>The immediate cost has weight 1; only the continuation receives the factor γ. V in A already contains the 8 delivery points. Start again at the terminal state and date each reward to avoid counting it again.</p><a href="#exemple">Start again at the end, then date the present and the continuation</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-present"><p class="repere">Exercise 1 · Warm-up</p>
+<h3>An objective that ignores the future</h3><p>In the same mission, replace γ with 0 without changing P or the rewards. Before calculating, predict the optimal route. Calculate the action values at the depot and explain what happened to the transition probabilities.</p>
+<label for="reponse-ex-present">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-present" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-present" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-present" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-present" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In r + γU, which term disappears?</p></details><details class="indice"><summary>Hint 2</summary><p>The probabilities remain in the model, even though their future consequences no longer have any weight in the objective.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The direct route is worth -1 + 0 × 5 = -1 point. The detour is worth -2 + 0 × 8 = -2 points. Since -1 is greater than -2, we choose d.</p><p>The distribution P has not changed: the door can still be blocked. Only the objective has changed, giving 0 weight to rewards at the next step. Since the immediate reward here is independent of the outcome, no additional averaging changes these values.</p><p class="petit-titre">Check your reasoning</p><ul><li>You give both values and compare their order with negative rewards.</li><li>You distinguish a change in γ from a change in the probabilities.</li><li>You explain why a different immediate reward that depended on the outcome would still require an expectation.</li></ul></details></article><article class="exercice" id="ex-politique"><p class="repere">Exercise 2 · Application and checking</p>
+<h3>Recover a value from the possible missions</h3><p>Restore γ = 1/2. The policy chooses d with probability 1/2 and c with probability 1/2, before any observation of the door. List the possible trajectories, their probabilities and their returns. Recover V under this policy, then compare it with the optimal value.</p>
+<label for="reponse-ex-politique">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-politique" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-politique" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-politique" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-politique" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>To reach A via d, multiply the probability of choosing d by the probability of reaching A given d.</p></details><details class="indice"><summary>Hint 2</summary><p>The detour has only one outcome. The returns for each route have already been discounted to the depot: do not multiply by γ again.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Trajectory d then A: probability 1/2 × 3/4 = 3/8, return 3 points. Trajectory d then B: probability 1/2 × 1/4 = 1/8, return -3 points. Trajectory c then A: probability 1/2, return 2 points. These probabilities sum to 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>V</mi><mn>0</mn><mi>π</mi></msubsup><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mn>3/8</mn><mo>×</mo><mn>3</mn><mo>+</mo><mn>1/8</mn><mo>×</mo><mo>(</mo><mn>-3</mn><mo>)</mo><mo>+</mo><mn>1/2</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>7/4</mn><mtext> point</mtext></mrow></math></div><p>We recover 1.750 points, between the action values 1.50 and 2.00. The certain detour achieves 2 points in expectation. The difference comes from the random choice of route; it does not show that the randomized policy would lose on every individual mission.</p><p class="petit-titre">Check your reasoning</p><ul><li>You separate the action draw from the transition draw and multiply conditional probabilities.</li><li>The sum of the trajectory probabilities is 1.</li><li>You recover 7/4 without discounting twice and distinguish expectation from observed score.</li></ul></details></article><article class="exercice" id="ex-information"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>The value of information received too early</h3><p>Someone claims 11/4 points by choosing d when the door is open and c when it is blocked. To analyse this claim, represent the state of the door by a random draw shared by the routes: open with probability 3/4, blocked with probability 1/4; c reaches A in both cases. Calculate the mean score and explain whether this decision respects the information available at the depot. Then replace the probability of the door being open with an unknown q and find the threshold at which the direct route becomes optimal.</p>
+<label for="reponse-ex-information">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-information" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-information" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-information" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-information" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For each state of the door, compare the complete returns of d and c. Then consider when that state is observed.</p></details><details class="indice"><summary>Hint 2</summary><p>With probability q, the continuation of the direct route is q × 8 + (1 − q) × (-4).</p></details><details class="indice"><summary>Hint 3</summary><p>Expand r_d + γ[qV(A) + (1 − q)V(B)] and compare it with the detour, which is still worth 2.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Door open: the direct route gives 3 points, compared with 2 for c. Door blocked: d gives -3 points, compared with 2 for c. Choosing the best in each case gives 3/4 × 3 + 1/4 × 2 = 9/4 + 1/2 = 11/4 points, or 2.75 points.</p><p>This rule sees the door before choosing, unlike our driver. It has additional information. Its expectation exceeds the maximum achievable at the depot by 3/4 points. This is not the Bellman value of the original problem. We have replaced “maximize an expectation” with “average maxima after revelation”. The shared draw specified in the problem makes this second experiment well defined.</p><p>For the sensitivity analysis, q is a probability with no units between 0 and 1. The range of the values is 12 points, and γ times this range is 6 points. The value of d can therefore be written as 6q − 3 points. It exceeds 2 when 6q &gt; 5, so q &gt; 5/6. At q = 5/6, the routes tie; below it, c is preferable. Our q = 3/4 lies below this threshold.</p><p>The threshold compares expectations within the same model. It does not remove the need to justify the probability of the door being open before any real use.</p><p class="petit-titre">Check your reasoning</p><ul><li>You recover 11/4 and identify the additional observation required before choosing.</li><li>You keep the complete returns and the same door draw when comparing routes after revelation.</li><li>You obtain the threshold 5/6, handle the tie and recover the choice in the example.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="decoupage"><summary><span class="repere">Recall 1</span><span>Where does the Bellman decomposition come from?</span></summary><p>The return is the immediate reward plus γ times the remaining return. Taking its conditional expectation, then conditioning on the action and the next state, gives the Bellman averages. The terminal value is 0 after the final reward.</p></details><details class="carte" data-carte="deux-hasards"><summary><span class="repere">Recall 2</span><span>What do P and π weight, and what are their units?</span></summary><p>P weights the next states given the state and action; π weights actions given the state. These are probabilities with no units, normalized separately. The choice according to π precedes the transition draw.</p></details><details class="carte" data-carte="deux-equations"><summary><span class="repere">Recall 3</span><span>What changes when moving from a fixed policy to the optimal value?</span></summary><p>For fixed π, we average action values according to π and continue with V under π. For the optimum, we maximize over the available actions and continue with the optimal value. Each action retains the expectation over all its outcomes.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 4</span><span>Why can we not freely move the maximum inside the mean over outcomes?</span></summary><p>Choosing the action separately for each outcome can use information unknown at decision time. In our mission, this produces 11/4 points rather than 2 points: a different experiment, with the state of the door revealed beforehand.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>How can we check the 3/2 points for the direct route without copying the continuation calculation?</span></summary><p>Calculate the complete returns 3 and -3 points, then their weighted average using 3/4 and 1/4. We recover 3/2 points. The units are points; this number is not a guaranteed score on a mission.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>On a blank sheet, reconstruct the terminal condition, the dated rewards and the normalized probabilities. Recover the return decomposition, then the expectation for each action. Next evaluate a fixed policy and distinguish it from the optimal maximum. Finish by explaining why choosing after the state of the door is revealed would change the problem.</p></div><div class="exports"><a class="bouton" download="c265-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjUtbTM6ZGVjb3VwYWdlIiwKICAgICAgInVuaXRlIjogImMyNjUtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJiZWxsbWFuLWRlY291cGFnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGVyZSBkb2VzIHRoZSBCZWxsbWFuIGRlY29tcG9zaXRpb24gY29tZSBmcm9tPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSByZXR1cm4gaXMgdGhlIGltbWVkaWF0ZSByZXdhcmQgcGx1cyDOsyB0aW1lcyB0aGUgcmVtYWluaW5nIHJldHVybi4gVGFraW5nIGl0cyBjb25kaXRpb25hbCBleHBlY3RhdGlvbiwgdGhlbiBjb25kaXRpb25pbmcgb24gdGhlIGFjdGlvbiBhbmQgdGhlIG5leHQgc3RhdGUsIGdpdmVzIHRoZSBCZWxsbWFuIGF2ZXJhZ2VzLiBUaGUgdGVybWluYWwgdmFsdWUgaXMgMCBhZnRlciB0aGUgZmluYWwgcmV3YXJkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjY1LW0zOmRldXgtaGFzYXJkcyIsCiAgICAgICJ1bml0ZSI6ICJjMjY1LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9saXRpcXVlLWV0LXRyYW5zaXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkbyBQIGFuZCDPgCB3ZWlnaHQsIGFuZCB3aGF0IGFyZSB0aGVpciB1bml0cz8iLAogICAgICAicmVwb25zZSI6ICJQIHdlaWdodHMgdGhlIG5leHQgc3RhdGVzIGdpdmVuIHRoZSBzdGF0ZSBhbmQgYWN0aW9uOyDPgCB3ZWlnaHRzIGFjdGlvbnMgZ2l2ZW4gdGhlIHN0YXRlLiBUaGVzZSBhcmUgcHJvYmFiaWxpdGllcyB3aXRoIG5vIHVuaXRzLCBub3JtYWxpemVkIHNlcGFyYXRlbHkuIFRoZSBjaG9pY2UgYWNjb3JkaW5nIHRvIM+AIHByZWNlZGVzIHRoZSB0cmFuc2l0aW9uIGRyYXcuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjUtbTM6ZGV1eC1lcXVhdGlvbnMiLAogICAgICAidW5pdGUiOiAiYzI2NS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV2YWx1YXRpb24tZXQtb3B0aW1hbGl0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNoYW5nZXMgd2hlbiBtb3ZpbmcgZnJvbSBhIGZpeGVkIHBvbGljeSB0byB0aGUgb3B0aW1hbCB2YWx1ZT8iLAogICAgICAicmVwb25zZSI6ICJGb3IgZml4ZWQgz4AsIHdlIGF2ZXJhZ2UgYWN0aW9uIHZhbHVlcyBhY2NvcmRpbmcgdG8gz4AgYW5kIGNvbnRpbnVlIHdpdGggViB1bmRlciDPgC4gRm9yIHRoZSBvcHRpbXVtLCB3ZSBtYXhpbWl6ZSBvdmVyIHRoZSBhdmFpbGFibGUgYWN0aW9ucyBhbmQgY29udGludWUgd2l0aCB0aGUgb3B0aW1hbCB2YWx1ZS4gRWFjaCBhY3Rpb24gcmV0YWlucyB0aGUgZXhwZWN0YXRpb24gb3ZlciBhbGwgaXRzIG91dGNvbWVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjY1LW0zOm9yZHJlIiwKICAgICAgInVuaXRlIjogImMyNjUtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbmZvcm1hdGlvbi1ldC1tYXhpbWlzYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiB3ZSBub3QgZnJlZWx5IG1vdmUgdGhlIG1heGltdW0gaW5zaWRlIHRoZSBtZWFuIG92ZXIgb3V0Y29tZXM/IiwKICAgICAgInJlcG9uc2UiOiAiQ2hvb3NpbmcgdGhlIGFjdGlvbiBzZXBhcmF0ZWx5IGZvciBlYWNoIG91dGNvbWUgY2FuIHVzZSBpbmZvcm1hdGlvbiB1bmtub3duIGF0IGRlY2lzaW9uIHRpbWUuIEluIG91ciBtaXNzaW9uLCB0aGlzIHByb2R1Y2VzIDExLzQgcG9pbnRzIHJhdGhlciB0aGFuIDIgcG9pbnRzOiBhIGRpZmZlcmVudCBleHBlcmltZW50LCB3aXRoIHRoZSBzdGF0ZSBvZiB0aGUgZG9vciByZXZlYWxlZCBiZWZvcmVoYW5kLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjY1LW0zOmNvbnRyb2xlIiwKICAgICAgInVuaXRlIjogImMyNjUtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250cm9sZS1kZS12YWxldXIiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiB3ZSBjaGVjayB0aGUgMy8yIHBvaW50cyBmb3IgdGhlIGRpcmVjdCByb3V0ZSB3aXRob3V0IGNvcHlpbmcgdGhlIGNvbnRpbnVhdGlvbiBjYWxjdWxhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJDYWxjdWxhdGUgdGhlIGNvbXBsZXRlIHJldHVybnMgMyBhbmQgLTMgcG9pbnRzLCB0aGVuIHRoZWlyIHdlaWdodGVkIGF2ZXJhZ2UgdXNpbmcgMy80IGFuZCAxLzQuIFdlIHJlY292ZXIgMy8yIHBvaW50cy4gVGhlIHVuaXRzIGFyZSBwb2ludHM7IHRoaXMgbnVtYmVyIGlzIG5vdCBhIGd1YXJhbnRlZWQgc2NvcmUgb24gYSBtaXNzaW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c265-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hlcmUgZG9lcyB0aGUgQmVsbG1hbiBkZWNvbXBvc2l0aW9uIGNvbWUgZnJvbT8JVGhlIHJldHVybiBpcyB0aGUgaW1tZWRpYXRlIHJld2FyZCBwbHVzIM6zIHRpbWVzIHRoZSByZW1haW5pbmcgcmV0dXJuLiBUYWtpbmcgaXRzIGNvbmRpdGlvbmFsIGV4cGVjdGF0aW9uLCB0aGVuIGNvbmRpdGlvbmluZyBvbiB0aGUgYWN0aW9uIGFuZCB0aGUgbmV4dCBzdGF0ZSwgZ2l2ZXMgdGhlIEJlbGxtYW4gYXZlcmFnZXMuIFRoZSB0ZXJtaW5hbCB2YWx1ZSBpcyAwIGFmdGVyIHRoZSBmaW5hbCByZXdhcmQuCXRvZGFpIGMyNjUtbTMgYmVsbG1hbi1kZWNvdXBhZ2UKV2hhdCBkbyBQIGFuZCDPgCB3ZWlnaHQsIGFuZCB3aGF0IGFyZSB0aGVpciB1bml0cz8JUCB3ZWlnaHRzIHRoZSBuZXh0IHN0YXRlcyBnaXZlbiB0aGUgc3RhdGUgYW5kIGFjdGlvbjsgz4Agd2VpZ2h0cyBhY3Rpb25zIGdpdmVuIHRoZSBzdGF0ZS4gVGhlc2UgYXJlIHByb2JhYmlsaXRpZXMgd2l0aCBubyB1bml0cywgbm9ybWFsaXplZCBzZXBhcmF0ZWx5LiBUaGUgY2hvaWNlIGFjY29yZGluZyB0byDPgCBwcmVjZWRlcyB0aGUgdHJhbnNpdGlvbiBkcmF3Lgl0b2RhaSBjMjY1LW0zIHBvbGl0aXF1ZS1ldC10cmFuc2l0aW9uCldoYXQgY2hhbmdlcyB3aGVuIG1vdmluZyBmcm9tIGEgZml4ZWQgcG9saWN5IHRvIHRoZSBvcHRpbWFsIHZhbHVlPwlGb3IgZml4ZWQgz4AsIHdlIGF2ZXJhZ2UgYWN0aW9uIHZhbHVlcyBhY2NvcmRpbmcgdG8gz4AgYW5kIGNvbnRpbnVlIHdpdGggViB1bmRlciDPgC4gRm9yIHRoZSBvcHRpbXVtLCB3ZSBtYXhpbWl6ZSBvdmVyIHRoZSBhdmFpbGFibGUgYWN0aW9ucyBhbmQgY29udGludWUgd2l0aCB0aGUgb3B0aW1hbCB2YWx1ZS4gRWFjaCBhY3Rpb24gcmV0YWlucyB0aGUgZXhwZWN0YXRpb24gb3ZlciBhbGwgaXRzIG91dGNvbWVzLgl0b2RhaSBjMjY1LW0zIGV2YWx1YXRpb24tZXQtb3B0aW1hbGl0ZQpXaHkgY2FuIHdlIG5vdCBmcmVlbHkgbW92ZSB0aGUgbWF4aW11bSBpbnNpZGUgdGhlIG1lYW4gb3ZlciBvdXRjb21lcz8JQ2hvb3NpbmcgdGhlIGFjdGlvbiBzZXBhcmF0ZWx5IGZvciBlYWNoIG91dGNvbWUgY2FuIHVzZSBpbmZvcm1hdGlvbiB1bmtub3duIGF0IGRlY2lzaW9uIHRpbWUuIEluIG91ciBtaXNzaW9uLCB0aGlzIHByb2R1Y2VzIDExLzQgcG9pbnRzIHJhdGhlciB0aGFuIDIgcG9pbnRzOiBhIGRpZmZlcmVudCBleHBlcmltZW50LCB3aXRoIHRoZSBzdGF0ZSBvZiB0aGUgZG9vciByZXZlYWxlZCBiZWZvcmVoYW5kLgl0b2RhaSBjMjY1LW0zIGluZm9ybWF0aW9uLWV0LW1heGltaXNhdGlvbgpIb3cgY2FuIHdlIGNoZWNrIHRoZSAzLzIgcG9pbnRzIGZvciB0aGUgZGlyZWN0IHJvdXRlIHdpdGhvdXQgY29weWluZyB0aGUgY29udGludWF0aW9uIGNhbGN1bGF0aW9uPwlDYWxjdWxhdGUgdGhlIGNvbXBsZXRlIHJldHVybnMgMyBhbmQgLTMgcG9pbnRzLCB0aGVuIHRoZWlyIHdlaWdodGVkIGF2ZXJhZ2UgdXNpbmcgMy80IGFuZCAxLzQuIFdlIHJlY292ZXIgMy8yIHBvaW50cy4gVGhlIHVuaXRzIGFyZSBwb2ludHM7IHRoaXMgbnVtYmVyIGlzIG5vdCBhIGd1YXJhbnRlZWQgc2NvcmUgb24gYSBtaXNzaW9uLgl0b2RhaSBjMjY1LW0zIGNvbnRyb2xlLWRlLXZhbGV1cgo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zwhseb nwgyal cqxk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading connection · a decision rule is not enough to establish Bellman</h3><dl><div><dt>What you understand</dt><dd>A policy associates a decision with the available information. A Bellman equation also relates that decision to rewards and future transitions. The word “policy” in a file does not prove that this structure exists.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">urqgrk pliyjk fbjagm brfqdc oqcnbe jftpbh kdpccf quvuid xqalqz jxjele hljwqh kijfnh ktfcqe jnzaqo suapwj bpagos jjblsf gjjnjt ifzncw xheehx nqmscm vxstfj opffqz qrzdvi</span></span></dd></div><div><dt>Your level</dt><dd>Level to prepare for: reproduce the recurrence for a finite mission and justify which information precedes the action. Reading, consulting a correction or producing an assisted answer never establishes that a level has been attained.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rewszu dksgha eowjri pwgshp dibsvx hgiwaw jrcrce krikyt jrsaot sgqtko blzwcz xzkikm vzmrtw ubpggx yxsrjk yjiiwu dfgzfh ocjcwj bocehz zouqcm lkqqfh ztorzp yiihvf ridygz</span></span></dd></div><div><dt>To continue</dt><dd>Reconstruct the calculations without help after at least 2 days and answer the objection in the exercise on information. The next unit will introduce learning an action value from observed transitions. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xofucg ekrktu hnnjvn bpetjf igzeix jzvpnr plzjkm ipsrkr rbjcjb uqakln zebrjl swvrax djdwpv gj</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c265-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c265-m2.html">Previous</a> · <a href="c265-m4.html">Next</a></nav>
+<footer><p>Course book · C265·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

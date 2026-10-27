@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Choose a lock to protect a shared update and a semaphore to limit admissions, then check that both are released.">
+<title>C019·M3 · Locks and semaphores — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xukrpv xknsuw twim</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C019·M3</p><h1>Locks and semaphores</h1><p class="objectif"><span>Your goal</span>Choose a lock to protect a shared update and a semaphore to limit admissions, then check that both are released.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c007-m5 : execution traces · c012-m5 : counterexamples · c019-m1 : processes and memory space · c019-m2 : threads and races</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a fictional workshop, workers A, B and C process cases at 2 interchangeable workstations. A shared register counts completed cases. The register shows 8 cases; each newly completed case must add 1 to the count. The workers represent threads of the same program that can read and write this shared memory.</p><p>To change the register, imagine a single key: whoever takes it reads the count, increases it and writes the new count before returning the key. The others wait. A lock provides this mutual exclusion: sections protected by the same lock do not overlap.</p><p>To enter the workshop, imagine 2 tokens instead, each allowing use of a workstation. A semaphore counts these available permissions. A successful acquisition consumes 1 permit; a release returns 1. When no permits remain, a new request must wait or give up, depending on the chosen mode.</p><p>These protections meet different needs. The 2 workstations can operate together, but an update to the register must remain exclusive. A workshop permit therefore does not prevent another worker from accessing the register. The scene and its numbers are fictional; no actual duration or performance is measured.</p><div class="schemas"><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>The key covers the entire update</title><desc>A holds the lock, reads 8 and writes 9. B waits. After release, B acquires the same lock, reads 9 and writes 10. The rectangles represent protected sections, not durations.</desc><rect x="20" y="20" width="320" height="76" rx="7" class="cadre-prediction" /><text x="180" y="49" text-anchor="middle">A holds the lock</text><text x="180" y="77" text-anchor="middle">Read 8 → write 9</text><path d="M180 96v42m-5-6 5 6 5-6" class="trait" /><text x="200" y="121" class="petite-etiquette">B waits</text><rect x="20" y="146" width="320" height="76" rx="7" class="cadre-resultat" /><text x="180" y="175" text-anchor="middle">B takes the same lock</text><text x="180" y="203" text-anchor="middle">Read 9 → write 10</text></svg><figcaption>The key is returned between the rectangles. B reads after acquiring it, so B uses the count updated by A. The drawing shows one possible order; B could go before A.</figcaption></figure><figure><svg viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg" role="img"><title>Permits limit admissions</title><desc>The 2 workstations are occupied by A and B. There are 0 permits available. C makes a nonblocking attempt that fails; C does no work and returns no permit.</desc><text x="180" y="27" text-anchor="middle">2 permits held</text><rect x="20" y="46" width="145" height="74" rx="7" class="cadre-neutre" /><rect x="195" y="46" width="145" height="74" rx="7" class="cadre-neutre" /><text x="92" y="76" text-anchor="middle">Left station</text><text x="92" y="104" text-anchor="middle">A is working</text><text x="267" y="76" text-anchor="middle">Right station</text><text x="267" y="104" text-anchor="middle">B is working</text><text x="180" y="149" text-anchor="middle">0 permits free</text><rect x="20" y="169" width="320" height="55" rx="7" class="cadre-prediction" /><text x="180" y="203" text-anchor="middle">C: admission denied</text></svg><figcaption>The semaphore controls entry. It does not choose the actual workstation, protect the register or promise who will be admitted next. The case shown uses a nonblocking attempt.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Protect the entire read–modify–write sequence with the same lock; reserve a permit for the entire time a workstation is occupied; release each successful acquisition exactly 1 time.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Keep the register accurate without inventing workstations</h3><p>A, B and C each have a case to process. The capacity is 2 workstations and the initial count is 8 completed cases. We first compare the updates by A and B, then track the permits until C leaves. These comparisons use the same cases. Each successfully completed case counts as 1; the workers release their locks and permits even if an error interrupts processing.</p><ol class="etapes"><li><h3>Define what each protection guarantees</h3><p>x denotes the count of completed cases; L is the shared lock for the register. A critical section is the section that accesses shared state and must be protected: here, reading x, calculating its new value, then writing it back. L does not contain this count or work out which accesses need protection.</p><p>K denotes the workshop capacity; p is the number of available permits; h is the number of permits acquired and not yet returned. These are integer counts: x is counted in cases; K, p and h in permits, with each permit allowing use of a workstation. L names a lock object and is not a measured quantity.</p><p>We assume acquisitions are indivisible: concurrent requests cannot take the same available permit. All workers use the same synchronization objects within the same process. Assignment of an actual workstation is assumed to be handled separately: the semaphore does not do this. Individual reads and writes of the count are assumed to be indivisible in our trace; their combination is not. No worker abruptly disappears, and the exit mechanism actually runs.</p></li><li><h3>Reconstruct the loss without protection</h3><p>A reads 8 and B also reads 8 before any write. Each calculates 8 + 1 = 9. A writes 9, then B writes 9 using its old copy. The register ends at 9 cases.</p><p>For 2 cases actually completed, the expected count is 8 + 2 = 10 cases. The difference of 10 − 9 = 1 case reveals a lost update. This counterexample shows a possible race; it does not mean that every execution without a lock gives this result.</p></li><li><h3>Lock the entire critical section</h3><p>The protocol becomes: acquire L, read x, add 1, write x, then release L on exit. If A acquires L first, A writes 9. B waits to acquire it before reading, so B reads 9, calculates 9 + 1 = 10 and writes this result.</p><p>If B goes first, the names change but the final count remains 10. Protecting only the write would fail: old copies could still be prepared outside the lock. Every concurrent operation that needs to observe or change the register consistently must follow this same protocol.</p><p>A guaranteed exit, such as the exit from a context manager block, releases L even if the program signals an error. It does not automatically undo a change already written. Keep this section short: the case is processed outside L.</p></li><li><h3>Write the permit rule</h3><p>Initially, p = K = 2 and h = 0. The property to preserve, called an invariant, is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>0</mn><mo>≤</mo><mi>p</mi><mo>≤</mo><mi>K</mi><mo>;</mo><mi>p</mi><mo>+</mo><mi>h</mi><mo>=</mo><mi>K</mi></mrow></math></div><p>The prime mark indicates the value immediately after the operation. A successful acquisition removes an available permit and adds a held permit:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>p</mi><mo>′</mo><mo>=</mo><mi>p</mi><mo>−</mo><mn>1</mn><mo>;</mo><mi>h</mi><mo>′</mo><mo>=</mo><mi>h</mi><mo>+</mo><mn>1</mn></mrow></math></div><p>This is possible only if p is strictly greater than 0. A legitimate release does the reverse: p′ = p + 1 and h′ = h − 1. It returns a permit previously acquired and still held. A denied acquisition changes neither p nor h.</p></li><li><h3>Admit A and B, deny C without waiting</h3><p>A acquires a permit: p = 2 − 1 = 1. B acquires another: p = 1 − 1 = 0. They hold 1 + 1 = 2; the check gives 0 + 2 = 2 permits.</p><p>C now attempts a nonblocking acquisition. With p = 0, it fails: p remains 0, h remains 2. C does not start its case and releases nothing. A blocking acquisition would instead wait until a permit was obtained; this wait does not create a workstation or establish a guaranteed admission order.</p></li><li><h3>Return and then reassign permits</h3><p>A completes its case, updates the register under L, then returns its permit: p = 0 + 1 = 1, h = 2 − 1 = 1. In our chosen trace, C now retries and succeeds: p = 1 − 1 = 0, h = 1 + 1 = 2. B and C occupy the workstations.</p><p>B then finishes, updates the register and returns its permit: p = 0 + 1 = 1. At this point, A and B have added their cases; the protected count is 10. C is still working. When C finishes, its update gives 10 + 1 = 11 cases and its release gives p = 1 + 1 = 2. Only 0 permits remain held.</p></li><li><h3>Combine the protections without confusing their releases</h3><p>Each worker therefore follows this sequence: obtain a permit; process the case; acquire L to record success; release L; return the permit when leaving the workstation. Permit release must be guaranteed as soon as its acquisition succeeds, including if processing fails before success is recorded. Freeing a place does not establish that the case was completed successfully.</p><p>Wait for the permit before taking L. Otherwise, a worker could hold the register lock while waiting for a workstation whose occupant needs the register to finish: each would wait for the other. Using a different lock for each worker does not provide the required shared exclusion.</p><p>Count check: 11 − 8 = 3 completed cases. Capacity check: at the end, 2 + 0 = 2 permits, all available. These checks concern different properties. The protocol establishes neither a maximum waiting time nor faster work.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the trace. Explain when B must read the register, why C returns nothing after being denied and why its permit must nevertheless be returned if processing fails after admission. Then reconstruct the case count and the count of places separately.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I lock only the write: the register is protected.”</h3><p>The workers may have read the same old value before this protected write. Put the read, calculation and write in the same critical section, under the same lock L. B must read only after acquiring L.</p><a href="#exemple">Replay the loss, then the critical section</a></li><li><h3>“The semaphore already protects the register.”</h3><p>With 2 permits, A and B can be admitted together and lose an update. Keep the semaphore for the workstations and add L around the register. A semaphore initialized to 1 can provide exclusion if the protocol is followed; here, that would limit admission to 1 worker at a time.</p><a href="#intuition">Compare the register key and the entry permits</a></li><li><h3>“When leaving my attempt, I always return a permit.”</h3><p>Return a permit only if this attempt acquired it, and exactly 1 time. After a denial, nothing was taken. After an acquisition followed by an error, a guaranteed exit must return it. A bounded semaphore flags a return that would exceed the initial capacity; it does not replace this tracking of acquisitions.</p><a href="#exercices">Diagnose an extra permit return</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-section"><p class="repere">Exercise 1 · Identification and justification</p>
+<h3>Where does protection begin?</h3><p>In the same workshop, A and B read 8 outside L. Each then takes L, writes its copy increased by 1, then releases L. Give the final count in this trace, the expected count and the change needed in when the lock is acquired.</p>
+<label for="reponse-ex-section">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-section" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-section" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-section" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-section" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Acquiring the lock late does not refresh a copy already read.</p></details><details class="indice"><summary>Hint 2</summary><p>Replay each write, then place the acquisition of L before the register is read.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A and B have each prepared 8 + 1 = 9. The writes are separate but copy the same value: the final count is 9, whereas 2 completed cases require 10. The register is missing 1 case.</p><p>Acquiring L must come before the read; release must come after the write. In this order, the second worker reads 9 and produces 10. The protection covers the dependency between reading and writing, not just the final action.</p><p class="petit-titre">Check your reasoning</p><ul><li>I distinguish 9 observed in the trace from 10 expected.</li><li>I place reading, adding and writing under the same shared lock.</li></ul></details></article><article class="exercice" id="ex-admission"><p class="repere">Exercise 2 · Paper trace</p>
+<h3>Track permits and choose protections</h3><p>Start again with 2 free permits. A acquires; B acquires; C makes a nonblocking attempt and fails; A returns a permit; C retries and acquires. Note p and h after each event. A colleague proposes removing L because the semaphore admitted A and B together: answer with a register trace at the time of this admission.</p>
+<label for="reponse-ex-admission">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-admission" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-admission" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-admission" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-admission" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>With each successful acquisition, a permit changes category: available becomes held.</p></details><details class="indice"><summary>Hint 2</summary><p>Check p + h = K after each line. Then imagine A and B reading the register before any write.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>After A: p = 1, h = 1. After B: p = 0, h = 2. After C is denied: p = 0, h = 2; neither category changes.</p><p>After A returns a permit: p = 1, h = 1. After C enters: p = 0, h = 2. Each sum equals 2, with no negative permit count.</p><p>The semaphore lets A and B work together. Without L, they can read 8, then each write 9. Admission then respects capacity while the register loses 1 case. L must be retained for the shared update.</p><p class="petit-titre">Check your reasoning</p><ul><li>I keep p and h unchanged after the denial.</li><li>I check that the 2 permits are conserved.</li><li>I provide the counterexample 8 → 9 rather than merely asserting that the semaphore is insufficient.</li></ul></details></article><article class="exercice" id="ex-sortie"><p class="repere">Exercise 3 · Diagnosis and repair</p>
+<h3>An error followed by a duplicate release</h3><p>The workshop is empty, with p = 2. A acquires, then its processing fails before any update to the register. A first block returns its permit; another exit block returns it again. Calculate what an ordinary semaphore counter would report, explain the anomaly and propose a protocol that also handles a denied acquisition.</p>
+<label for="reponse-ex-sortie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-sortie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-sortie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-sortie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-sortie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the sequence of p values starting with the capacity. The register counts only successfully completed cases.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate successful acquisition, failure of the work and release. A guaranteed exit must be set up after successful acquisition and perform 1 return.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>After acquisition: p = 1. The first return restores p = 2. The duplicate return would take an ordinary semaphore to 2 + 1 = 3 free permits, beyond the 2 workstations. The register remains at 8: A did not complete its case successfully.</p><p>A bounded semaphore rejects this second return because its counter would exceed its initial capacity. This detection signals a protocol error; it does not make the case successful. Repair requires removing the duplicate return and assigning every release to the same guaranteed exit.</p><p>Protocol: attempt acquisition; if denied, exit without working or releasing; if successful, guarantee release throughout processing. Record only a completed case under L, and also guarantee that L is released if this section is interrupted. The program must be fixed, rather than its capacity artificially increased.</p><p class="petit-titre">Check your reasoning</p><ul><li>I reconstruct the sequence 2, 1, 2, then 3 in the faulty protocol.</li><li>I distinguish the counter of places from successful completion of the case.</li><li>My repair returns exactly 1 permit per successful acquisition, even after an error, and none after a denial.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="section"><summary><span class="repere">Recall 1</span><span>What must the lock cover to increment the register correctly?</span></summary><p>The entire read–modify–write section, with the same lock object for all workers. Reading before acquisition can retain an old value, even if the write is protected.</p></details><details class="carte" data-carte="permis"><summary><span class="repere">Recall 2</span><span>What does a successful acquisition change, and what does a denial change?</span></summary><p>Success removes 1 available permit and adds 1 held permit. A denial changes neither count; it gives no permit to return.</p></details><details class="carte" data-carte="choix"><summary><span class="repere">Recall 3</span><span>Why keep a register lock when the semaphore admits 2 workers?</span></summary><p>Permits allow work to overlap up to the capacity. They do not make the shared update exclusive; the lock then prevents concurrent reads and writes from losing a case.</p></details><details class="carte" data-carte="sortie"><summary><span class="repere">Recall 4</span><span>If processing fails after admission, what must be returned and what can be claimed?</span></summary><p>Return the acquired permit exactly 1 time through a guaranteed exit, and release any lock actually acquired. This release does not prove that the work succeeded or undo a write already performed.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does respecting the permit count alone fail to guarantee?</span></summary><p>It guarantees neither the accuracy of the shared register, nor a maximum waiting time, nor admission order, nor a speed gain. It bounds admissions if all workers follow the same protocol.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct the path of a case: obtain a permit, work, protect read–modify–write under the shared lock, then return what was acquired. Justify the case count and the conservation of permits separately. Describe what happens after a denial or an error; reading and an assisted answer do not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c019-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTM6c2VjdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXhjbHVzaW9uLW11dHVlbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgbXVzdCB0aGUgbG9jayBjb3ZlciB0byBpbmNyZW1lbnQgdGhlIHJlZ2lzdGVyIGNvcnJlY3RseT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZW50aXJlIHJlYWTigJNtb2RpZnnigJN3cml0ZSBzZWN0aW9uLCB3aXRoIHRoZSBzYW1lIGxvY2sgb2JqZWN0IGZvciBhbGwgd29ya2Vycy4gUmVhZGluZyBiZWZvcmUgYWNxdWlzaXRpb24gY2FuIHJldGFpbiBhbiBvbGQgdmFsdWUsIGV2ZW4gaWYgdGhlIHdyaXRlIGlzIHByb3RlY3RlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMzpwZXJtaXMiLAogICAgICAidW5pdGUiOiAiYzAxOS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNlbWFwaG9yZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBzdWNjZXNzZnVsIGFjcXVpc2l0aW9uIGNoYW5nZSwgYW5kIHdoYXQgZG9lcyBhIGRlbmlhbCBjaGFuZ2U/IiwKICAgICAgInJlcG9uc2UiOiAiU3VjY2VzcyByZW1vdmVzIDEgYXZhaWxhYmxlIHBlcm1pdCBhbmQgYWRkcyAxIGhlbGQgcGVybWl0LiBBIGRlbmlhbCBjaGFuZ2VzIG5laXRoZXIgY291bnQ7IGl0IGdpdmVzIG5vIHBlcm1pdCB0byByZXR1cm4uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTM6Y2hvaXgiLAogICAgICAidW5pdGUiOiAiYzAxOS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInZlcnJvdS1ldC1jYXBhY2l0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkga2VlcCBhIHJlZ2lzdGVyIGxvY2sgd2hlbiB0aGUgc2VtYXBob3JlIGFkbWl0cyAyIHdvcmtlcnM/IiwKICAgICAgInJlcG9uc2UiOiAiUGVybWl0cyBhbGxvdyB3b3JrIHRvIG92ZXJsYXAgdXAgdG8gdGhlIGNhcGFjaXR5LiBUaGV5IGRvIG5vdCBtYWtlIHRoZSBzaGFyZWQgdXBkYXRlIGV4Y2x1c2l2ZTsgdGhlIGxvY2sgdGhlbiBwcmV2ZW50cyBjb25jdXJyZW50IHJlYWRzIGFuZCB3cml0ZXMgZnJvbSBsb3NpbmcgYSBjYXNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDE5LW0zOnNvcnRpZSIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGliZXJhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJJZiBwcm9jZXNzaW5nIGZhaWxzIGFmdGVyIGFkbWlzc2lvbiwgd2hhdCBtdXN0IGJlIHJldHVybmVkIGFuZCB3aGF0IGNhbiBiZSBjbGFpbWVkPyIsCiAgICAgICJyZXBvbnNlIjogIlJldHVybiB0aGUgYWNxdWlyZWQgcGVybWl0IGV4YWN0bHkgMSB0aW1lIHRocm91Z2ggYSBndWFyYW50ZWVkIGV4aXQsIGFuZCByZWxlYXNlIGFueSBsb2NrIGFjdHVhbGx5IGFjcXVpcmVkLiBUaGlzIHJlbGVhc2UgZG9lcyBub3QgcHJvdmUgdGhhdCB0aGUgd29yayBzdWNjZWVkZWQgb3IgdW5kbyBhIHdyaXRlIGFscmVhZHkgcGVyZm9ybWVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDE5LW0zOnBvcnRlZSIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibGltaXRlcy1zeW5jaHJvbmlzYXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHJlc3BlY3RpbmcgdGhlIHBlcm1pdCBjb3VudCBhbG9uZSBmYWlsIHRvIGd1YXJhbnRlZT8iLAogICAgICAicmVwb25zZSI6ICJJdCBndWFyYW50ZWVzIG5laXRoZXIgdGhlIGFjY3VyYWN5IG9mIHRoZSBzaGFyZWQgcmVnaXN0ZXIsIG5vciBhIG1heGltdW0gd2FpdGluZyB0aW1lLCBub3IgYWRtaXNzaW9uIG9yZGVyLCBub3IgYSBzcGVlZCBnYWluLiBJdCBib3VuZHMgYWRtaXNzaW9ucyBpZiBhbGwgd29ya2VycyBmb2xsb3cgdGhlIHNhbWUgcHJvdG9jb2wuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c019-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IHRoZSBsb2NrIGNvdmVyIHRvIGluY3JlbWVudCB0aGUgcmVnaXN0ZXIgY29ycmVjdGx5PwlUaGUgZW50aXJlIHJlYWTigJNtb2RpZnnigJN3cml0ZSBzZWN0aW9uLCB3aXRoIHRoZSBzYW1lIGxvY2sgb2JqZWN0IGZvciBhbGwgd29ya2Vycy4gUmVhZGluZyBiZWZvcmUgYWNxdWlzaXRpb24gY2FuIHJldGFpbiBhbiBvbGQgdmFsdWUsIGV2ZW4gaWYgdGhlIHdyaXRlIGlzIHByb3RlY3RlZC4JdG9kYWkgYzAxOS1tMyBleGNsdXNpb24tbXV0dWVsbGUKV2hhdCBkb2VzIGEgc3VjY2Vzc2Z1bCBhY3F1aXNpdGlvbiBjaGFuZ2UsIGFuZCB3aGF0IGRvZXMgYSBkZW5pYWwgY2hhbmdlPwlTdWNjZXNzIHJlbW92ZXMgMSBhdmFpbGFibGUgcGVybWl0IGFuZCBhZGRzIDEgaGVsZCBwZXJtaXQuIEEgZGVuaWFsIGNoYW5nZXMgbmVpdGhlciBjb3VudDsgaXQgZ2l2ZXMgbm8gcGVybWl0IHRvIHJldHVybi4JdG9kYWkgYzAxOS1tMyBzZW1hcGhvcmUKV2h5IGtlZXAgYSByZWdpc3RlciBsb2NrIHdoZW4gdGhlIHNlbWFwaG9yZSBhZG1pdHMgMiB3b3JrZXJzPwlQZXJtaXRzIGFsbG93IHdvcmsgdG8gb3ZlcmxhcCB1cCB0byB0aGUgY2FwYWNpdHkuIFRoZXkgZG8gbm90IG1ha2UgdGhlIHNoYXJlZCB1cGRhdGUgZXhjbHVzaXZlOyB0aGUgbG9jayB0aGVuIHByZXZlbnRzIGNvbmN1cnJlbnQgcmVhZHMgYW5kIHdyaXRlcyBmcm9tIGxvc2luZyBhIGNhc2UuCXRvZGFpIGMwMTktbTMgdmVycm91LWV0LWNhcGFjaXRlCklmIHByb2Nlc3NpbmcgZmFpbHMgYWZ0ZXIgYWRtaXNzaW9uLCB3aGF0IG11c3QgYmUgcmV0dXJuZWQgYW5kIHdoYXQgY2FuIGJlIGNsYWltZWQ/CVJldHVybiB0aGUgYWNxdWlyZWQgcGVybWl0IGV4YWN0bHkgMSB0aW1lIHRocm91Z2ggYSBndWFyYW50ZWVkIGV4aXQsIGFuZCByZWxlYXNlIGFueSBsb2NrIGFjdHVhbGx5IGFjcXVpcmVkLiBUaGlzIHJlbGVhc2UgZG9lcyBub3QgcHJvdmUgdGhhdCB0aGUgd29yayBzdWNjZWVkZWQgb3IgdW5kbyBhIHdyaXRlIGFscmVhZHkgcGVyZm9ybWVkLgl0b2RhaSBjMDE5LW0zIGxpYmVyYXRpb24KV2hhdCBkb2VzIHJlc3BlY3RpbmcgdGhlIHBlcm1pdCBjb3VudCBhbG9uZSBmYWlsIHRvIGd1YXJhbnRlZT8JSXQgZ3VhcmFudGVlcyBuZWl0aGVyIHRoZSBhY2N1cmFjeSBvZiB0aGUgc2hhcmVkIHJlZ2lzdGVyLCBub3IgYSBtYXhpbXVtIHdhaXRpbmcgdGltZSwgbm9yIGFkbWlzc2lvbiBvcmRlciwgbm9yIGEgc3BlZWQgZ2Fpbi4gSXQgYm91bmRzIGFkbWlzc2lvbnMgaWYgYWxsIHdvcmtlcnMgZm9sbG93IHRoZSBzYW1lIHByb3RvY29sLgl0b2RhaSBjMDE5LW0zIGxpbWl0ZXMtc3luY2hyb25pc2F0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xukrpv xknsuw twim</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Preparing for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nmrzyk walqfm lpnk</span></span> · recognize protections before clocks and persistence</h3><dl><div><dt>What you understand</dt><dd>A lock makes a shared section exclusive; a semaphore bounds admissions. A guaranteed exit returns an acquired lock or permit without proving that the work succeeded. The workshop scene is a limited analogy, not a measurement of the project.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fqpbmj vsgdpu xngumx wmgzgt qyrjvk bozpql omfpwm zfizti khvouc ncsdhs wypsom zgqcuk gtrsdr zyhypp kfputy uatfwt gnrtgq unolhy ljogbg rixydf sttdte wlvtqj fovirf hinjfy oxhgaw qzdkpm srwqfp wzfpmq fgmaww cpulgn acnjlj fsntnn mjngjk ioaknr eyhhpl lkujqn zkyzhr kn</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Course Level 1: redo the traces, choose a protection and explain how an exit after an error is handled without help. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">whheuh ugjjmx ggpmht voxtff cwndvg psokvx snxe</span></span> An answer produced with a hint remains assisted.</dd></div><div><dt>Evidence and what remains to be established</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">haxwkx ikmure yhbrpy rzpwnf fczxoe sxjkbz xzujrh zokiqx efgklc yyfkql kedjdf krcpfv rlmnix khwjyq ayklob kxnguj rxxflh hkmssd nsdpfu zueiar oyrgcy hojqfw knqedv xxofuw eeyhxr hxifip jbclwm ovqkpl ohbyua bxrzuf pyxgeg tqntbf kwnaox tlhbbn pxxqiy scqrjh tnppdn ri</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises on another day, before rereading. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qqfdpf ebrcxt nawnik fpsbwy qxtsqb hrszrb fdyg</span></span> Further targeted reading of the corresponding controller will be needed; its behavior is not established here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c019-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c019-m2.html">Previous</a> · <a href="c019-m4.html">Next</a></nav>
+<footer><p>Course book · C019·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

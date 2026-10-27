@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a lasso fit for the working days of a workshop and explain why an absolute penalty can set a coefficient to 0 without proving that the variable is useless.">
+<title>C100·M3 · Lasso — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nzyvau yeeuao cafk</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C100·M3</p><h1>Lasso</h1><p class="objectif"><span>Your goal</span>Calculate a lasso fit for the working days of a workshop and explain why an absolute penalty can set a coefficient to 0 without proving that the variable is useless.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c059-m6 : Deterministic discrete Bellman · c066-m5 : standard errors and diagnostics · c100-m1 : predictive regression · c100-m2 : ridge</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop wants to predict its electricity consumption from its operating time and the number of parts produced. Adding a coefficient for each piece of information can sometimes reproduce previously observed days more closely, but it can also retain fragile relationships. How can we allow the model to leave out a variable?</p><p>The lasso adds a cost for the absolute size of each coefficient. Keeping a coefficient must then offset this cost by reducing the error. The kink in the absolute value at 0 allows some coefficients to stop exactly there; the others move closer to 0.</p><p>The first diagram gives all the observations in this example, which are explicitly fictional. The second shows the result after centering and scaling; its coefficients therefore share the same unit. The lesson explains each transformation before using these numbers. No actual savings or future performance are measured.</p><div class="schemas"><figure><svg viewBox="0 0 360 244" xmlns="http://www.w3.org/2000/svg" role="img"><title>Fictional working days at the workshop</title><desc>In the order A, B, C, D: operating times 1, 1, 3, 3 hours; outputs 10, 30, 10, 30 parts; consumption 16, 18, 22, 24 kilowatt-hours.</desc><rect x="10" y="12" width="340" height="220" rx="8" class="cadre-neutre" /><text x="100" y="41" text-anchor="middle">Time</text><text x="194" y="41" text-anchor="middle">Parts</text><text x="292" y="41" text-anchor="middle">Energy</text><text x="100" y="64" text-anchor="middle" class="petite-etiquette">h</text><text x="194" y="64" text-anchor="middle" class="petite-etiquette">parts</text><text x="292" y="64" text-anchor="middle" class="petite-etiquette">kWh</text><line x1="24" y1="75" x2="336" y2="75" class="trait" /><text x="32" y="103">A</text><text x="100" y="103" text-anchor="middle">1</text><text x="194" y="103" text-anchor="middle">10</text><text x="292" y="103" text-anchor="middle">16</text><text x="32" y="140">B</text><text x="100" y="140" text-anchor="middle">1</text><text x="194" y="140" text-anchor="middle">30</text><text x="292" y="140" text-anchor="middle">18</text><text x="32" y="177">C</text><text x="100" y="177" text-anchor="middle">3</text><text x="194" y="177" text-anchor="middle">10</text><text x="292" y="177" text-anchor="middle">22</text><text x="32" y="214">D</text><text x="100" y="214" text-anchor="middle">3</text><text x="194" y="214" text-anchor="middle">30</text><text x="292" y="214" text-anchor="middle">24</text></svg><figcaption>The training days, in raw values. Operating time and output vary independently to make the calculation fully checkable.</figcaption></figure><figure><svg viewBox="0 0 360 244" xmlns="http://www.w3.org/2000/svg" role="img"><title>One coefficient reduced, the other set to 0</title><desc>With the variables centered and scaled as in the lesson, the least squares coefficients are 3 and 1 kilowatt-hours. At a threshold of 2 kilowatt-hours, the lasso replaces them with 1 and 0 kilowatt-hours.</desc><text x="180" y="32" text-anchor="middle">Threshold: 2 kWh</text><rect x="18" y="52" width="324" height="70" rx="7" class="cadre-prediction" /><text x="180" y="79" text-anchor="middle">Scaled operating time</text><text x="180" y="107" text-anchor="middle">3 kWh → 1 kWh</text><rect x="18" y="144" width="324" height="70" rx="7" class="cadre-resultat" /><text x="180" y="171" text-anchor="middle">Scaled output</text><text x="180" y="199" text-anchor="middle">1 kWh → 0 kWh</text><text x="180" y="236" text-anchor="middle" class="petite-etiquette">The baseline of 20 kWh is retained.</text></svg><figcaption>At the chosen threshold, operating time remains in the prediction while output receives a 0 coefficient. The result depends on the data and the setting.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fix the scales and the objective; pay for the absolute size of the coefficients; check the minimum and assess the prediction on separate observations.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Paying to keep a coefficient</h3><p>Let us use the 4 days in the diagram to fit a linear prediction. The lasso penalizes the coefficients of the transformed variables with λ = 2 kWh; the intercept remains unpenalized. We calculate a training minimum, then make a prediction without a future observation.</p><ol class="etapes"><li><h3>Center the variables and make them comparable</h3><p>For each day i, hᵢ is the operating time in hours, qᵢ is the output in parts and Eᵢ is the consumption in kWh. i runs through the days from 1 to n, with n = 4. The letters A to D let us track the same observations in the diagram. Total consumption is 34 + 46 = 80 kWh; its mean is 20 kWh.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>x</mi><mi>i</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>h</mi><mi>i</mi></msub><mo>−</mo><mn>2</mn><mtext> h</mtext></mrow><mrow><mn>1</mn><mtext> h</mtext></mrow></mfrac><mo>;</mo><msub><mi>z</mi><mi>i</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>q</mi><mi>i</mi></msub><mo>−</mo><mn>20</mn><mtext> pièces</mtext></mrow><mrow><mn>10</mn><mtext> pièces</mtext></mrow></mfrac></mrow></math></div><p>x and z are the transformed variables, with no units. The centers are the training means; the chosen scales are 1 h and 10 parts. In the order shown in the diagram, x = (-1, -1, 1, 1) and z = (-1, 1, -1, 1). We retain these transformations for future days.</p><p>We also center the target: yᵢ = Eᵢ − 20 kWh, giving y = (-4, -2, 2, 4) kWh. The means of x, z and y are 0. The mean of the squares of x and the mean of the squares of z both equal 1; the mean of the products xᵢzᵢ equals 0. This last property, called column orthogonality, will allow us to separate the coefficients. It is chosen for this example and never assumed for every dataset.</p></li><li><h3>State the exact lasso objective</h3><p>We predict ŷᵢ = bxᵢ + czᵢ and then Êᵢ = 20 kWh + ŷᵢ. The hat marks a prediction. b and c, in kWh, are the coefficients to choose; the baseline of 20 kWh is an unpenalized intercept. Since the variables are centered, this baseline is also the optimal intercept for this objective.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>b</mi><mo>,</mo><mi>c</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>2</mn><mi>n</mi></mrow></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><msup><mrow><mo>(</mo><msub><mi>y</mi><mi>i</mi></msub><mo>−</mo><mi>b</mi><msub><mi>x</mi><mi>i</mi></msub><mo>−</mo><mi>c</mi><msub><mi>z</mi><mi>i</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mi>λ</mi><mo>(</mo><mo>|</mo><mi>b</mi><mo>|</mo><mo>+</mo><mo>|</mo><mi>c</mi><mo>|</mo><mo>)</mo></mrow></math></div><p>The symbol ∑ means to add the terms for all the days. The first term is half the training mean squared error. The second is the penalty: |b| is the absolute value of b, meaning its size without the sign. The sum of the absolute values is also called the absolute norm. λ, pronounced lambda, is a nonnegative setting; here λ = 2 kWh. Since x and z have no units and y is in kWh, J and each of its terms are in kWh².</p><p>This choice of the factor 1/(2n) fixes the numerical meaning of λ. A different factor in front of the sum requires converting the setting. The calculations concern these observations and this deterministic objective; no normal distribution for the noise is needed to find its minimum.</p></li><li><h3>Separate the coefficients using the data</h3><p>Let α denote the mean of the products xᵢyᵢ and β the mean of the products zᵢyᵢ, both in kWh. These are association scores with the centered target, not probabilities. The signs of x and z let us group the rows in the diagram.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>α</mi><mo>=</mo><mfrac><mrow><mo>(</mo><mn>22</mn><mo>+</mo><mn>24</mn><mo>)</mo><mo>−</mo><mo>(</mo><mn>16</mn><mo>+</mo><mn>18</mn><mo>)</mo></mrow><mn>4</mn></mfrac><mo>=</mo><mfrac><mn>12</mn><mn>4</mn></mfrac><mo>=</mo><mn>3</mn><mtext> kWh</mtext></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>β</mi><mo>=</mo><mfrac><mrow><mo>(</mo><mn>18</mn><mo>+</mo><mn>24</mn><mo>)</mo><mo>−</mo><mo>(</mo><mn>16</mn><mo>+</mo><mn>22</mn><mo>)</mo></mrow><mn>4</mn></mfrac><mo>=</mo><mfrac><mn>4</mn><mn>4</mn></mfrac><mo>=</mo><mn>1</mn><mtext> kWh</mtext></mrow></math></div><p>The contributions from the mean cancel in these differences. Check that yᵢ = αxᵢ + βzᵢ in each row. Without a penalty, b = α and c = β therefore reproduce these consumption values exactly. When we expand the squares, the cross term disappears because of orthogonality, and the means of the squares equal 1. Our objective becomes exactly:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><mi>b</mi><mo>,</mo><mi>c</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msup><mrow><mo>(</mo><mi>b</mi><mo>−</mo><mi>α</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msup><mrow><mo>(</mo><mi>c</mi><mo>−</mo><mi>β</mi><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><mi>λ</mi><mo>(</mo><mo>|</mo><mi>b</mi><mo>|</mo><mo>+</mo><mo>|</mo><mi>c</mi><mo>|</mo><mo>)</mo></mrow></math></div><p>We can therefore minimize the part that depends on b and the part that depends on c separately. Without this orthogonality and scaling, applying a threshold separately to the least squares coefficients does not generally solve the lasso problem.</p></li><li><h3>Understand the kink at 0</h3><p>To handle each part, t denotes any coefficient and r its score: r = α for b, r = β for c. They are in kWh. We minimize f(t) = (t − r) squared divided by 2, plus λ|t|; f is in kWh². The derivative f′ is the slope of this function. For positive t, |t| = t and f′(t) = t − r + λ; for negative t, |t| = −t and f′(t) = t − r − λ.</p><p>At t = 0, the absolute value has a kink: for strictly positive λ, f has no unique derivative. The slope approaching from the left is −r − λ; the slope leaving to the right is −r + λ. 0 is a minimum when the first is nonpositive and the second nonnegative, meaning |r| ≤ λ. On each side, the slope increases with t: these conditions, or a 0 slope on a branch, do give the unique global minimum.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>t</mi><mo>∗</mo></msup><mo>=</mo><mo>{</mo><mtable><mtr><mtd><mi>r</mi><mo>−</mo><mi>λ</mi></mtd><mtd><mtext>si </mtext><mi>r</mi><mo>&gt;</mo><mi>λ</mi></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mtext>si </mtext><mo>|</mo><mi>r</mi><mo>|</mo><mo>≤</mo><mi>λ</mi></mtd></mtr><mtr><mtd><mi>r</mi><mo>+</mo><mi>λ</mi></mtd><mtd><mtext>si </mtext><mi>r</mi><mo>&lt;</mo><mo>−</mo><mi>λ</mi></mtd></mtr></mtable></mrow></math></div><p>The star marks the coefficient that minimizes f. This rule is called soft thresholding: it shrinks large scores toward 0 and sets those covered by the threshold to 0. The rule preserves the sign of a score that exceeds the threshold in absolute value. The squared penalty in ridge has no such kink; it can shrink a coefficient without setting it exactly to 0.</p></li><li><h3>Apply the threshold and check the slopes</h3><p>For operating time, α = 3 kWh exceeds λ = 2 kWh. We obtain b* = 3 − 2 = 1 kWh. For output, |β| = 1 kWh remains below the threshold: c* = 0 kWh. Choose the branch before subtracting; mechanically calculating β − λ would create an unjustified negative coefficient.</p><p>Check locally, then globally: for b*, the slope is 1 − 3 + 2 = 0 kWh. For c*, the left slope is −1 − 2 and is negative; the right slope is −1 + 2 and is positive. Each part is therefore at its minimum; since they are separate, their sum is too. The selection is exact for this mathematical problem.</p></li><li><h3>Recalculate the cost on the original days</h3><p>The regularized fit predicts ŷᵢ = 1xᵢ + 0zᵢ, in kWh. The residuals yᵢ − ŷᵢ are, in order, (−3, −1, 1, 3) kWh. Their sum is 0, consistent with centering. Adding their squares gives 20 kWh².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>J</mi><mo>(</mo><msup><mi>b</mi><mo>∗</mo></msup><mo>,</mo><msup><mi>c</mi><mo>∗</mo></msup><mo>)</mo><mo>=</mo><mfrac><mn>20</mn><mn>8</mn></mfrac><mo>+</mo><mn>2</mn><mo>×</mo><mo>(</mo><mn>1</mn><mo>+</mo><mn>0</mn><mo>)</mo><mo>=</mo><mn>2.50</mn><mo>+</mo><mn>2.00</mn><mo>=</mo><mn>4.50</mn><mtext> kWh²</mtext></mrow></math></div><p>An independent calculation using the coefficients gives the same loss: the difference α − b* is 2 kWh; its square is 4 kWh². The square of β − c* is 1 kWh². Their sum 5 divided by 2 again gives 2.50 kWh².</p><p>The unpenalized coefficients make the residuals 0, but the sum of their absolute values is 4 kWh. With the same λ, their total objective is 8.00 kWh², greater than 4.50 kWh². The lasso therefore accepts a less accurate reproduction of the training days to reduce the penalized objective. This comparison alone would not prove optimality; the slopes in the previous step justify it.</p></li><li><h3>Return to predicted consumption</h3><p>A new working day at the workshop lasts 3 h and produces 30 parts. Reusing the training centers and scales gives x = 1, z = 1. The model predicts Ê = 20 + 1 × 1 + 0 × 1 = 21 kWh.</p><p>The 0 coefficient removes the dependence on z from this prediction rule. This does not demonstrate that producing parts consumes no energy: it is a property of the fit, the threshold and the chosen variables. Consumption for this new day is not given; no actual error or predictive improvement can be reported.</p></li><li><h3>Keep the result within its proper scope</h3><p>The threshold is fixed here to explain the mechanism. To choose it in practice, compare settings on separate validation data, learning the centers and scales from the training data alone. Keep the test set for the final evaluation. A low value of J is not enough to choose λ: J itself changes when λ changes.</p><p>Related variables may share or compete for a role in the prediction; which ones remain can then change with the data. The separate calculation on this page depends on our orthogonality. Neither setting a coefficient to 0 nor reading with help constitutes proof of causality or mastery of a level.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the output coefficient stop at 0 instead of becoming negative? Reconstruct the slopes to the left and right, then explain why this result is not a conclusion about the cause of consumption.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The lasso always subtracts λ from each coefficient.”</h3><p>Choose the branch from the score and its sign. A score whose absolute value does not exceed λ gives a 0 coefficient; a strongly negative score moves closer to 0 by adding λ. Here the separate rule assumes orthogonal columns with a mean square of one.</p><a href="#exemple">Revisit the kink and the threshold branches</a></li><li><h3>“The coefficient is 0, so this activity consumes nothing.”</h3><p>The model removes a dependence for the chosen threshold and data. It does not isolate a causal effect. Repeating the calculation with a lower threshold already shows that the same variable can return.</p><a href="#exercices">Vary the threshold in the exercises</a></li><li><h3>“I can change units without adjusting the penalty.”</h3><p>Changing the scale of a variable changes the size of its coefficient, and therefore the absolute cost paid for an identical prediction. Revisit the variables with no units and learn their transformations from the training data alone. The factor in front of the sum of squares must also remain explicit.</p><a href="#exemple">Review the scales and the stated objective</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-sans-penalite"><p class="repere">Exercise 1 · Warm-up</p>
+<h3>Recover the coefficients with no cost</h3><p>Keep the same days, centers and scales. Take λ = 0 kWh. Recover b and c, then the predicted consumption for day D. Why do both variables remain in the rule?</p>
+<label for="reponse-ex-sans-penalite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-sans-penalite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-sans-penalite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-sans-penalite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-sans-penalite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The scores for this orthogonal dataset are α = 3 kWh and β = 1 kWh.</p></details><details class="indice"><summary>Hint 2</summary><p>Without a penalty, each separate square is minimal when the coefficient equals its score.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>We obtain b = α = 3 kWh and c = β = 1 kWh. For D, x = 1 and z = 1: Ê = 20 + 3 × 1 + 1 × 1 = 24 kWh.</p><p>Both scores are nonzero and no cost moves them toward 0. Here this model reproduces the training observations exactly; that does not demonstrate its accuracy on other days.</p><p class="petit-titre">Check your reasoning</p><ul><li>Recover both coefficients with their unit.</li><li>Add the mean back into the prediction.</li><li>Distinguish reproducing the data from future predictive quality.</li></ul></details></article><article class="exercice" id="ex-seuil-faible"><p class="repere">Exercise 2 · Paper exercise</p>
+<h3>A variable returns</h3><p>Lower the threshold to λ = 0.50 kWh. Calculate both coefficients, then check the slope of each part at the result. Can we still say that output is excluded?</p>
+<label for="reponse-ex-seuil-faible">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-seuil-faible" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-seuil-faible" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-seuil-faible" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-seuil-faible" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Compare |α| and |β| separately with the new threshold before calculating.</p></details><details class="indice"><summary>Hint 2</summary><p>On the positive branch, the slope is coefficient − score + λ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Both positive scores exceed 0.50 kWh. Thus b = 3 − 0.50 = 2.50 kWh and c = 1 − 0.50 = 0.50 kWh.</p><p>The slopes are respectively 2.50 − 3 + 0.50 = 0 kWh and 0.50 − 1 + 0.50 = 0 kWh. Both coefficients are strictly positive, so the branches used are appropriate. The output coefficient has returned: its selection depends on the threshold, not on proof that it has no physical use.</p><p class="petit-titre">Check your reasoning</p><ul><li>Justify each branch by comparing the score with the threshold.</li><li>Give both coefficients and check their signs.</li><li>Check the slopes, then explain why the variable returns.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 3 · Reasoning and scope</p>
+<h3>What remains at the boundary?</h3><p>Now take λ = 3 kWh. Determine the coefficients, explicitly handling the case where a score equals the threshold. Explain the predicted consumption for any day. A colleague claims that this model must be the best because it is the simplest: what evidence would you ask for?</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The case |r| ≤ λ includes equality. Look at the slopes on either side of 0.</p></details><details class="indice"><summary>Hint 2</summary><p>The baseline is unpenalized. Future predictive quality requires separate observations, rather than just a count of coefficients.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For b, α = λ: the right slope at 0 is −3 + 3 = 0 kWh and the left slope is negative. The minimum remains b = 0 kWh. Since |β| is below the same threshold, c = 0 kWh too. The rule therefore always predicts the baseline of 20 kWh, including for days with different activity levels.</p><p>A 0 slope at the boundary does not create an interval of solutions: as soon as t moves away along a branch, the slope increases. To prefer this rule, we would need to compare its validation error with that of the other settings on the same observations, using the same training transformations. The final test remains separate. No such comparison is provided here; simplicity alone does not decide.</p><p class="petit-titre">Check your reasoning</p><ul><li>Include equality in the 0 coefficient case.</li><li>Retain the intercept and its unit.</li><li>Ask for a separate predictive comparison and avoid declaring a winner without data.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="penalite"><summary><span class="repere">Recall 1</span><span>What trade-off does the lasso objective impose, and what do we leave out of the penalty here?</span></summary><p>It adds a squared training loss and λ times the sum of the absolute sizes of the coefficients. The intercept is unpenalized. The scales and the factor in front of the loss must be fixed before λ can be given a meaning.</p></details><details class="carte" data-carte="cassure"><summary><span class="repere">Recall 2</span><span>Why does an interval of scores give an exactly 0 coefficient?</span></summary><p>For f(t) = (t − r) squared divided by 2 + λ|t|, the slopes at 0 are −r − λ on the left and −r + λ on the right. When |r| ≤ λ, they bracket 0 slope and the minimum is t = 0. Otherwise, move r toward 0 by λ without changing its sign.</p></details><details class="carte" data-carte="hypotheses"><summary><span class="repere">Recall 3</span><span>When can we apply this threshold separately to the scores of each variable?</span></summary><p>For the stated objective, the variables must be centered, have a mean square of one and be mutually orthogonal. The expansion then separates the coefficients. With related columns, applying the threshold once to the least squares coefficients is generally insufficient.</p></details><details class="carte" data-carte="interpretation"><summary><span class="repere">Recall 4</span><span>What does a 0 coefficient establish, and what physical conclusion remains out of reach?</span></summary><p>The fitted rule no longer depends on this variable for the chosen data, transformations and threshold. It proves neither that the activity consumes nothing nor that its causal effect is 0. Changing the threshold or the data can change the selection.</p></details><details class="carte" data-carte="validation"><summary><span class="repere">Recall 5</span><span>How can we prepare to choose λ without treating the fit as future performance?</span></summary><p>Learn the transformations from the training data alone, compare settings by their error on separate validation data, and keep a final test independent of the choice. The penalized training J does not demonstrate a future gain, and its values cannot be compared directly across different λ settings.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without reopening the steps, reconstruct the path from the raw days to the prediction in kWh: centers and scales, objective and units, scores, kink and threshold, residual check, then the limits of selection. Add why a separate validation error is needed. An answer obtained with a hint remains an assisted answer; reading the lesson or consulting the solution does not establish mastery of any level.</p></div><div class="exports"><a class="bouton" download="c100-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDAtbTM6cGVuYWxpdGUiLAogICAgICAidW5pdGUiOiAiYzEwMC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlbmFsaXRlLWFic29sdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCB0cmFkZS1vZmYgZG9lcyB0aGUgbGFzc28gb2JqZWN0aXZlIGltcG9zZSwgYW5kIHdoYXQgZG8gd2UgbGVhdmUgb3V0IG9mIHRoZSBwZW5hbHR5IGhlcmU/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgYWRkcyBhIHNxdWFyZWQgdHJhaW5pbmcgbG9zcyBhbmQgzrsgdGltZXMgdGhlIHN1bSBvZiB0aGUgYWJzb2x1dGUgc2l6ZXMgb2YgdGhlIGNvZWZmaWNpZW50cy4gVGhlIGludGVyY2VwdCBpcyB1bnBlbmFsaXplZC4gVGhlIHNjYWxlcyBhbmQgdGhlIGZhY3RvciBpbiBmcm9udCBvZiB0aGUgbG9zcyBtdXN0IGJlIGZpeGVkIGJlZm9yZSDOuyBjYW4gYmUgZ2l2ZW4gYSBtZWFuaW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAwLW0zOmNhc3N1cmUiLAogICAgICAidW5pdGUiOiAiYzEwMC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInNldWlsbGFnZS1kb3V4IiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGFuIGludGVydmFsIG9mIHNjb3JlcyBnaXZlIGFuIGV4YWN0bHkgMCBjb2VmZmljaWVudD8iLAogICAgICAicmVwb25zZSI6ICJGb3IgZih0KSA9ICh0IOKIkiByKSBzcXVhcmVkIGRpdmlkZWQgYnkgMiArIM67fHR8LCB0aGUgc2xvcGVzIGF0IDAgYXJlIOKIknIg4oiSIM67IG9uIHRoZSBsZWZ0IGFuZCDiiJJyICsgzrsgb24gdGhlIHJpZ2h0LiBXaGVuIHxyfCDiiaQgzrssIHRoZXkgYnJhY2tldCAwIHNsb3BlIGFuZCB0aGUgbWluaW11bSBpcyB0ID0gMC4gT3RoZXJ3aXNlLCBtb3ZlIHIgdG93YXJkIDAgYnkgzrsgd2l0aG91dCBjaGFuZ2luZyBpdHMgc2lnbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMC1tMzpoeXBvdGhlc2VzIiwKICAgICAgInVuaXRlIjogImMxMDAtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvcnRob2dvbmFsaXRlLWV0LWVjaGVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hlbiBjYW4gd2UgYXBwbHkgdGhpcyB0aHJlc2hvbGQgc2VwYXJhdGVseSB0byB0aGUgc2NvcmVzIG9mIGVhY2ggdmFyaWFibGU/IiwKICAgICAgInJlcG9uc2UiOiAiRm9yIHRoZSBzdGF0ZWQgb2JqZWN0aXZlLCB0aGUgdmFyaWFibGVzIG11c3QgYmUgY2VudGVyZWQsIGhhdmUgYSBtZWFuIHNxdWFyZSBvZiBvbmUgYW5kIGJlIG11dHVhbGx5IG9ydGhvZ29uYWwuIFRoZSBleHBhbnNpb24gdGhlbiBzZXBhcmF0ZXMgdGhlIGNvZWZmaWNpZW50cy4gV2l0aCByZWxhdGVkIGNvbHVtbnMsIGFwcGx5aW5nIHRoZSB0aHJlc2hvbGQgb25jZSB0byB0aGUgbGVhc3Qgc3F1YXJlcyBjb2VmZmljaWVudHMgaXMgZ2VuZXJhbGx5IGluc3VmZmljaWVudC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMC1tMzppbnRlcnByZXRhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMTAwLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2VsZWN0aW9uLWV0LWNhdXNhbGl0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSAwIGNvZWZmaWNpZW50IGVzdGFibGlzaCwgYW5kIHdoYXQgcGh5c2ljYWwgY29uY2x1c2lvbiByZW1haW5zIG91dCBvZiByZWFjaD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZml0dGVkIHJ1bGUgbm8gbG9uZ2VyIGRlcGVuZHMgb24gdGhpcyB2YXJpYWJsZSBmb3IgdGhlIGNob3NlbiBkYXRhLCB0cmFuc2Zvcm1hdGlvbnMgYW5kIHRocmVzaG9sZC4gSXQgcHJvdmVzIG5laXRoZXIgdGhhdCB0aGUgYWN0aXZpdHkgY29uc3VtZXMgbm90aGluZyBub3IgdGhhdCBpdHMgY2F1c2FsIGVmZmVjdCBpcyAwLiBDaGFuZ2luZyB0aGUgdGhyZXNob2xkIG9yIHRoZSBkYXRhIGNhbiBjaGFuZ2UgdGhlIHNlbGVjdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMC1tMzp2YWxpZGF0aW9uIiwKICAgICAgInVuaXRlIjogImMxMDAtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjaG9peC1kdS1zZXVpbCIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHdlIHByZXBhcmUgdG8gY2hvb3NlIM67IHdpdGhvdXQgdHJlYXRpbmcgdGhlIGZpdCBhcyBmdXR1cmUgcGVyZm9ybWFuY2U/IiwKICAgICAgInJlcG9uc2UiOiAiTGVhcm4gdGhlIHRyYW5zZm9ybWF0aW9ucyBmcm9tIHRoZSB0cmFpbmluZyBkYXRhIGFsb25lLCBjb21wYXJlIHNldHRpbmdzIGJ5IHRoZWlyIGVycm9yIG9uIHNlcGFyYXRlIHZhbGlkYXRpb24gZGF0YSwgYW5kIGtlZXAgYSBmaW5hbCB0ZXN0IGluZGVwZW5kZW50IG9mIHRoZSBjaG9pY2UuIFRoZSBwZW5hbGl6ZWQgdHJhaW5pbmcgSiBkb2VzIG5vdCBkZW1vbnN0cmF0ZSBhIGZ1dHVyZSBnYWluLCBhbmQgaXRzIHZhbHVlcyBjYW5ub3QgYmUgY29tcGFyZWQgZGlyZWN0bHkgYWNyb3NzIGRpZmZlcmVudCDOuyBzZXR0aW5ncy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c100-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCB0cmFkZS1vZmYgZG9lcyB0aGUgbGFzc28gb2JqZWN0aXZlIGltcG9zZSwgYW5kIHdoYXQgZG8gd2UgbGVhdmUgb3V0IG9mIHRoZSBwZW5hbHR5IGhlcmU/CUl0IGFkZHMgYSBzcXVhcmVkIHRyYWluaW5nIGxvc3MgYW5kIM67IHRpbWVzIHRoZSBzdW0gb2YgdGhlIGFic29sdXRlIHNpemVzIG9mIHRoZSBjb2VmZmljaWVudHMuIFRoZSBpbnRlcmNlcHQgaXMgdW5wZW5hbGl6ZWQuIFRoZSBzY2FsZXMgYW5kIHRoZSBmYWN0b3IgaW4gZnJvbnQgb2YgdGhlIGxvc3MgbXVzdCBiZSBmaXhlZCBiZWZvcmUgzrsgY2FuIGJlIGdpdmVuIGEgbWVhbmluZy4JdG9kYWkgYzEwMC1tMyBwZW5hbGl0ZS1hYnNvbHVlCldoeSBkb2VzIGFuIGludGVydmFsIG9mIHNjb3JlcyBnaXZlIGFuIGV4YWN0bHkgMCBjb2VmZmljaWVudD8JRm9yIGYodCkgPSAodCDiiJIgcikgc3F1YXJlZCBkaXZpZGVkIGJ5IDIgKyDOu3x0fCwgdGhlIHNsb3BlcyBhdCAwIGFyZSDiiJJyIOKIkiDOuyBvbiB0aGUgbGVmdCBhbmQg4oiSciArIM67IG9uIHRoZSByaWdodC4gV2hlbiB8cnwg4omkIM67LCB0aGV5IGJyYWNrZXQgMCBzbG9wZSBhbmQgdGhlIG1pbmltdW0gaXMgdCA9IDAuIE90aGVyd2lzZSwgbW92ZSByIHRvd2FyZCAwIGJ5IM67IHdpdGhvdXQgY2hhbmdpbmcgaXRzIHNpZ24uCXRvZGFpIGMxMDAtbTMgc2V1aWxsYWdlLWRvdXgKV2hlbiBjYW4gd2UgYXBwbHkgdGhpcyB0aHJlc2hvbGQgc2VwYXJhdGVseSB0byB0aGUgc2NvcmVzIG9mIGVhY2ggdmFyaWFibGU/CUZvciB0aGUgc3RhdGVkIG9iamVjdGl2ZSwgdGhlIHZhcmlhYmxlcyBtdXN0IGJlIGNlbnRlcmVkLCBoYXZlIGEgbWVhbiBzcXVhcmUgb2Ygb25lIGFuZCBiZSBtdXR1YWxseSBvcnRob2dvbmFsLiBUaGUgZXhwYW5zaW9uIHRoZW4gc2VwYXJhdGVzIHRoZSBjb2VmZmljaWVudHMuIFdpdGggcmVsYXRlZCBjb2x1bW5zLCBhcHBseWluZyB0aGUgdGhyZXNob2xkIG9uY2UgdG8gdGhlIGxlYXN0IHNxdWFyZXMgY29lZmZpY2llbnRzIGlzIGdlbmVyYWxseSBpbnN1ZmZpY2llbnQuCXRvZGFpIGMxMDAtbTMgb3J0aG9nb25hbGl0ZS1ldC1lY2hlbGxlCldoYXQgZG9lcyBhIDAgY29lZmZpY2llbnQgZXN0YWJsaXNoLCBhbmQgd2hhdCBwaHlzaWNhbCBjb25jbHVzaW9uIHJlbWFpbnMgb3V0IG9mIHJlYWNoPwlUaGUgZml0dGVkIHJ1bGUgbm8gbG9uZ2VyIGRlcGVuZHMgb24gdGhpcyB2YXJpYWJsZSBmb3IgdGhlIGNob3NlbiBkYXRhLCB0cmFuc2Zvcm1hdGlvbnMgYW5kIHRocmVzaG9sZC4gSXQgcHJvdmVzIG5laXRoZXIgdGhhdCB0aGUgYWN0aXZpdHkgY29uc3VtZXMgbm90aGluZyBub3IgdGhhdCBpdHMgY2F1c2FsIGVmZmVjdCBpcyAwLiBDaGFuZ2luZyB0aGUgdGhyZXNob2xkIG9yIHRoZSBkYXRhIGNhbiBjaGFuZ2UgdGhlIHNlbGVjdGlvbi4JdG9kYWkgYzEwMC1tMyBzZWxlY3Rpb24tZXQtY2F1c2FsaXRlCkhvdyBjYW4gd2UgcHJlcGFyZSB0byBjaG9vc2Ugzrsgd2l0aG91dCB0cmVhdGluZyB0aGUgZml0IGFzIGZ1dHVyZSBwZXJmb3JtYW5jZT8JTGVhcm4gdGhlIHRyYW5zZm9ybWF0aW9ucyBmcm9tIHRoZSB0cmFpbmluZyBkYXRhIGFsb25lLCBjb21wYXJlIHNldHRpbmdzIGJ5IHRoZWlyIGVycm9yIG9uIHNlcGFyYXRlIHZhbGlkYXRpb24gZGF0YSwgYW5kIGtlZXAgYSBmaW5hbCB0ZXN0IGluZGVwZW5kZW50IG9mIHRoZSBjaG9pY2UuIFRoZSBwZW5hbGl6ZWQgdHJhaW5pbmcgSiBkb2VzIG5vdCBkZW1vbnN0cmF0ZSBhIGZ1dHVyZSBnYWluLCBhbmQgaXRzIHZhbHVlcyBjYW5ub3QgYmUgY29tcGFyZWQgZGlyZWN0bHkgYWNyb3NzIGRpZmZlcmVudCDOuyBzZXR0aW5ncy4JdG9kYWkgYzEwMC1tMyBjaG9peC1kdS1zZXVpbAo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nzyvau yeeuao cafk</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yghhmj cbaghd czuxww uboqfk qkgsng ypmyoz qgjs</span></span></h3><dl><div><dt>What you understand</dt><dd>The lasso changes the optimization problem by adding an absolute penalty; building a linear fit is not enough to show this mechanism. The chapter provides no canonical private milestone: this card is a supplementary reading reference.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mznxgo uezvex kozrez sucfrl sjvqfj nufmwk bcgzie oyqcgi suuzxw weabxs lpuqga gyfvrw nmxzkx jjttqe pijroe ajxneq grsszo psludz abgbzy gjthxz fzynef nuszxm hvlzfq pztefj</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 2 to prepare for: explain the absolute cost, reconstruct the 0 coefficient case and repeat the calculation without support. An exercise completed successfully after a hint remains assisted; reading this page does not validate the level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yrjhcf djvqvn cojuuu cwaehh kpqbpd xboctq vzsbiu rnyokw ybvlvt femtdp vqwfsc bawoaq yqoywi uimzmr afxsji tufzgp fwhpvd tyzrno hxlkxr pafllt bjmugz umnjcc iwtguo ybypwp</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the threshold branches and the residual check without help on another day, then study bias and variance in the next unit. Before any actual use of the lasso, an appropriate implementation would still need to be identified, its validation protocol obtained and its actual invocation checked separately; no activation is proposed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c100-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c100-m2.html">Previous</a> · <a href="c100-m4.html">Next</a></nav>
+<footer><p>Course book · C100·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

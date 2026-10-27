@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Construct an adapted value and its noise coefficient from a terminal condition, then verify a backward stochastic differential equation using conditional expectation and Ito’s formula.">
+<title>C234·M4 · Backward SDEs — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zxutcx obpszc jpkt</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C234·M4</p><h1>Backward SDEs</h1><p class="objectif"><span>Your goal</span>Construct an adapted value and its noise coefficient from a terminal condition, then verify a backward stochastic differential equation using conditional expectation and Ito’s formula.</p><p class="prerequis"><strong>Before you start</strong><br>c233-m5 : verification theorem · c066-m5 : standard errors and diagnostics · c227-m5 : Ito-Tanaka · c234-m1 : state space · c234-m2 : Kalman filter · c234-m3 : nonlinear filtering</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A temperature-controlled chamber needs to stay close to a setpoint. At the end of a short experiment, we will look at the square of its deviation from that setpoint. We add a stipulated penalty for the remaining time. What value should we assign to this future total now, while the future fluctuations are still unknown?</p><p>A stochastic differential equation, abbreviated SDE, describes an evolution subject to randomness. A backward SDE imposes its condition at the end: here, the terminal total. Backward refers to the end at which the condition is specified. It does not let us know the final temperature in advance.</p><p>The current value must use only information already available. We therefore look for both a value Y and a coefficient Z that describes how this value responds to newly revealed noise. The term carried by Z makes the random final condition compatible with a value that can be calculated in the present.</p><p>The entire scenario and its parameters are fictional. Here, an ideal sensor gives the present deviation exactly; no measurement error is added. This simplification isolates the backward construction: we are not recalculating a filter for a hidden state. The total is in squared degrees, with no interpretation as energy or actual performance.</p><div class="schemas"><figure><svg viewBox="0 0 360 246" xmlns="http://www.w3.org/2000/svg" role="img"><title>Information moves forward, the condition is given at the end</title><desc>Time runs from 0 to 4 minutes. At the present time, 2 minutes, the observed deviation is 2 degrees. The final condition is the square of the final deviation, which is still unknown in the present. The backward calculation uses a conditional expectation without revealing the future.</desc><text x="20" y="25">Available information</text><line class="trait" x1="25" y1="52" x2="330" y2="52" /><path class="trait" d="M322 46l8 6-8 6" /><circle class="point-prediction" cx="30" cy="52" r="5" /><circle class="point-mesure" cx="180" cy="52" r="5" /><circle class="resultat" cx="330" cy="52" r="5" /><text x="20" y="82">0 min</text><text x="180" y="82" text-anchor="middle">2 min</text><text x="340" y="82" text-anchor="end">4 min</text><rect class="cadre-prediction" x="20" y="106" width="145" height="66" rx="7" /><text x="92" y="132" text-anchor="middle">Known deviation</text><text x="92" y="157" text-anchor="middle">2 °C now</text><rect class="cadre-resultat" x="195" y="106" width="145" height="66" rx="7" /><text x="267" y="132" text-anchor="middle">Final total</text><text x="267" y="157" text-anchor="middle">still random</text><line class="trait" x1="320" y1="194" x2="40" y2="194" /><path class="trait" d="M48 188l-8 6 8 6" /><text class="petite-etiquette" x="180" y="226" text-anchor="middle">Back via conditional expectation</text></svg><figcaption>The lower arrow represents a calculation dependency. The information remains that of the present: the final temperature is not available in advance.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Contributions to the present value</title><desc>At 2 minutes, the square of the present deviation is 4 squared degrees. The variance of the future fluctuation adds 2 squared degrees, and the waiting penalty adds 4. The total is 10 squared degrees.</desc><rect class="cadre-neutre" x="20" y="12" width="320" height="43" rx="7" /><text x="180" y="40" text-anchor="middle">Present square: 4 °C²</text><text x="180" y="78" text-anchor="middle">+</text><rect class="cadre-prediction" x="20" y="88" width="320" height="43" rx="7" /><text x="180" y="116" text-anchor="middle">Future variance: 2 °C²</text><text x="180" y="154" text-anchor="middle">+</text><rect class="cadre-neutre" x="20" y="164" width="320" height="43" rx="7" /><text x="180" y="192" text-anchor="middle">Waiting: 4 °C²</text><text class="resultat" x="180" y="237" text-anchor="middle">Present value: 10 °C²</text></svg><figcaption>The square of the future mean is not the mean of the future square. The variance contribution remains necessary even when the noise has mean 0.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Specify the total at the horizon, take its expectation given the present information, then recover the noise coefficient that makes the entire path compatible with that total.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Assign a value to the final temperature total</h3><p>The experiment lasts T = 4 min. The initial deviation is x = 1 °C; the noise amplitude is σ = 1 °C/√min. The constant penalty is c = 2 °C²/min. At t = 2 min, the ideal sensor gives Xₜ = 2 °C. Let us construct Y and Z, then calculate their values at this time.</p><ol class="etapes"><li><h3>Describe the randomness and the permitted information</h3><p>t and T are the current time and the horizon, in minutes, with 0 ≤ t ≤ T. W is a standard Brownian motion: its paths are continuous, W starts at 0, and its future increments are Gaussian, independent of the past, with mean 0 and variance equal to the elapsed time. Here, W is expressed in √min. ℱ<sub>t</sub> denotes the information generated by W up to t, with the usual completions; this is the reference filtration.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>X</mi><mi>t</mi></msub><mo>=</mo><mi>x</mi><mo>+</mo><mi>σ</mi><msub><mi>W</mi><mi>t</mi></msub></mrow></math></div><p>X<sub>t</sub> is the signed deviation from the setpoint, in °C; x and σ are the known constants given in the problem. The model has no drift. Its increment variance is σ squared times the duration, in °C². The word standard describes the normalization of the Brownian motion, rather than an actual chamber setting.</p></li><li><h3>Read an SDE with its terminal condition</h3><p>The letter ξ, called xi, denotes the total imposed at the end: here, ξ = X at the horizon, squared. It is known as a rule from the start, but its realization is available only at T. The general backward form is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mi>t</mi></msub><mo>=</mo><mi>ξ</mi><mo>+</mo><msubsup><mo>∫</mo><mi>t</mi><mi>T</mi></msubsup><mi>f</mi><mo>(</mo><mi>s</mi><mo>,</mo><msub><mi>Y</mi><mi>s</mi></msub><mo>,</mo><msub><mi>Z</mi><mi>s</mi></msub><mo>)</mo><mi>d</mi><mi>s</mi><mo>−</mo><msubsup><mo>∫</mo><mi>t</mi><mi>T</mi></msubsup><msub><mi>Z</mi><mi>s</mi></msub><mi>d</mi><msub><mi>W</mi><mi>s</mi></msub></mrow></math></div><p>s is the integration time, in minutes. f is the generator, a given rule for the rate at which the total accumulates, in °C²/min in our scenario. Its arguments y and z represent possible values of Y and Z, in their respective units. We use only f(s,y,z) = c, independent of these arguments. The integral with respect to ds adds up the running total; the integral with respect to dW is an Ito integral.</p><p>The solution we seek is a pair of processes (Y,Z). Y<sub>t</sub> is the value, in °C², measurable with respect to ℱ<sub>t</sub>: it is adapted and does not consult the future. Z is predictable, so it can be used as an integrand based on past information, in °C²/√min. Z is neither a temperature reading nor a Kalman gain.</p><p>We seek continuous Y with finite E[sup over t of |Y<sub>t</sub>| squared] and Z with finite E[∫ from 0 to T of |Z<sub>s</sub>| squared ds]. E denotes expectation under the model; sup denotes the largest value over the interval. This second condition makes the stochastic integral a square-integrable martingale: its future conditional mean is 0. ξ is also square-integrable; Brownian motion over a finite horizon has the moments needed here.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><msub><mi>Y</mi><mi>t</mi></msub><mo>=</mo><mo>−</mo><mi>c</mi><mi>d</mi><mi>t</mi><mo>+</mo><msub><mi>Z</mi><mi>t</mi></msub><mi>d</mi><msub><mi>W</mi><mi>t</mi></msub><mo>;</mo><msub><mi>Y</mi><mi>T</mi></msub><mo>=</mo><mi>ξ</mi><mo>=</mo><msup><msub><mi>X</mi><mi>T</mi></msub><mn>2</mn></msup></mrow></math></div><p>Check the signs by integrating this differential from t to T, then isolating Y<sub>t</sub>. A positive rate c enters with a plus sign in the backward formula and with a minus sign in the differential.</p></li><li><h3>Reduce the future to a calculable expectation</h3><p>Taking the expectation given ℱ<sub>t</sub> preserves Y<sub>t</sub>, which is already known with this information. The Ito term disappears only in this expectation; it is not 0 on every path. Since c is constant, its integral is c(T − t).</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Y</mi><mi>t</mi></msub><mo>=</mo><mi>E</mi><mo>[</mo><msup><msub><mi>X</mi><mi>T</mi></msub><mn>2</mn></msup><mo>|</mo><msub><mi>ℱ</mi><mi>t</mi></msub><mo>]</mo><mo>+</mo><mi>c</mi><mo>(</mo><mi>T</mi><mo>−</mo><mi>t</mi><mo>)</mo></mrow></math></div><p>Set ΔW = W at T minus W at t. Given ℱ<sub>t</sub>, X at T is X<sub>t</sub> + σΔW; ΔW has mean 0 and variance T − t. Expanding the square gives a present square, a cross term with mean 0, and the square of the noise. This is why noise with mean 0 still contributes to the total:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><msup><msub><mi>X</mi><mi>T</mi></msub><mn>2</mn></msup><mo>|</mo><msub><mi>ℱ</mi><mi>t</mi></msub><mo>]</mo><mo>=</mo><msup><msub><mi>X</mi><mi>t</mi></msub><mn>2</mn></msup><mo>+</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>(</mo><mi>T</mi><mo>−</mo><mi>t</mi><mo>)</mo></mrow></math></div><p>This expression conditions on the available information. Replacing the expectation with the final total of a path we had already looked at would change the problem.</p></li><li><h3>Calculate the present value, operation by operation</h3><p>Remaining time: 4 − 2 = 2 min. Square of the present deviation: 2 × 2 = 4 °C². Future variance: 1 × 1 × 2 = 2 °C². Add these contributions to obtain the mean terminal total: 4 + 2 = 6 °C².</p><p>The waiting penalty is 2 × 2 = 4 °C². The value we seek is therefore 6 + 4 = 10 °C². All the additions combine squared degrees; multiplying a duration by σ alone would give an incorrect unit.</p><p>Check: the conditional mean of X at T is 2 °C. Its square is 4 °C², less than 6 °C² by exactly 2 °C², the conditional variance. The total 10 is therefore not a variance: it also contains the square of a mean deviation and a penalty.</p></li><li><h3>Recover the noise coefficient as well</h3><p>The value formula suggests the deterministic function u(t,a) below, in °C², where a is a possible deviation, in °C. Writing Y<sub>t</sub> = u(t,X<sub>t</sub>) lets us use Ito’s formula, already encountered in the prerequisites. The derivatives ∂<sub>t</sub>u, ∂<sub>a</sub>u, and ∂<sub>aa</sub>u are, respectively, the time derivative, in °C²/min, the derivative with respect to the deviation, in °C, and the second derivative with respect to the deviation, which is dimensionless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>u</mi><mo>(</mo><mi>t</mi><mo>,</mo><mi>a</mi><mo>)</mo><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><mo>(</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>+</mo><mi>c</mi><mo>)</mo><mo>(</mo><mi>T</mi><mo>−</mo><mi>t</mi><mo>)</mo></mrow></math></div><p>Ito’s formula gives the product σ∂<sub>a</sub>u as the coefficient of dW. Since ∂<sub>a</sub>u = 2a, the second unknown is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>Z</mi><mi>t</mi></msub><mo>=</mo><mn>2</mn><mi>σ</mi><msub><mi>X</mi><mi>t</mi></msub></mrow></math></div><p>At the observed point, Z<sub>t</sub> = 2 × 1 × 2 = 4 °C²/√min. It describes the sensitivity of Y to Brownian noise; its dimension differs from that of Y. Its value can be negative when the deviation is negative.</p></li><li><h3>Check the drift, the boundary, and initial consistency</h3><p>For our function, ∂<sub>t</sub>u = −(σ squared + c) and ∂<sub>aa</sub>u = 2. The drift term in Ito’s formula combines the time variation and the variance correction:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><msub><mi>Y</mi><mi>t</mi></msub><mo>=</mo><mo>(</mo><msub><mi>∂</mi><mi>t</mi></msub><mi>u</mi><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><msup><mi>σ</mi><mn>2</mn></msup><msub><mi>∂</mi><mrow><mi>a</mi><mi>a</mi></mrow></msub><mi>u</mi><mo>)</mo><mi>d</mi><mi>t</mi><mo>+</mo><mi>σ</mi><msub><mi>∂</mi><mi>a</mi></msub><mi>u</mi><mi>d</mi><msub><mi>W</mi><mi>t</mi></msub></mrow></math></div><p>The factor 1/2 × 2 is 1. Numerically, the drift is -3 + 1 = -2 °C²/min, which is −c. We recover exactly dY = −c dt + Z dW, with the correct sign. Removing the Ito correction would give a different drift.</p><p>At the boundary t = T, the remaining time is 0: u(T,a) is the square of a. Thus Y at T does equal ξ. Y is adapted, and Z is continuous and adapted, hence predictable; their integrability follows here from the moments of Brownian motion on the finite interval. These checks construct a solution for this example without stating a general existence theorem.</p><p>At the start, the square of the deviation is 1 °C² and the future variance is 4 °C²: the mean terminal total is 5 °C². Waiting adds 8 °C²; initial Y is 13 °C². This initial number is deterministic, whereas later values of Y follow the information revealed. The next unit will address existence conditions beyond this example.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the formulas. Reconstruct the present value from the terminal total; explain where the future variance comes from. Then recover Z using Ito’s formula and justify why making an integral’s mean 0 does not let us remove that integral path by path.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The noise has mean 0: I can simply remove it from the square.”</h3><p>The linear term with mean 0 averages to 0, but the square of the noise has a mean equal to its variance. Omitting this contribution gives 8 °C² instead of 10 °C²; the difference of 2 °C² is exactly the future variance.</p><a href="#exemple">Revisit the expansion of the square and the unit check</a></li><li><h3>“Backward means that I enter the known final temperature into the present calculation.”</h3><p>The terminal rule is given, but its future realization is not. Yₜ must be ℱₜ-measurable. A complete path can be used to verify the identity afterwards, but it must not supply the present calculation with future information.</p><a href="#intuition">Reread the directions of information and calculation</a></li><li><h3>“The Ito integral has mean 0, so Z can be 0.”</h3><p>The cancellation is conditional and holds in expectation, under the stated integrability condition. In our example, Zₜ = 2σXₜ remains necessary to carry the fluctuations of the value. The check after the final observation shows an integral that is indeed nonzero.</p><a href="#exercices">Check the identity on a realization in the last exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-information"><p class="repere">Exercise 1 · Understand the information</p>
+<h3>A value calculated with the right numbers can anticipate the future</h3><p>At time t = 2 min, one person proposes Yₜ = ξ + c(T − t), using the actual ξ that the experiment will produce later. Another uses Yₜ = E[ξ | ℱₜ] + c(T − t). Which proposal is adapted? Calculate its value using the scenario data. Explain why we cannot simply set Z to 0.</p>
+<label for="reponse-ex-information">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-information" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-information" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-information" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-information" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Ask which quantities are known at time t before performing the additions.</p></details><details class="indice"><summary>Hint 2</summary><p>The terminal mean is the square of the present deviation plus the future variance; the noise integral disappears only in the conditional expectation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The second proposal is adapted: it uses ℱ<sub>t</sub> and known constants. The first depends on a future realization of ξ and is generally not ℱ<sub>t</sub>-measurable. In our scenario, with nonzero σ and t before T, this realization remains random given the present.</p><p>The mean terminal total is 4 + 2 = 6 °C². The waiting penalty is 4 °C²; the adapted value is 10 °C². Setting Z to 0 would impose dY = −c dt: an evolution without noise could not reach the random ξ of this experiment. The required coefficient at the current point is 4 °C²/√min.</p><p class="petit-titre">Check your reasoning</p><ul><li>You identify the permitted information and the forbidden future realization.</li><li>You recover 10 °C² while keeping the variance contribution.</li><li>You distinguish cancellation in expectation from the disappearance of noise on every path.</li></ul></details></article><article class="exercice" id="ex-valeur"><p class="repere">Exercise 2 · Exact calculation on paper</p>
+<h3>A deviation on the other side of the setpoint</h3><p>In the same experiment, consider another possible observation point: τ = 3/2 min, or 1.50 min, and X at τ = -1/2 °C, or -0.50 °C. The parameters T, σ, and c remain those of the example. Calculate E[ξ | ℱ at τ], Y at τ, and Z at τ. Explain the sign of Z without interpreting it as a probability.</p>
+<label for="reponse-ex-valeur">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-valeur" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-valeur" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-valeur" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-valeur" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate T − τ, then the square of the negative deviation. Keep exact fractions.</p></details><details class="indice"><summary>Hint 2</summary><p>Y uses a square; Z contains the signed deviation multiplied by 2σ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Remaining time: 4 − 3/2 = 5/2 min. The present square is 1/4 °C²; the future variance is 5/2 °C². Their sum is 11/4 °C², or 2.75 °C².</p><p>The penalty is 2 × 5/2 = 5 °C². We obtain Y = 11/4 + 5 = 31/4 °C², or 7.75 °C². Z = 2 × 1 × (-1/2) = -1 °C²/√min.</p><p>Z is negative: at this negative deviation, a small increase in X brings the chamber closer to the setpoint and reduces the square of its deviation. The sign expresses this local sensitivity, while Y remains positive. A negative temperature here means a deviation below the setpoint, rather than necessarily a negative absolute temperature.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain 5/2 min before calculating the future noise.</li><li>You give 31/4 °C² and -1 °C²/√min with their distinct units.</li><li>You justify the sign of Z through the sensitivity of the square.</li></ul></details></article><article class="exercice" id="ex-trajectoire"><p class="repere">Exercise 3 · Verification and objection</p>
+<h3>A 0 mean, a nonzero realization</h3><p>After the experiment, suppose that X at T = 3 °C was observed, while retaining X at time 2 min = 2 °C. Use Ito’s formula applied to the square of X to calculate the integral of Z dW from this time to T, then verify the backward formula. Can this final result be used to calculate Y in the present during the experiment?</p>
+<label for="reponse-ex-trajectoire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-trajectoire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-trajectoire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-trajectoire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-trajectoire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Ito’s formula gives d(X squared) = 2σX dW + σ squared dt. The noise coefficient is exactly Z.</p></details><details class="indice"><summary>Hint 2</summary><p>The integral of Z dW is therefore the final square minus the present square, minus σ squared times the remaining time.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The final square is 9 °C²; the present square is 4 °C². Their difference is 5 °C². The quadratic variation contribution is 2 °C²; the integral of Z dW on this realization is therefore 3 °C².</p><p>The backward formula gives 9 + 4 − 3 = 10 °C², matching the adapted value 10 °C². Omitting the integral would give 13 °C² on this realization: a different value.</p><p>This check is performed afterwards. It does not reveal the future during the experiment. Conditional on the present, the realizations of the integral have mean 0; the value 3 °C² calculated here for a realization is therefore not contradictory. The proposed final values serve as an algebraic check, rather than an actual record of readings.</p><p class="petit-titre">Check your reasoning</p><ul><li>You connect the integral of Z dW to Ito’s formula for the square, without simulating noise.</li><li>You obtain 3 °C² and check the minus sign when returning to Y.</li><li>You reject turning a final check into information available in the present.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="condition"><summary><span class="repere">Recall 1</span><span>What makes the equation backward, and what must we seek?</span></summary><p>The condition concerns Y at the horizon: Y at T = ξ. We seek a pair (Y,Z), with Y adapted to the present information and Z predictable to carry the noise, rather than a path that consults ξ in advance.</p></details><details class="carte" data-carte="projection"><summary><span class="repere">Recall 2</span><span>Why, for the constant generator c, is Yₜ = E[ξ | ℱₜ] + c(T − t)?</span></summary><p>Yₜ is already measurable with respect to ℱₜ. The future integral of Z dW has conditional expectation 0 if it is a martingale, here thanks to square integrability. The integral of the constant rate is c(T − t). The stochastic integral remains present on every path.</p></details><details class="carte" data-carte="carre"><summary><span class="repere">Recall 3</span><span>Which contribution would we miss by using only the square of the future mean deviation?</span></summary><p>We would miss the conditional variance σ squared times (T − t). Expanding the square of Xₜ + σΔW cancels the cross term in expectation but retains the square of the noise.</p></details><details class="carte" data-carte="exposition"><summary><span class="repere">Recall 4</span><span>How do we recover Z in the example, and what does its sign mean?</span></summary><p>For Yₜ = u(t,Xₜ), Ito’s formula gives Zₜ = σ∂ₐu(t,Xₜ) = 2σXₜ. It is a sensitivity to noise, in °C²/√min. Its sign follows the deviation from the setpoint; this coefficient is not a probability.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 5</span><span>Which checks make the proposed pair acceptable in this example?</span></summary><p>Recover the drift −c and the coefficient Z using Ito’s formula; check the boundary Y at T = ξ; check adaptedness, predictability, and integrability. The conditional expectation and the identity after the final observation provide complementary checks. This does not prove a general existence theorem.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Reconstruct without reference material: identify the available information, write the terminal condition, and explain the signs in the SDE. Recover the value using conditional expectation without losing the square of the noise, then identify Z using Ito’s formula. Check the drift and the boundary. Reading the page or consulting a hint does not validate mastery of any level; repeating the work and explaining it without help on another day remains necessary.</p></div><div class="exports"><a class="bouton" download="c234-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTQ6Y29uZGl0aW9uIiwKICAgICAgInVuaXRlIjogImMyMzQtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlZHMtcmV0cm9ncmFkZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG1ha2VzIHRoZSBlcXVhdGlvbiBiYWNrd2FyZCwgYW5kIHdoYXQgbXVzdCB3ZSBzZWVrPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBjb25kaXRpb24gY29uY2VybnMgWSBhdCB0aGUgaG9yaXpvbjogWSBhdCBUID0gzr4uIFdlIHNlZWsgYSBwYWlyIChZLFopLCB3aXRoIFkgYWRhcHRlZCB0byB0aGUgcHJlc2VudCBpbmZvcm1hdGlvbiBhbmQgWiBwcmVkaWN0YWJsZSB0byBjYXJyeSB0aGUgbm9pc2UsIHJhdGhlciB0aGFuIGEgcGF0aCB0aGF0IGNvbnN1bHRzIM6+IGluIGFkdmFuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTQ6cHJvamVjdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZXNwZXJhbmNlLWNvbmRpdGlvbm5lbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSwgZm9yIHRoZSBjb25zdGFudCBnZW5lcmF0b3IgYywgaXMgWeKCnCA9IEVbzr4gfCDihLHigpxdICsgYyhUIOKIkiB0KT8iLAogICAgICAicmVwb25zZSI6ICJZ4oKcIGlzIGFscmVhZHkgbWVhc3VyYWJsZSB3aXRoIHJlc3BlY3QgdG8g4oSx4oKcLiBUaGUgZnV0dXJlIGludGVncmFsIG9mIFogZFcgaGFzIGNvbmRpdGlvbmFsIGV4cGVjdGF0aW9uIDAgaWYgaXQgaXMgYSBtYXJ0aW5nYWxlLCBoZXJlIHRoYW5rcyB0byBzcXVhcmUgaW50ZWdyYWJpbGl0eS4gVGhlIGludGVncmFsIG9mIHRoZSBjb25zdGFudCByYXRlIGlzIGMoVCDiiJIgdCkuIFRoZSBzdG9jaGFzdGljIGludGVncmFsIHJlbWFpbnMgcHJlc2VudCBvbiBldmVyeSBwYXRoLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjM0LW00OmNhcnJlIiwKICAgICAgInVuaXRlIjogImMyMzQtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJiaWxhbi1xdWFkcmF0aXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGljaCBjb250cmlidXRpb24gd291bGQgd2UgbWlzcyBieSB1c2luZyBvbmx5IHRoZSBzcXVhcmUgb2YgdGhlIGZ1dHVyZSBtZWFuIGRldmlhdGlvbj8iLAogICAgICAicmVwb25zZSI6ICJXZSB3b3VsZCBtaXNzIHRoZSBjb25kaXRpb25hbCB2YXJpYW5jZSDPgyBzcXVhcmVkIHRpbWVzIChUIOKIkiB0KS4gRXhwYW5kaW5nIHRoZSBzcXVhcmUgb2YgWOKCnCArIM+DzpRXIGNhbmNlbHMgdGhlIGNyb3NzIHRlcm0gaW4gZXhwZWN0YXRpb24gYnV0IHJldGFpbnMgdGhlIHNxdWFyZSBvZiB0aGUgbm9pc2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTQ6ZXhwb3NpdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMjM0LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29lZmZpY2llbnQtYnJvd25pZW4iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIHdlIHJlY292ZXIgWiBpbiB0aGUgZXhhbXBsZSwgYW5kIHdoYXQgZG9lcyBpdHMgc2lnbiBtZWFuPyIsCiAgICAgICJyZXBvbnNlIjogIkZvciBZ4oKcID0gdSh0LFjigpwpLCBJdG/igJlzIGZvcm11bGEgZ2l2ZXMgWuKCnCA9IM+D4oiC4oKQdSh0LFjigpwpID0gMs+DWOKCnC4gSXQgaXMgYSBzZW5zaXRpdml0eSB0byBub2lzZSwgaW4gwrBDwrIv4oiabWluLiBJdHMgc2lnbiBmb2xsb3dzIHRoZSBkZXZpYXRpb24gZnJvbSB0aGUgc2V0cG9pbnQ7IHRoaXMgY29lZmZpY2llbnQgaXMgbm90IGEgcHJvYmFiaWxpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyMzQtbTQ6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzIzNC1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInZlcmlmaWNhdGlvbi1yZXRyb2dyYWRlIiwKICAgICAgInF1ZXN0aW9uIjogIldoaWNoIGNoZWNrcyBtYWtlIHRoZSBwcm9wb3NlZCBwYWlyIGFjY2VwdGFibGUgaW4gdGhpcyBleGFtcGxlPyIsCiAgICAgICJyZXBvbnNlIjogIlJlY292ZXIgdGhlIGRyaWZ0IOKIkmMgYW5kIHRoZSBjb2VmZmljaWVudCBaIHVzaW5nIEl0b+KAmXMgZm9ybXVsYTsgY2hlY2sgdGhlIGJvdW5kYXJ5IFkgYXQgVCA9IM6+OyBjaGVjayBhZGFwdGVkbmVzcywgcHJlZGljdGFiaWxpdHksIGFuZCBpbnRlZ3JhYmlsaXR5LiBUaGUgY29uZGl0aW9uYWwgZXhwZWN0YXRpb24gYW5kIHRoZSBpZGVudGl0eSBhZnRlciB0aGUgZmluYWwgb2JzZXJ2YXRpb24gcHJvdmlkZSBjb21wbGVtZW50YXJ5IGNoZWNrcy4gVGhpcyBkb2VzIG5vdCBwcm92ZSBhIGdlbmVyYWwgZXhpc3RlbmNlIHRoZW9yZW0uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c234-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtYWtlcyB0aGUgZXF1YXRpb24gYmFja3dhcmQsIGFuZCB3aGF0IG11c3Qgd2Ugc2Vlaz8JVGhlIGNvbmRpdGlvbiBjb25jZXJucyBZIGF0IHRoZSBob3Jpem9uOiBZIGF0IFQgPSDOvi4gV2Ugc2VlayBhIHBhaXIgKFksWiksIHdpdGggWSBhZGFwdGVkIHRvIHRoZSBwcmVzZW50IGluZm9ybWF0aW9uIGFuZCBaIHByZWRpY3RhYmxlIHRvIGNhcnJ5IHRoZSBub2lzZSwgcmF0aGVyIHRoYW4gYSBwYXRoIHRoYXQgY29uc3VsdHMgzr4gaW4gYWR2YW5jZS4JdG9kYWkgYzIzNC1tNCBlZHMtcmV0cm9ncmFkZQpXaHksIGZvciB0aGUgY29uc3RhbnQgZ2VuZXJhdG9yIGMsIGlzIFnigpwgPSBFW86+IHwg4oSx4oKcXSArIGMoVCDiiJIgdCk/CVnigpwgaXMgYWxyZWFkeSBtZWFzdXJhYmxlIHdpdGggcmVzcGVjdCB0byDihLHigpwuIFRoZSBmdXR1cmUgaW50ZWdyYWwgb2YgWiBkVyBoYXMgY29uZGl0aW9uYWwgZXhwZWN0YXRpb24gMCBpZiBpdCBpcyBhIG1hcnRpbmdhbGUsIGhlcmUgdGhhbmtzIHRvIHNxdWFyZSBpbnRlZ3JhYmlsaXR5LiBUaGUgaW50ZWdyYWwgb2YgdGhlIGNvbnN0YW50IHJhdGUgaXMgYyhUIOKIkiB0KS4gVGhlIHN0b2NoYXN0aWMgaW50ZWdyYWwgcmVtYWlucyBwcmVzZW50IG9uIGV2ZXJ5IHBhdGguCXRvZGFpIGMyMzQtbTQgZXNwZXJhbmNlLWNvbmRpdGlvbm5lbGxlCldoaWNoIGNvbnRyaWJ1dGlvbiB3b3VsZCB3ZSBtaXNzIGJ5IHVzaW5nIG9ubHkgdGhlIHNxdWFyZSBvZiB0aGUgZnV0dXJlIG1lYW4gZGV2aWF0aW9uPwlXZSB3b3VsZCBtaXNzIHRoZSBjb25kaXRpb25hbCB2YXJpYW5jZSDPgyBzcXVhcmVkIHRpbWVzIChUIOKIkiB0KS4gRXhwYW5kaW5nIHRoZSBzcXVhcmUgb2YgWOKCnCArIM+DzpRXIGNhbmNlbHMgdGhlIGNyb3NzIHRlcm0gaW4gZXhwZWN0YXRpb24gYnV0IHJldGFpbnMgdGhlIHNxdWFyZSBvZiB0aGUgbm9pc2UuCXRvZGFpIGMyMzQtbTQgYmlsYW4tcXVhZHJhdGlxdWUKSG93IGRvIHdlIHJlY292ZXIgWiBpbiB0aGUgZXhhbXBsZSwgYW5kIHdoYXQgZG9lcyBpdHMgc2lnbiBtZWFuPwlGb3IgWeKCnCA9IHUodCxY4oKcKSwgSXRv4oCZcyBmb3JtdWxhIGdpdmVzIFrigpwgPSDPg+KIguKCkHUodCxY4oKcKSA9IDLPg1jigpwuIEl0IGlzIGEgc2Vuc2l0aXZpdHkgdG8gbm9pc2UsIGluIMKwQ8KyL+KImm1pbi4gSXRzIHNpZ24gZm9sbG93cyB0aGUgZGV2aWF0aW9uIGZyb20gdGhlIHNldHBvaW50OyB0aGlzIGNvZWZmaWNpZW50IGlzIG5vdCBhIHByb2JhYmlsaXR5Lgl0b2RhaSBjMjM0LW00IGNvZWZmaWNpZW50LWJyb3duaWVuCldoaWNoIGNoZWNrcyBtYWtlIHRoZSBwcm9wb3NlZCBwYWlyIGFjY2VwdGFibGUgaW4gdGhpcyBleGFtcGxlPwlSZWNvdmVyIHRoZSBkcmlmdCDiiJJjIGFuZCB0aGUgY29lZmZpY2llbnQgWiB1c2luZyBJdG/igJlzIGZvcm11bGE7IGNoZWNrIHRoZSBib3VuZGFyeSBZIGF0IFQgPSDOvjsgY2hlY2sgYWRhcHRlZG5lc3MsIHByZWRpY3RhYmlsaXR5LCBhbmQgaW50ZWdyYWJpbGl0eS4gVGhlIGNvbmRpdGlvbmFsIGV4cGVjdGF0aW9uIGFuZCB0aGUgaWRlbnRpdHkgYWZ0ZXIgdGhlIGZpbmFsIG9ic2VydmF0aW9uIHByb3ZpZGUgY29tcGxlbWVudGFyeSBjaGVja3MuIFRoaXMgZG9lcyBub3QgcHJvdmUgYSBnZW5lcmFsIGV4aXN0ZW5jZSB0aGVvcmVtLgl0b2RhaSBjMjM0LW00IHZlcmlmaWNhdGlvbi1yZXRyb2dyYWRlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zxutcx obpszc jpkt</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ayzyfa ektwzh tfpgqp ugwwty sfzivk koljjj zzst</span></span></h3><dl><div><dt>What you understand</dt><dd>A filter updates a state from received observations. Our SDE specifies a terminal total and constructs a value using the present information. The coefficient Z in the lesson carries Brownian noise; it does not play the role of the reading z or the gain k in a Kalman loop.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">oqazwm rksxav gyirpm qtjjvt qobftc zgkmjo vskbne eyabpi xhhbki blhzcs pquckj bifaoe vqbhmh bfnrlj wzqtiz ciqilx ygktad nfyqkl svkzki njkwwu wcpqnr syjlgi wjhjrz jgcicj</span></span></dd></div><div><dt>Your level</dt><dd>Level 4 to prepare for: reconstruct the pair in the example, check the signs using Ito’s formula, and explain adaptedness without confusing the terminal value with the present observation. Reading, consulting a worked solution, or producing an assisted answer never constitutes mastery of a level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bqluin wuauak wbqmzn oozmqm jyevja rckgbs uxmnik lklgdw pkwagv hwwymq gpyqnp dxftfx aqmzir fcqqcz lsjvnr zkjzxs csajrm hjoziw urwjyh gllygx kvljqx upiicq mhnoxl xwuydz</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the calculation and verification without reference material on another day, then move on to c234-m5 on existence conditions. This reading guide adds no canonical milestone to the chapter. Any study of a possible backward implementation would require a separate source search and validation, under an appropriate mandate.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c234-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c234-m3.html">Previous</a> · <a href="c234-m5.html">Next</a></nav>
+<footer><p>Course book · C234·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

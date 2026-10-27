@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate, at a given spot and time, the leverage that links Dupire local volatility to the mean stochastic variance, then check that L² × E[v | S] recovers the Dupire variance.">
+<title>C253·M1 · Leverage function — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eaawep yqzpkz dgsh</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C253·M1</p><h1>Leverage function</h1><p class="objectif"><span>Your goal</span>Calculate, at a given spot and time, the leverage that links Dupire local volatility to the mean stochastic variance, then check that L² × E[v | S] recovers the Dupire variance.</p><p class="prerequis"><strong>Before you start</strong><br>c252-m5 : model risk · c239-m5 : calibration and identifiability · c182-m5 : trinomial tree and admissibility · c220-m5 : numerical reproducibility · c198-m5 : independent validation</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional foreign exchange desk tracks the euro against the dollar. To price its options, it has two descriptions of volatility. Dupire local volatility, introduced in C182·M5, assigns an instantaneous volatility σ<sub>l</sub>(S, t) to each spot S and time t, constructed to reproduce the surface of vanilla options. A stochastic volatility model, such as those in C239·M5, instead lets the instantaneous variance v evolve randomly.</p><p>The local-stochastic volatility model retains both ideas. Its instantaneous volatility is the product of √v, the random factor, and a predetermined function L(S, t): the leverage function. Leverage increases the random factor where the Dupire surface requires it and reduces it elsewhere. It is dimensionless, because it multiplies a volatility to obtain a volatility.</p><p>The question in this unit is specific: at a point (S, t), what leverage makes the instantaneous model variance, L² v, equal to the Dupire value σ<sub>l</sub>² on average? The average includes only paths where the spot equals S at time t. This is a conditional expectation, written E[v | S]. Its estimation is covered in the next unit; here it is given, to isolate the role of leverage.</p><p>All values on this page are fictional. They serve to calculate a single point carefully; they describe neither an observed market surface nor a validated calibration.</p><div class="schemas"><figure><svg viewBox="0 0 360 225" xmlns="http://www.w3.org/2000/svg" role="img"><title>Leverage compares two volatilities</title><desc>At a spot of 1.10 dollars per euro and a horizon of 0.25 years, local volatility is 12 % per year and the square root of the mean stochastic variance is 15 % per year. Their ratio, the leverage, is 0.80.</desc><text x="180" y="16" text-anchor="middle">Spot 1.10 · horizon 0.25 years (fictional values)</text><line x1="30" y1="190" x2="330" y2="190" class="trait" /><rect x="60" y="70" width="90" height="120" rx="6" class="cadre-resultat" /><text x="105" y="62" text-anchor="middle">σₗ = 12 %</text><text x="105" y="208" text-anchor="middle">Dupire</text><rect x="210" y="40" width="90" height="150" rx="6" class="cadre-prediction" /><text x="255" y="32" text-anchor="middle">m = 15 %</text><text x="255" y="208" text-anchor="middle">√E[v | S]</text><text x="180" y="130" text-anchor="middle" class="petite-etiquette">L = σₗ / m</text><text x="180" y="148" text-anchor="middle" class="petite-etiquette">= 0.80</text></svg><figcaption>At the same point, Dupire volatility is compared with the square root of the mean stochastic variance. Leverage is their dimensionless ratio.</figcaption></figure><figure><svg viewBox="0 0 380 235" xmlns="http://www.w3.org/2000/svg" role="img"><title>The mean of L² v recovers the Dupire variance</title><desc>Two variance scenarios, 125 and 325 percent squared, have a mean of 225. Multiplied by the squared leverage, 0.64, they become 80 and 208, with a mean of 144, which is the Dupire variance.</desc><text x="30" y="22">v at spot S, in %² per year</text><line x1="30" y1="60" x2="360" y2="60" class="trait" /><circle cx="143" cy="60" r="8" class="point-prediction" /><circle cx="233" cy="60" r="8" class="point-mesure" /><circle cx="323" cy="60" r="8" class="point-prediction" /><text x="143" y="88" text-anchor="middle">125</text><text x="233" y="88" text-anchor="middle">mean 225</text><text x="323" y="88" text-anchor="middle">325</text><line x1="233" y1="100" x2="233" y2="140" class="trait" /><text x="245" y="125" class="petite-etiquette">× L² = 0.64</text><line x1="30" y1="165" x2="360" y2="165" class="trait" /><circle cx="102" cy="165" r="8" class="point-prediction" /><circle cx="160" cy="165" r="8" class="point-mesure" /><circle cx="217" cy="165" r="8" class="point-prediction" /><text x="102" y="193" text-anchor="middle">80</text><text x="160" y="193" text-anchor="middle">144</text><text x="217" y="193" text-anchor="middle">208</text><text x="190" y="222" text-anchor="middle">Mean = σₗ² = 144 %²</text></svg><figcaption>Two variance scenarios at the same spot: the factor L² rescales both, and their mean recovers the Dupire variance. Both axes use the same scale.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Leverage is the local volatility divided by the square root of the mean stochastic variance, conditional on the same spot; check it by verifying that L² × E[v | S] recovers σₗ².</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Leverage at a point (S, t)</h3><p>Fictional values. For the euro against the dollar, the spot is S = 1.10 dollars per euro and the horizon is t = 0.25 years. The Dupire surface gives σₗ = 12 % per year. The stochastic model, whose dynamics are already fixed, gives a square root of the mean variance of m = 15 % per year at this point. What leverage L is needed, and how can it be checked?</p><ol class="etapes"><li><h3>Define the quantities, their units and the assumptions</h3><p>S is the spot, in dollars per euro; t is time, in years. σ<sub>l</sub>(S, t) is Dupire local volatility, in percent per year; its square σ<sub>l</sub>² is a variance, in percent squared per year. v is the variance factor of the stochastic model, in the same unit. E[v | S] is its mean, calculated only over paths where the spot equals S at time t. m is its square root. L(S, t) is the dimensionless leverage.</p><p>Assumptions: both models describe the same spot; v remains strictly positive, so m does too; L is taken to be positive; the dynamics of v are already calibrated, as in C239·M5, and provide E[v | S]; we work at a single point, rather than across the entire surface. If any of these conditions fails, the formula below must be reconsidered.</p></li><li><h3>Write the consistency condition</h3><p>The instantaneous variance of the local-stochastic volatility model is L² v. At the point (S, t), L is a number, so it can be taken outside the average: the conditional mean is L² E[v | S]. Calibration requires it to equal the Dupire variance.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><msub><mi>σ</mi><mi>l</mi></msub><mn>2</mn></msup><mo>=</mo><msup><mi>L</mi><mn>2</mn></msup><mo>×</mo><mi>E</mi><mo>[</mo><mi>v</mi><mo>|</mo><mi>S</mi><mo>]</mo></mrow></math></div></li><li><h3>Solve for the leverage</h3><p>Dividing by E[v | S] and then taking the positive square root, which requires E[v | S] to be strictly greater than 0, gives leverage as the ratio of two volatilities.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><msub><mi>σ</mi><mi>l</mi></msub><msqrt><mrow><mi>E</mi><mo>[</mo><mi>v</mi><mo>|</mo><mi>S</mi><mo>]</mo></mrow></msqrt></mfrac></mrow></math></div><p>The denominator is the square root of a variance: it is a volatility, in percent per year. The ratio is therefore dimensionless.</p></li><li><h3>Convert the square root to the mean variance</h3><p>The data give m, rather than E[v | S]. We recover the mean variance by squaring m, so that we can later check the result in variance units.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>[</mo><mi>v</mi><mo>|</mo><mi>S</mi><mo>]</mo><mo>=</mo><msup><mi>m</mi><mn>2</mn></msup><mo>=</mo><msup><mn>15</mn><mn>2</mn></msup><mo>=</mo><mn>225</mn><mtext> %²</mtext></mrow></math></div><p>The Dupire variance is likewise 12² = 144 %².</p></li><li><h3>Calculate the leverage</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mfrac><mn>12</mn><mn>15</mn></mfrac><mo>=</mo><mn>4/5</mn><mo>=</mo><mn>0.80</mn></mrow></math></div><p>Both volatilities are in percent per year: division cancels their units. The exact fraction is 4/5; its decimal form is 0.80. This leverage is less than 1.</p></li><li><h3>Check by reconstructing the Dupire variance</h3><p>A check must use a different route from the calculation. We square the leverage and multiply it by the mean variance.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mi>L</mi><mn>2</mn></msup><mo>×</mo><mi>E</mi><mo>[</mo><mi>v</mi><mo>|</mo><mi>S</mi><mo>]</mo><mo>=</mo><mn>16/25</mn><mo>×</mo><mn>225</mn><mo>=</mo><mn>144</mn><mo>=</mo><msup><msub><mi>σ</mi><mi>l</mi></msub><mn>2</mn></msup></mrow></math></div><p>The result is 144 %², which is σ<sub>l</sub>²: the leverage correctly reconstructs the Dupire variance.</p></li><li><h3>Check using two variance scenarios</h3><p>At the same spot, imagine two equally likely values of v: 125 and 325 %². Their mean is 225 %², equal to the mean variance from the previous step.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mn>125</mn><mo>+</mo><mn>325</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mn>225</mn></mrow></math></div><p>Multiply each scenario by L² = 16/25. We obtain 80 and 208 %², with a mean of 144 %², which is σ<sub>l</sub>². Multiplying each scenario by the same factor also multiplies their mean by that factor: this check is algebraic, as the second figure shows. It does not prove that these two scenarios are realistic.</p></li><li><h3>Interpret the result within its limits</h3><p>Leverage below 1 means that, at this point, the random factor √v is stronger on average than Dupire volatility: the model attenuates it. Leverage above 1 would do the reverse.</p><p>This value applies to a given point, given dynamics of v and a given conditional mean. It says nothing about the rest of the surface, the cost of calibration or the stability of the calculation.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why do we average v only over paths where the spot equals S? And why does the check use the square of the leverage rather than the leverage itself?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Leverage is Dupire volatility divided by E[v | S].”</h3><p>E[v | S] is a variance, whereas σₗ is a volatility: divide by its square root m. Using the variance would give a quotient of 0.05, and the check would fail, far from σₗ².</p><a href="#intuition">Review the rule to remember</a></li><li><h3>“To check, simply multiply the leverage by E[v | S].”</h3><p>The condition uses the square of the leverage. The product L × E[v | S] would give 180 %², which is not σₗ² = 144 %². Check with L², then compare with the Dupire variance.</p><a href="#exemple">Repeat the check in the example</a></li><li><h3>“Leverage is a market input, the same for every variance model.”</h3><p>It depends both on σₗ and on the conditional mean provided by the chosen dynamics of v. For the same σₗ, a different mean changes the leverage, as in the second exercise.</p><a href="#exercices">Go to the exercises</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-second-point"><p class="repere">Exercise 1 · Application</p>
+<h3>A second spot</h3><p>The same fictional setting, at another point: the spot is 1.05 dollars per euro, at the same time. Dupire volatility is 15 % per year and the square root of the mean stochastic variance is 12 % per year. Calculate the leverage, check it by recovering the Dupire variance, then state whether it is below or above 1.</p>
+<label for="reponse-ex-second-point">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-second-point" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-second-point" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-second-point" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-second-point" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Divide the volatility by the square root, rather than by the variance.</p></details><details class="indice"><summary>Hint 2</summary><p>For the check, square the leverage and multiply by the mean variance, which is the square of the given root.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Leverage: 15 / 12 = 5/4 = 1.25. Check: the mean variance is 12² = 144 %² and L² = 25/16. The product is 225 %², equal to 15² = 225 %².</p><p>Leverage exceeds 1: here, the square root of the mean stochastic variance is lower than Dupire volatility, so leverage amplifies the random factor. This interpretation applies only to this point.</p><p class="petit-titre">Check your reasoning</p><ul><li>Division of two volatilities, giving a dimensionless result.</li><li>Check using the square of the leverage and the mean variance.</li><li>Interpretation limited to this point.</li></ul></details></article><article class="exercice" id="ex-conditionnelle"><p class="repere">Exercise 2 · Diagnostic</p>
+<h3>The wrong mean</h3><p>At the first point, a colleague replaces the conditional mean with the mean of v over all paths. The colleague obtains 400 %², with a square root of 20 % per year, and keeps σₗ = 12 % per year. What leverage does this give? Does it pass the check against the conditional mean 225 %² at the first point? What do you conclude?</p>
+<label for="reponse-ex-conditionnelle">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-conditionnelle" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-conditionnelle" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-conditionnelle" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-conditionnelle" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Apply the same formula as in the example with a different square root.</p></details><details class="indice"><summary>Hint 2</summary><p>Check against the conditional mean in the example, rather than the mean the colleague assumed.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The colleague obtains leverage of 12 / 20 = 3/5 = 0.60, instead of 4/5 in the example. Against the conditional mean, 9/25 × 225 = 81 %², which is not 144 %²: the check fails.</p><p>Note: against the colleague&#x27;s own mean, 9/25 × 400 = 144 %², so the calculation is internally consistent. A check that reuses the assumption being tested does not detect the error. For the same σ<sub>l</sub>, the chosen mean changes the leverage: it cannot be treated as a market input.</p><p class="petit-titre">Check your reasoning</p><ul><li>Distinguish the conditional mean from the mean over all paths.</li><li>Compare two leverage values for the same Dupire volatility.</li><li>Avoid validating a calculation with the assumption it uses.</li></ul></details></article><article class="exercice" id="ex-scenarios"><p class="repere">Exercise 3 · Scenario check</p>
+<h3>Two scenarios at the second point</h3><p>At the second spot, the stochastic variance takes two equally likely values conditional on the spot: 100 and 188 %². Show that their mean is the mean variance from the first exercise, then that the mean of L² × v recovers the Dupire variance. These scenarios are fictional; the finite distribution serves only as a check.</p>
+<label for="reponse-ex-scenarios">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-scenarios" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-scenarios" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-scenarios" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-scenarios" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The mean of two equally likely values is their sum divided by 2.</p></details><details class="indice"><summary>Hint 2</summary><p>Multiply each scenario by L² from the first exercise, then average the results.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Mean of v: (100 + 188) / 2 = 288 / 2 = 144 %², equal to 144 %².</p><p>With L² = 25/16, the instantaneous variances are 156.25 and 293.75 %². Their mean is 450 / 2 = 225 %², equal to 225 %², the Dupire variance.</p><p>Leverage is the same in both scenarios: it changes the scale, and the mean of v then determines the result. This check is algebraic; it does not establish that the distribution of v is realistic at this point.</p><p class="petit-titre">Check your reasoning</p><ul><li>Exact mean of the scenarios before applying leverage.</li><li>Same L² applied to both scenarios.</li><li>Conclusion limited to an algebraic check.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="levier"><summary><span class="repere">Recall 1</span><span>What does the leverage function L(S, t) represent?</span></summary><p>A dimensionless factor that multiplies √v so that the mean instantaneous variance at spot S and time t recovers the Dupire variance.</p></details><details class="carte" data-carte="formule"><summary><span class="repere">Recall 2</span><span>What relation gives leverage in terms of σₗ and v?</span></summary><p>σₗ² = L² E[v | S], so L is σₗ divided by the square root of E[v | S].</p></details><details class="carte" data-carte="conditionnelle"><summary><span class="repere">Recall 3</span><span>Why do we average v conditional on the spot being S?</span></summary><p>Because the Dupire variance is a variance at this spot: only paths that pass through it count. The mean over all paths gives different leverage.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 4</span><span>How can calculated leverage be checked?</span></summary><p>Square L, multiply by E[v | S] and recover σₗ². This validates the point, rather than the entire calibration.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 5</span><span>What does the value of leverage at a single point leave unknown?</span></summary><p>It says nothing about the rest of the surface, the cost of calibration or numerical stability; E[v | S] comes from assumed dynamics of v.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>State the point (S, t) and the units; write σₗ² = L² E[v | S]; solve for L as σₗ divided by the square root of the conditional mean; calculate with volatilities in the same unit; check using the square of the leverage; draw conclusions only for this point and the assumed dynamics of v.</p></div><div class="exports"><a class="bouton" download="c253-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTE6bGV2aWVyIiwKICAgICAgInVuaXRlIjogImMyNTMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsZXZpZXIiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSBsZXZlcmFnZSBmdW5jdGlvbiBMKFMsIHQpIHJlcHJlc2VudD8iLAogICAgICAicmVwb25zZSI6ICJBIGRpbWVuc2lvbmxlc3MgZmFjdG9yIHRoYXQgbXVsdGlwbGllcyDiiJp2IHNvIHRoYXQgdGhlIG1lYW4gaW5zdGFudGFuZW91cyB2YXJpYW5jZSBhdCBzcG90IFMgYW5kIHRpbWUgdCByZWNvdmVycyB0aGUgRHVwaXJlIHZhcmlhbmNlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjUzLW0xOmZvcm11bGUiLAogICAgICAidW5pdGUiOiAiYzI1My1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZvcm11bGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCByZWxhdGlvbiBnaXZlcyBsZXZlcmFnZSBpbiB0ZXJtcyBvZiDPg+KClyBhbmQgdj8iLAogICAgICAicmVwb25zZSI6ICLPg+KCl8KyID0gTMKyIEVbdiB8IFNdLCBzbyBMIGlzIM+D4oKXIGRpdmlkZWQgYnkgdGhlIHNxdWFyZSByb290IG9mIEVbdiB8IFNdLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjUzLW0xOmNvbmRpdGlvbm5lbGxlIiwKICAgICAgInVuaXRlIjogImMyNTMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb25kaXRpb25uZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG8gd2UgYXZlcmFnZSB2IGNvbmRpdGlvbmFsIG9uIHRoZSBzcG90IGJlaW5nIFM/IiwKICAgICAgInJlcG9uc2UiOiAiQmVjYXVzZSB0aGUgRHVwaXJlIHZhcmlhbmNlIGlzIGEgdmFyaWFuY2UgYXQgdGhpcyBzcG90OiBvbmx5IHBhdGhzIHRoYXQgcGFzcyB0aHJvdWdoIGl0IGNvdW50LiBUaGUgbWVhbiBvdmVyIGFsbCBwYXRocyBnaXZlcyBkaWZmZXJlbnQgbGV2ZXJhZ2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTE6Y29udHJvbGUiLAogICAgICAidW5pdGUiOiAiYzI1My1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbnRyb2xlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gY2FsY3VsYXRlZCBsZXZlcmFnZSBiZSBjaGVja2VkPyIsCiAgICAgICJyZXBvbnNlIjogIlNxdWFyZSBMLCBtdWx0aXBseSBieSBFW3YgfCBTXSBhbmQgcmVjb3ZlciDPg+KCl8KyLiBUaGlzIHZhbGlkYXRlcyB0aGUgcG9pbnQsIHJhdGhlciB0aGFuIHRoZSBlbnRpcmUgY2FsaWJyYXRpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNTMtbTE6bGltaXRlIiwKICAgICAgInVuaXRlIjogImMyNTMtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBkb2VzIHRoZSB2YWx1ZSBvZiBsZXZlcmFnZSBhdCBhIHNpbmdsZSBwb2ludCBsZWF2ZSB1bmtub3duPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IHNheXMgbm90aGluZyBhYm91dCB0aGUgcmVzdCBvZiB0aGUgc3VyZmFjZSwgdGhlIGNvc3Qgb2YgY2FsaWJyYXRpb24gb3IgbnVtZXJpY2FsIHN0YWJpbGl0eTsgRVt2IHwgU10gY29tZXMgZnJvbSBhc3N1bWVkIGR5bmFtaWNzIG9mIHYuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c253-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBsZXZlcmFnZSBmdW5jdGlvbiBMKFMsIHQpIHJlcHJlc2VudD8JQSBkaW1lbnNpb25sZXNzIGZhY3RvciB0aGF0IG11bHRpcGxpZXMg4oiadiBzbyB0aGF0IHRoZSBtZWFuIGluc3RhbnRhbmVvdXMgdmFyaWFuY2UgYXQgc3BvdCBTIGFuZCB0aW1lIHQgcmVjb3ZlcnMgdGhlIER1cGlyZSB2YXJpYW5jZS4JdG9kYWkgYzI1My1tMSBsZXZpZXIKV2hhdCByZWxhdGlvbiBnaXZlcyBsZXZlcmFnZSBpbiB0ZXJtcyBvZiDPg+KClyBhbmQgdj8Jz4PigpfCsiA9IEzCsiBFW3YgfCBTXSwgc28gTCBpcyDPg+KClyBkaXZpZGVkIGJ5IHRoZSBzcXVhcmUgcm9vdCBvZiBFW3YgfCBTXS4JdG9kYWkgYzI1My1tMSBmb3JtdWxlCldoeSBkbyB3ZSBhdmVyYWdlIHYgY29uZGl0aW9uYWwgb24gdGhlIHNwb3QgYmVpbmcgUz8JQmVjYXVzZSB0aGUgRHVwaXJlIHZhcmlhbmNlIGlzIGEgdmFyaWFuY2UgYXQgdGhpcyBzcG90OiBvbmx5IHBhdGhzIHRoYXQgcGFzcyB0aHJvdWdoIGl0IGNvdW50LiBUaGUgbWVhbiBvdmVyIGFsbCBwYXRocyBnaXZlcyBkaWZmZXJlbnQgbGV2ZXJhZ2UuCXRvZGFpIGMyNTMtbTEgY29uZGl0aW9ubmVsbGUKSG93IGNhbiBjYWxjdWxhdGVkIGxldmVyYWdlIGJlIGNoZWNrZWQ/CVNxdWFyZSBMLCBtdWx0aXBseSBieSBFW3YgfCBTXSBhbmQgcmVjb3ZlciDPg+KCl8KyLiBUaGlzIHZhbGlkYXRlcyB0aGUgcG9pbnQsIHJhdGhlciB0aGFuIHRoZSBlbnRpcmUgY2FsaWJyYXRpb24uCXRvZGFpIGMyNTMtbTEgY29udHJvbGUKV2hhdCBkb2VzIHRoZSB2YWx1ZSBvZiBsZXZlcmFnZSBhdCBhIHNpbmdsZSBwb2ludCBsZWF2ZSB1bmtub3duPwlJdCBzYXlzIG5vdGhpbmcgYWJvdXQgdGhlIHJlc3Qgb2YgdGhlIHN1cmZhY2UsIHRoZSBjb3N0IG9mIGNhbGlicmF0aW9uIG9yIG51bWVyaWNhbCBzdGFiaWxpdHk7IEVbdiB8IFNdIGNvbWVzIGZyb20gYXNzdW1lZCBkeW5hbWljcyBvZiB2Lgl0b2RhaSBjMjUzLW0xIGxpbWl0ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eaawep yqzpkz dgsh</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yopdqk upqerm nmwcoh pnowzr brstxg lcbeuq lqkk</span></span></h3><dl><div><dt>What you understand</dt><dd>Leverage adjusts a random variance factor point by point to recover Dupire local volatility. This unit calculates it at a single point, with a given conditional mean.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xrzsge bmudfc mmkirn qyinqr rplryn smdxuj zkxuyt yahpew pkaqqd zudohw aqyxts xtpmnt kdnwfu dqpzfn jwnuup qahwto gphhzn izhnez dhuzty rhpjia kwspcb wjussx snrwez utyzii</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: justify the relation σₗ² = L² E[v | S], explain the conditional mean and repeat the check without help. Reading the lesson or giving an assisted answer does not establish any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nzmfef tpvgtb xncsvn wyzttq gncvfj flpmer ktuvhg fhcusj pdfmnk elnkdh fzlapx jbvbqa xbqiif mlxyyh zhrhkq llohsl mmyukt sszjnr ctdgmr jwddwb kmjyum tjobhp olnzyp nggzrc</span></span></dd></div><div><dt>To continue</dt><dd>Repeat the calculation without support, then read the unit on conditional calibration. Before any use, carry out a separate, bounded search of the relevant code, without inferring a global absence from a single file.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c253-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c246-m5.html">Previous</a> · <a href="c253-m2.html">Next</a></nav>
+<footer><p>Course book · C253·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Find the exact derivative of an error with respect to a weight by propagating a value and a tangent through a computational graph, then check it by another method.">
+<title>C102·M3 · Automatic differentiation — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">okygiw wtnwpx jtom</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C102·M3</p><h1>Automatic differentiation</h1><p class="objectif"><span>Your goal</span>Find the exact derivative of an error with respect to a weight by propagating a value and a tangent through a computational graph, then check it by another method.</p><p class="prerequis"><strong>Before you start</strong><br>c057-m5 : Hessian · c100-m5 : learning curves · c059-m6 : deterministic discrete Bellman equation · c015-m5 : diagnostic · c102-m1 : matrix chain rule · c102-m2 : computational graph</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small fictional model predicts a recovery score using ŷ = w × x + b. The input x is 4 hours of activity, the weight w is 2 points per hour, the bias b is 1 point and the target y is 3 points. The squared error L = (ŷ − y)² is measured in points². These values are fictional: they are used for calculation, not to describe a person or a real setting.</p><p>To adjust w, we need to know how much L changes when w changes slightly. This is the derivative of L with respect to w, written ∂L/∂w, calculated by varying only w. Two approaches come to mind. The first repeats the calculation with a slightly different w and divides the difference: this is a finite difference, easy to write but approximate, and its result depends on the chosen step size. The second does not repeat the calculation with another w: it reads the calculation as a graph of small operations (product, sum, difference, product), each with a known differentiation rule.</p><p>Automatic differentiation follows this second approach. It performs the calculation on pairs (value, tangent). At each node in the graph, the value follows the rule for the operation, and the tangent follows the local differentiation rule for that same operation. The tangent of a node, denoted using d and its name (dz, d(u), dr, dL), is its change per unit change in the chosen input, with the other inputs held fixed. The choice of starting tangents is called the seed: one for the input being differentiated with respect to, 0 for the others.</p><p>At the output, the tangent of L is the derivative we want. It is exact for the calculation performed: here, using fractions with no rounding; with floating point numbers, subject to rounding. This unit covers only forward mode, with one seed and one pass. Reverse mode, which collects the derivatives with respect to all inputs, is the mode used in backpropagation, studied next. Systematic comparison with finite differences belongs to another unit; here it checks only a single number.</p><div class="schemas"><figure><svg viewBox="0 0 446 225" xmlns="http://www.w3.org/2000/svg" role="img"><title>Computational graph with a value and a tangent at each node</title><desc>Four nodes run from left to right. The values are 8, 9, 6 and 36. With a seed of 1 on w, the tangents are 4, 4, 4 and 48.</desc><text x="34" y="26" text-anchor="middle" class="petite-etiquette">w = 2</text><text x="86" y="26" text-anchor="middle" class="petite-etiquette">x = 4</text><text x="167" y="26" text-anchor="middle" class="petite-etiquette">b = 1</text><text x="279" y="26" text-anchor="middle" class="petite-etiquette">y = 3</text><line x1="34" y1="34" x2="34" y2="60" class="trait" /><line x1="86" y1="34" x2="86" y2="60" class="trait" /><line x1="167" y1="34" x2="167" y2="60" class="trait" /><line x1="279" y1="34" x2="279" y2="60" class="trait" /><rect x="10" y="60" width="90" height="96" rx="7" class="cadre-neutre" /><rect x="122" y="60" width="90" height="96" rx="7" class="cadre-neutre" /><rect x="234" y="60" width="90" height="96" rx="7" class="cadre-neutre" /><rect x="346" y="60" width="90" height="96" rx="7" class="cadre-resultat" /><text x="55" y="84" text-anchor="middle" class="petite-etiquette">z = w × x</text><text x="55" y="110" text-anchor="middle" class="petite-etiquette">value 8</text><text x="55" y="136" text-anchor="middle" class="petite-etiquette">tangent 4</text><text x="167" y="84" text-anchor="middle" class="petite-etiquette">u = z + b</text><text x="167" y="110" text-anchor="middle" class="petite-etiquette">value 9</text><text x="167" y="136" text-anchor="middle" class="petite-etiquette">tangent 4</text><text x="279" y="84" text-anchor="middle" class="petite-etiquette">r = u − y</text><text x="279" y="110" text-anchor="middle" class="petite-etiquette">value 6</text><text x="279" y="136" text-anchor="middle" class="petite-etiquette">tangent 4</text><text x="391" y="84" text-anchor="middle" class="petite-etiquette">L = r × r</text><text x="391" y="110" text-anchor="middle" class="petite-etiquette">value 36</text><text x="391" y="136" text-anchor="middle" class="petite-etiquette">tangent 48</text><line x1="100" y1="108" x2="122" y2="108" class="trait" /><polyline points="116,102 122,108 116,114" class="trait" /><line x1="212" y1="108" x2="234" y2="108" class="trait" /><polyline points="228,102 234,108 228,114" class="trait" /><line x1="324" y1="108" x2="346" y2="108" class="trait" /><polyline points="340,102 346,108 340,114" class="trait" /><text x="223" y="186" text-anchor="middle" class="petite-etiquette">Seed: tangent of w = 1; x, b and y = 0</text><text x="223" y="210" text-anchor="middle" class="petite-etiquette">Units: z, u and r in points; L in points²</text></svg><figcaption>Each node carries two numbers: its value and its tangent. Values advance according to the rules for the operation, and tangents according to its differentiation rules. Here only w has a seed of one.</figcaption></figure><figure><svg viewBox="0 0 420 200" xmlns="http://www.w3.org/2000/svg" role="img"><title>Three seeds, three passes</title><desc>A seed of 1 on w alone gives a tangent of 48. A seed of 1 on b alone gives 12. Both seeds together give 60, the sum of the two.</desc><rect x="10" y="14" width="400" height="52" rx="7" class="cadre-neutre" /><text x="210" y="36" text-anchor="middle" class="petite-etiquette">Seed (dw, db) = (1, 0)</text><text x="210" y="56" text-anchor="middle" class="petite-etiquette">Tangent of L: 48, derivative with respect to w</text><rect x="10" y="74" width="400" height="52" rx="7" class="cadre-neutre" /><text x="210" y="96" text-anchor="middle" class="petite-etiquette">Seed (dw, db) = (0, 1)</text><text x="210" y="116" text-anchor="middle" class="petite-etiquette">Tangent of L: 12, derivative with respect to b</text><rect x="10" y="134" width="400" height="52" rx="7" class="cadre-prediction" /><text x="210" y="156" text-anchor="middle" class="petite-etiquette">Seed (dw, db) = (1, 1)</text><text x="210" y="176" text-anchor="middle" class="petite-etiquette">60 = 48 + 12, one direction</text></svg><figcaption>A seed gives a direction of differentiation. To obtain the derivative with respect to w and the derivative with respect to b separately, we need two passes, one per input.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To differentiate a computational graph, give a tangent of one to a single input and 0 to the others, apply the local rule for the operation at each node, then read the output tangent with its unit.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Differentiate the error of a small model with respect to its weight</h3><p>Take x = 4 hours, w = 2 points per hour, b = 1 point and y = 3 points, all fictional values. Calculate L and its derivative with respect to w by automatic differentiation, without repeating the calculation with another w, then check the result.</p><ol class="etapes"><li><h3>Set out the graph, symbols and assumptions</h3><p>The graph has four nodes: z = w × x (in points), u = z + b (in points), r = u − y (prediction error, in points) and L = r × r (in points²). The inputs x, b and y are constants in this calculation; we differentiate only with respect to w. Assumptions: each operation is differentiable at the values used, the numbers are exact, and only one input carries the seed at a time. Without these conditions, for example at a node with a corner, the local rule would need separate treatment.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><msup><mrow><mo>(</mo><mi>w</mi><mo>×</mo><mi>x</mi><mo>+</mo><mi>b</mi><mo>−</mo><mi>y</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div></li><li><h3>Run the value pass</h3><p>First we run the ordinary calculation, keeping each intermediate value because some tangent rules reuse them. This gives z = 2 × 4 = 8 points, u = 8 + 1 = 9 points, r = 9 − 3 = 6 points and L = 6 × 6 = 36 points². Immediate check: L is a square, so it cannot be negative.</p></li><li><h3>Write the local differentiation rules</h3><p>Consider two nodes a and c with tangents da and dc. A sum adds the tangents; a difference subtracts them. A product has two contributions, because each factor can vary while the other stays fixed.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><mo>(</mo><mi>a</mi><mo>+</mo><mi>c</mi><mo>)</mo><mo>=</mo><mi>da</mi><mo>+</mo><mi>dc</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><mo>(</mo><mi>a</mi><mo>×</mo><mi>c</mi><mo>)</mo><mo>=</mo><mi>da</mi><mo>×</mo><mi>c</mi><mo>+</mo><mi>a</mi><mo>×</mo><mi>dc</mi></mrow></math></div><p>When the same node is used twice, as r is in r × r, both contributions still exist: the rule considers only the positions of the factors.</p></li><li><h3>Propagate the tangent of w</h3><p>Seed: dw = 1, and dx = db = dy = 0 because these inputs are fixed. The product gives dz = dw × x + w × dx = 1 × 4 + 2 × 0 = 4 + 0 = 4. The sum gives d(u) = dz + db = 4 + 0 = 4. The difference gives dr = d(u) − dy = 4 − 0 = 4.</p><p>The final product uses the value of r saved in step two: dL = dr × r + r × dr = 4 × 6 + 6 × 4 = 24 + 24 = 48.</p></li><li><h3>Read the result with its unit</h3><p>Because the seed was one, the tangent of L is directly the derivative of L with respect to w. Its unit is the unit of L divided by the unit of w: points² divided by points per hour, giving point-hours.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mrow><mo>∂</mo><mi>L</mi></mrow><mrow><mo>∂</mo><mi>w</mi></mrow></mfrac><mo>=</mo><mn>48</mn><mtext> points·heure</mtext></mrow></math></div><p>Local interpretation: near this point, a small increase in w increases L by approximately 48 times that increase. This number does not yet tell us which way to move w to improve the result in practice; that decision belongs to optimization, outside this unit.</p></li><li><h3>Check by another method</h3><p>Algebraic method: L = (w × x + b − y)² is the square of r. The chain rule gives ∂L/∂w = 2 × r × x, because r changes by x per unit change in w.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mn>2</mn><mo>×</mo><mn>6</mn><mo>×</mo><mn>4</mn><mo>=</mo><mn>12</mn><mo>×</mo><mn>4</mn><mo>=</mo><mn>48</mn></mrow></math></div><p>The result matches 48: the two methods agree. The comparison with a finite difference is left until exercise two, where the results no longer match.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why does the tangent of L contain two terms when L is just a single product? Also explain why the value of r, as well as its tangent, is needed to finish the calculation.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“If the code contains a gradient, it uses automatic differentiation.”</h3><p>A gradient can come from a formula written by hand, a finite difference or tangent propagation. We need to read how it is obtained. In the file cited in the milestone, the gradient is obtained by recalculating the objective at two points, without propagating a tangent.</p><a href="#jalon"><span class="milestone-label">Reread the lines cited in the milestone</span></a></li><li><h3>“In r × r, differentiating r once is enough: dL = r × dr.”</h3><p>The product rule counts one contribution for each factor position: dr × r followed by r × dr. Both have the same value here, giving twice r × dr. Check by redoing the next-to-last line of the propagation step.</p><a href="#exemple">Review the tangent propagation</a></li><li><h3>“To get both derivatives at once, put a seed of one on w and on b.”</h3><p>The tangents add together: the pass gives the derivative in the direction (one, one), meaning the sum of the two derivatives, rather than the pair. We need one pass per input being differentiated with respect to, as in exercise three.</p><a href="#exercices">Redo the exercise on seeds</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-biais"><p class="repere">Exercise 1 · Guided application</p>
+<h3>The derivative with respect to the bias</h3><p>Use the same graph and the same values. This time, give b a seed of one and w, x and y a seed of 0. Propagate dz, d(u), dr and then dL, give the unit of the derivative, then check using the chain rule.</p>
+<label for="reponse-ex-biais">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-biais" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-biais" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-biais" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-biais" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>In dz = dw × x + w × dx, both terms have an input tangent of 0; calculate them one by one.</p></details><details class="indice"><summary>Hint 2</summary><p>The sum u = z + b is the only node where the seed of one enters the pass.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>With dw = dx = dy = 0, dz = 0 × 4 + 2 × 0 = 0 + 0 = 0. Then d(u) = dz + db = 0 + 1 = 1, dr = d(u) − dy = 1 − 0 = 1, and dL = dr × r + r × dr = 1 × 6 + 6 × 1 = 6 + 6 = 12.</p><p>Unit: points² divided by points, giving points. Check: r changes by one per unit change in b, so ∂L/∂b = 2 × r × 1 = 12 × 1 = 12, which matches. The bias has less effect than the weight here because x is 4 hours: a unit change in w shifts r by 4 points, while a unit change in b shifts r by 1 point.</p><p class="petit-titre">Check your reasoning</p><ul><li>The seed is one on b and 0 elsewhere.</li><li>Both terms of the final product are written out.</li><li>The resulting unit is the point.</li><li>The result is checked using the chain rule.</li></ul></details></article><article class="exercice" id="ex-poids-carre"><p class="repere">Exercise 2 · Transfer to a modified problem</p>
+<h3>An input used twice, followed by a finite difference</h3><p>Replace z = w × x with z = w × w, a fictional algebraic test with no physical meaning. Keep w = 2, b = 1 and y = 3. Calculate L using the value pass, then dL with respect to w with a seed of one. Then compare with the central difference with a step size of one, calculated at w = 3 and w = 1: divide the difference between the two values of L by twice the step size. What do you observe?</p>
+<label for="reponse-ex-poids-carre">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-poids-carre" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-poids-carre" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-poids-carre" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-poids-carre" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The node z receives w twice: apply the product rule with dw = one for both positions.</p></details><details class="indice"><summary>Hint 2</summary><p>For the central difference, repeat the full value pass at w = 3 and then at w = 1. The node r can become negative; its square cannot.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Value pass: z = 2 × 2 = 4, u = 4 + 1 = 5, r = 5 − 3 = 2, L = 2 × 2 = 4. Tangent: dz = dw × w + w × dw = 2 + 2 = 4. Since db = dy = 0, d(u) = dr = 4, then dL = 4 × 2 + 2 × 4 = 8 + 8 = 16.</p><p>Central difference: at w = 3, r = 7 and L = 49; at w = 1, r = -1 and L = 1. The difference is 48 and, divided by twice the step size, the central difference gives 24. It exceeds the exact derivative 16.</p><p>The discrepancy is not a calculation mistake. Here L is a polynomial of degree 4 in w, whereas a central difference is exact only up to degree 2. The step size affects the numerical result; tangent propagation has no step size to choose.</p><p class="petit-titre">Check your reasoning</p><ul><li>Both contributions from w × w are written out.</li><li>The value pass is repeated at both neighboring points.</li><li>The discrepancy between the approximate result and the tangent is acknowledged rather than left unmentioned.</li><li>The cause is linked to the degree of the polynomial and the step size.</li></ul></details></article><article class="exercice" id="ex-graines"><p class="repere">Exercise 3 · Diagnostic</p>
+<h3>What does a seed on two inputs measure?</h3><p>On the graph from the example, someone puts a seed of one on both w and b, with dx = dy = 0, and reads 60. What does this number measure? Recover it from the two passes already completed, explain why it does not replace the pair of derivatives, and state how many forward passes are needed here to obtain both derivatives.</p>
+<label for="reponse-ex-graines">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-graines" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-graines" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-graines" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-graines" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A sum adds the tangents of its terms, and a product is linear in each tangent: the contributions from dw and db add together.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the number obtained with the results from the example and exercise one.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The local rules are linear in the input tangents. The output tangent for the seed (one, one) is therefore the sum of the tangents obtained with (one, 0) and (0, one): 48 + 12 = 60. This number is the derivative of L in the direction where w and b increase together by one unit each.</p><p>It does not separate the two effects: we cannot recover 48 and 12 from their sum alone. We need one pass per input being differentiated with respect to, so 2 forward passes here. When there are many inputs and a single output, this multiplication of passes is the reason for reverse mode, the subject of the next unit.</p><p class="petit-titre">Check your reasoning</p><ul><li>The number obtained is identified as a directional derivative.</li><li>It is recovered as the sum of two previous passes.</li><li>The loss of information is explained.</li><li>The number of forward passes is given.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="autodiff"><summary><span class="repere">Recall 1</span><span>What does automatic differentiation calculate, and how?</span></summary><p>The exact derivative of a function written as a graph of operations, by propagating a value and a tangent at each node according to the local rule for the operation.</p></details><details class="carte" data-carte="graine"><summary><span class="repere">Recall 2</span><span>What does the seed of a forward pass specify?</span></summary><p>A tangent of one for a single input and 0 for the others: the output tangent is then the derivative with respect to that input.</p></details><details class="carte" data-carte="produit"><summary><span class="repere">Recall 3</span><span>Why does the tangent of r × r contain two terms?</span></summary><p>The product rule adds one contribution per factor, dr × r followed by r × dr, even when the factor is the same node.</p></details><details class="carte" data-carte="pas"><summary><span class="repere">Recall 4</span><span>What distinguishes automatic differentiation from a finite difference?</span></summary><p>It applies exact differentiation rules without a step size; a finite difference recalculates the function at two points and retains an error that depends on the step size.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Write the calculation as a graph of operations and keep the values from the pass; choose an input, give it a tangent of one and the others 0; propagate the tangent using the local rule for each node, including both contributions for a product; read the output tangent with its unit; check it by another method; repeat for each input being differentiated with respect to.</p></div><div class="exports"><a class="bouton" download="c102-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTM6YXV0b2RpZmYiLAogICAgICAidW5pdGUiOiAiYzEwMi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImF1dG9kaWZmw6lyZW50aWF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyBhdXRvbWF0aWMgZGlmZmVyZW50aWF0aW9uIGNhbGN1bGF0ZSwgYW5kIGhvdz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZXhhY3QgZGVyaXZhdGl2ZSBvZiBhIGZ1bmN0aW9uIHdyaXR0ZW4gYXMgYSBncmFwaCBvZiBvcGVyYXRpb25zLCBieSBwcm9wYWdhdGluZyBhIHZhbHVlIGFuZCBhIHRhbmdlbnQgYXQgZWFjaCBub2RlIGFjY29yZGluZyB0byB0aGUgbG9jYWwgcnVsZSBmb3IgdGhlIG9wZXJhdGlvbi4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwMi1tMzpncmFpbmUiLAogICAgICAidW5pdGUiOiAiYzEwMi1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdyYWluZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgdGhlIHNlZWQgb2YgYSBmb3J3YXJkIHBhc3Mgc3BlY2lmeT8iLAogICAgICAicmVwb25zZSI6ICJBIHRhbmdlbnQgb2Ygb25lIGZvciBhIHNpbmdsZSBpbnB1dCBhbmQgMCBmb3IgdGhlIG90aGVyczogdGhlIG91dHB1dCB0YW5nZW50IGlzIHRoZW4gdGhlIGRlcml2YXRpdmUgd2l0aCByZXNwZWN0IHRvIHRoYXQgaW5wdXQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTM6cHJvZHVpdCIsCiAgICAgICJ1bml0ZSI6ICJjMTAyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJvZHVpdCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyB0aGUgdGFuZ2VudCBvZiByIMOXIHIgY29udGFpbiB0d28gdGVybXM/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHByb2R1Y3QgcnVsZSBhZGRzIG9uZSBjb250cmlidXRpb24gcGVyIGZhY3RvciwgZHIgw5cgciBmb2xsb3dlZCBieSByIMOXIGRyLCBldmVuIHdoZW4gdGhlIGZhY3RvciBpcyB0aGUgc2FtZSBub2RlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAyLW0zOnBhcyIsCiAgICAgICJ1bml0ZSI6ICJjMTAyLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGlmZmVyZW5jZS1maW5pZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRpc3Rpbmd1aXNoZXMgYXV0b21hdGljIGRpZmZlcmVudGlhdGlvbiBmcm9tIGEgZmluaXRlIGRpZmZlcmVuY2U/IiwKICAgICAgInJlcG9uc2UiOiAiSXQgYXBwbGllcyBleGFjdCBkaWZmZXJlbnRpYXRpb24gcnVsZXMgd2l0aG91dCBhIHN0ZXAgc2l6ZTsgYSBmaW5pdGUgZGlmZmVyZW5jZSByZWNhbGN1bGF0ZXMgdGhlIGZ1bmN0aW9uIGF0IHR3byBwb2ludHMgYW5kIHJldGFpbnMgYW4gZXJyb3IgdGhhdCBkZXBlbmRzIG9uIHRoZSBzdGVwIHNpemUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c102-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIGF1dG9tYXRpYyBkaWZmZXJlbnRpYXRpb24gY2FsY3VsYXRlLCBhbmQgaG93PwlUaGUgZXhhY3QgZGVyaXZhdGl2ZSBvZiBhIGZ1bmN0aW9uIHdyaXR0ZW4gYXMgYSBncmFwaCBvZiBvcGVyYXRpb25zLCBieSBwcm9wYWdhdGluZyBhIHZhbHVlIGFuZCBhIHRhbmdlbnQgYXQgZWFjaCBub2RlIGFjY29yZGluZyB0byB0aGUgbG9jYWwgcnVsZSBmb3IgdGhlIG9wZXJhdGlvbi4JdG9kYWkgYzEwMi1tMyBhdXRvZGlmZsOpcmVudGlhdGlvbgpXaGF0IGRvZXMgdGhlIHNlZWQgb2YgYSBmb3J3YXJkIHBhc3Mgc3BlY2lmeT8JQSB0YW5nZW50IG9mIG9uZSBmb3IgYSBzaW5nbGUgaW5wdXQgYW5kIDAgZm9yIHRoZSBvdGhlcnM6IHRoZSBvdXRwdXQgdGFuZ2VudCBpcyB0aGVuIHRoZSBkZXJpdmF0aXZlIHdpdGggcmVzcGVjdCB0byB0aGF0IGlucHV0Lgl0b2RhaSBjMTAyLW0zIGdyYWluZQpXaHkgZG9lcyB0aGUgdGFuZ2VudCBvZiByIMOXIHIgY29udGFpbiB0d28gdGVybXM/CVRoZSBwcm9kdWN0IHJ1bGUgYWRkcyBvbmUgY29udHJpYnV0aW9uIHBlciBmYWN0b3IsIGRyIMOXIHIgZm9sbG93ZWQgYnkgciDDlyBkciwgZXZlbiB3aGVuIHRoZSBmYWN0b3IgaXMgdGhlIHNhbWUgbm9kZS4JdG9kYWkgYzEwMi1tMyBwcm9kdWl0CldoYXQgZGlzdGluZ3Vpc2hlcyBhdXRvbWF0aWMgZGlmZmVyZW50aWF0aW9uIGZyb20gYSBmaW5pdGUgZGlmZmVyZW5jZT8JSXQgYXBwbGllcyBleGFjdCBkaWZmZXJlbnRpYXRpb24gcnVsZXMgd2l0aG91dCBhIHN0ZXAgc2l6ZTsgYSBmaW5pdGUgZGlmZmVyZW5jZSByZWNhbGN1bGF0ZXMgdGhlIGZ1bmN0aW9uIGF0IHR3byBwb2ludHMgYW5kIHJldGFpbnMgYW4gZXJyb3IgdGhhdCBkZXBlbmRzIG9uIHRoZSBzdGVwIHNpemUuCXRvZGFpIGMxMDItbTMgZGlmZmVyZW5jZS1maW5pZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">okygiw wtnwpx jtom</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mxdoog ikbxxv qomxyr kgckwz qayzkc uwxiuv mylg</span></span></h3><dl><div><dt>What you understand</dt><dd>Automatic differentiation propagates a value and a tangent through the operations of a calculation. A finite difference recalculates the function at two neighboring points. Both can provide a gradient, through different methods.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">rogozu ksihon ywugxo rpvubu vptxey rkteio wywpcb ypkkhe fhrwaj tjjwrs ypgqtq skxalc pfjpzb htzqrj skgkek tgmwds ztohbm qxqofa ozruwl muaqvw padywg nngjeb yllcxc oykchi</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: repeat the tangent pass from the example without support, using two different seeds, then explain the discrepancy in exercise two. Reading this lesson or receiving a hint does not award an achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">igdopu udwjok pbpabp ydptxx qcniyk zfnytv otukrl nujjwa wbuaab wunrhf nabqaq yffhdu ujkjus jhylhq jnwysm rshfhm ntmzqg dqpvms mrypxe bnfbux qfmcbm zutiuu mokmzh unlvrq</span></span></dd></div><div><dt>To continue</dt><dd>Read about backpropagation, then finite difference checking, which compares a derivative obtained by rules with a numerical derivative. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xkyqic cjrpcy tpllcv khmluz xgwvck dcdtut btrtdm hsfygu mvxrqp oqpkvt slmnlt nmewjr fohjct hy</span></span> No replacement of a mechanism is announced.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c102-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c102-m2.html">Previous</a> · <a href="c102-m4.html">Next</a></nav>
+<footer><p>Course book · C102·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Turn scores into probabilities, predict the effect of temperature and identify the token selected by a given draw.">
+<title>C044·M3 · Softmax, temperature and sampling — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qedzig pdbjbu vdxz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C044·M3</p><h1>Softmax, temperature and sampling</h1><p class="objectif"><span>Your goal</span>Turn scores into probabilities, predict the effect of temperature and identify the token selected by a given draw.</p><p class="prerequis"><strong>Before you start</strong><br>c029-m5 : Bayes · c030-m5 : Poisson · c010-m5 : logarithmic scales · c018-m5 : contract tests and test doubles · c021-m5 : origin, authentication and authorization · c044-m1 : tokens and text segmentation · c044-m2 : next-token distribution</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>The text stops after “In the garden, the”. In our small fictional model, the only possible continuations are “cat”, “dog” and “wind”. Each is represented by a token, including its leading space. This closed vocabulary is used for the calculation; a real model has other tokens and a different way of segmenting text.</p><p>Imagine a strip divided among these continuations. The portion for “cat” is the widest, but a pointer placed at random can land in “dog”. The distribution gives the chances of each continuation; the draw selects the one that is actually added to the text.</p><p>Softmax builds this strip from scores: it turns each score into a positive weight, then divides the total among the candidates. Temperature controls the differences between the weights. Lowering it favors the highest score more strongly; raising it brings the portions closer in size, without reversing the order of the scores.</p><p>All the values below are fictional. We examine only the next token, with the same scores and all candidates retained. Temperature is a setting with no unit and has nothing to do with degrees. A likely continuation is no proof of truth.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>From scores to portions of the strip</title><desc>At temperature 1, the scores natural logarithm of 9, natural logarithm of 4 and 0 give the weights 9, 4 and 1. Their sum 14 gives the probabilities 9/14, 2/7 and 1/14.</desc><text x="180" y="27" text-anchor="middle">Same text, same candidates</text><rect x="20" y="45" width="320" height="64" rx="7" class="cadre-neutre" /><text x="180" y="70" text-anchor="middle">Scores have no unit</text><text x="180" y="94" text-anchor="middle">ln 9 · ln 4 · 0</text><line x1="180" y1="109" x2="180" y2="141" class="trait" /><rect x="20" y="141" width="320" height="49" rx="7" class="cadre-prediction" /><text x="180" y="172" text-anchor="middle">Weights at T = 1: 9 · 4 · 1</text><line x1="180" y1="190" x2="180" y2="218" class="trait" /><text x="180" y="242" text-anchor="middle">Portions: 9/14 · 2/7 · 1/14</text></svg><figcaption>In order: cat, dog, wind. Scores become weights through the exponential function; only division by the total produces probabilities. The notation ln will be explained in the example.</figcaption></figure><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same draw, two temperatures</title><desc>The total width of each strip is unity. At temperature 1, the portions are 9/14, 2/7, 1/14: the draw 7/10 lands in dog. At temperature 1/2, the portions are 81/98, 8/49, 1/98: the same draw lands in cat. Each vertical line marks the same position.</desc><text x="20" y="28">T = 1 : dog selected</text><rect x="20" y="43" width="205.714286" height="35" class="cadre-prediction" /><rect x="225.714286" y="43" width="91.428571" height="35" class="cadre-resultat" /><rect x="317.142857" y="43" width="22.857143" height="35" class="cadre-neutre" /><text x="112" y="66" text-anchor="middle">cat</text><text x="272" y="66" text-anchor="middle">dog</text><line x1="244" y1="35" x2="244" y2="88" class="trait" /><text x="20" y="104" class="petite-etiquette">Portions: 9/14 ; 2/7 ; 1/14</text><text x="20" y="139">T = 0.5 : cat selected</text><rect x="20" y="154" width="264.489796" height="35" class="cadre-prediction" /><rect x="284.489796" y="154" width="52.244898" height="35" class="cadre-resultat" /><rect x="336.734694" y="154" width="3.265306" height="35" class="cadre-neutre" /><text x="150" y="177" text-anchor="middle">cat</text><line x1="244" y1="146" x2="244" y2="199" class="trait" /><text x="20" y="215" class="petite-etiquette">Portions: 81/98 ; 8/49 ; 1/98</text><text x="180" y="247" text-anchor="middle">Line: u = 0.70, no unit</text></svg><figcaption>The boundaries move; the line marking the draw stays in place. The regions always follow the order cat, dog, wind, including the thin wind region on the right. The text and description give their exact portions without relying on colors.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Divide the scores by the temperature, take their exponentials, divide each weight by the total, then locate the draw in the cumulative intervals.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Choosing what follows “In the garden, the”</h3><p>The given scores are z_chat = ln(9), z_chien = ln(4) and z_vent = 0 = ln(1). We will build the distribution at T = 1, then use u = 7/10 = 0.70. These data are chosen to give exact fractions; they do not come from measurements of any model.</p><ol class="etapes"><li><h3>Define the objects and assumptions</h3><p>V is the set of 3 allowed tokens, in the order cat, dog, wind. i and j each denote a token in V. zᵢ is its finite real score, sometimes called a logit; this score is not yet a probability. T is the temperature, strictly greater than 0. The text and scores stay fixed throughout this comparison.</p><p>exp is the natural exponential function; ln is its inverse: exp(ln a) = a for positive a. In particular, exp(0) = 1. The scores, T, weights, probabilities and draw all have no unit. Their values are read neither as degrees nor as confidence in the truth of the sentence.</p><p>u denotes a realized value from a uniform draw on [0, 1): intervals of equal length have equal probability. We fix its value so we can check the selection by hand. This page does not perform any random sampling.</p></li><li><h3>Go from score to weight, then to probability</h3><p>wᵢ is the positive weight exp(zᵢ/T). Z is the sum of these weights over all allowed tokens. The symbol Σ means to add a term for each j in V. pᵢ(T) is then the probability of selecting i at this temperature.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><mi>exp</mi><mo>(</mo><mfrac><msub><mi>z</mi><mi>i</mi></msub><mi>T</mi></mfrac><mo>)</mo><mo>;</mo><mi>Z</mi><mo>=</mo><msub><mo>Σ</mo><mrow><mi>j</mi><mo>∈</mo><mi>V</mi></mrow></msub><msub><mi>w</mi><mi>j</mi></msub><mo>;</mo><msub><mi>p</mi><mi>i</mi></msub><mo>(</mo><mi>T</mi><mo>)</mo><mo>=</mo><mfrac><msub><mi>w</mi><mi>i</mi></msub><mi>Z</mi></mfrac></mrow></math></div><p>The exponential function makes the weights strictly positive, even if a score is negative. Dividing by their sum makes their total equal to 1. This is softmax with temperature. Dividing the scores directly by their sum would not provide these guarantees.</p><p>Shifting all scores by the same amount does not change the probabilities: if we subtract the same number m, each weight is multiplied by exp(−m/T). This common factor cancels with the one in the denominator. Choosing the largest score as m avoids computing excessively large exponentials; it preserves the same distribution.</p></li><li><h3>Calculate the weights for our text</h3><p>At T = 1, dividing by T leaves each score unchanged. The exponentials undo the logarithms chosen in the data: weight of cat = exp(ln(9)) = 9; weight of dog = 4; weight of wind = exp(0) = 1.</p><p>Add all retained candidates, since each will occupy a portion of the strip: Z = 9 + 4 + 1 = 13 + 1 = 14. The weights express a relative allocation, rather than probabilities that have already been normalized.</p></li><li><h3>Divide by the total and check</h3><p>Each token’s portion is its weight divided by 14. We obtain p_chat = 9/14 ≈ 0.6429, p_chien = 2/7 ≈ 0.2857 and p_vent = 1/14 ≈ 0.0714. All these probabilities have no unit; the decimals are only for readability.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mfrac><mn>9</mn><mn>14</mn></mfrac><mo>+</mo><mfrac><mn>4</mn><mn>14</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>14</mn></mfrac><mo>=</mo><mfrac><mn>14</mn><mn>14</mn></mfrac><mo>=</mo><mn>1</mn></mrow></math></div><p>Independent check: the ratio of the probabilities of cat and dog is 9/4, equal to the ratio of the weights 9/4. Normalization has preserved their ratio and order. Keep the fractions, rather than their rounded values, when deciding near a boundary.</p></li><li><h3>Build the intervals and read the draw</h3><p>Accumulate the portions in the stated order. Cat occupies [0, 9/14), dog [9/14, 13/14), wind [13/14, 1). The left endpoint is included and the right endpoint excluded: a boundary therefore belongs to the next token. This convention leaves no gaps or overlapping assignments.</p><p>Our u = 7/10 satisfies 9/14 &lt; 7/10 &lt; 13/14. Check without rounding: 9 × 10 &lt; 7 × 14 &lt; 13 × 10. Since the denominators are positive, these multiplications preserve the direction of the inequalities. The token added is therefore dog.</p><p>Cat was the most likely, but was not selected. Always taking the highest score is another rule, called maximum selection. Sampling from the distribution preserves a chance for the other candidates. A single draw does not measure long-term frequencies.</p></li><li><h3>Lower the temperature while keeping scores fixed</h3><p>Take T = 1/2 = 0.5. Dividing a score by this fraction is equivalent to multiplying it by 2. The identity exp(2 ln a) = a squared therefore gives the new weights 81, 16 and 1. The new total is 97 + 1 = 98; we must normalize again.</p><p>The portions become 81/98 ≈ 0.8265, 8/49 ≈ 0.1633 and 1/98 ≈ 0.0102, still with no unit. Their exact sum is 1. The cat/dog ratio is now 81/16, the square of 9/4: the former is more strongly favored.</p><p>The same u = 0.70 now belongs to [0, 81/98): cat would be selected. Keeping u fixed isolates the effect of T in this comparison; this does not describe two outputs that were actually observed. The scores have not changed and the page has not retrained anything.</p></li><li><h3>State the limits of what temperature guarantees</h3><p>For positive T, dividing by T and taking the exponential are increasing operations: they preserve the order of the scores. As T increases, the ratio of the probabilities of a higher score and a lower score approaches 1; the portions therefore become closer in size.</p><p>With fixed scores and no candidates removed, as T grows without limit the distribution approaches equal portions. As T approaches 0 through positive values, it concentrates on the highest score; if several tokens tie for the maximum, they share the limiting probability. The formula contains a division by T: never substitute 0 for T in it. A software setting with this name may specify a separate rule, which must be checked in its implementation.</p><p>Temperature controls this allocation, rather than the truth of the continuations. Our closed vocabulary and sampling without any other filter are assumptions for the calculation. A generation policy containing other rules must be studied with those rules before this exact distribution can be attributed to it.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the fractions and reconstruct the chain score → weight → total → probability → interval → token. Why can dog be generated even though cat has the best score? What did you keep fixed to compare the temperatures?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The weights 9, 4 and 1 are already the probabilities.”</h3><p>Their sum is 14, rather than 1. Divide each weight by the total. Then check the sum of the probabilities and the cat/dog ratio: these checks detect inconsistent normalization.</p><a href="#exemple">Repeat the division and its checks</a></li><li><h3>“A higher temperature makes cat even more certain.”</h3><p>With fixed scores, a higher temperature brings the portions closer in size. The last exercise lets you recover the weights using roots. In every case, a generation probability does not certify the content.</p><a href="#exercices">Test the higher temperature</a></li><li><h3>“Cat has the best score: the draw must select cat.”</h3><p>The highest score identifies the largest portion. The result of the draw depends on the interval containing u: at T = 1 and u = 7/10, this is dog. Always choosing the maximum would remove this draw.</p><a href="#intuition">Compare the strips and the position of the line</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-normaliser"><p class="repere">Exercise 1 · Warm-up · find the denominator</p>
+<h3>The portion for dog</h3><p>Use the weights 9, 4, 1 at T = 1 again. What is the common denominator of the probabilities? Calculate the probability of dog, then explain why 4/(9 + 4) does not answer the same question.</p>
+<label for="reponse-ex-normaliser">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-normaliser" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-normaliser" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-normaliser" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-normaliser" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>List all the tokens retained under our assumption, even the least likely one.</p></details><details class="indice"><summary>Hint 2</summary><p>The denominator is the sum of the weights over this entire set.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The total is 9 + 4 + 1 = 14. The probability of dog is 4/14 = 2/7 ≈ 0.2857, with no unit.</p><p>The denominator 9 + 4 = 13 would exclude wind and normalize only over cat and dog. That would be a different set of candidates. For our set, the numerators together give 14, so the portions sum to 1.</p><p class="petit-titre">Check your reasoning</p><ul><li>Include wind in the total 14.</li><li>Give the exact fraction 2/7 before its rounded value.</li><li>Explain that removing a candidate changes the distribution being considered.</li></ul></details></article><article class="exercice" id="ex-refroidir"><p class="repere">Exercise 2 · Application · complete calculation on paper</p>
+<h3>The strip becomes more concentrated</h3><p>Without rereading the example, keep the scores ln(9), ln(4), 0, but take T = 1/2. First predict how the portion for cat will change. Then find the weights, total, probabilities and cumulative endpoints. Which token corresponds to the same u = 7/10?</p>
+<label for="reponse-ex-refroidir">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-refroidir" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-refroidir" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-refroidir" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-refroidir" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Dividing by 1/2 multiplies the scores by 2; connect the exponential of a multiplied logarithm to a power.</p></details><details class="indice"><summary>Hint 2</summary><p>The total of the new weights changes too. Build the intervals after recalculating this total.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The portion for the best score should increase. The weights become 9 × 9 = 81, 4 × 4 = 16 and 1 × 1 = 1. Their sum is 98.</p><p>The probabilities are 81/98, 8/49, 1/98. The boundaries are 0, 81/98, 97/98, 1. The final cumulative sum is 1; the ratio of the first portions is 81/16.</p><p>Since 0 ≤ 7/10 &lt; 81/98, the draw lands in cat. The inequality can be checked exactly by comparing 7 × 98 and 81 × 10. The portion for cat is larger than at T = 1, but it remains less than 1: sampling has not become a mandatory selection of the maximum.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict the direction of the change before calculating.</li><li>Recalculate the weights and their total, then check the sum 1.</li><li>Locate u using exact fractions and distinguish favored from certain.</li></ul></details></article><article class="exercice" id="ex-rechauffer"><p class="repere">Exercise 3 · Transfer · temperature and boundary</p>
+<h3>Closer portions, a precise boundary</h3><p>Keep the same scores but take T = 2. Use exp(ln a / 2) = √a to find the weights. Calculate the portions and the result for u = 7/10. If u were exactly equal to the first cumulative boundary, which token would you select? Someone claims this T makes the continuation more truthful: what can you say in response?</p>
+<label for="reponse-ex-rechauffer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-rechauffer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-rechauffer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-rechauffer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-rechauffer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The positive roots of 9, 4 and 1 give integers; check them by squaring them.</p></details><details class="indice"><summary>Hint 2</summary><p>A boundary is included in the interval that starts there. Then distinguish the chance of generation from truth.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The weights are 3, 2, 1, because their squares give the initial weights. The total is 5 + 1 = 6. The probabilities are 1/2, 1/3 and 1/6, with no unit. Their exact sum is 1.</p><p>Cat occupies [0, 1/2), dog [1/2, 5/6), wind [5/6, 1). Since 1/2 &lt; 7/10 &lt; 5/6, dog is selected. For u exactly equal to 1/2, it is still dog: cat excludes its right endpoint.</p><p>The portion for cat has decreased from 9/14 to 1/2, while the portion for wind has increased from 1/14 to 1/6. The order remains cat, dog, wind, but the portions are closer in size. This controls sampling; no assessment of truth has been provided. The content must be checked separately.</p><p class="petit-titre">Check your reasoning</p><ul><li>Check the roots and normalize by 6.</li><li>Give intervals without overlap and assign the boundary to dog.</li><li>Use the values to justify the portions becoming closer in size, without claiming an improvement in truth.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="scores-poids"><summary><span class="repere">Recall 1</span><span>What chain turns a score into a probability, and why is a total needed?</span></summary><p>For strictly positive T, the weight is exp(score/T). Divide each weight by the sum of all retained weights: the probabilities are positive and their sum is 1. A score or weight alone is not a probability.</p></details><details class="carte" data-carte="temperature"><summary><span class="repere">Recall 2</span><span>With fixed scores, what changes and what stays the same when T is lowered?</span></summary><p>The allocation concentrates on the best scores, without changing their order or the given scores. Here, going from T = 1 to 1/2 replaces the weights with their squares. The total must be recalculated. T has no unit and does not measure truth.</p></details><details class="carte" data-carte="tirage"><summary><span class="repere">Recall 3</span><span>How can you identify the selected token from the probabilities and a uniform u?</span></summary><p>Accumulate the probabilities in a fixed order to divide [0, 1). Select the interval containing u, with the left endpoint included and the right endpoint excluded. Its length is the token’s probability: the most likely token is therefore not always selected.</p></details><details class="carte" data-carte="temperature-nulle"><summary><span class="repere">Recall 4</span><span>Why can you not replace T with 0 in the formula, even if software accepts this setting?</span></summary><p>The formula divides by T and requires positive T. Its limit as T approaches 0 concentrates on the highest scores, but a 0 software setting requires a separate rule whose implementation must be read.</p></details><details class="carte" data-carte="verite"><summary><span class="repere">Recall 5</span><span>What does a high probability for the next token fail to prove?</span></summary><p>It does not prove that the continuation is true. It describes the generator’s selection under a given text, scores and policy. The truth of the content and the actual effect of a setting require other evidence.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the path from scores to token and justify each operation. Then explain why changing T moves the boundaries without reversing the scores, and why sampling does not certify truth. An answer obtained with a hint remains an assisted answer; reconstruct this reasoning without support on another day before requesting human validation.</p></div><div class="exports"><a class="bouton" download="c044-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTM6c2NvcmVzLXBvaWRzIiwKICAgICAgInVuaXRlIjogImMwNDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJzb2Z0bWF4IiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgY2hhaW4gdHVybnMgYSBzY29yZSBpbnRvIGEgcHJvYmFiaWxpdHksIGFuZCB3aHkgaXMgYSB0b3RhbCBuZWVkZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiRm9yIHN0cmljdGx5IHBvc2l0aXZlIFQsIHRoZSB3ZWlnaHQgaXMgZXhwKHNjb3JlL1QpLiBEaXZpZGUgZWFjaCB3ZWlnaHQgYnkgdGhlIHN1bSBvZiBhbGwgcmV0YWluZWQgd2VpZ2h0czogdGhlIHByb2JhYmlsaXRpZXMgYXJlIHBvc2l0aXZlIGFuZCB0aGVpciBzdW0gaXMgMS4gQSBzY29yZSBvciB3ZWlnaHQgYWxvbmUgaXMgbm90IGEgcHJvYmFiaWxpdHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTM6dGVtcGVyYXR1cmUiLAogICAgICAidW5pdGUiOiAiYzA0NC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInRlbXBlcmF0dXJlLWRlLXRpcmFnZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaXRoIGZpeGVkIHNjb3Jlcywgd2hhdCBjaGFuZ2VzIGFuZCB3aGF0IHN0YXlzIHRoZSBzYW1lIHdoZW4gVCBpcyBsb3dlcmVkPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBhbGxvY2F0aW9uIGNvbmNlbnRyYXRlcyBvbiB0aGUgYmVzdCBzY29yZXMsIHdpdGhvdXQgY2hhbmdpbmcgdGhlaXIgb3JkZXIgb3IgdGhlIGdpdmVuIHNjb3Jlcy4gSGVyZSwgZ29pbmcgZnJvbSBUID0gMSB0byAxLzIgcmVwbGFjZXMgdGhlIHdlaWdodHMgd2l0aCB0aGVpciBzcXVhcmVzLiBUaGUgdG90YWwgbXVzdCBiZSByZWNhbGN1bGF0ZWQuIFQgaGFzIG5vIHVuaXQgYW5kIGRvZXMgbm90IG1lYXN1cmUgdHJ1dGguIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTM6dGlyYWdlIiwKICAgICAgInVuaXRlIjogImMwNDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0aXJhZ2UtY2F0ZWdvcmllbCIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgY2FuIHlvdSBpZGVudGlmeSB0aGUgc2VsZWN0ZWQgdG9rZW4gZnJvbSB0aGUgcHJvYmFiaWxpdGllcyBhbmQgYSB1bmlmb3JtIHU/IiwKICAgICAgInJlcG9uc2UiOiAiQWNjdW11bGF0ZSB0aGUgcHJvYmFiaWxpdGllcyBpbiBhIGZpeGVkIG9yZGVyIHRvIGRpdmlkZSBbMCwgMSkuIFNlbGVjdCB0aGUgaW50ZXJ2YWwgY29udGFpbmluZyB1LCB3aXRoIHRoZSBsZWZ0IGVuZHBvaW50IGluY2x1ZGVkIGFuZCB0aGUgcmlnaHQgZW5kcG9pbnQgZXhjbHVkZWQuIEl0cyBsZW5ndGggaXMgdGhlIHRva2Vu4oCZcyBwcm9iYWJpbGl0eTogdGhlIG1vc3QgbGlrZWx5IHRva2VuIGlzIHRoZXJlZm9yZSBub3QgYWx3YXlzIHNlbGVjdGVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQ0LW0zOnRlbXBlcmF0dXJlLW51bGxlIiwKICAgICAgInVuaXRlIjogImMwNDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJsaW1pdGUtZGUtdGVtcGVyYXR1cmUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiB5b3Ugbm90IHJlcGxhY2UgVCB3aXRoIDAgaW4gdGhlIGZvcm11bGEsIGV2ZW4gaWYgc29mdHdhcmUgYWNjZXB0cyB0aGlzIHNldHRpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGZvcm11bGEgZGl2aWRlcyBieSBUIGFuZCByZXF1aXJlcyBwb3NpdGl2ZSBULiBJdHMgbGltaXQgYXMgVCBhcHByb2FjaGVzIDAgY29uY2VudHJhdGVzIG9uIHRoZSBoaWdoZXN0IHNjb3JlcywgYnV0IGEgMCBzb2Z0d2FyZSBzZXR0aW5nIHJlcXVpcmVzIGEgc2VwYXJhdGUgcnVsZSB3aG9zZSBpbXBsZW1lbnRhdGlvbiBtdXN0IGJlIHJlYWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDQtbTM6dmVyaXRlIiwKICAgICAgInVuaXRlIjogImMwNDQtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJnZW5lcmF0aW9uLWV0LXZlcml0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBoaWdoIHByb2JhYmlsaXR5IGZvciB0aGUgbmV4dCB0b2tlbiBmYWlsIHRvIHByb3ZlPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGRvZXMgbm90IHByb3ZlIHRoYXQgdGhlIGNvbnRpbnVhdGlvbiBpcyB0cnVlLiBJdCBkZXNjcmliZXMgdGhlIGdlbmVyYXRvcuKAmXMgc2VsZWN0aW9uIHVuZGVyIGEgZ2l2ZW4gdGV4dCwgc2NvcmVzIGFuZCBwb2xpY3kuIFRoZSB0cnV0aCBvZiB0aGUgY29udGVudCBhbmQgdGhlIGFjdHVhbCBlZmZlY3Qgb2YgYSBzZXR0aW5nIHJlcXVpcmUgb3RoZXIgZXZpZGVuY2UuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c044-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBjaGFpbiB0dXJucyBhIHNjb3JlIGludG8gYSBwcm9iYWJpbGl0eSwgYW5kIHdoeSBpcyBhIHRvdGFsIG5lZWRlZD8JRm9yIHN0cmljdGx5IHBvc2l0aXZlIFQsIHRoZSB3ZWlnaHQgaXMgZXhwKHNjb3JlL1QpLiBEaXZpZGUgZWFjaCB3ZWlnaHQgYnkgdGhlIHN1bSBvZiBhbGwgcmV0YWluZWQgd2VpZ2h0czogdGhlIHByb2JhYmlsaXRpZXMgYXJlIHBvc2l0aXZlIGFuZCB0aGVpciBzdW0gaXMgMS4gQSBzY29yZSBvciB3ZWlnaHQgYWxvbmUgaXMgbm90IGEgcHJvYmFiaWxpdHkuCXRvZGFpIGMwNDQtbTMgc29mdG1heApXaXRoIGZpeGVkIHNjb3Jlcywgd2hhdCBjaGFuZ2VzIGFuZCB3aGF0IHN0YXlzIHRoZSBzYW1lIHdoZW4gVCBpcyBsb3dlcmVkPwlUaGUgYWxsb2NhdGlvbiBjb25jZW50cmF0ZXMgb24gdGhlIGJlc3Qgc2NvcmVzLCB3aXRob3V0IGNoYW5naW5nIHRoZWlyIG9yZGVyIG9yIHRoZSBnaXZlbiBzY29yZXMuIEhlcmUsIGdvaW5nIGZyb20gVCA9IDEgdG8gMS8yIHJlcGxhY2VzIHRoZSB3ZWlnaHRzIHdpdGggdGhlaXIgc3F1YXJlcy4gVGhlIHRvdGFsIG11c3QgYmUgcmVjYWxjdWxhdGVkLiBUIGhhcyBubyB1bml0IGFuZCBkb2VzIG5vdCBtZWFzdXJlIHRydXRoLgl0b2RhaSBjMDQ0LW0zIHRlbXBlcmF0dXJlLWRlLXRpcmFnZQpIb3cgY2FuIHlvdSBpZGVudGlmeSB0aGUgc2VsZWN0ZWQgdG9rZW4gZnJvbSB0aGUgcHJvYmFiaWxpdGllcyBhbmQgYSB1bmlmb3JtIHU/CUFjY3VtdWxhdGUgdGhlIHByb2JhYmlsaXRpZXMgaW4gYSBmaXhlZCBvcmRlciB0byBkaXZpZGUgWzAsIDEpLiBTZWxlY3QgdGhlIGludGVydmFsIGNvbnRhaW5pbmcgdSwgd2l0aCB0aGUgbGVmdCBlbmRwb2ludCBpbmNsdWRlZCBhbmQgdGhlIHJpZ2h0IGVuZHBvaW50IGV4Y2x1ZGVkLiBJdHMgbGVuZ3RoIGlzIHRoZSB0b2tlbuKAmXMgcHJvYmFiaWxpdHk6IHRoZSBtb3N0IGxpa2VseSB0b2tlbiBpcyB0aGVyZWZvcmUgbm90IGFsd2F5cyBzZWxlY3RlZC4JdG9kYWkgYzA0NC1tMyB0aXJhZ2UtY2F0ZWdvcmllbApXaHkgY2FuIHlvdSBub3QgcmVwbGFjZSBUIHdpdGggMCBpbiB0aGUgZm9ybXVsYSwgZXZlbiBpZiBzb2Z0d2FyZSBhY2NlcHRzIHRoaXMgc2V0dGluZz8JVGhlIGZvcm11bGEgZGl2aWRlcyBieSBUIGFuZCByZXF1aXJlcyBwb3NpdGl2ZSBULiBJdHMgbGltaXQgYXMgVCBhcHByb2FjaGVzIDAgY29uY2VudHJhdGVzIG9uIHRoZSBoaWdoZXN0IHNjb3JlcywgYnV0IGEgMCBzb2Z0d2FyZSBzZXR0aW5nIHJlcXVpcmVzIGEgc2VwYXJhdGUgcnVsZSB3aG9zZSBpbXBsZW1lbnRhdGlvbiBtdXN0IGJlIHJlYWQuCXRvZGFpIGMwNDQtbTMgbGltaXRlLWRlLXRlbXBlcmF0dXJlCldoYXQgZG9lcyBhIGhpZ2ggcHJvYmFiaWxpdHkgZm9yIHRoZSBuZXh0IHRva2VuIGZhaWwgdG8gcHJvdmU/CUl0IGRvZXMgbm90IHByb3ZlIHRoYXQgdGhlIGNvbnRpbnVhdGlvbiBpcyB0cnVlLiBJdCBkZXNjcmliZXMgdGhlIGdlbmVyYXRvcuKAmXMgc2VsZWN0aW9uIHVuZGVyIGEgZ2l2ZW4gdGV4dCwgc2NvcmVzIGFuZCBwb2xpY3kuIFRoZSB0cnV0aCBvZiB0aGUgY29udGVudCBhbmQgdGhlIGFjdHVhbCBlZmZlY3Qgb2YgYSBzZXR0aW5nIHJlcXVpcmUgb3RoZXIgZXZpZGVuY2UuCXRvZGFpIGMwNDQtbTMgZ2VuZXJhdGlvbi1ldC12ZXJpdGUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">qedzig pdbjbu vdxz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kmyvyt svydbv lyqp</span></span> · explain a dialogue setting</h3><dl><div><dt>What you understand</dt><dd>Softmax turns scores into a distribution; temperature changes its concentration; sampling selects an outcome according to this distribution. These operations do not establish the truth of the generated sentence.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tnljxc yfoify qxeooy rykjwr rkfiuc hgnuwa dvmkcv acsgwg vlgmjj wmzsdc tmybpu buqhgc ajerjf afzawy umxryu lakmnl mgwuvm hydbwv khcbfz qfajis fnhqpi rbsyvi xjfyxy hvwssm</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">amvuib aueyhz pyoxbn gncgsx bixtlb amwqpp tkzxip skttso qcpgtp abjktq hiucxw ajimxd hyyepo yw</span></span> Reading, an immediate calculation or an assisted answer does not establish an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dsmlhx yvfwkq yggbee iqinig seygqq fefjpg usmmbk wdvwri jjtuph bzmpng ozgjgn cnvifg iqdulh tgnicp dvnbhr bhljkk sdznok zuoeoo kyttbj ghlzap rsawcd wojyyf ymojon irwjqr</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the calculation and interval selection without help on another day, then continue with C044·M4 and C044·M5. To prepare for the full milestone, you will still need to trace the call contracts and their returns. Checking the actual path of the parameter and the engine’s behavior would require separate evidence, beyond this static reading.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c044-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c044-m2.html">Previous</a> · <a href="c044-m4.html">Next</a></nav>
+<footer><p>Course book · C044·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

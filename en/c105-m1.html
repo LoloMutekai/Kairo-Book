@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Separate what searches, what is compared and what is passed on, then work through an attention calculation on a short sequence.">
+<title>C105·M1 · Queries, keys and values — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kncnra zuibup vahr</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C105·M1</p><h1>Queries, keys and values</h1><p class="objectif"><span>Your goal</span>Separate what searches, what is compared and what is passed on, then work through an attention calculation on a short sequence.</p><p class="prerequis"><strong>Before you start</strong><br>c104-m5 : temporal validation · c102-m5 : finite difference verification · c050-m5 : conditioning</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>Imagine the sequence “bike fixed”. We want to enrich the representation of “fixed” with information taken from this same sequence. At this position, the query expresses what the calculation is looking for. Each position presents a key to be compared with the query and a value to contribute to the result.</p><p>The key helps decide how much weight to give a piece of information; the value is the information that is then mixed. Like a label and the contents of a card, they have distinct roles. In a network, they are numerical vectors, rather than written words or labels that a person has chosen by hand.</p><p>We call the position of “bike” A and the position of “fixed” B. Our 2 fictional representations are x_A = (1, 2) and x_B = (1, 6), with no physical unit. They are chosen for pencil calculations; no coordinate is assigned any real linguistic meaning here.</p><p>In our small model, the keys will be identical but the values will differ. The query at B will therefore give the same weight to both positions while receiving different contributions. This is exactly what lets us see why a key cannot replace a value.</p><div class="schemas"><figure><svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg" role="img"><title>One representation, several roles</title><desc>The sequence supplies a matrix X with 2 rows and 2 columns. Distinct transformations give Q to search, K to compare and V to pass on content. Only Q and K determine the weights; the weights act on V.</desc><rect x="20" y="12" width="320" height="54" rx="7" class="cadre-neutre" /><text x="180" y="36" text-anchor="middle">X: “bike fixed”</text><text x="180" y="56" text-anchor="middle" class="petite-etiquette">2 rows × 2 columns</text><path d="M180 66v18M68 84h224M68 84v18M180 84v18M292 84v18" class="trait" /><rect x="16" y="102" width="104" height="57" rx="7" class="cadre-prediction" /><rect x="128" y="102" width="104" height="57" rx="7" class="cadre-prediction" /><rect x="240" y="102" width="104" height="57" rx="7" class="cadre-resultat" /><text x="68" y="127" text-anchor="middle">Q</text><text x="68" y="148" text-anchor="middle" class="petite-etiquette">search</text><text x="180" y="127" text-anchor="middle">K</text><text x="180" y="148" text-anchor="middle" class="petite-etiquette">compare</text><text x="292" y="127" text-anchor="middle">V</text><text x="292" y="148" text-anchor="middle" class="petite-etiquette">pass on</text><path d="M68 159v20h56v16M180 159v20h-56" class="trait" /><rect x="26" y="195" width="196" height="45" rx="7" class="cadre-neutre" /><text x="124" y="223" text-anchor="middle">Scores, then weights</text><path d="M124 240v25h58M292 159v106h-70" class="trait" /><text x="202" y="271" text-anchor="middle" class="resultat">y</text><text x="180" y="294" text-anchor="middle" class="petite-etiquette">Mix values with these weights</text></svg><figcaption>X contains the input representations. The Q and K branches determine the weight distribution; the V branch supplies the content of the output y.</figcaption></figure><figure><svg viewBox="0 0 360 290" xmlns="http://www.w3.org/2000/svg" role="img"><title>Equal keys, different content</title><desc>For the query q_B equal to 6, position A presents k_A equal to 1 and v_A equal to 3. Position B presents k_B equal to 1 and v_B equal to 7. Equal scores give the weights 1/2 and 1/2. The output is 5, with no physical unit.</desc><rect x="65" y="10" width="230" height="48" rx="7" class="cadre-prediction" /><text x="180" y="40" text-anchor="middle">Query at B: 6</text><path d="M180 58v18M90 76h180M90 76v18M270 76v18" class="trait" /><rect x="15" y="94" width="150" height="105" rx="7" class="cadre-neutre" /><rect x="195" y="94" width="150" height="105" rx="7" class="cadre-neutre" /><text x="90" y="120" text-anchor="middle">A: bike</text><text x="90" y="145" text-anchor="middle">Key 1; value 3</text><text x="90" y="177" text-anchor="middle" class="petite-etiquette">Weight 0.50</text><text x="270" y="120" text-anchor="middle">B: fixed</text><text x="270" y="145" text-anchor="middle">Key 1; value 7</text><text x="270" y="177" text-anchor="middle" class="petite-etiquette">Weight 0.50</text><path d="M90 199v18h180v-18M180 217v20" class="trait" /><rect x="35" y="237" width="290" height="42" rx="7" class="cadre-resultat" /><text x="180" y="265" text-anchor="middle">Output at B: 5</text></svg><figcaption>The identical keys require equal weights here. The values remain distinct: their average gives the output. All numerical quantities in the diagram have no physical unit.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Form queries, keys and values; compare the query with the keys; turn the scores into weights; apply these weights to the values.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>What “fixed” receives from the sequence</h3><p>Let us calculate only the output at B in single-head attention. Positions A and B are both accessible, including B to itself. The representations and coefficients are fictional and fixed for this exercise. We are aiming neither to train a model nor to produce a sentence.</p><ol class="etapes"><li><h3>Set out the conventions and dimensions</h3><p>A row vector is a horizontal sequence of coordinates. X stacks the vectors x_A and x_B: one row per position. n is the number of positions; d is the size of an input representation. Here n = 2 and d = 2. All coordinates and coefficients have no physical unit.</p><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yygcvg hibobv okbz</span></span> The letter W denotes the coefficients; the subscripts Q, K and V indicate their roles. In a trained model, these coefficients can be learned. Here they are given and shared across positions, with no term added after multiplication.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Q</mi><mo>=</mo><mi>X</mi><msub><mi>W</mi><mi>Q</mi></msub><mo>;</mo><mi>K</mi><mo>=</mo><mi>X</mi><msub><mi>W</mi><mi>K</mi></msub><mo>;</mo><mi>V</mi><mo>=</mo><mi>X</mi><msub><mi>W</mi><mi>V</mi></msub></mrow></math></div><p>d_k is the common size of queries and keys; d_v is the size of values. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xvlywd gomqvq hvhwnf ahuhfa evpltt fhuavh aajb</span></span> Q and K have n rows and d_k columns; V has n rows and d_v columns. d_v can differ from d_k: only queries and keys must have equal sizes for our comparison.</p><p>Here d_k = 1 and d_v = 1. Each row of Q, K or V therefore contains a single number. q_A and q_B denote the rows of Q; k_A and k_B those of K; v_A and v_B those of V. The common source X makes this operation self-attention: a sequence queries its own representations.</p></li><li><h3>Read the given transformations</h3><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>X</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>6</mn></mtd></mtr></mtable><mo>]</mo><mo>;</mo><msub><mi>W</mi><mi>Q</mi></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>0</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo><mo>;</mo><msub><mi>W</mi><mi>K</mi></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd></mtr></mtable><mo>]</mo><mo>;</mo><msub><mi>W</mi><mi>V</mi></msub><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>]</mo></mrow></math></div><p>Multiplying a row by a column means multiplying corresponding coordinates and then adding the products. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">besycl mpomkq kwmacn cqmqps qgmyki yyytje lrzt</span></span> These choices make the roles visible without claiming to represent coefficients from a real model.</p></li><li><h3>Form queries and keys</h3><p>For A, q_A = 1 × 0 + 2 × 1 = 2, while k_A = 1 × 1 + 2 × 0 = 1. The same representation provides different outputs because different matrices are applied to it.</p><p>For B, q_B = 1 × 0 + 6 × 1 = 6 and k_B = 1 × 1 + 6 × 0 = 1. The keys are equal because the retained coordinate is equal at both positions. This is not a general rule of attention.</p><p>We keep q_B to calculate the output at B. q_A would be used in the separate calculation of the output at A. A position can therefore offer a key while also carrying its own query.</p></li><li><h3>Prepare what can be passed on</h3><p>With W_V, v_A = 1 × 1 + 2 × 1 = 3 and v_B = 1 × 1 + 6 × 1 = 7. The values are not the keys: although k_A = k_B, v_A differs from v_B.</p><p>With X fixed, changing only W_V changes the available content without changing the queries or keys in this calculation. This separation will make the last exercise possible.</p></li><li><h3>Compare the query with the keys</h3><p>For each position j, here A or B, s_j is the score used for the output at B. The dot · denotes the dot product: we add the products of corresponding coordinates. The square root √d_k supplies the comparison scale for this form of attention. We provide this rule; justifying its statistical basis is beyond our calculation.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>q</mi><mi>B</mi></msub><mo>·</mo><msub><mi>k</mi><mi>j</mi></msub></mrow><msqrt><msub><mi>d</mi><mi>k</mi></msub></msqrt></mfrac></mrow></math></div><p>Since d_k = 1, √d_k = 1. What remains is a multiplication followed by division by 1: s_A = (6 × 1)/1 = 6; s_B = (6 × 1)/1 = 6. These scores have no unit, are not yet weights and are not used directly to multiply the values.</p></li><li><h3>Turn scores into exact weights</h3><p>α_A and α_B, read as “alpha A” and “alpha B”, are the mixing weights for B. The function exp is the exponential function: it gives a strictly positive number and exp(0) = 1. Exponential normalization divides each exponential by the sum of the exponentials.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>α</mi><mi>j</mi></msub><mo>=</mo><mfrac><mrow><mi>exp</mi><mo>(</mo><msub><mi>s</mi><mi>j</mi></msub><mo>)</mo></mrow><mrow><mi>exp</mi><mo>(</mo><msub><mi>s</mi><mi>A</mi></msub><mo>)</mo><mo>+</mo><mi>exp</mi><mo>(</mo><msub><mi>s</mi><mi>B</mi></msub><mo>)</mo></mrow></mfrac></mrow></math></div><p>To avoid calculating large exponentials, subtract the same number m = max(s_A, s_B) = 6 from both scores. max denotes the largest score. This divides the numerators and denominator by exp(m) without changing the weights. The centered scores are s_A − m = 0 and s_B − m = 0.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>α</mi><mi>A</mi></msub><mo>=</mo><msub><mi>α</mi><mi>B</mi></msub><mo>=</mo><mfrac><mrow><mi>exp</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow><mrow><mi>exp</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>+</mo><mi>exp</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow></mfrac><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>=</mo><mn>0.50</mn></mrow></math></div><p>The equality of the scores makes this calculation exact using fractions. We have not replaced exponential normalization with division of the raw scores. If the scores differed, we would need to calculate their relative exponentials; a simple average would no longer be justified.</p></li><li><h3>Mix the values and name the output</h3><p>y_B denotes the attention output at position B. It has the size of the values, so 1 coordinate here. Each value is multiplied by its weight, then the contributions are added.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>y</mi><mi>B</mi></msub><mo>=</mo><msub><mi>α</mi><mi>A</mi></msub><msub><mi>v</mi><mi>A</mi></msub><mo>+</mo><msub><mi>α</mi><mi>B</mi></msub><msub><mi>v</mi><mi>B</mi></msub><mo>=</mo><mn>0.50</mn><mo>×</mo><mn>3</mn><mo>+</mo><mn>0.50</mn><mo>×</mo><mn>7</mn><mo>=</mo><mn>5</mn></mrow></math></div><p>Contribution from A: 3/2 = 1.50; contribution from B: 7/2 = 3.50. Their sum is 5, with no physical unit. Identical weights therefore do not imply identical contributions. The result is a numerical representation; it is neither the word “fixed” nor a written answer.</p></li><li><h3>Check the calculation and define its limits</h3><p>The weights are positive and their sum is 1. The scalar output must remain between 3 and 7. Another calculation recovers the average: (3 + 7)/2 = 10/2 = 5. This check confirms the aggregation rather than a linguistic interpretation.</p><p>Equal keys explain equal scores, which explain equal weights. The magnitude 6 of an isolated score measures neither the truth of a word nor its absolute relevance. The weights distribute a mixture across the accessible positions in this calculation.</p><p>We have followed a single output, with fixed coefficients and no visibility restriction. A complete Transformer adds other operations; multiple heads and positions belong to the following units. This example does not establish how well a model understands language.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking at the matrices, describe the path for B: which transformation creates its query, which quantities determine the weights and which quantities make up the output? Explain why equal keys can pass on different content.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“A key and a value are the same vector under two names.”</h3><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lloqvo hxotgp jztfft cieotj hvckvk whlkqq byiwlr aawcxj akbtzz ykfzuq cmjzxu wakgih kxpuum xn</span></span> The key is used in the score; the value is used in the final sum.</p><a href="#exemple">Recalculate the keys, then the values</a></li><li><h3>“The score 6 is already the weight of card A.”</h3><p>A score comes before normalization. Here the equal scores give weights of 0.50 each, with a sum of 1. The scores of all accessible positions must be compared before assigning weights.</p><a href="#exemple">Revisit the step from scores to weights</a></li><li><h3>“The query must be text typed by a person.”</h3><p>In our self-attention calculation, q_B is the result of x_B W_Q. Each position can form its query even when there is no written question. Reconstruct the branches in the first diagram and distinguish the input representation from its transformation.</p><a href="#intuition">Review the Q, K and V branches</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-roles"><p class="repere">Exercise 1 · Identification, then calculation</p>
+<h3>Reread the card for “fixed”</h3><p>Using x_B = (1, 6) and the matrices in the example, recover q_B, k_B and v_B. For each, state when it is used in calculating the output at B.</p>
+<label for="reponse-ex-roles">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-roles" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-roles" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-roles" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-roles" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Read each column of coefficients separately; multiplying a row by a column gives a sum of products.</p></details><details class="indice"><summary>Hint 2</summary><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jhflsj zsygjx cadhce zbgivm wyrmdd jxslfy aazf</span></span></p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>q_B = 1 × 0 + 6 × 1 = 6: this is the query with which B compares accessible keys. k_B = 1 × 1 + 6 × 0 = 1: this is the key that B presents for this comparison.</p><p>v_B = 1 × 1 + 6 × 1 = 7: this is the content at B that will be multiplied by α_B in the final sum. The three numbers have no physical unit. A quantity gets its role from its use in the calculation.</p><p class="petit-titre">Check your reasoning</p><ul><li>Show the sums of products without swapping the matrices.</li><li>Associate query with search, key with comparison and value with contribution.</li><li>Distinguish the query at B from the key that B offers.</li></ul></details></article><article class="exercice" id="ex-requete"><p class="repere">Exercise 2 · Controlled variation</p>
+<h3>Does another query necessarily change the weight distribution?</h3><p>In the same sequence, replace only W_Q with the column (2, 0). <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uzmfji uidkpe zwqu</span></span> Calculate the new query at B, its scores, then the weights and output. Respond to the claim: “Changing a query always changes the weights.”</p>
+<label for="reponse-ex-requete">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-requete" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-requete" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-requete" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-requete" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The new query at B is calculated using the first coordinate; the keys remain identical.</p></details><details class="indice"><summary>Hint 2</summary><p>Center the new scores on their maximum. If they are equal, the exponentials of the centered scores are equal.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The new query is 1 × 2 + 6 × 0 = 2. Since √d_k = 1, the scores are 2 × 1 = 2 for A and 2 × 1 = 2 for B.</p><p>Subtracting their maximum gives 0 at both positions. Each weight remains 1/2 = 0.50, and the output remains 5. The scores have changed; their distribution after normalization has not changed.</p><p>The claim is therefore false: our equal keys provide a counterexample. With different keys, changing the query could change their relative scores. A change of query alone is not proof of a change in weights.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 2 for the query and 2 for each score.</li><li>Justify the weights using the equality of the scores without directly dividing the raw scores.</li><li>Give the specific counterexample rather than an opposite universal rule.</li></ul></details></article><article class="exercice" id="ex-valeurs"><p class="repere">Exercise 3 · Transfer and a check on paper</p>
+<h3>Same weights, different content</h3><p>Start again from all the data in the original example, then replace only W_V with the column (1, 2). Before calculating, state what must remain identical. Recover the new values and the output at B; check the result and state what this variation does not demonstrate.</p>
+<label for="reponse-ex-valeurs">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-valeurs" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-valeurs" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-valeurs" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-valeurs" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>With X fixed, W_V appears neither in the queries, nor in the keys, nor in their scores.</p></details><details class="indice"><summary>Hint 2</summary><p>Now multiply the second coordinate at each position by 2, add the first, then apply the unchanged weights.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Q and K remain unchanged, so the scores remain 6 and 6, and the weights remain 1/2 and 1/2. The separation holds for this calculation with fixed inputs.</p><p>New value at A: 1 × 1 + 2 × 2 = 1 + 4 = 5. New value at B: 1 × 1 + 6 × 2 = 1 + 12 = 13.</p><p>Contributions: 1/2 × 5 = 5/2 and 1/2 × 13 = 13/2. Their sum gives 9. Check: the equal weights require the midpoint between 5 and 13, namely 9; this result remains between the two values.</p><p>Changing only the content passed on can therefore change the output without changing the weight distribution. An increase in the output number proves no linguistic improvement. In a complete network, this output could change the inputs to a later calculation; we have not fixed the entire network forever.</p><p class="petit-titre">Check your reasoning</p><ul><li>Predict that the scores will remain unchanged before consulting the solution.</li><li>Show the new values 5 and 13 and their mixture 9.</li><li>Check the average and its position between the values.</li><li>Limit the invariance to the calculation studied without claiming a real gain.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="roles"><summary><span class="repere">Recall 1</span><span>What searches, what is compared and what is passed on?</span></summary><p>The query q carries the search from the target position; the key k at each position enters the comparison; the value v at each position enters the weighted mixture. These are roles of vectors, not necessarily texts.</p></details><details class="carte" data-carte="projections"><summary><span class="repere">Recall 2</span><span>How can a single sequence provide different queries, keys and values?</span></summary><p>Its representations X pass through distinct matrices: Q = XW_Q, K = XW_K, V = XW_V. Sharing the input does not require sharing the transformations. In the example, the key retains one coordinate and the value adds the coordinates.</p></details><details class="carte" data-carte="dimensions"><summary><span class="repere">Recall 3</span><span>Which sizes must match, and what size is the output for one position?</span></summary><p>Query and key have the same size d_k for their dot product. Values have size d_v, which can differ. The mixture of values retains d_v coordinates. The number of positions indicates how many keys and values are offered.</p></details><details class="carte" data-carte="egalite"><summary><span class="repere">Recall 4</span><span>Why are the weights equal in our sequence, and why does this not make the values identical?</span></summary><p>The identical keys give identical scores for the query at B. After centering, each exponential is 1, so the weights are 1/2 and 1/2. The values 3 and 7 remain different; their mixture gives 5.</p></details><details class="carte" data-carte="variation"><summary><span class="repere">Recall 5</span><span>With the input fixed, what can W_V change without changing the weights in this calculation?</span></summary><p>W_V can change the values and their mixture. The weights depend on Q and K, which remain fixed here. The last exercise thus moves from 5 to 9 with the same weights, without demonstrating an improvement in the model.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hradql kzdgjs uvxbho cnsrzp jffmcj rxjkzw ovwgma lhwdfj zmtpmd cinwqv iwwkkr bhjgzt nozaph bt</span></span> Add the condition that would allow this weight distribution to change, then a limitation of the example.</p></div><div class="exports"><a class="bouton" download="c105-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTE6cm9sZXMiLAogICAgICAidW5pdGUiOiAiYzEwNS1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInJlcXVldGVzLWNsZXMtdmFsZXVycyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IHNlYXJjaGVzLCB3aGF0IGlzIGNvbXBhcmVkIGFuZCB3aGF0IGlzIHBhc3NlZCBvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgcXVlcnkgcSBjYXJyaWVzIHRoZSBzZWFyY2ggZnJvbSB0aGUgdGFyZ2V0IHBvc2l0aW9uOyB0aGUga2V5IGsgYXQgZWFjaCBwb3NpdGlvbiBlbnRlcnMgdGhlIGNvbXBhcmlzb247IHRoZSB2YWx1ZSB2IGF0IGVhY2ggcG9zaXRpb24gZW50ZXJzIHRoZSB3ZWlnaHRlZCBtaXh0dXJlLiBUaGVzZSBhcmUgcm9sZXMgb2YgdmVjdG9ycywgbm90IG5lY2Vzc2FyaWx5IHRleHRzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW0xOnByb2plY3Rpb25zIiwKICAgICAgInVuaXRlIjogImMxMDUtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ0cmFuc2Zvcm1hdGlvbnMtcWt2IiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gYSBzaW5nbGUgc2VxdWVuY2UgcHJvdmlkZSBkaWZmZXJlbnQgcXVlcmllcywga2V5cyBhbmQgdmFsdWVzPyIsCiAgICAgICJyZXBvbnNlIjogIkl0cyByZXByZXNlbnRhdGlvbnMgWCBwYXNzIHRocm91Z2ggZGlzdGluY3QgbWF0cmljZXM6IFEgPSBYV19RLCBLID0gWFdfSywgViA9IFhXX1YuIFNoYXJpbmcgdGhlIGlucHV0IGRvZXMgbm90IHJlcXVpcmUgc2hhcmluZyB0aGUgdHJhbnNmb3JtYXRpb25zLiBJbiB0aGUgZXhhbXBsZSwgdGhlIGtleSByZXRhaW5zIG9uZSBjb29yZGluYXRlIGFuZCB0aGUgdmFsdWUgYWRkcyB0aGUgY29vcmRpbmF0ZXMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDUtbTE6ZGltZW5zaW9ucyIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZGltZW5zaW9ucy1hdHRlbnRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2hpY2ggc2l6ZXMgbXVzdCBtYXRjaCwgYW5kIHdoYXQgc2l6ZSBpcyB0aGUgb3V0cHV0IGZvciBvbmUgcG9zaXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiUXVlcnkgYW5kIGtleSBoYXZlIHRoZSBzYW1lIHNpemUgZF9rIGZvciB0aGVpciBkb3QgcHJvZHVjdC4gVmFsdWVzIGhhdmUgc2l6ZSBkX3YsIHdoaWNoIGNhbiBkaWZmZXIuIFRoZSBtaXh0dXJlIG9mIHZhbHVlcyByZXRhaW5zIGRfdiBjb29yZGluYXRlcy4gVGhlIG51bWJlciBvZiBwb3NpdGlvbnMgaW5kaWNhdGVzIGhvdyBtYW55IGtleXMgYW5kIHZhbHVlcyBhcmUgb2ZmZXJlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzEwNS1tMTplZ2FsaXRlIiwKICAgICAgInVuaXRlIjogImMxMDUtbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJub3JtYWxpc2F0aW9uLWV4cG9uZW50aWVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGFyZSB0aGUgd2VpZ2h0cyBlcXVhbCBpbiBvdXIgc2VxdWVuY2UsIGFuZCB3aHkgZG9lcyB0aGlzIG5vdCBtYWtlIHRoZSB2YWx1ZXMgaWRlbnRpY2FsPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBpZGVudGljYWwga2V5cyBnaXZlIGlkZW50aWNhbCBzY29yZXMgZm9yIHRoZSBxdWVyeSBhdCBCLiBBZnRlciBjZW50ZXJpbmcsIGVhY2ggZXhwb25lbnRpYWwgaXMgMSwgc28gdGhlIHdlaWdodHMgYXJlIDEvMiBhbmQgMS8yLiBUaGUgdmFsdWVzIDMgYW5kIDcgcmVtYWluIGRpZmZlcmVudDsgdGhlaXIgbWl4dHVyZSBnaXZlcyA1LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTA1LW0xOnZhcmlhdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMTA1LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2VwYXJlci1zZWxlY3Rpb24tY29udGVudSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaXRoIHRoZSBpbnB1dCBmaXhlZCwgd2hhdCBjYW4gV19WIGNoYW5nZSB3aXRob3V0IGNoYW5naW5nIHRoZSB3ZWlnaHRzIGluIHRoaXMgY2FsY3VsYXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiV19WIGNhbiBjaGFuZ2UgdGhlIHZhbHVlcyBhbmQgdGhlaXIgbWl4dHVyZS4gVGhlIHdlaWdodHMgZGVwZW5kIG9uIFEgYW5kIEssIHdoaWNoIHJlbWFpbiBmaXhlZCBoZXJlLiBUaGUgbGFzdCBleGVyY2lzZSB0aHVzIG1vdmVzIGZyb20gNSB0byA5IHdpdGggdGhlIHNhbWUgd2VpZ2h0cywgd2l0aG91dCBkZW1vbnN0cmF0aW5nIGFuIGltcHJvdmVtZW50IGluIHRoZSBtb2RlbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c105-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBzZWFyY2hlcywgd2hhdCBpcyBjb21wYXJlZCBhbmQgd2hhdCBpcyBwYXNzZWQgb24/CVRoZSBxdWVyeSBxIGNhcnJpZXMgdGhlIHNlYXJjaCBmcm9tIHRoZSB0YXJnZXQgcG9zaXRpb247IHRoZSBrZXkgayBhdCBlYWNoIHBvc2l0aW9uIGVudGVycyB0aGUgY29tcGFyaXNvbjsgdGhlIHZhbHVlIHYgYXQgZWFjaCBwb3NpdGlvbiBlbnRlcnMgdGhlIHdlaWdodGVkIG1peHR1cmUuIFRoZXNlIGFyZSByb2xlcyBvZiB2ZWN0b3JzLCBub3QgbmVjZXNzYXJpbHkgdGV4dHMuCXRvZGFpIGMxMDUtbTEgcmVxdWV0ZXMtY2xlcy12YWxldXJzCkhvdyBjYW4gYSBzaW5nbGUgc2VxdWVuY2UgcHJvdmlkZSBkaWZmZXJlbnQgcXVlcmllcywga2V5cyBhbmQgdmFsdWVzPwlJdHMgcmVwcmVzZW50YXRpb25zIFggcGFzcyB0aHJvdWdoIGRpc3RpbmN0IG1hdHJpY2VzOiBRID0gWFdfUSwgSyA9IFhXX0ssIFYgPSBYV19WLiBTaGFyaW5nIHRoZSBpbnB1dCBkb2VzIG5vdCByZXF1aXJlIHNoYXJpbmcgdGhlIHRyYW5zZm9ybWF0aW9ucy4gSW4gdGhlIGV4YW1wbGUsIHRoZSBrZXkgcmV0YWlucyBvbmUgY29vcmRpbmF0ZSBhbmQgdGhlIHZhbHVlIGFkZHMgdGhlIGNvb3JkaW5hdGVzLgl0b2RhaSBjMTA1LW0xIHRyYW5zZm9ybWF0aW9ucy1xa3YKV2hpY2ggc2l6ZXMgbXVzdCBtYXRjaCwgYW5kIHdoYXQgc2l6ZSBpcyB0aGUgb3V0cHV0IGZvciBvbmUgcG9zaXRpb24/CVF1ZXJ5IGFuZCBrZXkgaGF2ZSB0aGUgc2FtZSBzaXplIGRfayBmb3IgdGhlaXIgZG90IHByb2R1Y3QuIFZhbHVlcyBoYXZlIHNpemUgZF92LCB3aGljaCBjYW4gZGlmZmVyLiBUaGUgbWl4dHVyZSBvZiB2YWx1ZXMgcmV0YWlucyBkX3YgY29vcmRpbmF0ZXMuIFRoZSBudW1iZXIgb2YgcG9zaXRpb25zIGluZGljYXRlcyBob3cgbWFueSBrZXlzIGFuZCB2YWx1ZXMgYXJlIG9mZmVyZWQuCXRvZGFpIGMxMDUtbTEgZGltZW5zaW9ucy1hdHRlbnRpb24KV2h5IGFyZSB0aGUgd2VpZ2h0cyBlcXVhbCBpbiBvdXIgc2VxdWVuY2UsIGFuZCB3aHkgZG9lcyB0aGlzIG5vdCBtYWtlIHRoZSB2YWx1ZXMgaWRlbnRpY2FsPwlUaGUgaWRlbnRpY2FsIGtleXMgZ2l2ZSBpZGVudGljYWwgc2NvcmVzIGZvciB0aGUgcXVlcnkgYXQgQi4gQWZ0ZXIgY2VudGVyaW5nLCBlYWNoIGV4cG9uZW50aWFsIGlzIDEsIHNvIHRoZSB3ZWlnaHRzIGFyZSAxLzIgYW5kIDEvMi4gVGhlIHZhbHVlcyAzIGFuZCA3IHJlbWFpbiBkaWZmZXJlbnQ7IHRoZWlyIG1peHR1cmUgZ2l2ZXMgNS4JdG9kYWkgYzEwNS1tMSBub3JtYWxpc2F0aW9uLWV4cG9uZW50aWVsbGUKV2l0aCB0aGUgaW5wdXQgZml4ZWQsIHdoYXQgY2FuIFdfViBjaGFuZ2Ugd2l0aG91dCBjaGFuZ2luZyB0aGUgd2VpZ2h0cyBpbiB0aGlzIGNhbGN1bGF0aW9uPwlXX1YgY2FuIGNoYW5nZSB0aGUgdmFsdWVzIGFuZCB0aGVpciBtaXh0dXJlLiBUaGUgd2VpZ2h0cyBkZXBlbmQgb24gUSBhbmQgSywgd2hpY2ggcmVtYWluIGZpeGVkIGhlcmUuIFRoZSBsYXN0IGV4ZXJjaXNlIHRodXMgbW92ZXMgZnJvbSA1IHRvIDkgd2l0aCB0aGUgc2FtZSB3ZWlnaHRzLCB3aXRob3V0IGRlbW9uc3RyYXRpbmcgYW4gaW1wcm92ZW1lbnQgaW4gdGhlIG1vZGVsLgl0b2RhaSBjMTA1LW0xIHNlcGFyZXItc2VsZWN0aW9uLWNvbnRlbnUK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kncnra zuibup vahr</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fgunlz mrxynb dmyu</span></span> · identify the role of a query without confusing the mechanisms</h3><dl><div><dt>What you understand</dt><dd>You can separate the representation that queries, the elements used for comparison and the content passed on. This distinction helps frame questions about a vector search; it does not turn every search into self-attention.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">igzlvw lcnzbx dcmzcz agqxse ozxmvh icbsip pyaibq skimeq abchzt ynlrxz gtifka ixvyuv ysgcsi fzuzco rxabeu itkwib zgqfku kltyht mjvekd tkdbyx ehnmtu bbrbiw euawah kmgink</span></span></dd></div><div><dt>Your level</dt><dd>Level 3 to prepare: reconstruct the transformations, dimensions and mixture without support, then explain the boundary between comparison and content. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ovijrg clppua mhedmp akgobt xrfazb zfakwj fcwn</span></span> Reading or an assisted answer does not establish that a level has been achieved.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">zzghze ekvcrb ywdwxz ysuacx tduhvy tezzmu dwjcci wxusrd zjwgqm tpfmcx jhzksm ftfjyo njrivz ygzmtu buatqw fbfvlv ncimdu bnqegm nahbua oacrvs gqcdyq dwaxyg ezkgmh xiqore</span></span></dd></div><div><dt>To continue</dt><dd>Redo the exercises without help on another day and explain the two matrix changes. Then continue with C105·M2 on multi-head attention. To prepare the full milestone, you will still need to trace separately the content associated with the identifiers and the components that consume it, then establish the authorized assessment criteria; this page does not supply that evidence.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c105-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c104-m5.html">Previous</a> · <a href="c105-m2.html">Next</a></nav>
+<footer><p>Course book · C105·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

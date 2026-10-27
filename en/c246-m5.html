@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate how a residual at the barrier becomes a price difference, then check an adjustment in a finite tree.">
+<title>C246·M5 · Boundary error — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eaqyxr auyrjh rofw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C246·M5</p><h1>Boundary error</h1><p class="objectif"><span>Your goal</span>Calculate how a residual at the barrier becomes a price difference, then check an adjustment in a finite tree.</p><p class="prerequis"><strong>Before you start</strong><br>c176-m5 : correlated simulation · c240-m5 : forward smile and VIX · c186-m5 : risk near the barrier · c182-m5 : trinomial tree and admissibility · c246-m1 : pathwise under conditions · c246-m2 : likelihood weights · c246-m3 : Malliavin weights · c246-m4 : finite static replication</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A fictional contract promises the payoff of a call option at maturity, unless the price reaches an upper barrier on a monitoring date. In that case, it is knocked out without a rebate. An ordinary option can exactly reproduce what it pays on surviving paths while still having some value when the contract is knocked out.</p><p>Imagine closing the portfolio as soon as this knock-out occurs. You must compare its liquidation value with the amount then due under the contract, which is 0 m.u. The difference is a boundary residual. Here, the boundary means the states where the rule requires stopping, rather than the edge of a drawing or the end of a list of strike prices.</p><p>The price starts at 100 m.u. The barrier is 120 m.u. and the strike price is 80 m.u. The first up move reaches the barrier. Even if the price then falls back to 96 m.u., the contract remains knocked out: the final price alone does not describe the path.</p><p>Everything is fictional: the tree, payoffs and pricing probabilities. We isolate the portfolio error at a known boundary. We are seeking neither an actual market strategy nor an adjustment for crossings between observations.</p><div class="schemas"><figure><svg viewBox="0 0 360 370" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same final price can hide two histories</title><desc>Dates 0, 1 and 2. The price 100 becomes 120 or 80. After 120, the possible prices are 144 and 96, but the contract has already been knocked out at the barrier 120. After 80, it ends at 96 or 64 and remains active. The ordinary options continue on all branches.</desc><text x="44" y="25" text-anchor="middle">Date 0</text><text x="165" y="25" text-anchor="middle">Date 1</text><text x="301" y="25" text-anchor="middle">Date 2</text><path d="M77 177L133 90M77 177L133 265M198 90L266 70M198 90L266 150M198 265L266 240M198 265L266 330" class="trait" /><rect x="12" y="157" width="65" height="40" rx="6" class="cadre-neutre" /><text x="44" y="183" text-anchor="middle">100</text><rect x="133" y="70" width="65" height="40" rx="6" class="cadre-prediction" /><text x="165" y="96" text-anchor="middle">120</text><text x="165" y="58" text-anchor="middle" class="petite-etiquette">Stop</text><rect x="133" y="245" width="65" height="40" rx="6" class="cadre-resultat" /><text x="165" y="271" text-anchor="middle">80</text><text x="165" y="309" text-anchor="middle" class="petite-etiquette">Survival</text><rect x="266" y="50" width="70" height="40" rx="6" class="cadre-neutre" /><text x="301" y="76" text-anchor="middle">144</text><rect x="266" y="130" width="70" height="40" rx="6" class="cadre-neutre" /><text x="301" y="156" text-anchor="middle">96</text><rect x="266" y="220" width="70" height="40" rx="6" class="cadre-resultat" /><text x="301" y="246" text-anchor="middle">96</text><rect x="266" y="310" width="70" height="40" rx="6" class="cadre-resultat" /><text x="301" y="336" text-anchor="middle">64</text><text x="180" y="364" text-anchor="middle" class="petite-etiquette">Prices in monetary units (m.u.)</text></svg><figcaption>Time runs from left to right. Each branch has pricing weight 1/2. The two 96 boxes remain separate: the upper box carries the history of a knock-out, the lower one the history of survival. The lines after stopping serve only to value the ordinary options.</figcaption></figure><figure><svg viewBox="0 0 360 235" xmlns="http://www.w3.org/2000/svg" role="img"><title>From boundary residual to initial difference</title><desc>At stopping, the unadjusted portfolio is worth 40 monetary units more than the contract. The stopping event has pricing weight 1/2. With no discounting and no other error, the initial difference is 20 monetary units.</desc><rect x="20" y="12" width="320" height="52" rx="7" class="cadre-prediction" /><text x="180" y="44" text-anchor="middle">Residual at stopping: 40 m.u.</text><path d="M180 64V90" class="trait" /><rect x="20" y="90" width="320" height="52" rx="7" class="cadre-neutre" /><text x="180" y="122" text-anchor="middle">Pricing weight: 1/2</text><path d="M180 142V168" class="trait" /><rect x="20" y="168" width="320" height="52" rx="7" class="cadre-resultat" /><text x="180" y="200" text-anchor="middle">1/2 × 40 = 20 m.u.</text></svg><figcaption>The local residual and the initial difference have the same unit but different amounts. The weight 0.50 belongs to our pricing model; it does not describe a measured crossing frequency.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Check the payoff at maturity on surviving paths AND the portfolio value at every first stopping point. An overlooked residual at the barrier propagates to the initial price.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>An option that survives the knock-out of the contract</h3><p>The contract is monitored only on dates 1 and 2, the latter being maturity T. It is knocked out at the first price greater than or equal to B = 120 m.u. Otherwise it pays max(S_T − K, 0), with K = 80 m.u. Compare it with the provisional portfolio consisting of an ordinary call option with the same K and T.</p><ol class="etapes"><li><h3>Specify the model and the quantities being compared</h3><p>t is a dimensionless date index, from 0 to 2; T is the maturity of this tree. S_t is the asset price on date t, in m.u. K and B are also prices in m.u. The contract multiplier is 1: a price difference converts into the same number of m.u. of payoff. For an amount x in m.u., x⁺ means max(x, 0). An ordinary option pays (S_T − K)⁺ regardless of the history.</p><p>H denotes the value of the option portfolio and V the value of the contract while it remains active; e = H − V is the signed error, positive if the portfolio costs more. All three are expressed in m.u. The subscripts on H_départ, H_haut and H_bas name the start, up and down nodes. At a knock-out node, V is 0 and H is the liquidation value of the portfolio before it is closed.</p><p>The interest rate and the dividend yield are 0. Trading has no costs, short sales and fractional quantities are possible, and the portfolio is liquidated at the model price at the first knock-out; otherwise it is held until T. There are no intermediate distributions. These assumptions make adding and discounting the values consistent.</p><p>The pricing law assigns q = 1/2 to an up move and 1 − q = 1/2 to a down move at every node. These probabilities are dimensionless; they are not historical probabilities. The current price equals the average of the next two prices: (120 + 80)/2 = 100, (144 + 96)/2 = 120 and (96 + 64)/2 = 80 m.u. With the 0 interest rate, the tree therefore satisfies the condition for pricing without arbitrage.</p></li><li><h3>Value the ordinary option before any stopping</h3><p>From the up node, its terminal payoffs are 144 − 80 = 64 m.u. and 96 − 80 = 16 m.u. Their sum is 80 m.u. We take the average because the weights are equal: H_haut = 80/2 = 40 m.u.</p><p>From the down node, the option pays 16 m.u. at 96 and 0 m.u. at 64, because the latter price is below K. The sum is 16 m.u., so H_bas = 16/2 = 8 m.u.</p><p>At the start, we work backwards once more: H_départ = (40 + 8)/2 = 48/2 = 24 m.u. The 40 m.u. is the option value on the crossing date; the 64 m.u. is a possible payoff at T. Substituting one for the other would change the date and the risk being compared.</p></li><li><h3>Value the contract with its history</h3><p>At the first up node, S = B: the contract is knocked out and V_haut = 0 m.u. It does not become active again if the price falls back. At the down node, it survives. Its two possible terminal prices remain below B, so its payoffs there are those of the ordinary option: 16 and 0 m.u.</p><p>Thus V_bas = 8 m.u., then V_départ = (0 + 8)/2 = 4 m.u. The portfolio matches the contract on every surviving outcome, yet its initial price of 24 m.u. already differs from 4 m.u.</p></li><li><h3>Isolate the residual and propagate the error</h3><p>Let r_B denote the residual at the first stopping point: portfolio value minus knock-out payment. Here r_B = 40 − 0 = 40 m.u. At the down node, both terminal payoffs are correctly reproduced, so e_bas = 0 m.u. Linearity of the average gives the following relation; no simulation is needed to calculate it.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>e</mi><mtext>départ</mtext></msub><mo>=</mo><mi>q</mi><msub><mi>r</mi><mi>B</mi></msub><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>q</mi><mo>)</mo><msub><mi>e</mi><mtext>bas</mtext></msub></mrow></math></div><p>Numerically: 1/2 × 40 + 1/2 × 0 = 20 m.u. Check using the separately calculated prices: H_départ − V_départ = 24 − 4 = 20 m.u. We obtain the same signed error.</p><p>This is not a Monte Carlo error: increasing the number of draws does not remove r_B from the portfolio rule. Residuals with different signs could also cancel in the average; a small price difference would then not prove a small error on every path.</p></li><li><h3>Check using the stopped paths</h3><p>Each complete history has weight 1/2 × 1/2 = 1/4. Without a barrier, the option payoffs are, in the order up-up, up-down, down-up, down-down: 64, 16, 16, 0 m.u. Their average is 24 m.u.</p><p>For the contract, both histories starting with an up move are knocked out. Only down-up pays: 1/4 × 16 = 4 m.u. For the liquidated portfolio, histories starting with an up move each return 40 m.u. at stopping; the others return 16 and 0 m.u. at T. Because the interest rate is 0, we can compare these amounts without a discount factor: contract 4 + error 20 = portfolio 24 m.u.</p><p>The check preserves the stopping date and the history. Merging the two outcomes with price 96 would remove precisely the information that triggers the knock-out.</p></li><li><h3>Repair this boundary in our finite tree</h3><p>Add a short position in ordinary call options with strike price B and the same maturity T. Let A denote their unit value, in m.u., and w the dimensionless quantity sold. From the up node, such an option pays 144 − 120 = 24 m.u. or 0 m.u.: A_haut = 24/2 = 12 m.u. At the down node, it pays nothing, so A_bas = 0 and A_départ = 6 m.u.</p><p>The adjusted portfolio is worth H − wA. To cancel its residual at the up node, we must sell w = H_haut/A_haut = 40/12 = 10/3 options. Then wA_haut = 40 m.u. and the residual becomes 0 m.u. On surviving paths, A pays nothing: the already correct payoff is preserved.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>w</mi><mo>=</mo><mfrac><msub><mi>H</mi><mtext>haut</mtext></msub><msub><mi>A</mi><mtext>haut</mtext></msub></mfrac><mo>=</mo><mfrac><mn>40</mn><mn>12</mn></mfrac><mo>=</mo><mn>10/3</mn></mrow></math></div><p>The cost of the short position is negative in the portfolio: the initial proceeds are wA_départ = 20 m.u. The adjusted cost is 24 − 20 = 4 m.u., equal to the contract price. This check concerns an identity in the fictional model; the sale proceeds are not a profit.</p></li><li><h3>State exactly where this repair stops</h3><p>Here, there is only one possible first-crossing node before T; after a down move, no terminal price touches B. Cancelling this residual and the terminal errors therefore covers all possible stopping points in this tree. The portfolio is held with fixed quantities until stopping, then unwound: static does not mean holding the options after knock-out.</p><p>With other dates or continuous monitoring, the portfolio value would have to match the knock-out payment at every possible first crossing. The value of the option sold depends in particular on the remaining time: cancelling the residual on a chosen date does not automatically cancel it on other dates. A uniform bound ε on residuals at all stopping points, in m.u., also bounds the initial error by ε in a consistent model with a 0 interest rate, because an average of bounded absolute values remains bounded.</p><p>This bound also assumes that the terminal error on surviving paths is bounded by ε. If it is 0, as here, only the boundary contributes. Discretization error for a continuous barrier and uncertainty in market prices are other issues; our small tree does not measure them.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Why is a correct terminal payoff on all surviving outcomes not enough? Reconstruct the residual, its propagation and the role of unwinding without looking at the values in the second diagram.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The portfolio pays the correct amount at maturity, so the barrier changes nothing.”</h3><p>First specify which histories survive. At the first stopping point, compare the liquidation value of the portfolio with the knock-out payment. In our tree, the residual of 40 m.u. remains despite agreement on all surviving payoffs.</p><a href="#exemple">Review the residual and the check using stopped paths</a></li><li><h3>“The price falls back below the barrier, so the contract becomes active again.”</h3><p>A knock-out is permanent. Keep the two histories with final price 96 distinct: after an initial up move, the contract is already knocked out; after an initial down move, it can pay. The drawing separates these histories.</p><a href="#intuition">Reread the two histories with the same final price</a></li><li><h3>“More simulations will erase the portfolio difference.”</h3><p>Draws estimate an average under the rule you give them. They do not change the portfolio value at stopping. Repair the residual or bound it; then distinguish this error from sampling uncertainty.</p><a href="#exercices">Quantify the residual of a partially adjusted portfolio</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-histoire"><p class="repere">Exercise 1 · Path diagnosis</p>
+<h3>Same final price, different contract</h3><p>The price ends at 96 m.u. Compare the up-down and down-up histories. For each, give the contract payoff, then its contribution to the initial price with weight 1/4. Justify when the knock-out occurs.</p>
+<label for="reponse-ex-histoire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-histoire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-histoire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-histoire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-histoire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Find the first price that reaches B; do not start only from the final price.</p></details><details class="indice"><summary>Hint 2</summary><p>Once the contract is knocked out, its payoff remains 0.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Up-down passes through 120 = B: knock-out on date 1, payoff 0 m.u. and contribution 0 m.u. Down-up passes through 80, then 96, two prices below B: payoff 96 − 80 = 16 m.u.</p><p>The contribution of down-up to the initial price is 1/4 × 16 = 4 m.u. The 0 interest rate allows us to keep the same monetary units across dates. The final asset price is identical; the contract state is not.</p><p class="petit-titre">Check your reasoning</p><ul><li>I located the knock-out at the first relevant monitoring date.</li><li>I separated the payoff on a history from its weighted contribution to the price.</li><li>I did not reactivate the contract after a down move.</li></ul></details></article><article class="exercice" id="ex-residu"><p class="repere">Exercise 2 · Error calculation</p>
+<h3>An incomplete adjustment</h3><p>Sell only 3 options with strike price B against the option with strike price K. Their unit value is A_haut = 12 m.u. at the first up node and A_départ = 6 m.u. at the start. Calculate the residual, its contribution to the initial price and the portfolio price. Check the difference by another route.</p>
+<label for="reponse-ex-residu">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-residu" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-residu" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-residu" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-residu" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>At the barrier, subtract the value of the short position from H_haut.</p></details><details class="indice"><summary>Hint 2</summary><p>Weight the residual by q, then compare the portfolio cost with V_départ.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The short position has a value of 3 × 12 = 36 m.u. to be subtracted at stopping. The portfolio is still worth 40 − 36 = 4 m.u. there, while the contract owes nothing. The residual remains positive.</p><p>Its initial contribution is 1/2 × 4 = 2 m.u. Surviving paths add no error, because the options with strike price B pay nothing on them.</p><p>Check using the costs: the sale brings in 3 × 6 = 18 m.u. The portfolio therefore costs 24 − 18 = 6 m.u. The difference from the contract is 6 − 4 = 2 m.u., identical to the contribution calculated at the boundary.</p><p class="petit-titre">Check your reasoning</p><ul><li>I used the option values at stopping to calculate the residual.</li><li>I applied the pricing weight to this residual only once.</li><li>I obtained the same error from the difference between initial costs.</li></ul></details></article><article class="exercice" id="ex-denouement"><p class="repere">Exercise 3 · Repair and objection</p>
+<h3>Is the exact portfolio still exact after stopping?</h3><p>Find the quantity w to sell to cancel the residual. Check the adjusted cost. Then suppose the options are not liquidated on the initial up move and the price ends at 144 m.u. Calculate their net payoff at T. Does this amount contradict the stated replication? Can replication for a continuously monitored barrier be deduced from it?</p>
+<label for="reponse-ex-denouement">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-denouement" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-denouement" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-denouement" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-denouement" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Solve H_haut − wA_haut = 0, allowing a fractional quantity.</p></details><details class="indice"><summary>Hint 2</summary><p>Without unwinding, subtract terminal payoffs rather than values at the up node.</p></details><details class="indice"><summary>Hint 3</summary><p>Reread which dates and actions define the strategy that was proved.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>We need w = 40/12 = 10/3, or approximately 3.3333 options, a dimensionless quantity. Keep the exact fraction in the products: it cancels the residual exactly. The initial proceeds are 20 m.u. and the adjusted cost is 24 − 20 = 4 m.u.</p><p>Without unwinding, the option with strike price K pays 64 m.u.; the options sold pay w × 24 = 80 m.u. The net payoff is 64 − 80 = -16 m.u., while the contract is knocked out and pays 0 m.u.</p><p>There is no contradiction: the stated replication closes the portfolio at the first crossing. At the up node, its net value is 0 m.u. Failing to liquidate it defines a different strategy, which retains risk after knock-out.</p><p>Continuous monitoring is not covered by the proof. We would need to define the dynamics between our dates and check the portfolio value at every possible first crossing, with its remaining time. Cancellation at a single node does not supply these additional conditions.</p><p class="petit-titre">Check your reasoning</p><ul><li>I obtained an exact fraction and checked that the residual is 0.</li><li>I distinguished liquidation value from the terminal payoff of the portfolio if held.</li><li>I named the assumption violated by the failure to unwind.</li><li>I did not turn the proof in a tree into a guarantee for continuous monitoring.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="residu"><summary><span class="repere">Recall 1</span><span>What does the boundary residual of a replicating portfolio compare?</span></summary><p>At the first stopping point, its liquidation value and the payment required by the contract at that stopping point, on the same date and in the same unit. Here the contract is knocked out without a rebate.</p></details><details class="carte" data-carte="propagation"><summary><span class="repere">Recall 2</span><span>How does the residual become a pricing error in our tree?</span></summary><p>Errors follow the same weighted backward calculation as prices. Because surviving payoffs are exact, the initial error equals q times the residual at the only first-crossing node: 1/2 × 40 = 20 m.u.</p></details><details class="carte" data-carte="histoire"><summary><span class="repere">Recall 3</span><span>Why separate the two histories with the same final price?</span></summary><p>One history has already touched the barrier; the other has not. The knocked-out contract does not become active again: its value also depends on that state, rather than just the final price.</p></details><details class="carte" data-carte="controle"><summary><span class="repere">Recall 4</span><span>What must be checked before declaring replication exact?</span></summary><p>The payoff at T on every surviving path and the portfolio value at every first stopping point, using a common pricing model and the planned unwinding. Checking a single date is sufficient only if it covers all first stopping points in the model.</p></details><details class="carte" data-carte="simulation"><summary><span class="repere">Recall 5</span><span>Why does increasing the number of draws not repair an incorrect boundary?</span></summary><p>Draws estimate the average of the chosen portfolio. They do not change its payoff or liquidation rule. The residual must be adjusted or bounded separately from sampling uncertainty.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct this chain: monitoring rule and first stopping point; payoff for survivors; liquidation value at the boundary; signed residual; backward calculation using pricing probabilities; check using prices; adjustment and model limitation. Then explain what changes if the portfolio remains open. Return after a delay and redo the exercises without help: reading, recognizing an answer or succeeding with a hint does not establish an attained level.</p></div><div class="exports"><a class="bouton" download="c246-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDYtbTU6cmVzaWR1IiwKICAgICAgInVuaXRlIjogImMyNDYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlcnJldXItZnJvbnRpZXJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG9lcyB0aGUgYm91bmRhcnkgcmVzaWR1YWwgb2YgYSByZXBsaWNhdGluZyBwb3J0Zm9saW8gY29tcGFyZT8iLAogICAgICAicmVwb25zZSI6ICJBdCB0aGUgZmlyc3Qgc3RvcHBpbmcgcG9pbnQsIGl0cyBsaXF1aWRhdGlvbiB2YWx1ZSBhbmQgdGhlIHBheW1lbnQgcmVxdWlyZWQgYnkgdGhlIGNvbnRyYWN0IGF0IHRoYXQgc3RvcHBpbmcgcG9pbnQsIG9uIHRoZSBzYW1lIGRhdGUgYW5kIGluIHRoZSBzYW1lIHVuaXQuIEhlcmUgdGhlIGNvbnRyYWN0IGlzIGtub2NrZWQgb3V0IHdpdGhvdXQgYSByZWJhdGUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDYtbTU6cHJvcGFnYXRpb24iLAogICAgICAidW5pdGUiOiAiYzI0Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByb3BhZ2F0aW9uLWZyb250aWVyZSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG9lcyB0aGUgcmVzaWR1YWwgYmVjb21lIGEgcHJpY2luZyBlcnJvciBpbiBvdXIgdHJlZT8iLAogICAgICAicmVwb25zZSI6ICJFcnJvcnMgZm9sbG93IHRoZSBzYW1lIHdlaWdodGVkIGJhY2t3YXJkIGNhbGN1bGF0aW9uIGFzIHByaWNlcy4gQmVjYXVzZSBzdXJ2aXZpbmcgcGF5b2ZmcyBhcmUgZXhhY3QsIHRoZSBpbml0aWFsIGVycm9yIGVxdWFscyBxIHRpbWVzIHRoZSByZXNpZHVhbCBhdCB0aGUgb25seSBmaXJzdC1jcm9zc2luZyBub2RlOiAxLzIgw5cgNDAgPSAyMCBtLnUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNDYtbTU6aGlzdG9pcmUiLAogICAgICAidW5pdGUiOiAiYzI0Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImFycmV0LWJhcnJpZXJlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBzZXBhcmF0ZSB0aGUgdHdvIGhpc3RvcmllcyB3aXRoIHRoZSBzYW1lIGZpbmFsIHByaWNlPyIsCiAgICAgICJyZXBvbnNlIjogIk9uZSBoaXN0b3J5IGhhcyBhbHJlYWR5IHRvdWNoZWQgdGhlIGJhcnJpZXI7IHRoZSBvdGhlciBoYXMgbm90LiBUaGUga25vY2tlZC1vdXQgY29udHJhY3QgZG9lcyBub3QgYmVjb21lIGFjdGl2ZSBhZ2FpbjogaXRzIHZhbHVlIGFsc28gZGVwZW5kcyBvbiB0aGF0IHN0YXRlLCByYXRoZXIgdGhhbiBqdXN0IHRoZSBmaW5hbCBwcmljZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0Ni1tNTpjb250cm9sZSIsCiAgICAgICJ1bml0ZSI6ICJjMjQ2LW01IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJldXZlLXJlcGxpY2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgbXVzdCBiZSBjaGVja2VkIGJlZm9yZSBkZWNsYXJpbmcgcmVwbGljYXRpb24gZXhhY3Q/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHBheW9mZiBhdCBUIG9uIGV2ZXJ5IHN1cnZpdmluZyBwYXRoIGFuZCB0aGUgcG9ydGZvbGlvIHZhbHVlIGF0IGV2ZXJ5IGZpcnN0IHN0b3BwaW5nIHBvaW50LCB1c2luZyBhIGNvbW1vbiBwcmljaW5nIG1vZGVsIGFuZCB0aGUgcGxhbm5lZCB1bndpbmRpbmcuIENoZWNraW5nIGEgc2luZ2xlIGRhdGUgaXMgc3VmZmljaWVudCBvbmx5IGlmIGl0IGNvdmVycyBhbGwgZmlyc3Qgc3RvcHBpbmcgcG9pbnRzIGluIHRoZSBtb2RlbC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI0Ni1tNTpzaW11bGF0aW9uIiwKICAgICAgInVuaXRlIjogImMyNDYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlcnJldXItZXQtc2ltdWxhdGlvbiIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBpbmNyZWFzaW5nIHRoZSBudW1iZXIgb2YgZHJhd3Mgbm90IHJlcGFpciBhbiBpbmNvcnJlY3QgYm91bmRhcnk/IiwKICAgICAgInJlcG9uc2UiOiAiRHJhd3MgZXN0aW1hdGUgdGhlIGF2ZXJhZ2Ugb2YgdGhlIGNob3NlbiBwb3J0Zm9saW8uIFRoZXkgZG8gbm90IGNoYW5nZSBpdHMgcGF5b2ZmIG9yIGxpcXVpZGF0aW9uIHJ1bGUuIFRoZSByZXNpZHVhbCBtdXN0IGJlIGFkanVzdGVkIG9yIGJvdW5kZWQgc2VwYXJhdGVseSBmcm9tIHNhbXBsaW5nIHVuY2VydGFpbnR5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c246-m5-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkb2VzIHRoZSBib3VuZGFyeSByZXNpZHVhbCBvZiBhIHJlcGxpY2F0aW5nIHBvcnRmb2xpbyBjb21wYXJlPwlBdCB0aGUgZmlyc3Qgc3RvcHBpbmcgcG9pbnQsIGl0cyBsaXF1aWRhdGlvbiB2YWx1ZSBhbmQgdGhlIHBheW1lbnQgcmVxdWlyZWQgYnkgdGhlIGNvbnRyYWN0IGF0IHRoYXQgc3RvcHBpbmcgcG9pbnQsIG9uIHRoZSBzYW1lIGRhdGUgYW5kIGluIHRoZSBzYW1lIHVuaXQuIEhlcmUgdGhlIGNvbnRyYWN0IGlzIGtub2NrZWQgb3V0IHdpdGhvdXQgYSByZWJhdGUuCXRvZGFpIGMyNDYtbTUgZXJyZXVyLWZyb250aWVyZQpIb3cgZG9lcyB0aGUgcmVzaWR1YWwgYmVjb21lIGEgcHJpY2luZyBlcnJvciBpbiBvdXIgdHJlZT8JRXJyb3JzIGZvbGxvdyB0aGUgc2FtZSB3ZWlnaHRlZCBiYWNrd2FyZCBjYWxjdWxhdGlvbiBhcyBwcmljZXMuIEJlY2F1c2Ugc3Vydml2aW5nIHBheW9mZnMgYXJlIGV4YWN0LCB0aGUgaW5pdGlhbCBlcnJvciBlcXVhbHMgcSB0aW1lcyB0aGUgcmVzaWR1YWwgYXQgdGhlIG9ubHkgZmlyc3QtY3Jvc3Npbmcgbm9kZTogMS8yIMOXIDQwID0gMjAgbS51Lgl0b2RhaSBjMjQ2LW01IHByb3BhZ2F0aW9uLWZyb250aWVyZQpXaHkgc2VwYXJhdGUgdGhlIHR3byBoaXN0b3JpZXMgd2l0aCB0aGUgc2FtZSBmaW5hbCBwcmljZT8JT25lIGhpc3RvcnkgaGFzIGFscmVhZHkgdG91Y2hlZCB0aGUgYmFycmllcjsgdGhlIG90aGVyIGhhcyBub3QuIFRoZSBrbm9ja2VkLW91dCBjb250cmFjdCBkb2VzIG5vdCBiZWNvbWUgYWN0aXZlIGFnYWluOiBpdHMgdmFsdWUgYWxzbyBkZXBlbmRzIG9uIHRoYXQgc3RhdGUsIHJhdGhlciB0aGFuIGp1c3QgdGhlIGZpbmFsIHByaWNlLgl0b2RhaSBjMjQ2LW01IGFycmV0LWJhcnJpZXJlCldoYXQgbXVzdCBiZSBjaGVja2VkIGJlZm9yZSBkZWNsYXJpbmcgcmVwbGljYXRpb24gZXhhY3Q/CVRoZSBwYXlvZmYgYXQgVCBvbiBldmVyeSBzdXJ2aXZpbmcgcGF0aCBhbmQgdGhlIHBvcnRmb2xpbyB2YWx1ZSBhdCBldmVyeSBmaXJzdCBzdG9wcGluZyBwb2ludCwgdXNpbmcgYSBjb21tb24gcHJpY2luZyBtb2RlbCBhbmQgdGhlIHBsYW5uZWQgdW53aW5kaW5nLiBDaGVja2luZyBhIHNpbmdsZSBkYXRlIGlzIHN1ZmZpY2llbnQgb25seSBpZiBpdCBjb3ZlcnMgYWxsIGZpcnN0IHN0b3BwaW5nIHBvaW50cyBpbiB0aGUgbW9kZWwuCXRvZGFpIGMyNDYtbTUgcHJldXZlLXJlcGxpY2F0aW9uCldoeSBkb2VzIGluY3JlYXNpbmcgdGhlIG51bWJlciBvZiBkcmF3cyBub3QgcmVwYWlyIGFuIGluY29ycmVjdCBib3VuZGFyeT8JRHJhd3MgZXN0aW1hdGUgdGhlIGF2ZXJhZ2Ugb2YgdGhlIGNob3NlbiBwb3J0Zm9saW8uIFRoZXkgZG8gbm90IGNoYW5nZSBpdHMgcGF5b2ZmIG9yIGxpcXVpZGF0aW9uIHJ1bGUuIFRoZSByZXNpZHVhbCBtdXN0IGJlIGFkanVzdGVkIG9yIGJvdW5kZWQgc2VwYXJhdGVseSBmcm9tIHNhbXBsaW5nIHVuY2VydGFpbnR5Lgl0b2RhaSBjMjQ2LW01IGVycmV1ci1ldC1zaW11bGF0aW9uCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">eaqyxr auyrjh rofw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">befxnj tntnvj izxgvf kglqxe ikiggv whktsn nnxi</span></span></h3><dl><div><dt>What you understand</dt><dd>The number of simulations and the dispersion of their results concern the calculation performed. They do not guarantee that the stopping rule of the contract has been represented. This connection is a reference added for the classic edition brief; the C246 architecture provides no canonical private milestone.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dfkmtw hceakj hhribl vrvztj jrrirr mxihgt dxxiqe zmdfnn uhiyat uaggvr icyvgf sefdvt nlhxvh tcrnii hpvpjf hvjexq nkqrjr mhmuvv ugtxde olvbdm uxkjen dgykxo odhysf kfqcpw</span></span></dd></div><div><dt>Your level</dt><dd>Level 4 to prepare for: reconstruct the signed error, recover it from the costs, then challenge an extension to another monitoring rule. Reading the code or the page, like an assisted answer, does not establish any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ghrswk ygaewn xrfwyt bjuvyu dvaqrj avmyog fwugvq cliovd kfzwxw oavrxw cvccax ohqeei vvwvmv uzudxt bafwuo dlujru qphiuo hjfgpw bmbsaz mbwjvt mrrvjx kmbqkr gqshir kwtwab</span></span></dd></div><div><dt>Next step</dt><dd>Redo the calculation without support after a delay and write the conditions that make the repair exact. A future code study would need to examine the residual producers and the consumers of the result separately, under a focused reading brief. This page implies no system launch or adjustment.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c246-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c246-m4.html">Previous</a> · <a href="c253-m1.html">Next</a></nav>
+<footer><p>Course book · C246·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="State what makes a state valid, preserve that rule when making a reservation, and explain what a frozen object actually protects.">
+<title>C018·M3 · Invariants and immutable states — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bdlxxr rplhbl yuvv</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C018·M3</p><h1>Invariants and immutable states</h1><p class="objectif"><span>Your goal</span>State what makes a state valid, preserve that rule when making a reservation, and explain what a frozen object actually protects.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c015-m5 : diagnosis · c017-m5 : reproduction protocol · c012-m5 : counterexamples · c018-m1 : interface and contract · c018-m2 : composition and injection</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A small room has 12 seats. Its reservation record shows 5 reserved seats and 7 available seats. You keep this record to explain the situation to someone. A request for 4 seats arrives: should it rewrite the record you already hold?</p><p>Let us call the description of the room at a given moment its state: its capacity, the number of reserved seats and the number of available seats. An invariant is a rule required for every state the program accepts or makes visible. Here, the counts must be non-negative integers, and reserved + available must always equal the capacity.</p><p>An immutable state keeps its values after creation. To accept the request, we prepare a complete new record, then select it as the current state. The old record remains an accurate description of the previous situation. Immutable therefore does not mean that the room can no longer accept reservations: successive states can differ.</p><p>These data are fictional. We process requests one after another, with a fixed capacity. Each request specifies an integer number of seats; it is either accepted in full or refused. There are no cancellations or implicit partial reservations here.</p><div class="schemas"><figure><svg viewBox="0 0 360 302" xmlns="http://www.w3.org/2000/svg" role="img"><title>Two records, the same capacity</title><desc>The initial record keeps 5 reserved seats and 7 available seats. After a request for 4 seats, a new record contains 9 reserved and 3 available. The capacity remains 12 seats. The old record stays unchanged.</desc><rect x="20" y="16" width="320" height="82" rx="7" class="cadre-prediction" /><text x="180" y="42" text-anchor="middle">Initial record · S</text><text x="180" y="68" text-anchor="middle">5 reserved + 7 available</text><text x="180" y="88" text-anchor="middle" class="petite-etiquette">Capacity: 12 seats</text><path d="M180 98v44m-5-5 5 5 5-5" class="trait" /><text x="197" y="125" class="petite-etiquette">Request: 4</text><rect x="20" y="150" width="320" height="82" rx="7" class="cadre-resultat" /><text x="180" y="176" text-anchor="middle">New record · S′</text><text x="180" y="202" text-anchor="middle">9 reserved + 3 available</text><text x="180" y="222" text-anchor="middle" class="petite-etiquette">Capacity: 12 seats</text><text x="180" y="267" text-anchor="middle">S stays (12, 5, 7).</text><text x="180" y="289" text-anchor="middle" class="petite-etiquette">The current reference moves from S to S′.</text></svg><figcaption>The line represents the construction of the new record. It does not erase the old one. Each record shows the capacity and its allocation separately.</figcaption></figure><figure><svg viewBox="0 0 360 246" xmlns="http://www.w3.org/2000/svg" role="img"><title>The pitfall of an incomplete update</title><desc>If the program replaces only the reserved count, it exposes 9 reserved and 7 available: their sum is 16, instead of the capacity 12. The complete new state gives 9 reserved and 3 available, making 12 seats.</desc><text x="180" y="27" text-anchor="middle">Do not expose an incomplete record</text><rect x="20" y="45" width="320" height="70" rx="7" class="cadre-neutre" /><text x="180" y="72" text-anchor="middle">9 reserved + 7 available = 16</text><text x="180" y="99" text-anchor="middle" class="petite-etiquette">Invalid: capacity 12 seats</text><rect x="20" y="142" width="320" height="70" rx="7" class="cadre-resultat" /><text x="180" y="169" text-anchor="middle">9 reserved + 3 available = 12</text><text x="180" y="196" text-anchor="middle" class="petite-etiquette">Valid: capacity 12 seats</text><text x="180" y="238" text-anchor="middle" class="petite-etiquette">Check before making visible.</text></svg><figcaption>The fault can be read from the values, without relying on their colour. Intermediate calculation values can remain local; they must not become an accepted state.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Validate the state when it is created, check the request, construct a complete new state and preserve the old one. Freezing an object is not enough to make its values consistent.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Reserve seats without changing the old record</h3><p>Starting with a capacity of 12 and 5 reserved seats, let us calculate the available seats, then process a request for 4 seats. We will also check why a request for 8 seats must be refused from the same starting state.</p><ol class="etapes"><li><h3>Write the validity rule precisely</h3><p>Let S = (C, R, L) denote the ordered triple of capacity, reserved and available. C is a strictly positive integer; R and L are integers. All these quantities are measured in seats. I(S) denotes the condition “S is valid”; the symbol ∧ means that all the conditions must be true.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>I</mi><mo>(</mo><mi>S</mi><mo>)</mo><mo>:</mo><mn>0</mn><mo>≤</mo><mi>R</mi><mo>∧</mo><mn>0</mn><mo>≤</mo><mi>L</mi><mo>∧</mo><mi>R</mi><mo>+</mo><mi>L</mi><mo>=</mo><mi>C</mi></mrow></math></div><p>The integer domain and the requirement that C be strictly positive are part of the contract. The equality and non-negativity also imply that neither count exceeds C. Validation takes place as soon as a record is created, before it can be used. An invariant expresses what must remain true; it does not mean that R or L must remain constant.</p></li><li><h3>Construct and check the initial state</h3><p>The capacity and reservations are given. Since each seat is either reserved or available, subtract the reserved seats from the capacity: L = 12 − 5 = 7 seats. The initial state is S = (12, 5, 7).</p><p>Check: 5 + 7 = 12 seats, equal to C. The counts are non-negative integers. S therefore satisfies I. This check must come before the first reservation: a correct transition does not automatically repair an inconsistent starting state.</p></li><li><h3>Check the request before acting</h3><p>q denotes the number of seats requested, in the same unit. The acceptance condition is: q is an integer and 0 ≤ q ≤ L. Here, q = 4 and L = 7; 0 ≤ 4 ≤ 7 is true. We can reserve the full number of seats.</p><p>This condition on the input is a precondition of the operation. It complements the state invariant. If it fails, return an explicit refusal and keep S; do not publish a partially modified record.</p></li><li><h3>Calculate the complete new record</h3><p>The prime in S′, R′ and L′ means “after the request”. The capacity does not change. The reserved count increases by q; the available count decreases by exactly the same amount.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>′</mo><mo>=</mo><mo>(</mo><mi>C</mi><mo>,</mo><mi>R</mi><mo>+</mo><mi>q</mi><mo>,</mo><mi>L</mi><mo>−</mo><mi>q</mi><mo>)</mo></mrow></math></div><p>R′ = 5 + 4 = 9 seats. L′ = 7 − 4 = 3 seats. Construct S′ = (12, 9, 3) from these values, then validate it. S remains (12, 5, 7). The name referring to the current state can then refer to S′; changing this reference does not modify the object S.</p></li><li><h3>Check the result and justify preservation</h3><p>Sum: 9 + 3 = 12 seats, matching the capacity. The new counts are integers and non-negative. Reverse check: 9 − 5 = 4 seats added to the reserved count; 7 − 3 = 4 seats removed from the available count. Both differences recover the requested amount.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>R</mi><mo>′</mo><mo>+</mo><mi>L</mi><mo>′</mo><mo>=</mo><mo>(</mo><mi>R</mi><mo>+</mo><mi>q</mi><mo>)</mo><mo>+</mo><mo>(</mo><mi>L</mi><mo>−</mo><mi>q</mi><mo>)</mo><mo>=</mo><mi>R</mi><mo>+</mo><mi>L</mi><mo>=</mo><mi>C</mi></mrow></math></div><p>The request is added and subtracted, so the sum is preserved. Also, q ≤ L ensures L′ ≥ 0 and q ≥ 0 ensures R′ ≥ 0. Given a valid initial state, the accepted transition therefore preserves the invariant for every permitted request, beyond just the chosen values.</p></li><li><h3>Understand the incomplete update</h3><p>If R is modified in the shared record before L is modified, someone may receive (12, 9, 7). The sum becomes 16 seats: it exceeds the capacity by 4 seats. The intermediate state violates the invariant even if a later instruction is intended to correct it.</p><p>Our intermediate values serve only to prepare S′. We make the complete new record visible once it has been validated. The immutability of S prevents ordinary modification of it during this preparation. This property is not enough to handle simultaneous reservations: the reasoning here assumes successive requests.</p></li><li><h3>Refuse excess demand without fabricating a valid result</h3><p>Start again from S. The request for 8 seats exceeds the 7 available seats. Accepting it would give R′ = 5 + 8 = 13 and L′ = 7 − 8 = -1 seat. Yet the sum would be 13 + (-1) = 12 seats: equality alone is not enough, because L′ is negative.</p><p>The correct result is a refusal with S unchanged. Silently replacing the negative available count with 0 would mean that adding the counts no longer recovers the capacity. Our contract requires refusal of the entire request, rather than an improvised repair of the numbers.</p></li><li><h3>Translate the idea into Python objects</h3><p>A class declared with @dataclass(frozen=True) prevents ordinary reassignment of its fields after construction. A validation check called at the end of construction can reject values that violate I by raising ValueError. Freezing protects the fields; validation protects their consistency. These are distinct mechanisms.</p><p>In our triple, the integer counts are themselves immutable. If the record instead contains a list of group sizes, freezing the field does not freeze the list. Imagine a list containing 5: another reference to that same list can append 4 to it. The group total becomes 9 in the old record too; with its old available count of 7, we get the inconsistent total 16 again.</p><p>Here, a reference is another name that lets us reach the same object; giving the list another name does not copy it. To keep the groups, constructing a tuple of integers (5,), then a new tuple (5, 4), avoids changing the old contents. A tuple cannot be extended in place. But a tuple containing a list would still have mutable contents: we must examine the objects it contains, as well as the container.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the results. Reconstruct the complete invariant, the condition on the request and the new record. Then explain why the total for the excessive request remains correct even though the state is invalid, and why freezing a record containing a list still leaves a risk.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The object is frozen, so it must be valid.”</h3><p>Freezing prevents reassignment of its fields after construction; it does not check their meaning. A record containing 9 reserved and 7 available for a capacity of 12 can be frozen and inconsistent. Validate the state when it is created.</p><a href="#exemple">Review the validity rule and construction</a></li><li><h3>“To get a new state, I must change the old one.”</h3><p>Calculate the new values from the old record, then construct a separate record. The current reference can change while the old record keeps its values. Reassigning the current name does not mutate the old object.</p><a href="#intuition">Compare records S and S′</a></li><li><h3>“A frozen field automatically makes all its contents immutable.”</h3><p>The field can keep referring to the same list while that list is modified. In our case, replace it with a tuple of integers and create a new tuple for the next reservation. Check the elements too: a tuple of lists is not enough.</p><a href="#exemple">Reread the passage on Python objects</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-validite"><p class="repere">Exercise 1 · Recognise and justify</p>
+<h3>A frozen but inconsistent record</h3><p>A frozen record shows C = 12, R = 9 and L = 7, in seats. Does it satisfy I? A second record shows C = 12, R = 13, L = -1. Why is checking only the sum insufficient for identifying valid states?</p>
+<label for="reponse-ex-validite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-validite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-validite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-validite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-validite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Check the sum and the signs separately.</p></details><details class="indice"><summary>Hint 2</summary><p>Freezing does not change any numerical value in the record.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The first record is invalid: 9 + 7 = 16 seats, different from the capacity 12. Freezing simply preserves this inconsistent state.</p><p>The second gives 13 + (-1) = 12 seats, but its available count is negative and its reserved count exceeds C. All the invariant conditions are required, as well as the integer domain.</p><p class="petit-titre">Check your reasoning</p><ul><li>You calculate 16 and compare it with 12 seats.</li><li>You also reject the record whose available count is -1, despite the correct sum.</li><li>You distinguish freezing the fields from validating the values.</li></ul></details></article><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 2 · Calculation and boundary case</p>
+<h3>Take exactly the remaining seats</h3><p>Start again from S′ = (12, 9, 3). Someone requests all the available seats. Give the request, the decision and the new record. From the same S′, another request is for 4 seats: what should be returned? Add the case of a request for 0 seats.</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The condition allows q = L. It does not require q to be strictly less than L.</p></details><details class="indice"><summary>Hint 2</summary><p>A refused request leaves the starting state intact. All the variants start again from S′.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For q = 3 seats, the condition is satisfied. R becomes 9 + 3 = 12 seats; L becomes 3 − 3 = 0 seats. The sum is 12 seats: a full room remains valid.</p><p>From S′, requesting 4 seats exceeds the available count by 1 seat. The disallowed calculation would produce 13 reserved and -1 available. Return a refusal and the record (12, 9, 3), with no partial reservation.</p><p>The request for 0 seats is accepted under our contract: the values remain (12, 9, 3). We can return the existing object because no value has changed. Immutability does not require an unnecessary copy.</p><p class="petit-titre">Check your reasoning</p><ul><li>You accept the boundary q = L and check (12, 12, 0).</li><li>You return an explicit refusal with S′ unchanged for the excessive request.</li><li>You explain why the values do not change for the 0 request.</li></ul></details></article><article class="exercice" id="ex-liste"><p class="repere">Exercise 3 · Diagnosis and repair</p>
+<h3>The old record changes despite freezing</h3><p>A frozen record contains a list of group sizes [5] and an available count of 7 seats. Another name refers to that same list. The program appends 4 to the list to make a reservation and creates a new record with 3 available seats. What problem appears in the old record? Suggest a representation that keeps the groups without this fault, and state what still needs to be checked.</p>
+<label for="reponse-ex-liste">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-liste" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-liste" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-liste" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-liste" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Reread the old list after the append: did freezing the field prevent modification of the object it refers to?</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the sum of the groups and the available count in each record. For the repair, choose elements that are themselves immutable.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The same list now contains [5, 4] in both records. The group total is 9 seats. The old record keeps 7 available seats; it therefore describes 16 seats for a capacity of 12. Its contents are no longer a snapshot of the starting situation.</p><p>Keep the tuple of integers (5,) in the old record and construct the tuple (5, 4) for the new one. The first keeps 5 reserved and 7 available; the second describes 9 reserved and 3 available. The counts in each record sum to the capacity.</p><p>You still need to validate the domain of the group sizes, check that their sum matches the reserved count and check the complete invariant. A tuple annotation does not perform this runtime validation on its own. A list inside a tuple would remain mutable.</p><p class="petit-titre">Check your reasoning</p><ul><li>You identify the shared list object and the change visible in the old record.</li><li>You calculate the inconsistent total of 16 seats.</li><li>You construct separate tuples of integers and retain validation of the values.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="invariant"><summary><span class="repere">Recall 1</span><span>What is an invariant, and what is its complete form for the room?</span></summary><p>A rule required for every accepted or visible state. C is a positive integer; R and L are non-negative integers, in seats, with R + L = C. Checking only the total allows a negative available count through.</p></details><details class="carte" data-carte="transition"><summary><span class="repere">Recall 2</span><span>How can we accept a request q without modifying the initial state?</span></summary><p>From a valid state (C, R, L), check that q is an integer and 0 ≤ q ≤ L. Construct and validate (C, R + q, L − q), then select it as the current state. The request is added and subtracted: the sum remains C.</p></details><details class="carte" data-carte="refus"><summary><span class="repere">Recall 3</span><span>Why refuse 8 seats from the initial state, even if the calculated total remains 12?</span></summary><p>Only 7 seats remain. The calculation would give 13 reserved and -1 available: the state violates non-negativity. Return an explicit refusal and keep (12, 5, 7).</p></details><details class="carte" data-carte="gel"><summary><span class="repere">Recall 4</span><span>Why are freezing and validation needed separately?</span></summary><p>Freezing blocks ordinary reassignment of the fields after construction. Validation checks their values and relationships before accepting the object. A frozen object may have been constructed with inconsistent numbers.</p></details><details class="carte" data-carte="contenu"><summary><span class="repere">Recall 5</span><span>Why is a frozen record containing a list an unreliable snapshot?</span></summary><p>The list remains mutable, including through another reference to it. For our groups, use separate tuples of integers; also check the elements they contain and the validity rules. Freezing the container does not recursively freeze its contents.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the process in a few sentences: state and units; complete invariant; acceptance condition; validated new state; refusal that preserves the starting state. Add the difference between freezing the fields and validating their values, then the counterexample of the shared list.</p></div><div class="exports"><a class="bouton" download="c018-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTgtbTM6aW52YXJpYW50IiwKICAgICAgInVuaXRlIjogImMwMTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbnZhcmlhbnQtZXRhdCIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIGFuIGludmFyaWFudCwgYW5kIHdoYXQgaXMgaXRzIGNvbXBsZXRlIGZvcm0gZm9yIHRoZSByb29tPyIsCiAgICAgICJyZXBvbnNlIjogIkEgcnVsZSByZXF1aXJlZCBmb3IgZXZlcnkgYWNjZXB0ZWQgb3IgdmlzaWJsZSBzdGF0ZS4gQyBpcyBhIHBvc2l0aXZlIGludGVnZXI7IFIgYW5kIEwgYXJlIG5vbi1uZWdhdGl2ZSBpbnRlZ2VycywgaW4gc2VhdHMsIHdpdGggUiArIEwgPSBDLiBDaGVja2luZyBvbmx5IHRoZSB0b3RhbCBhbGxvd3MgYSBuZWdhdGl2ZSBhdmFpbGFibGUgY291bnQgdGhyb3VnaC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOC1tMzp0cmFuc2l0aW9uIiwKICAgICAgInVuaXRlIjogImMwMTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwcmVzZXJ2YXRpb24taW52YXJpYW50IiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gd2UgYWNjZXB0IGEgcmVxdWVzdCBxIHdpdGhvdXQgbW9kaWZ5aW5nIHRoZSBpbml0aWFsIHN0YXRlPyIsCiAgICAgICJyZXBvbnNlIjogIkZyb20gYSB2YWxpZCBzdGF0ZSAoQywgUiwgTCksIGNoZWNrIHRoYXQgcSBpcyBhbiBpbnRlZ2VyIGFuZCAwIOKJpCBxIOKJpCBMLiBDb25zdHJ1Y3QgYW5kIHZhbGlkYXRlIChDLCBSICsgcSwgTCDiiJIgcSksIHRoZW4gc2VsZWN0IGl0IGFzIHRoZSBjdXJyZW50IHN0YXRlLiBUaGUgcmVxdWVzdCBpcyBhZGRlZCBhbmQgc3VidHJhY3RlZDogdGhlIHN1bSByZW1haW5zIEMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTgtbTM6cmVmdXMiLAogICAgICAidW5pdGUiOiAiYzAxOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByZWNvbmRpdGlvbi1ldC1yZWZ1cyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgcmVmdXNlIDggc2VhdHMgZnJvbSB0aGUgaW5pdGlhbCBzdGF0ZSwgZXZlbiBpZiB0aGUgY2FsY3VsYXRlZCB0b3RhbCByZW1haW5zIDEyPyIsCiAgICAgICJyZXBvbnNlIjogIk9ubHkgNyBzZWF0cyByZW1haW4uIFRoZSBjYWxjdWxhdGlvbiB3b3VsZCBnaXZlIDEzIHJlc2VydmVkIGFuZCAtMSBhdmFpbGFibGU6IHRoZSBzdGF0ZSB2aW9sYXRlcyBub24tbmVnYXRpdml0eS4gUmV0dXJuIGFuIGV4cGxpY2l0IHJlZnVzYWwgYW5kIGtlZXAgKDEyLCA1LCA3KS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOC1tMzpnZWwiLAogICAgICAidW5pdGUiOiAiYzAxOC1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImdlbC1ldC12YWxpZGF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBhcmUgZnJlZXppbmcgYW5kIHZhbGlkYXRpb24gbmVlZGVkIHNlcGFyYXRlbHk/IiwKICAgICAgInJlcG9uc2UiOiAiRnJlZXppbmcgYmxvY2tzIG9yZGluYXJ5IHJlYXNzaWdubWVudCBvZiB0aGUgZmllbGRzIGFmdGVyIGNvbnN0cnVjdGlvbi4gVmFsaWRhdGlvbiBjaGVja3MgdGhlaXIgdmFsdWVzIGFuZCByZWxhdGlvbnNoaXBzIGJlZm9yZSBhY2NlcHRpbmcgdGhlIG9iamVjdC4gQSBmcm96ZW4gb2JqZWN0IG1heSBoYXZlIGJlZW4gY29uc3RydWN0ZWQgd2l0aCBpbmNvbnNpc3RlbnQgbnVtYmVycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOC1tMzpjb250ZW51IiwKICAgICAgInVuaXRlIjogImMwMTgtbTMiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjb250ZW51LWltbXVhYmxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBpcyBhIGZyb3plbiByZWNvcmQgY29udGFpbmluZyBhIGxpc3QgYW4gdW5yZWxpYWJsZSBzbmFwc2hvdD8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbGlzdCByZW1haW5zIG11dGFibGUsIGluY2x1ZGluZyB0aHJvdWdoIGFub3RoZXIgcmVmZXJlbmNlIHRvIGl0LiBGb3Igb3VyIGdyb3VwcywgdXNlIHNlcGFyYXRlIHR1cGxlcyBvZiBpbnRlZ2VyczsgYWxzbyBjaGVjayB0aGUgZWxlbWVudHMgdGhleSBjb250YWluIGFuZCB0aGUgdmFsaWRpdHkgcnVsZXMuIEZyZWV6aW5nIHRoZSBjb250YWluZXIgZG9lcyBub3QgcmVjdXJzaXZlbHkgZnJlZXplIGl0cyBjb250ZW50cy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c018-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBpcyBhbiBpbnZhcmlhbnQsIGFuZCB3aGF0IGlzIGl0cyBjb21wbGV0ZSBmb3JtIGZvciB0aGUgcm9vbT8JQSBydWxlIHJlcXVpcmVkIGZvciBldmVyeSBhY2NlcHRlZCBvciB2aXNpYmxlIHN0YXRlLiBDIGlzIGEgcG9zaXRpdmUgaW50ZWdlcjsgUiBhbmQgTCBhcmUgbm9uLW5lZ2F0aXZlIGludGVnZXJzLCBpbiBzZWF0cywgd2l0aCBSICsgTCA9IEMuIENoZWNraW5nIG9ubHkgdGhlIHRvdGFsIGFsbG93cyBhIG5lZ2F0aXZlIGF2YWlsYWJsZSBjb3VudCB0aHJvdWdoLgl0b2RhaSBjMDE4LW0zIGludmFyaWFudC1ldGF0CkhvdyBjYW4gd2UgYWNjZXB0IGEgcmVxdWVzdCBxIHdpdGhvdXQgbW9kaWZ5aW5nIHRoZSBpbml0aWFsIHN0YXRlPwlGcm9tIGEgdmFsaWQgc3RhdGUgKEMsIFIsIEwpLCBjaGVjayB0aGF0IHEgaXMgYW4gaW50ZWdlciBhbmQgMCDiiaQgcSDiiaQgTC4gQ29uc3RydWN0IGFuZCB2YWxpZGF0ZSAoQywgUiArIHEsIEwg4oiSIHEpLCB0aGVuIHNlbGVjdCBpdCBhcyB0aGUgY3VycmVudCBzdGF0ZS4gVGhlIHJlcXVlc3QgaXMgYWRkZWQgYW5kIHN1YnRyYWN0ZWQ6IHRoZSBzdW0gcmVtYWlucyBDLgl0b2RhaSBjMDE4LW0zIHByZXNlcnZhdGlvbi1pbnZhcmlhbnQKV2h5IHJlZnVzZSA4IHNlYXRzIGZyb20gdGhlIGluaXRpYWwgc3RhdGUsIGV2ZW4gaWYgdGhlIGNhbGN1bGF0ZWQgdG90YWwgcmVtYWlucyAxMj8JT25seSA3IHNlYXRzIHJlbWFpbi4gVGhlIGNhbGN1bGF0aW9uIHdvdWxkIGdpdmUgMTMgcmVzZXJ2ZWQgYW5kIC0xIGF2YWlsYWJsZTogdGhlIHN0YXRlIHZpb2xhdGVzIG5vbi1uZWdhdGl2aXR5LiBSZXR1cm4gYW4gZXhwbGljaXQgcmVmdXNhbCBhbmQga2VlcCAoMTIsIDUsIDcpLgl0b2RhaSBjMDE4LW0zIHByZWNvbmRpdGlvbi1ldC1yZWZ1cwpXaHkgYXJlIGZyZWV6aW5nIGFuZCB2YWxpZGF0aW9uIG5lZWRlZCBzZXBhcmF0ZWx5PwlGcmVlemluZyBibG9ja3Mgb3JkaW5hcnkgcmVhc3NpZ25tZW50IG9mIHRoZSBmaWVsZHMgYWZ0ZXIgY29uc3RydWN0aW9uLiBWYWxpZGF0aW9uIGNoZWNrcyB0aGVpciB2YWx1ZXMgYW5kIHJlbGF0aW9uc2hpcHMgYmVmb3JlIGFjY2VwdGluZyB0aGUgb2JqZWN0LiBBIGZyb3plbiBvYmplY3QgbWF5IGhhdmUgYmVlbiBjb25zdHJ1Y3RlZCB3aXRoIGluY29uc2lzdGVudCBudW1iZXJzLgl0b2RhaSBjMDE4LW0zIGdlbC1ldC12YWxpZGF0aW9uCldoeSBpcyBhIGZyb3plbiByZWNvcmQgY29udGFpbmluZyBhIGxpc3QgYW4gdW5yZWxpYWJsZSBzbmFwc2hvdD8JVGhlIGxpc3QgcmVtYWlucyBtdXRhYmxlLCBpbmNsdWRpbmcgdGhyb3VnaCBhbm90aGVyIHJlZmVyZW5jZSB0byBpdC4gRm9yIG91ciBncm91cHMsIHVzZSBzZXBhcmF0ZSB0dXBsZXMgb2YgaW50ZWdlcnM7IGFsc28gY2hlY2sgdGhlIGVsZW1lbnRzIHRoZXkgY29udGFpbiBhbmQgdGhlIHZhbGlkaXR5IHJ1bGVzLiBGcmVlemluZyB0aGUgY29udGFpbmVyIGRvZXMgbm90IHJlY3Vyc2l2ZWx5IGZyZWV6ZSBpdHMgY29udGVudHMuCXRvZGFpIGMwMTgtbTMgY29udGVudS1pbW11YWJsZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bdlxxr rplhbl yuvv</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Towards <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nhnabm tsiywg jbpi</span></span> · recognise a frozen state and its rules</h3><dl><div><dt>You understand</dt><dd>An invariant determines which states are acceptable; immutability protects the values of a state already constructed. The room provides the calculation example. The following code concerns a configuration with its own rules.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mogvnk apqafc zpncxp ywenjl zcelrr xddkbs kvnzkp dxkhtq qtckvg wstymr zvtrjr qsiovu qlhpqe znuxpp ybxyoh mbokfj ofivms mmxbif vhwbqs ozapnm zdftql mlwjmi xhvvfm azvmmz</span></span></dd></div><div><dt>Your level</dt><dd>Level 1 to prepare: reconstruct the room transition, justify the refusal, then distinguish freezing, annotation and validation in the excerpts. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sumkkc cmgphg tiqbej crmuoz hccsjk dlkwyn qixq</span></span> Reading or giving an answer obtained with a hint never constitutes an acquired level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ixvhrj fydjqs juuxos ywfafp hgfhfp hqiwwl epfesd pmgeao ifqjaz irezgi mubzfp dmloei xpcgsv jlycfp ibekso yjxsbx tezkzx wrejgs cymjpi dlljfm xberbh uhlrbz wlhkmg zqxhcl</span></span></dd></div><div><dt>To continue</dt><dd>Redo the exercises without support on another day and explain the list counterexample. Continue with c018-m4, producer and consumer. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hlhxjl uokfht aomwgl vtquhe pzssoq zhahkc rbsgzr aqzjbj jylqoj casqfk zphakb nzxzhi oydyxo tc</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c018-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c018-m2.html">Previous</a> · <a href="c018-m4.html">Next</a></nav>
+<footer><p>Course book · C018·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

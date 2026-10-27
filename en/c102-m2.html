@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Build and evaluate a computation graph, then find every place that needs an update when a shared input changes.">
+<title>C102·M2 · Computation graph — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nmdnrf zkmynd yuxz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C102·M2</p><h1>Computation graph</h1><p class="objectif"><span>Your goal</span>Build and evaluate a computation graph, then find every place that needs an update when a shared input changes.</p><p class="prerequis"><strong>Before you start</strong><br>c057-m5 : Hessian · c100-m5 : learning curves · c059-m6 : deterministic discrete Bellman equation · c015-m5 : diagnosis · c102-m1 : matrix chain rule</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A workshop is preparing an order of 6 notebooks. Each notebook costs 3 € to make and 1 € to pack. Delivery of the entire order costs 6 €. To quote the average price per delivered notebook, we need to combine these costs in the right order. All these values are fictitious.</p><p>Imagine cards connected by arrows. On one card, you add manufacturing and packing costs; on the next, you multiply this unit price by the number of notebooks. You then add the flat delivery charge and divide the total among the notebooks. Each arrow shows which card supplies an input to the next calculation.</p><p>The number of notebooks is used in multiplication and then in division. The same input is used in several places: one card can supply several calculations. The diagram preserves this identity, rather than letting independent copies of the number hide inside a large formula.</p><p>A computation graph describes these dependencies. Here, the nodes are the inputs or named results; the edges are arrows from a value being used to the result that reads it directly. The diagram describes the procedure; the numbers shown give an evaluation of that procedure.</p><div class="schemas"><figure><svg viewBox="0 0 360 474" xmlns="http://www.w3.org/2000/svg" role="img"><title>Dependencies of the average delivered price</title><desc>p and e feed into u, which is 4 euros per notebook. n and u feed into s, giving 24 euros. s and f feed into t, giving 30 euros. t and the same n feed into m, giving 5 euros per notebook. The branch from n runs directly down to the final division.</desc><rect x="35" y="12" width="130" height="52" rx="7" class="cadre-prediction" /><text x="100" y="34" text-anchor="middle">p = 3</text><text x="100" y="55" text-anchor="middle" class="petite-etiquette">€/notebook</text><rect x="195" y="12" width="130" height="52" rx="7" class="cadre-prediction" /><text x="260" y="34" text-anchor="middle">e = 1</text><text x="260" y="55" text-anchor="middle" class="petite-etiquette">€/notebook</text><path d="M100 64V82H150V104M145 97L150 104L155 97M260 64V82H210V104M205 97L210 104L215 97" class="trait" /><rect x="110" y="104" width="140" height="56" rx="7" class="cadre-neutre" /><text x="180" y="127" text-anchor="middle">u = p + e</text><text x="180" y="150" text-anchor="middle">4 €/notebook</text><path d="M180 160V183H225V208M220 201L225 208L230 201" class="trait" /><rect x="12" y="208" width="96" height="56" rx="7" class="cadre-prediction" /><text x="60" y="231" text-anchor="middle">n = 6</text><text x="60" y="254" text-anchor="middle" class="petite-etiquette">notebooks</text><path d="M108 236H130M123 231L130 236L123 241" class="trait" /><rect x="130" y="208" width="190" height="56" rx="7" class="cadre-neutre" /><text x="225" y="231" text-anchor="middle">s = n × u</text><text x="225" y="254" text-anchor="middle">24 €</text><path d="M225 264V284H180V308M175 301L180 308L185 301" class="trait" /><rect x="116" y="308" width="128" height="56" rx="7" class="cadre-neutre" /><text x="180" y="331" text-anchor="middle">t = s + f</text><text x="180" y="354" text-anchor="middle">30 €</text><rect x="266" y="308" width="82" height="56" rx="7" class="cadre-prediction" /><text x="307" y="341" text-anchor="middle">f = 6 €</text><path d="M266 336H244M251 331L244 336L251 341M180 364V408M175 401L180 408L185 401M60 264V436H116M109 431L116 436L109 441" class="trait" /><rect x="116" y="408" width="180" height="56" rx="7" class="cadre-resultat" /><text x="206" y="431" text-anchor="middle">m = t ÷ n</text><text x="206" y="454" text-anchor="middle">5 €/notebook</text></svg><figcaption>Read the arrowheads: they point into the calculation that uses the input. The long branch from n reaches the division; it represents the same number of notebooks as the branch to the multiplication. The names and units let you read the diagram without relying on colors.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To calculate a node, wait until all its parents are known. If an input changes, follow all its branches before reusing a result.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>From the workshop cost estimate to the average delivered price</h3><p>Let us build and then evaluate the graph for the initial order: n = 6 notebooks, p = 3 €/notebook, e = 1 €/notebook and f = 6 € for the entire order. The aim is to calculate m, the average delivered cost, and to be able to explain every dependency.</p><ol class="etapes"><li><h3>Define the quantities and the domain</h3><p>n denotes the strictly positive integer number of notebooks. p is the manufacturing cost per notebook; e is its packing cost; f is the flat delivery charge for the order. These inputs are known. We assume identical notebooks, constant unit prices when n changes, and a flat charge independent of n. The model covers only the stated costs.</p><p>u denotes the cost of one packed notebook, in €/notebook; s, the cost of all the packed notebooks, in €; t, the total including delivery, in €; m, the total divided equally among the notebooks, in €/notebook. The values are scalars, so each is a number. We calculate exactly and round only the displayed results at the end.</p></li><li><h3>Write the structure before the results</h3><p>Write G = (V, E). G is the graph; V is the set of nodes n, p, e, f, u, s, t and m; E is the set of directed edges. The notation a → b means that the calculation of b reads a directly: a is a parent of b. A sequence of arrows is a path; the nodes it can reach are descendants of the starting point.</p><p>The parents are p and e for u; n and u for s; s and f for t; t and n for m. We also attach its operation and the order of its arguments to each calculated node. The arrows t → m and n → m alone do not specify which division to choose: we need to write m = t/n.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>u</mi><mo>=</mo><mi>p</mi><mo>+</mo><mi>e</mi><mo>;</mo><mi>s</mi><mo>=</mo><mi>n</mi><mo>×</mo><mi>u</mi></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>t</mi><mo>=</mo><mi>s</mi><mo>+</mo><mi>f</mi><mo>;</mo><mi>m</mi><mo>=</mo><mfrac><mi>t</mi><mi>n</mi></mfrac><mo>,</mo><mi>n</mi><mo>&gt;</mo><mn>0</mn></mrow></math></div><p>This graph has no cycle: following its arrows never takes us back to the starting point. A topological order is an order of traversal in which each parent precedes the node that reads it. Here, n, p, e, f, u, s, t, m works. The inputs can be reordered among themselves; t cannot be calculated before s. A cycle would require another mechanism, such as solving an equation: our direct evaluation does not handle it.</p></li><li><h3>Add the costs per notebook</h3><p>u is ready as soon as p and e are known. We add these inputs because they describe costs for the same notebook. Delivery does not enter into this node.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>u</mi><mo>=</mo><mn>3</mn><mo>+</mo><mn>1</mn><mo>=</mo><mn>4</mn><mtext> €/carnet</mtext></mrow></math></div></li><li><h3>Move from the notebook to the order</h3><p>s uses the previously calculated value u and the input n. Multiplying the unit price by the number of notebooks gives the cost of the packed batch. Tracking the units, notebook × €/notebook gives €: the result is no longer a unit price.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>s</mi><mo>=</mo><mn>6</mn><mo>×</mo><mn>4</mn><mo>=</mo><mn>24</mn><mtext> €</mtext></mrow></math></div></li><li><h3>Add the flat charge in the right place</h3><p>Delivery applies to the entire order. We therefore add f to s, both amounts in euros. Adding f to u would charge the flat fee for every notebook and mix € with €/notebook. Node t depends directly on s and f, and indirectly on p, e and n.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>t</mi><mo>=</mo><mn>24</mn><mo>+</mo><mn>6</mn><mo>=</mo><mn>30</mn><mtext> €</mtext></mrow></math></div></li><li><h3>Divide the total and identify the shared input</h3><p>Dividing the total including delivery by the number of notebooks gives the average delivered price. The division reads the same n as the earlier multiplication. We keep n available as an input: using it in s does not consume it. Requiring n to be strictly positive makes the quotient defined.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>m</mi><mo>=</mo><mfrac><mn>30</mn><mn>6</mn></mfrac><mo>=</mo><mn>5</mn><mtext> €/carnet</mtext></mrow></math></div></li><li><h3>Check using another decomposition</h3><p>Instead of adding everything and then dividing, first assign each notebook its share of delivery: f/n = 6/6 = 1 €/notebook. The delivered cost per notebook is then u + f/n = 4 + 1 = 5 €/notebook. We recover the result of the graph by arranging the operations differently.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>m</mi><mo>=</mo><mfrac><mrow><mi>n</mi><mo>×</mo><mi>u</mi><mo>+</mo><mi>f</mi></mrow><mi>n</mi></mfrac><mo>=</mo><mi>u</mi><mo>+</mo><mfrac><mi>f</mi><mi>n</mi></mfrac></mrow></math></div><p>Invoice check: 6 notebooks × 5 €/notebook = 30 €, which is the total t. The first check verifies the price decomposition; the second recovers the invoiced amount. They do not prove that the fictitious rates match those of a real workshop.</p></li><li><h3>Separate dependency, value and recalculation</h3><p>The graph stays the same if the flat charge changes: only the values of f, t and m need an update. u and s are not descendants of f and remain valid. If n changes, the descendants to recalculate are s, t and m, also accounting for m reading n directly.</p><p>An edge indicates a use, without specifying the direction of a change. With unit prices and the flat charge fixed, the check m = u + f/n shows that increasing n can increase t while decreasing m. Even a dependency can simplify algebraically: the contribution n × u, once divided by the same n, gives u again.</p><p>The graph makes explicit the compositions to which the chain rule from the previous unit applies. It prepares the distinction between calculating a value and calculating its derivatives; automatic differentiation and backpropagation will be studied in the following units. Here, we have built and evaluated the path of the values.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the diagram and reconstruct its edges from the operations. Explain why n must remain available after calculating s, then why changing f and changing n do not trigger the same recalculations. Finally, justify the quotient using the units.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“I can calculate the boxes in the order in which they catch my eye.”</h3><p>Before each operation, name its parents and check that their values are available. t waits for s and f; m waits for t and n. Reconstruct a topological order. Position on the page is not enough to define this order.</p><a href="#exemple">Review the parents and the evaluation order</a></li><li><h3>“When n changes, I replace only the factor in the multiplication.”</h3><p>Follow all the arrows starting from the same n. The final division also reads this input: keeping its old value mixes two orders. Recalculate the descendants and check the denominator before reporting m.</p><a href="#exercices">Repair the outdated cost estimate in the last exercise</a></li><li><h3>“An arrow means that the result increases when the input increases.”</h3><p>An arrow means only that the calculation reads the input. In the order, n multiplies the unit price and then divides the total: more notebooks can reduce the average price by spreading the flat charge. Use m = u + f/n to explain the direction of the change.</p><a href="#exemple">Review the check by sharing the delivery cost</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-structure"><p class="repere">Exercise 1 · Reconstruction</p>
+<h3>Draw from the formula</h3><p>Without looking at the diagram, reconstruct the graph of m = (n × (p + e) + f)/n, naming u, s and t as in the cost estimate. Give the direct parents of m, then an evaluation order. Why does p influence m without being its direct parent?</p>
+<label for="reponse-ex-structure">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-structure" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-structure" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-structure" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-structure" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The inner parentheses give the first intermediate result.</p></details><details class="indice"><summary>Hint 2</summary><p>To find the direct parents of m, read only the last operation.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Set u = p + e, then s = n × u, t = s + f and m = t/n. The arrows are p → u, e → u, n → s, u → s, s → t, f → t, t → m and n → m. The same n has several destinations.</p><p>A valid order is p, e, n, f, u, s, t, m. The direct parents of m are t and n. p reaches m along the path p → u → s → t → m: this is an indirect dependency. The numerical values play no part in finding this order.</p><p class="petit-titre">Check your reasoning</p><ul><li>Each calculated node carries its operation and its arguments in the correct order.</li><li>The same n reaches s and m, without becoming two independent inputs.</li><li>Each parent precedes its result, and a direct parent is distinguished from an ancestor.</li></ul></details></article><article class="exercice" id="ex-forfait"><p class="repere">Exercise 2 · Application and update</p>
+<h3>Delivery changes, the batch stays the same</h3><p>Start again from the initial order. The flat charge f changes to 12 €, while n = 6, p = 3 €/notebook and e = 1 €/notebook remain fixed. Identify the old results that are still valid, calculate the new total and the new average price, then check by sharing the flat charge.</p>
+<label for="reponse-ex-forfait">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-forfait" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-forfait" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-forfait" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-forfait" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The first calculation that reads f is the calculation of t.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare the sum u + f/n with the result of the path through t and then m.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>u = 4 €/notebook and s = 24 € remain valid: they do not depend on f. The results t and m must be recalculated because they are descendants of f.</p><p>New total: 24 + 12 = 36 €. New average price: 36/6 = 6 €/notebook. The number of notebooks in the division is still 6.</p><p>Another path: the delivery share is 12/6 = 2 €/notebook. Adding u gives 4 + 2 = 6 €/notebook. The graph and its operations are preserved; the values in this evaluation have changed.</p><p class="petit-titre">Check your reasoning</p><ul><li>u and s are reused with a justification based on dependencies.</li><li>t = 36 € and m = 6 €/notebook are recalculated in that order.</li><li>Sharing the flat charge confirms the result without adding a cost in € to a price in €/notebook.</li></ul></details></article><article class="exercice" id="ex-partage"><p class="repere">Exercise 3 · Diagnosis and transfer</p>
+<h3>A cost estimate mixes two versions of the order</h3><p>Start again from the initial rates, with f = 6 €. The quantity changes from 6 to 8 notebooks. Someone updates s and t but keeps 6 in the denominator of m. Repair the calculation using exact fractions, quantify the error in the average price, and explain how the total can rise while the average price falls.</p>
+<label for="reponse-ex-partage">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-partage" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-partage" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-partage" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-partage" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The quantity n is shared by the multiplication and the division. The new total and the old number of notebooks do not describe the same order.</p></details><details class="indice"><summary>Hint 2</summary><p>Calculate u + f/n with the new n to check the repaired average price.</p></details><details class="indice"><summary>Hint 3</summary><p>Subtract the repaired price from the price obtained with the outdated denominator; keep the fractions until the end.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>u remains 4 €/notebook. The subtotal becomes 8 × 4 = 32 €, then t = 32 + 6 = 38 €. Every use of n must be replaced: m = 38/8 = 19/4 €/notebook, or 4.75 €/notebook.</p><p>The outdated cost estimate gives 38/6 = 19/3 €/notebook, or approximately 6.33 €/notebook. Its overestimate is 19/3 − 19/4 = 19/12 €/notebook, or approximately 1.58 €/notebook. These decimals are rounded representations; the difference is calculated using the exact fractions.</p><p>Independent check: the flat charge per notebook is 6/8 = 3/4 €/notebook. Adding the unit cost 4 gives 19/4 €/notebook. The total 38 € exceeds 30 €, but the average price 4.75 €/notebook is below 5 €/notebook: the flat charge is shared among more notebooks.</p><p>The graph structure was enough to identify the fault: the direct branch n → m had kept an old value. A consistent evaluation uses the same version of the inputs throughout the graph.</p><p class="petit-titre">Check your reasoning</p><ul><li>The multiplication and the division both use n = 8.</li><li>The exact result 19/4 €/notebook and the exact difference 19/12 €/notebook come before the rounded values.</li><li>The fault is linked to a forgotten branch of the graph.</li><li>The fall in the average price is justified by sharing the flat charge, under the assumptions of constant prices.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="structure"><summary><span class="repere">Recall 1</span><span>What belongs to the graph, and what belongs to its evaluation?</span></summary><p>The graph carries the inputs, the operations, their ordered arguments and their dependencies. An evaluation assigns values to these nodes for the same version of the inputs. Changing a rate can leave the graph unchanged.</p></details><details class="carte" data-carte="parents"><summary><span class="repere">Recall 2</span><span>What are the direct parents of m, and why is p not one of them?</span></summary><p>The last operation m = t/n reads t and n directly. p acts along the path p → u → s → t → m. An ancestor can influence a result without being read directly by its last operation.</p></details><details class="carte" data-carte="ordre"><summary><span class="repere">Recall 3</span><span>What criterion makes an evaluation order valid?</span></summary><p>Each parent must precede the node that uses it. In our graph without cycles, the inputs are available before u, then s, then t, then m. Several orders of the inputs work; a cycle would prevent this direct evaluation.</p></details><details class="carte" data-carte="partage"><summary><span class="repere">Recall 4</span><span>Why does changing n require checking several branches?</span></summary><p>The same n is used in s = n × u and in m = t/n. We must recalculate s, t and m using the new quantity everywhere. An old denominator combines values from different orders.</p></details><details class="carte" data-carte="effet"><summary><span class="repere">Recall 5</span><span>Does an arrow from n guarantee that the result increases with n?</span></summary><p>It guarantees only that n is used. With our constant rates and a positive flat charge, t = n × u + f increases while m = u + f/n decreases as n increases. The direction of change depends on the operations and their assumptions.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the lesson and reconstruct the path: name the inputs and their units; break the formula into operations; draw the direct reads while keeping the arguments ordered; choose an order in which parents precede their results; calculate and check using another decomposition. Then start from a changed input and find all its branches. Reading or producing an assisted answer does not establish an achieved level: repeat this reconstruction without support on another day.</p></div><div class="exports"><a class="bouton" download="c102-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTI6c3RydWN0dXJlIiwKICAgICAgInVuaXRlIjogImMxMDItbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJncmFwaGUtZGUtY2FsY3VsIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgYmVsb25ncyB0byB0aGUgZ3JhcGgsIGFuZCB3aGF0IGJlbG9uZ3MgdG8gaXRzIGV2YWx1YXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGdyYXBoIGNhcnJpZXMgdGhlIGlucHV0cywgdGhlIG9wZXJhdGlvbnMsIHRoZWlyIG9yZGVyZWQgYXJndW1lbnRzIGFuZCB0aGVpciBkZXBlbmRlbmNpZXMuIEFuIGV2YWx1YXRpb24gYXNzaWducyB2YWx1ZXMgdG8gdGhlc2Ugbm9kZXMgZm9yIHRoZSBzYW1lIHZlcnNpb24gb2YgdGhlIGlucHV0cy4gQ2hhbmdpbmcgYSByYXRlIGNhbiBsZWF2ZSB0aGUgZ3JhcGggdW5jaGFuZ2VkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAyLW0yOnBhcmVudHMiLAogICAgICAidW5pdGUiOiAiYzEwMi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRlcGVuZGFuY2UtZGlyZWN0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGFyZSB0aGUgZGlyZWN0IHBhcmVudHMgb2YgbSwgYW5kIHdoeSBpcyBwIG5vdCBvbmUgb2YgdGhlbT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbGFzdCBvcGVyYXRpb24gbSA9IHQvbiByZWFkcyB0IGFuZCBuIGRpcmVjdGx5LiBwIGFjdHMgYWxvbmcgdGhlIHBhdGggcCDihpIgdSDihpIgcyDihpIgdCDihpIgbS4gQW4gYW5jZXN0b3IgY2FuIGluZmx1ZW5jZSBhIHJlc3VsdCB3aXRob3V0IGJlaW5nIHJlYWQgZGlyZWN0bHkgYnkgaXRzIGxhc3Qgb3BlcmF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAyLW0yOm9yZHJlIiwKICAgICAgInVuaXRlIjogImMxMDItbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJvcmRyZS10b3BvbG9naXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNyaXRlcmlvbiBtYWtlcyBhbiBldmFsdWF0aW9uIG9yZGVyIHZhbGlkPyIsCiAgICAgICJyZXBvbnNlIjogIkVhY2ggcGFyZW50IG11c3QgcHJlY2VkZSB0aGUgbm9kZSB0aGF0IHVzZXMgaXQuIEluIG91ciBncmFwaCB3aXRob3V0IGN5Y2xlcywgdGhlIGlucHV0cyBhcmUgYXZhaWxhYmxlIGJlZm9yZSB1LCB0aGVuIHMsIHRoZW4gdCwgdGhlbiBtLiBTZXZlcmFsIG9yZGVycyBvZiB0aGUgaW5wdXRzIHdvcms7IGEgY3ljbGUgd291bGQgcHJldmVudCB0aGlzIGRpcmVjdCBldmFsdWF0aW9uLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMTAyLW0yOnBhcnRhZ2UiLAogICAgICAidW5pdGUiOiAiYzEwMi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVudHJlZS1wYXJ0YWdlZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBjaGFuZ2luZyBuIHJlcXVpcmUgY2hlY2tpbmcgc2V2ZXJhbCBicmFuY2hlcz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgc2FtZSBuIGlzIHVzZWQgaW4gcyA9IG4gw5cgdSBhbmQgaW4gbSA9IHQvbi4gV2UgbXVzdCByZWNhbGN1bGF0ZSBzLCB0IGFuZCBtIHVzaW5nIHRoZSBuZXcgcXVhbnRpdHkgZXZlcnl3aGVyZS4gQW4gb2xkIGRlbm9taW5hdG9yIGNvbWJpbmVzIHZhbHVlcyBmcm9tIGRpZmZlcmVudCBvcmRlcnMuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMxMDItbTI6ZWZmZXQiLAogICAgICAidW5pdGUiOiAiYzEwMi1tMiIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImRlcGVuZGFuY2UtZXQtdmFyaWF0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIkRvZXMgYW4gYXJyb3cgZnJvbSBuIGd1YXJhbnRlZSB0aGF0IHRoZSByZXN1bHQgaW5jcmVhc2VzIHdpdGggbj8iLAogICAgICAicmVwb25zZSI6ICJJdCBndWFyYW50ZWVzIG9ubHkgdGhhdCBuIGlzIHVzZWQuIFdpdGggb3VyIGNvbnN0YW50IHJhdGVzIGFuZCBhIHBvc2l0aXZlIGZsYXQgY2hhcmdlLCB0ID0gbiDDlyB1ICsgZiBpbmNyZWFzZXMgd2hpbGUgbSA9IHUgKyBmL24gZGVjcmVhc2VzIGFzIG4gaW5jcmVhc2VzLiBUaGUgZGlyZWN0aW9uIG9mIGNoYW5nZSBkZXBlbmRzIG9uIHRoZSBvcGVyYXRpb25zIGFuZCB0aGVpciBhc3N1bXB0aW9ucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c102-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBiZWxvbmdzIHRvIHRoZSBncmFwaCwgYW5kIHdoYXQgYmVsb25ncyB0byBpdHMgZXZhbHVhdGlvbj8JVGhlIGdyYXBoIGNhcnJpZXMgdGhlIGlucHV0cywgdGhlIG9wZXJhdGlvbnMsIHRoZWlyIG9yZGVyZWQgYXJndW1lbnRzIGFuZCB0aGVpciBkZXBlbmRlbmNpZXMuIEFuIGV2YWx1YXRpb24gYXNzaWducyB2YWx1ZXMgdG8gdGhlc2Ugbm9kZXMgZm9yIHRoZSBzYW1lIHZlcnNpb24gb2YgdGhlIGlucHV0cy4gQ2hhbmdpbmcgYSByYXRlIGNhbiBsZWF2ZSB0aGUgZ3JhcGggdW5jaGFuZ2VkLgl0b2RhaSBjMTAyLW0yIGdyYXBoZS1kZS1jYWxjdWwKV2hhdCBhcmUgdGhlIGRpcmVjdCBwYXJlbnRzIG9mIG0sIGFuZCB3aHkgaXMgcCBub3Qgb25lIG9mIHRoZW0/CVRoZSBsYXN0IG9wZXJhdGlvbiBtID0gdC9uIHJlYWRzIHQgYW5kIG4gZGlyZWN0bHkuIHAgYWN0cyBhbG9uZyB0aGUgcGF0aCBwIOKGkiB1IOKGkiBzIOKGkiB0IOKGkiBtLiBBbiBhbmNlc3RvciBjYW4gaW5mbHVlbmNlIGEgcmVzdWx0IHdpdGhvdXQgYmVpbmcgcmVhZCBkaXJlY3RseSBieSBpdHMgbGFzdCBvcGVyYXRpb24uCXRvZGFpIGMxMDItbTIgZGVwZW5kYW5jZS1kaXJlY3RlCldoYXQgY3JpdGVyaW9uIG1ha2VzIGFuIGV2YWx1YXRpb24gb3JkZXIgdmFsaWQ/CUVhY2ggcGFyZW50IG11c3QgcHJlY2VkZSB0aGUgbm9kZSB0aGF0IHVzZXMgaXQuIEluIG91ciBncmFwaCB3aXRob3V0IGN5Y2xlcywgdGhlIGlucHV0cyBhcmUgYXZhaWxhYmxlIGJlZm9yZSB1LCB0aGVuIHMsIHRoZW4gdCwgdGhlbiBtLiBTZXZlcmFsIG9yZGVycyBvZiB0aGUgaW5wdXRzIHdvcms7IGEgY3ljbGUgd291bGQgcHJldmVudCB0aGlzIGRpcmVjdCBldmFsdWF0aW9uLgl0b2RhaSBjMTAyLW0yIG9yZHJlLXRvcG9sb2dpcXVlCldoeSBkb2VzIGNoYW5naW5nIG4gcmVxdWlyZSBjaGVja2luZyBzZXZlcmFsIGJyYW5jaGVzPwlUaGUgc2FtZSBuIGlzIHVzZWQgaW4gcyA9IG4gw5cgdSBhbmQgaW4gbSA9IHQvbi4gV2UgbXVzdCByZWNhbGN1bGF0ZSBzLCB0IGFuZCBtIHVzaW5nIHRoZSBuZXcgcXVhbnRpdHkgZXZlcnl3aGVyZS4gQW4gb2xkIGRlbm9taW5hdG9yIGNvbWJpbmVzIHZhbHVlcyBmcm9tIGRpZmZlcmVudCBvcmRlcnMuCXRvZGFpIGMxMDItbTIgZW50cmVlLXBhcnRhZ2VlCkRvZXMgYW4gYXJyb3cgZnJvbSBuIGd1YXJhbnRlZSB0aGF0IHRoZSByZXN1bHQgaW5jcmVhc2VzIHdpdGggbj8JSXQgZ3VhcmFudGVlcyBvbmx5IHRoYXQgbiBpcyB1c2VkLiBXaXRoIG91ciBjb25zdGFudCByYXRlcyBhbmQgYSBwb3NpdGl2ZSBmbGF0IGNoYXJnZSwgdCA9IG4gw5cgdSArIGYgaW5jcmVhc2VzIHdoaWxlIG0gPSB1ICsgZi9uIGRlY3JlYXNlcyBhcyBuIGluY3JlYXNlcy4gVGhlIGRpcmVjdGlvbiBvZiBjaGFuZ2UgZGVwZW5kcyBvbiB0aGUgb3BlcmF0aW9ucyBhbmQgdGhlaXIgYXNzdW1wdGlvbnMuCXRvZGFpIGMxMDItbTIgZGVwZW5kYW5jZS1ldC12YXJpYXRpb24K">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nmdnrf zkmynd yuxz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Reading milestone · specify what an edge means</h3><dl><div><dt>What you understand</dt><dd>Read a graph using the definitions of its nodes and edges. In the cost estimate, the arrow goes from the value being used to the calculation that reads it. To relate this idea to another graph, check its convention before following a path.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">btdbvk ziemrq gveegt fnwtvw jahhlp qggpnh bslbos jqnrwz aepyzc wudezh bqvdwp izpmru vpanbd gptcnq sbupsj gxbliw kgjxml axhqdi bhmosh zutyue jggbwr gtihqi mpqgyk coouqp</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 3: reconstruct the graph of the cost estimate, justify an evaluation order and repair the shared quantity without help. For this code reading, be able to justify why an import relation must be reversed to find the users of a module. Reading and answering after a hint do not establish any achieved level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ryuedq ldybcg joedib glihww vfpudp tiehdy yvfrup bmvtji daxhpb xiuepf tfyuhp mmdsdl dhsvef dzuxdq cgossg qvamne yhkcwj cemnvv nvjiti wnbhnj lymfos zzzotq gbwokm abdkvw</span></span></dd></div><div><dt>Next step</dt><dd>Redo the cost estimate and the diagnosis without support during delayed recall. Then move to the unit on automatic differentiation, which will distinguish values from derivatives. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tltmfq xftdwh ttfioh loygcl qdigts ukyxda zsbogb bayjkg xemfcx tkoluh ayqhie cgwolw kighxd lc</span></span></dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c102-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c102-m1.html">Previous</a> · <a href="c102-m3.html">Next</a></nav>
+<footer><p>Course book · C102·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

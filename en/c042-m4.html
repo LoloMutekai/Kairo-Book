@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Use a vector representation supplied by a service, check its validity and explain why changing the model can make an index incompatible.">
+<title>C042·M4 · Embeddings as an external service — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">znfads yfgafb qdoz</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C042·M4</p><h1>Embeddings as an external service</h1><p class="objectif"><span>Your goal</span>Use a vector representation supplied by a service, check its validity and explain why changing the model can make an index incompatible.</p><p class="prerequis"><strong>Before you start</strong><br>c040-m5 : least squares · c041-m5 : transactions and windows · c025-m5 : O, Omega and Theta · c036-m5 : annotated charts · c042-m1 : document and stable identifier · c042-m2 : norm, cosine and normalization · c042-m3 : exact index and cost</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You search for “adjust the brake” in a collection of bicycle instruction guides. The Brake guide explains how to adjust the cable; the Wheel guide explains how to remove the wheel. The collection stores the texts and their stable identifiers. But who turns these sentences into comparable vectors?</p><p>An embedding is an ordered sequence of numbers produced by a trained model. Here, the application delegates this work to an embedding service: it gives the service a text and receives a vector. It remains responsible for checking the returned vector, linking it to the correct guide and searching its index.</p><p>“External” describes the division of responsibilities. The computation can be provided by a library in the same process, by another local program or by a remote server. You need to know the actual provider: sending a text remotely involves a transfer that simply comparing vectors locally does not require.</p><p>The service is not a table of words to translate by hand. Its coordinates depend on a trained model; they are not necessarily axes named “brake” and “wheel”. We will not reconstruct its training. We will learn to use its output according to an explicit contract.</p><p>The collection, the Iris service and all the coordinates below are fictional. The vectors are chosen for calculation with pencil and paper; they do not come from any model that was run. The resulting score describes their geometric proximity, without proving the actual relevance of the guides.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>The service transforms, the application checks</title><desc>The guide texts and the question are given to the Iris alpha service. The received vectors are validated before comparison in the index maintained by the application.</desc><rect x="24" y="12" width="312" height="60" rx="7" class="cadre-neutre" /><text x="180" y="37" text-anchor="middle">Guides and question</text><text x="180" y="60" text-anchor="middle" class="petite-etiquette">Texts linked to their identifiers</text><path d="M180 72v27m-5-6 5 6 5-6" class="trait" /><rect x="24" y="99" width="312" height="72" rx="7" class="cadre-prediction" /><text x="180" y="127" text-anchor="middle">Embedding service</text><text x="180" y="152" text-anchor="middle" class="petite-etiquette">Iris alpha contract</text><path d="M180 171v29m-5-6 5 6 5-6" class="trait" /><rect x="24" y="200" width="312" height="90" rx="7" class="cadre-resultat" /><text x="180" y="227" text-anchor="middle">Received vectors</text><text x="180" y="251" text-anchor="middle">Validate, then compare</text><text x="180" y="276" text-anchor="middle" class="petite-etiquette">Index kept by the application</text></svg><figcaption>The same contract links the preparation of the guides and the question. A service reply remains an input to check before making any change to the index.</figcaption></figure><figure><svg viewBox="0 0 360 235" xmlns="http://www.w3.org/2000/svg" role="img"><title>Check the format, then compatibility</title><desc>An expected vector has 2 finite components and a strictly positive norm. The 0 vector is rejected. Even a correctly formatted output must come from the contract used by the index.</desc><rect x="20" y="12" width="320" height="90" rx="7" class="cadre-neutre" /><text x="180" y="38" text-anchor="middle">2 finite components</text><text x="180" y="64" text-anchor="middle">Strictly positive norm</text><text x="180" y="88" text-anchor="middle" class="petite-etiquette">(0 ; 0) is rejected</text><path d="M180 102v25m-5-6 5 6 5-6" class="trait" /><rect x="20" y="127" width="320" height="88" rx="7" class="cadre-resultat" /><text x="180" y="154" text-anchor="middle">Compatible contract?</text><text x="180" y="179" text-anchor="middle" class="petite-etiquette">Model, revision, preparation</text><text x="180" y="202" text-anchor="middle" class="petite-etiquette">and normalization rule</text></svg><figcaption>The format can be checked using the received numbers. Compatibility also requires knowing where they come from: it cannot be inferred from their length.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Have the vectors produced under a compatible contract, validate each returned vector, then compare. A correct dimension guarantees neither the right representation space nor the quality of the result.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Find the Brake guide without inventing its coordinates</h3><p>The fictional Iris alpha contract specifies the model, its revision, the text preparation and a raw output of dimension d = 2. The client normalizes the vectors before comparison. The supplied reply for the question is q = (3 ; 4), for Brake it is a = (4 ; 3), and for Wheel it is b = (0 ; 5). These numbers are exercise data, not deductions from the words.</p><ol class="etapes"><li><h3>Specify what must remain compatible</h3><p>Let e(t) denote the vector returned for text t. The letter e denotes the supplied transformation; t is the text, with no physical unit. The dimension d counts the components. q, a and b denote the raw vectors of the question, Brake and Wheel respectively. Every component, norm and score is dimensionless.</p><p>Here, Iris alpha uses the same encoding for guides and questions. The contract includes a specific model revision and text preparation, such as whitespace processing. The chosen rule produces the same vector for the same text. Some services provide different but compatible preparation for documents and questions: their compatibility must then be stated rather than guessed.</p><p>With each vector, the application records the guide identifier, the version of its text and the contract used. The name “Iris” alone is not enough if the provider changes the parameters under that name. We assume that this information is reliable and that the texts remain unchanged during the calculation.</p></li><li><h3>Reject unusable returned vectors</h3><p>Each returned vector must have exactly 2 components, all finite: no infinite or undefined values. For a vector v = (v<sub>x</sub> ; vᵧ), the letters v<sub>x</sub> and vᵧ denote its components; the subscripts x and y only identify their positions. Its Euclidean norm ‖v‖ is the square root of the sum of the squares of its components. It must be strictly positive to allow division.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msup><mrow><mo>‖</mo><mi>q</mi><mo>‖</mo></mrow><mn>2</mn></msup><mo>=</mo><msup><mn>3</mn><mn>2</mn></msup><mo>+</mo><msup><mn>4</mn><mn>2</mn></msup><mo>=</mo><mn>9</mn><mo>+</mo><mn>16</mn><mo>=</mo><mn>25</mn></mrow></math></div><p>For Brake: 16 + 9 = 25. For Wheel: 0 + 25 = 25. Each norm therefore equals n = 5, because 5 × 5 = 25 and the square root is positive. The letter n abbreviates this common norm, a feature of the chosen data.</p><p>If the service is unavailable, returns the wrong length or produces (0 ; 0), the client reports an embedding failure. It produces neither a 0 score nor the conclusion “no relevant guide”. If only the question fails, the previously validated guide vectors remain stored and are not used to invent a result.</p></li><li><h3>Normalize without changing direction</h3><p>Let uᵥ = v/‖v‖ denote the normalized vector associated with a nonzero vector v: divide each of its components by its norm. The coordinates change, but the direction stays the same. The norm of uᵥ is 1.</p><p>Thus u_q = (3/5 ; 4/5), u_a = (4/5 ; 3/5), u_b = (0 ; 1). In French decimal notation: u_q = (0.60 ; 0.80), u_a = (0.80 ; 0.60), u_b = (0.00 ; 1.00), still dimensionless.</p><p>For example, the squared norm of the normalized question vector equals (9 + 16)/25 = 1. If the service already promises normalized vectors, this check verifies that promise within a stated numerical tolerance; our exercise uses exact fractions, with no tolerance or intermediate rounding.</p></li><li><h3>Calculate the Brake score</h3><p>The score s_a is the cosine similarity between the question and Brake. The dot · denotes the dot product: it multiplies components in matching positions and then adds the products. For nonzero vectors, the cosine divides this dot product by the product of their norms.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>s</mi><mi>a</mi></msub><mo>=</mo><mfrac><mrow><mi>q</mi><mo>·</mo><mi>a</mi></mrow><mrow><mo>‖</mo><mi>q</mi><mo>‖</mo><mo>‖</mo><mi>a</mi><mo>‖</mo></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>3</mn><mo>×</mo><mn>4</mn><mo>+</mo><mn>4</mn><mo>×</mo><mn>3</mn></mrow><mrow><mn>5</mn><mo>×</mo><mn>5</mn></mrow></mfrac><mo>=</mo><mfrac><mn>24</mn><mn>25</mn></mfrac><mo>=</mo><mn>0.96</mn></mrow></math></div><p>The products are 12 and 12. Their sum is 24; the denominator is 25. Division gives the exact fraction 24/25, or 0.96, dimensionless. Keeping this fraction avoids accumulating rounding errors.</p></li><li><h3>Compare Wheel and check by another method</h3><p>For Wheel, q · b = 3 × 0 + 4 × 5 = 0 + 20 = 20. The score s_b equals 20/25 = 4/5 = 0.80, dimensionless. Brake ranks ahead of Wheel because 0.96 is greater than 0.80.</p><p>Independent check using the normalized vectors: u_q · u_a = (3/5) × (4/5) + (4/5) × (3/5) = 24/25. Similarly, u_q · u_b = (3/5) × (0) + (4/5) × (1) = 4/5. The dot product is sufficient here because the norms equal 1; it is not sufficient for arbitrary raw outputs.</p><p>The scores do lie between −1 and 1, the bounds of the cosine. The result establishes the proximity ordering of these vectors in Iris alpha. It does not turn 0.96 into a probability of a correct answer: you still need to read the guide to check that it meets the need. Measuring search quality will be the subject of the next unit.</p></li><li><h3>Keep a result whose provenance is known</h3><p>The returned result links the Brake identifier to the score 0.96 and the Iris alpha contract. The retrieved text remains a document distinct from its vector: its content and version can be checked. This association gives an interpretable result without claiming to explain how the model learned its coordinates.</p><p>A correctly formatted reply from another contract remains unusable with this index until compatibility is established. If an incompatible change occurs, prepare a new set of vectors for the guides and questions using the new contract, then check that set before replacing the old one. Keeping the same identifiers does not make the coordinates compatible.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without looking at the calculations, describe the path taken by a guide and by the question. Why do you reject a 0 vector output? What allows you to use the dot product after normalization? Why is a correct length not enough after a change of service?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The service replied, so I can definitely calculate a score.”</h3><p>First check the length, finite components and positive norm. An empty, 0 or malformed reply is an embedding failure, not a search score. Also reread the contract it belongs to.</p><a href="#exemple">Review the checks before normalization</a></li><li><h3>“Same dimension, so I can mix versions.”</h3><p>The dimension counts the coordinates; it does not say what they represent. Recalculate the coordinate change in the last exercise, then prepare a consistent index using the new contract.</p><a href="#exercices">Test the change of contract</a></li><li><h3>“A high cosine proves that the guide is the right one.”</h3><p>The cosine measures geometric proximity under the chosen model. It does not directly measure the relevance of the text. Return to the Brake result and separate its ranking from checking its content.</p><a href="#exemple">Review the check and what the score establishes</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-valider"><p class="repere">Exercise 1 · Diagnose a returned vector</p>
+<h3>Reject without concluding that there is no result</h3><p>For the same question, the Iris alpha service first returns (0 ; 0), then, on another attempt, (3 ; 4 ; 0). The contract expects 2 components. For each returned vector, state what fails and what the application can report. Can it fill in a score of 0?</p>
+<label for="reponse-ex-valider">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-valider" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-valider" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-valider" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-valider" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>A correct length does not guarantee that normalization is possible.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish a completed comparison from a comparison prevented by an invalid returned vector.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The vector (0 ; 0) has the correct length, but its norm is 0: the division required for the cosine is impossible. The returned vector (3 ; 4 ; 0) has 3 components instead of 2; it fails the dimension check, even though its norm would be positive.</p><p>In both cases, the application reports an invalid embedding output and produces no semantic score. A score of 0 could represent a true 0 cosine between valid vectors: using it to hide a failure would confuse these situations. The stored guides do not become absent as a result.</p><p class="petit-titre">Check your reasoning</p><ul><li>Identify the 0 norm and the incorrect length separately.</li><li>Do not divide by a 0 norm or silently truncate the returned vector.</li><li>Report that the search was not computed, without inventing a score or a verdict about the guides.</li></ul></details></article><article class="exercice" id="ex-question"><p class="repere">Exercise 2 · Calculate and check</p>
+<h3>A new question in the same collection</h3><p>The collection and Iris alpha are unchanged. For the new question “check the brake cable”, the supplied fictional reply is q′ = (4 ; 3). The prime marks this new question. Calculate its norm and its cosines with Brake and then Wheel. Explain what the higher score establishes.</p>
+<label for="reponse-ex-question">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-question" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-question" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-question" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-question" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The new vector is identical to the Brake vector; also use this fact to check your calculation.</p></details><details class="indice"><summary>Hint 2</summary><p>For Wheel, calculate the products component by component before dividing by the norms.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The squared norm of q′ equals 16 + 9 = 25; its norm is 5. With Brake: q′ · a = 25, then 25/25 = 1. Check: the cosine of a nonzero vector with itself equals 1.</p><p>With Wheel: 4 × 0 + 3 × 5 = 0 + 15 = 15. The cosine equals 3/5 = 0.60, dimensionless. Brake remains the first candidate.</p><p>Even the maximum score 1 proves only that the representations are aligned. The model may give identical representations to different texts. You need to read the guide before asserting that it contains the information sought.</p><p class="petit-titre">Check your reasoning</p><ul><li>Calculate the product of the norms in the denominator.</li><li>Recover the Brake score both by calculation and by using the fact that the vectors are identical.</li><li>Separate maximum proximity from document relevance.</li></ul></details></article><article class="exercice" id="ex-version"><p class="repere">Exercise 3 · Reason about a migration</p>
+<h3>The same number of coordinates, a different coordinate frame</h3><p>Return to the initial question. To isolate the problem, a fictional Iris beta contract replaces every alpha vector (x ; y) with (y ; −x). It therefore returns qᵦ = (4 ; -3), aᵦ = (3 ; -4), bᵦ = (5 ; 0). The subscript β denotes this contract. First calculate the disallowed cosine between qᵦ and the old a; then recalculate it between qᵦ and aᵦ. Why is normalization not enough to repair the mixture? What needs to be prepared for the whole collection?</p>
+<label for="reponse-ex-version">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-version" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-version" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-version" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-version" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The norms remain 5. Compare the numerator of the mixed calculation with the one where both vectors have changed.</p></details><details class="indice"><summary>Hint 2</summary><p>The rule from (x ; y) to (y ; −x) is a common coordinate change that preserves dot products if applied to both vectors.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The mixed calculation gives 4 × 4 + (-3) × 3 = 16 + (-9) = 7. Dividing it by 25 produces 7/25 = 0.28. The length and norm are valid, but the calculation mixes contracts.</p><p>Also using the new guide vector: 4 × 3 + (-3) × (-4) = 12 + 12 = 24. The cosine returns to 24/25 = 0.96. The rule preserves the sum of squares and the dot product when it transforms both vectors; this checks the result through geometry.</p><p>Normalizing each vector changes its length, not the coordinate frame its components come from. You need to produce vectors for all the guides under beta, keep the link to their identifiers and texts, then check the new index and the questions under that same contract before switching over.</p><p>The coordinate change rule is a teaching construction. Two real trained models are not necessarily related by such a rotation, and their rankings can differ even after a consistent migration. The calculation demonstrates the need for compatibility; it does not guarantee the equivalence of two models.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain both scores with their respective provenance.</li><li>Explain why normalization does not repair a change of coordinate frame.</li><li>Prepare all the guides under the new contract and do not promise unchanged quality.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="service"><summary><span class="repere">Recall 1</span><span>What do you delegate to the service, and what do you keep in the application?</span></summary><p>The service transforms a text into an embedding. The application checks the returned vector, its provenance and its association with the document, then maintains the index and search. The provider can be local or remote.</p></details><details class="carte" data-carte="contrat"><summary><span class="repere">Recall 2</span><span>Why is knowing the dimension not enough to compare vectors?</span></summary><p>The length does not guarantee a shared representation space. A compatible contract for the model, revision, text preparation and normalization is needed for the guides and questions.</p></details><details class="carte" data-carte="echec"><summary><span class="repere">Recall 3</span><span>What should you do with a 0 or malformed output?</span></summary><p>Refuse to compare it and report the embedding failure. Check the length, finite components and positive norm. A failure becomes neither a 0 score nor proof that no relevant guide exists.</p></details><details class="carte" data-carte="cosinus"><summary><span class="repere">Recall 4</span><span>When is the dot product sufficient, and what does its result prove?</span></summary><p>For vectors of unit norm in a compatible space, the dot product equals the cosine. This score establishes geometric proximity under the chosen model, without certifying the relevance of the text.</p></details><details class="carte" data-carte="migration"><summary><span class="repere">Recall 5</span><span>What should you prepare before using an embedding contract incompatible with the old one?</span></summary><p>A new, consistent set of guide vectors, linked to the texts and identifiers, and questions encoded with the compatible contract. Check the new index before switching over; quality must be evaluated separately.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the page and reconstruct the path through the collection: text and identifier → embedding contract → validated returned vector → normalization → comparison → document to read. Add the failure branch and describe what must change during a migration. Justify every arrow, then redo a calculation without support on another day; reading and an assisted answer do not constitute an attained level.</p></div><div class="exports"><a class="bouton" download="c042-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNDItbTQ6c2VydmljZSIsCiAgICAgICJ1bml0ZSI6ICJjMDQyLW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAic2VydmljZS12ZWN0b3Jpc2F0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8geW91IGRlbGVnYXRlIHRvIHRoZSBzZXJ2aWNlLCBhbmQgd2hhdCBkbyB5b3Uga2VlcCBpbiB0aGUgYXBwbGljYXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHNlcnZpY2UgdHJhbnNmb3JtcyBhIHRleHQgaW50byBhbiBlbWJlZGRpbmcuIFRoZSBhcHBsaWNhdGlvbiBjaGVja3MgdGhlIHJldHVybmVkIHZlY3RvciwgaXRzIHByb3ZlbmFuY2UgYW5kIGl0cyBhc3NvY2lhdGlvbiB3aXRoIHRoZSBkb2N1bWVudCwgdGhlbiBtYWludGFpbnMgdGhlIGluZGV4IGFuZCBzZWFyY2guIFRoZSBwcm92aWRlciBjYW4gYmUgbG9jYWwgb3IgcmVtb3RlLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQyLW00OmNvbnRyYXQiLAogICAgICAidW5pdGUiOiAiYzA0Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvbXBhdGliaWxpdGUtdmVjdG9yaWVsbGUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGlzIGtub3dpbmcgdGhlIGRpbWVuc2lvbiBub3QgZW5vdWdoIHRvIGNvbXBhcmUgdmVjdG9ycz8iLAogICAgICAicmVwb25zZSI6ICJUaGUgbGVuZ3RoIGRvZXMgbm90IGd1YXJhbnRlZSBhIHNoYXJlZCByZXByZXNlbnRhdGlvbiBzcGFjZS4gQSBjb21wYXRpYmxlIGNvbnRyYWN0IGZvciB0aGUgbW9kZWwsIHJldmlzaW9uLCB0ZXh0IHByZXBhcmF0aW9uIGFuZCBub3JtYWxpemF0aW9uIGlzIG5lZWRlZCBmb3IgdGhlIGd1aWRlcyBhbmQgcXVlc3Rpb25zLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQyLW00OmVjaGVjIiwKICAgICAgInVuaXRlIjogImMwNDItbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YWxpZGF0aW9uLXZlY3RvcmllbGxlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgc2hvdWxkIHlvdSBkbyB3aXRoIGEgMCBvciBtYWxmb3JtZWQgb3V0cHV0PyIsCiAgICAgICJyZXBvbnNlIjogIlJlZnVzZSB0byBjb21wYXJlIGl0IGFuZCByZXBvcnQgdGhlIGVtYmVkZGluZyBmYWlsdXJlLiBDaGVjayB0aGUgbGVuZ3RoLCBmaW5pdGUgY29tcG9uZW50cyBhbmQgcG9zaXRpdmUgbm9ybS4gQSBmYWlsdXJlIGJlY29tZXMgbmVpdGhlciBhIDAgc2NvcmUgbm9yIHByb29mIHRoYXQgbm8gcmVsZXZhbnQgZ3VpZGUgZXhpc3RzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDQyLW00OmNvc2ludXMiLAogICAgICAidW5pdGUiOiAiYzA0Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImNvc2ludXMtbm9ybWFsaXNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoZW4gaXMgdGhlIGRvdCBwcm9kdWN0IHN1ZmZpY2llbnQsIGFuZCB3aGF0IGRvZXMgaXRzIHJlc3VsdCBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJGb3IgdmVjdG9ycyBvZiB1bml0IG5vcm0gaW4gYSBjb21wYXRpYmxlIHNwYWNlLCB0aGUgZG90IHByb2R1Y3QgZXF1YWxzIHRoZSBjb3NpbmUuIFRoaXMgc2NvcmUgZXN0YWJsaXNoZXMgZ2VvbWV0cmljIHByb3hpbWl0eSB1bmRlciB0aGUgY2hvc2VuIG1vZGVsLCB3aXRob3V0IGNlcnRpZnlpbmcgdGhlIHJlbGV2YW5jZSBvZiB0aGUgdGV4dC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA0Mi1tNDptaWdyYXRpb24iLAogICAgICAidW5pdGUiOiAiYzA0Mi1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1pZ3JhdGlvbi12ZWN0b3JpZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IHNob3VsZCB5b3UgcHJlcGFyZSBiZWZvcmUgdXNpbmcgYW4gZW1iZWRkaW5nIGNvbnRyYWN0IGluY29tcGF0aWJsZSB3aXRoIHRoZSBvbGQgb25lPyIsCiAgICAgICJyZXBvbnNlIjogIkEgbmV3LCBjb25zaXN0ZW50IHNldCBvZiBndWlkZSB2ZWN0b3JzLCBsaW5rZWQgdG8gdGhlIHRleHRzIGFuZCBpZGVudGlmaWVycywgYW5kIHF1ZXN0aW9ucyBlbmNvZGVkIHdpdGggdGhlIGNvbXBhdGlibGUgY29udHJhY3QuIENoZWNrIHRoZSBuZXcgaW5kZXggYmVmb3JlIHN3aXRjaGluZyBvdmVyOyBxdWFsaXR5IG11c3QgYmUgZXZhbHVhdGVkIHNlcGFyYXRlbHkuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c042-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyB5b3UgZGVsZWdhdGUgdG8gdGhlIHNlcnZpY2UsIGFuZCB3aGF0IGRvIHlvdSBrZWVwIGluIHRoZSBhcHBsaWNhdGlvbj8JVGhlIHNlcnZpY2UgdHJhbnNmb3JtcyBhIHRleHQgaW50byBhbiBlbWJlZGRpbmcuIFRoZSBhcHBsaWNhdGlvbiBjaGVja3MgdGhlIHJldHVybmVkIHZlY3RvciwgaXRzIHByb3ZlbmFuY2UgYW5kIGl0cyBhc3NvY2lhdGlvbiB3aXRoIHRoZSBkb2N1bWVudCwgdGhlbiBtYWludGFpbnMgdGhlIGluZGV4IGFuZCBzZWFyY2guIFRoZSBwcm92aWRlciBjYW4gYmUgbG9jYWwgb3IgcmVtb3RlLgl0b2RhaSBjMDQyLW00IHNlcnZpY2UtdmVjdG9yaXNhdGlvbgpXaHkgaXMga25vd2luZyB0aGUgZGltZW5zaW9uIG5vdCBlbm91Z2ggdG8gY29tcGFyZSB2ZWN0b3JzPwlUaGUgbGVuZ3RoIGRvZXMgbm90IGd1YXJhbnRlZSBhIHNoYXJlZCByZXByZXNlbnRhdGlvbiBzcGFjZS4gQSBjb21wYXRpYmxlIGNvbnRyYWN0IGZvciB0aGUgbW9kZWwsIHJldmlzaW9uLCB0ZXh0IHByZXBhcmF0aW9uIGFuZCBub3JtYWxpemF0aW9uIGlzIG5lZWRlZCBmb3IgdGhlIGd1aWRlcyBhbmQgcXVlc3Rpb25zLgl0b2RhaSBjMDQyLW00IGNvbXBhdGliaWxpdGUtdmVjdG9yaWVsbGUKV2hhdCBzaG91bGQgeW91IGRvIHdpdGggYSAwIG9yIG1hbGZvcm1lZCBvdXRwdXQ/CVJlZnVzZSB0byBjb21wYXJlIGl0IGFuZCByZXBvcnQgdGhlIGVtYmVkZGluZyBmYWlsdXJlLiBDaGVjayB0aGUgbGVuZ3RoLCBmaW5pdGUgY29tcG9uZW50cyBhbmQgcG9zaXRpdmUgbm9ybS4gQSBmYWlsdXJlIGJlY29tZXMgbmVpdGhlciBhIDAgc2NvcmUgbm9yIHByb29mIHRoYXQgbm8gcmVsZXZhbnQgZ3VpZGUgZXhpc3RzLgl0b2RhaSBjMDQyLW00IHZhbGlkYXRpb24tdmVjdG9yaWVsbGUKV2hlbiBpcyB0aGUgZG90IHByb2R1Y3Qgc3VmZmljaWVudCwgYW5kIHdoYXQgZG9lcyBpdHMgcmVzdWx0IHByb3ZlPwlGb3IgdmVjdG9ycyBvZiB1bml0IG5vcm0gaW4gYSBjb21wYXRpYmxlIHNwYWNlLCB0aGUgZG90IHByb2R1Y3QgZXF1YWxzIHRoZSBjb3NpbmUuIFRoaXMgc2NvcmUgZXN0YWJsaXNoZXMgZ2VvbWV0cmljIHByb3hpbWl0eSB1bmRlciB0aGUgY2hvc2VuIG1vZGVsLCB3aXRob3V0IGNlcnRpZnlpbmcgdGhlIHJlbGV2YW5jZSBvZiB0aGUgdGV4dC4JdG9kYWkgYzA0Mi1tNCBjb3NpbnVzLW5vcm1hbGlzZQpXaGF0IHNob3VsZCB5b3UgcHJlcGFyZSBiZWZvcmUgdXNpbmcgYW4gZW1iZWRkaW5nIGNvbnRyYWN0IGluY29tcGF0aWJsZSB3aXRoIHRoZSBvbGQgb25lPwlBIG5ldywgY29uc2lzdGVudCBzZXQgb2YgZ3VpZGUgdmVjdG9ycywgbGlua2VkIHRvIHRoZSB0ZXh0cyBhbmQgaWRlbnRpZmllcnMsIGFuZCBxdWVzdGlvbnMgZW5jb2RlZCB3aXRoIHRoZSBjb21wYXRpYmxlIGNvbnRyYWN0LiBDaGVjayB0aGUgbmV3IGluZGV4IGJlZm9yZSBzd2l0Y2hpbmcgb3ZlcjsgcXVhbGl0eSBtdXN0IGJlIGV2YWx1YXRlZCBzZXBhcmF0ZWx5Lgl0b2RhaSBjMDQyLW00IG1pZ3JhdGlvbi12ZWN0b3JpZWxsZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">znfads yfgafb qdoz</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare for <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">tsvmru gqhexf nvci</span></span> · recognize the service boundary</h3><dl><div><dt>You understand</dt><dd>The index compares representations whose contracts must be compatible. It does not learn their coordinates. The embedding service can be a local component; receiving a list of numbers is not enough to permit its use.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">avndvc snzqmc quoefc tqlcgk glsswq lewjag zmyfvu qbslld jyodjh rifhcd bjcmcq jvgxjl cevshr frbpzk lqsqsn utazym nqvovu uqnmxj rludbz nikgxy fblawz akxobe qzqpsm yvdrfo</span></span></dd></div><div><dt>The level to prepare for</dt><dd>Level 2: explain the contract, redo the cosines and diagnose an invalid returned vector or a mixture of versions without support. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ismmxu arqojg uvhgvl tmssaq dkyoeq vrhokv prlpkl qiqlfe pgbjnz fwbziz xldtfg soyvuc hgieie gs</span></span></dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">muomvx yowbqc plezmr auwgtl fglhem vibycb bultjk cvddsx tjhryl klfguq dyuxac lrsbvr chxusf zxuplp ksiqaz hldixn nbwnxh vsduhd xayaea vjmqrr hhvveh wupjjo jvgkip gqxolj</span></span></dd></div><div><dt>Next step</dt><dd>Redo the exercises without help after a delay, then move on to C042·M5 to distinguish ranking from evaluation. Before any real use, a further targeted reading will need to trace the contract from initialization to persisted vectors; checking the executed path and its quality will require a separate authorized acceptance test.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c042-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c042-m3.html">Previous</a> · <a href="c042-m5.html">Next</a></nav>
+<footer><p>Course book · C042·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

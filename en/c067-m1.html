@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Calculate a mean loss over given observations, choose its denominator, and limit the conclusion to the batch and loss used.">
+<title>C067·M1 · Empirical risk — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kaafog qoglqo brcw</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C067·M1</p><h1>Empirical risk</h1><p class="objectif"><span>Your goal</span>Calculate a mean loss over given observations, choose its denominator, and limit the conclusion to the batch and loss used.</p><p class="prerequis"><strong>Before you start</strong><br>c061-m5 : identifiability and uncertainty · c066-m5 : standard errors and diagnostics · c017-m5 : reproducibility protocol</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>A delivery service announces a duration before each departure. For deliveries a, b, and c, rule A predicts 10, 20, and 22 min. The observed durations are 12, 18, and 25 min. All these data are fictional. How can we summarize the differences without letting an error disappear through cancellation by an error of the opposite sign?</p><p>First, we choose a loss: a penalty assigned to each prediction after comparison with the observed duration. Here, we use the square of the difference. A duration that is too short and one that is too long by the same amount receive the same positive penalty. This mathematical cost does not represent an amount of money.</p><p>Empirical risk is the mean of these losses over the observed batch. Here, empirical means “calculated from the available observations”. The diagrams show the durations for each delivery separately, followed by the addition and division that produce this mean.</p><p>We keep the prediction rule fixed throughout the calculation. Each delivery counts equally, predictions are paired with the correct observations, and no duration is missing. The batch is nonempty and all its values are finite. These conditions are sufficient for the calculation; the deliveries do not need to be independent to calculate this mean.</p><p>To make claims about future deliveries, we would also need to justify the connection between this batch and future situations. The result primarily describes the records in front of us. Learning the rule and separating the data will be studied in the following units.</p><div class="schemas"><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>Delivery records and their losses</title><desc>For a: prediction 10 minutes, observation 12 minutes, loss 4 square minutes. For b: 20, 18, and 4. For c: 22, 25, and 9. The losses are the squares of the differences.</desc><rect x="10" y="12" width="340" height="236" rx="7" class="cadre-neutre" /><text x="56" y="41" text-anchor="middle">Delivery</text><text x="143" y="41" text-anchor="middle" class="prediction">Predicted</text><text x="225" y="41" text-anchor="middle" class="mesure">Observed</text><text x="310" y="41" text-anchor="middle" class="resultat">Loss</text><text x="143" y="63" text-anchor="middle" class="petite-etiquette">min</text><text x="225" y="63" text-anchor="middle" class="petite-etiquette">min</text><text x="310" y="63" text-anchor="middle" class="petite-etiquette">min²</text><line x1="20" y1="77" x2="340" y2="77" class="trait" /><text x="56" y="110" text-anchor="middle">a</text><text x="143" y="110" text-anchor="middle" class="prediction">10</text><text x="225" y="110" text-anchor="middle" class="mesure">12</text><text x="310" y="110" text-anchor="middle" class="resultat">4</text><text x="56" y="163" text-anchor="middle">b</text><text x="143" y="163" text-anchor="middle" class="prediction">20</text><text x="225" y="163" text-anchor="middle" class="mesure">18</text><text x="310" y="163" text-anchor="middle" class="resultat">4</text><text x="56" y="216" text-anchor="middle">c</text><text x="143" y="216" text-anchor="middle" class="prediction">22</text><text x="225" y="216" text-anchor="middle" class="mesure">25</text><text x="310" y="216" text-anchor="middle" class="resultat">9</text></svg><figcaption>Each row preserves the pairing for a delivery. Pink: predicted duration; lavender: observed duration; gold: squared loss, in a different unit. The words and columns also make the diagram readable without the colors.</figcaption></figure><figure><svg viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" role="img"><title>From each loss to their mean</title><desc>The losses 4, 4, and 9 square minutes give a sum of 17 square minutes. Dividing by 3 observations gives the empirical risk 17/3 square minutes.</desc><rect x="12" y="12" width="100" height="55" rx="7" class="cadre-resultat" /><rect x="130" y="12" width="100" height="55" rx="7" class="cadre-resultat" /><rect x="248" y="12" width="100" height="55" rx="7" class="cadre-resultat" /><text x="62" y="46" text-anchor="middle">4 min²</text><text x="180" y="46" text-anchor="middle">4 min²</text><text x="298" y="46" text-anchor="middle">9 min²</text><polyline points="62,67 62,91 298,91 298,67" class="trait" /><line x1="180" y1="67" x2="180" y2="112" class="trait" /><rect x="38" y="112" width="284" height="50" rx="7" class="cadre-neutre" /><text x="180" y="144" text-anchor="middle">Sum: 17 min²</text><line x1="180" y1="162" x2="180" y2="212" class="trait" /><text x="196" y="192" class="petite-etiquette">÷ 3</text><rect x="38" y="212" width="284" height="48" rx="7" class="cadre-resultat" /><text x="180" y="243" text-anchor="middle">Mean: 17/3 min²</text></svg><figcaption>The denominator is the number of deliveries evaluated. Adding the losses gives a total; dividing this total gives a mean loss per observation.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Fix the batch, rule, and loss; calculate a loss for each observation; add the losses, then divide by the number of observations.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Evaluate the durations announced by rule A</h3><p>For deliveries a, b, and c, the (prediction; observation) pairs, in minutes, are (10 ; 12), (20 ; 18), and (22 ; 25). We want the empirical risk of rule A with squared loss and an equal weight for each delivery.</p><ol class="etapes"><li><h3>Name what is fixed</h3><p>D denotes the list of observed records; n = 3 is their number, a count with no unit. The index i identifies a record, from 1 to n; the letters a, b, and c name them in the diagram. xᵢ is the input record: the route and conditions known at departure. This composite record has no single unit. yᵢ is the observed duration, in minutes.</p><p>f is rule A, which turns a record xᵢ into a predicted duration. We write this duration as ŷᵢ = f(xᵢ), in minutes; the hat distinguishes the prediction from the observation. Here, we have its outputs, without investigating how f was built. We change neither f nor the records during this evaluation.</p></li><li><h3>Define the loss and the mean</h3><p>ℓ, read “ell”, denotes the loss. For a predicted duration u and an observed duration v, both in minutes, we choose ℓ(u, v) = (u − v) squared. Each loss therefore has the unit min², the square minute. The penalty is 0 exactly when the durations match.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ℓ</mi><mo>(</mo><mi>u</mi><mo>,</mo><mi>v</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mi>u</mi><mo>−</mo><mi>v</mi><mo>)</mo></mrow><mn>2</mn></msup></mrow></math></div><p>R̂_D(f) denotes the empirical risk of f on D: the hat indicates a calculation on an observed batch, and the subscript D recalls which batch was used. The symbol ∑ tells us to add the losses for all records, once each. The factor 1/n turns this sum into a mean.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>R</mi><mo>^</mo></mover><mi>D</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mi>ℓ</mi><mo>(</mo><mi>f</mi><mo>(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>)</mo><mo>,</mo><msub><mi>y</mi><mi>i</mi></msub><mo>)</mo></mrow></math></div><p>This is a descriptive mean: we divide by n. A denominator correction used for some variance estimates answers a different question. Here, neither a normal distribution nor an assumption of noise with 0 mean is required.</p></li><li><h3>Calculate the differences while keeping their direction</h3><p>Let eᵢ = ŷᵢ − yᵢ be the signed difference in minutes. For a: 10 − 12 = -2 min, a duration that is too short. For b: 20 − 18 = 2 min, a duration that is too long. For c: 22 − 25 = -3 min, a duration that is too short.</p><p>The first differences cancel in a signed sum: -2 + 2 = 0 min. Yet neither of these announcements was accurate. Over the whole batch, the signed mean is -1 min; it indicates the average direction of the differences without giving the mean penalty we want.</p></li><li><h3>Apply the penalty before adding</h3><p>For a, the loss is (-2) × (-2) = 4 min². For b: 2 × 2 = 4 min². For c: (-3) × (-3) = 9 min². Each product uses the difference for a single delivery.</p><p>Squaring makes the losses positive or 0 and penalizes larger differences more heavily. Squaring only after adding the differences would already allow cancellation to occur; it would be a different quantity.</p></li><li><h3>Add the losses, then normalize</h3><p>First, add the losses for a and b: 4 + 4 = 8 min². Add c: 8 + 9 = 17 min². There are 3 losses, so we divide by 3.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mover><mi>R</mi><mo>^</mo></mover><mi>D</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>4</mn><mo>+</mo><mn>4</mn><mo>+</mo><mn>9</mn></mrow><mn>3</mn></mfrac><mo>=</mo><mfrac><mn>17</mn><mn>3</mn></mfrac><mo>≈</mo><mn>5.67</mn><mtext> min²</mtext></mrow></math></div><p>The fraction 17/3 min² is exact; 5.67 min² is its rounded representation. This result is neither a mean error duration in minutes nor a probability. Its unit comes from the chosen loss.</p></li><li><h3>Check the count, scale, and units</h3><p>A mean with equal weights stays between the smallest and largest of its losses: 4 ≤ 17/3 ≤ 9, in min². Multiplying the exact fraction by the count gives back 3 × (17/3) = 17 min². These checks can reveal, in particular, an incorrect denominator or confusion between a sum and a mean.</p><p>Dividing by n − 1 would give 17/2 = 17/2 min², which would no longer be the mean of the 3 losses. If all announced durations matched the observations, each loss would be 0 min², and so would their mean.</p></li><li><h3>State exactly what the result measures</h3><p>We have evaluated rule A on D, using squared loss. To compare another rule on these records, keep the same pairing, weights, and loss. Choosing a different loss can change the ranking, as the last exercise will show.</p><p>The expected risk would be the theoretical mean of this loss over the distribution of the deliveries we want to predict. This distribution describes which situations and durations can occur, and how frequently. These records alone do not provide it. A low empirical risk therefore does not, by itself, demonstrate good predictions for new deliveries.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without rereading, explain why we square each difference before summing, why the denominator counts the records, and why the final unit is the square minute. What information is missing for a conclusion about the next deliveries?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“Durations that are too short and too long cancel out, so the predictions are good.”</h3><p>Cancellation concerns the signed differences. Apply the loss to each difference before summing: for a and b, the signed sum is 0 min, whereas the losses total 8 min². Redo the products, with their units.</p><a href="#exemple">Revisit the differences, then the losses</a></li><li><h3>“A mean of squared errors is always divided by n minus one.”</h3><p>First, name the quantity requested: here, the descriptive mean of the losses. There are 3 losses, so the denominator is 3. Count the rows again and check that the risk multiplied by this count gives back their sum.</p><a href="#exemple">Review normalization and its checks</a></li><li><h3>“A small empirical risk proves that the rule will be good tomorrow.”</h3><p>State the batch and loss alongside the result. The available records do not, by themselves, describe all future situations. Distinguish the calculation that can be checked on these records from the additional evidence needed about the situations of interest.</p><a href="#jalon"><span class="milestone-label">Return to the scope of the evidence</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-annonce-corrigee"><p class="repere">Exercise 1 · Application · one announced duration changes</p>
+<h3>Recalculate without starting over</h3><p>For the same delivery c, replace the prediction 22 min with 25 min. The observations and the predictions for a and b remain those of the example. Calculate the new exact risk under squared loss, then its rounded representation. Explain why the denominator stays the same.</p>
+<label for="reponse-ex-annonce-corrigee">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-annonce-corrigee" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-annonce-corrigee" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-annonce-corrigee" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-annonce-corrigee" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Recalculate the difference for c; the losses for a and b have already been added.</p></details><details class="indice"><summary>Hint 2</summary><p>Changing an announced duration does not remove any delivery from the batch.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For c, the new difference is 25 − 25 = 0 min; its loss is 0 min². The other losses still total 8 min². The new sum is 8 + 0 = 8 min².</p><p>There are still 3 observations: the risk becomes 8/3 = 8/3 min², or approximately 2.67 min². Eliminating the loss for c reduces the sum without reducing the number of losses. This describes the modified rule on these records.</p><p class="petit-titre">Check your reasoning</p><ul><li>You justify the 0 loss for c by the equality of the durations.</li><li>You keep 3 in the denominator and write the exact fraction before rounding.</li><li>You give a loss unit, min².</li></ul></details></article><article class="exercice" id="ex-lot-duplique"><p class="repere">Exercise 2 · Reasoning · check a mean</p>
+<h3>Does copying the records change the risk?</h3><p>Start again with the original rule A. Each record is copied exactly, with its prediction and observation. The batch then contains 6 rows. Calculate the new sum and the new risk. Have we collected new independent observations?</p>
+<label for="reponse-ex-lot-duplique">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-lot-duplique" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-lot-duplique" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-lot-duplique" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-lot-duplique" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each loss now appears 2 times. Apply the same factor to the sum and the count.</p></details><details class="indice"><summary>Hint 2</summary><p>Distinguish the number of rows written from the number of distinct observations made.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The sum becomes 2 × 17 = 34 min² and the count becomes 2 × 3 = 6. The risk is 34/6 = 17/3 min²: the mean is unchanged because all records have been repeated in the same proportion.</p><p>Copying adds no new observation. Equal means do not justify claiming more independent evidence. Copying only some records would change their relative weights; our equality relies on repeating the whole batch.</p><p class="petit-titre">Check your reasoning</p><ul><li>You double both the total and the denominator.</li><li>You simplify the fraction and compare it with the original risk.</li><li>You explain why copying does not constitute a new observation.</li></ul></details></article><article class="exercice" id="ex-choix-perte"><p class="repere">Exercise 3 · Transfer · defend a ranking</p>
+<h3>A better rule under which loss?</h3><p>For the same deliveries, rule B predicts 12, 18, and 20 min; the observations remain 12, 18, and 25 min. Compare A and B using squared loss. Repeat using absolute loss |u − v|: the distance between the predicted duration u and the observed duration v, in minutes. Does the ranking stay the same?</p>
+<label for="reponse-ex-choix-perte">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-choix-perte" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-choix-perte" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-choix-perte" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-choix-perte" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Write the differences for B, then evaluate both rules with the same loss before comparing them.</p></details><details class="indice"><summary>Hint 2</summary><p>For absolute loss, remove the sign of each difference without squaring it. The count remains 3.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The differences for B are 0, 0, and -5 min. The squared losses are 0, 0, and 25 min²; their sum is 25 min². The risk for B is 25/3 min², approximately 8.33 min². The risk for A, 17/3 min², is lower: A is preferable on this batch with this loss.</p><p>For absolute loss, A gives the distances 2, 2, and 3 min. Their sum is 7 min; the mean is 7/3 min, approximately 2.33 min. B gives 0, 0, and 5 min, so its risk under absolute loss is 5/3 min, approximately 1.67 min. B is preferable under this second criterion.</p><p>Squared loss penalizes the single large error of B more heavily. Absolute loss leads to the reverse ranking here. Choose the penalty according to the need before interpreting the ranking; do not directly compare a value in minutes with a value in square minutes. Neither ranking demonstrates superiority on new deliveries.</p><p class="petit-titre">Check your reasoning</p><ul><li>You recover the differences for B and show where each loss comes from.</li><li>You compare the rules using the same loss and give the corresponding units.</li><li>You justify the reversal of the ranking and limit the conclusion to the records evaluated.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="definition"><summary><span class="repere">Recall 1</span><span>What must be fixed for “empirical risk” to refer to a precise quantity?</span></summary><p>The batch of observations, the prediction rule, the loss, and the weights. Here, the weights are equal: add a loss for each observation and divide by the number of observations.</p></details><details class="carte" data-carte="ordre-calcul"><summary><span class="repere">Recall 2</span><span>Why apply the loss before summing the differences?</span></summary><p>A signed sum can cancel opposite differences. Squaring each difference penalizes each inaccurate announcement separately; the square of their sum does not measure the same thing.</p></details><details class="carte" data-carte="unite-denominateur"><summary><span class="repere">Recall 3</span><span>What denominator and unit does our risk under squared loss have?</span></summary><p>The denominator is the number of deliveries evaluated, with no correction. The difference is in minutes, its square is in square minutes, and the mean remains in square minutes.</p></details><details class="carte" data-carte="dependance-perte"><summary><span class="repere">Recall 4</span><span>Does a ranking obtained with squares remain valid with absolute distances?</span></summary><p>Not necessarily. The penalties change: in our batch, A is preferable with squares and B with absolute distances. A ranking must state its loss and batch.</p></details><details class="carte" data-carte="portee"><summary><span class="repere">Recall 5</span><span>What does a low risk calculated on the available records fail to demonstrate?</span></summary><p>It does not, by itself, demonstrate a low loss in future situations. Additional evidence is needed about the connection between the observed batch and the situations we want to predict.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct on paper the path from a record to the risk: data, prediction, difference, loss, sum, count, and unit. Then redo the delivery calculation, and write a concluding sentence naming the batch and loss and a sentence about what remains unknown for future deliveries.</p></div><div class="exports"><a class="bouton" download="c067-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNjctbTE6ZGVmaW5pdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicmlzcXVlLWVtcGlyaXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IG11c3QgYmUgZml4ZWQgZm9yIOKAnGVtcGlyaWNhbCByaXNr4oCdIHRvIHJlZmVyIHRvIGEgcHJlY2lzZSBxdWFudGl0eT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgYmF0Y2ggb2Ygb2JzZXJ2YXRpb25zLCB0aGUgcHJlZGljdGlvbiBydWxlLCB0aGUgbG9zcywgYW5kIHRoZSB3ZWlnaHRzLiBIZXJlLCB0aGUgd2VpZ2h0cyBhcmUgZXF1YWw6IGFkZCBhIGxvc3MgZm9yIGVhY2ggb2JzZXJ2YXRpb24gYW5kIGRpdmlkZSBieSB0aGUgbnVtYmVyIG9mIG9ic2VydmF0aW9ucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tMTpvcmRyZS1jYWxjdWwiLAogICAgICAidW5pdGUiOiAiYzA2Ny1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlcnRlLXF1YWRyYXRpcXVlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBhcHBseSB0aGUgbG9zcyBiZWZvcmUgc3VtbWluZyB0aGUgZGlmZmVyZW5jZXM/IiwKICAgICAgInJlcG9uc2UiOiAiQSBzaWduZWQgc3VtIGNhbiBjYW5jZWwgb3Bwb3NpdGUgZGlmZmVyZW5jZXMuIFNxdWFyaW5nIGVhY2ggZGlmZmVyZW5jZSBwZW5hbGl6ZXMgZWFjaCBpbmFjY3VyYXRlIGFubm91bmNlbWVudCBzZXBhcmF0ZWx5OyB0aGUgc3F1YXJlIG9mIHRoZWlyIHN1bSBkb2VzIG5vdCBtZWFzdXJlIHRoZSBzYW1lIHRoaW5nLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDY3LW0xOnVuaXRlLWRlbm9taW5hdGV1ciIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibW95ZW5uZS1kZXMtcGVydGVzIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZGVub21pbmF0b3IgYW5kIHVuaXQgZG9lcyBvdXIgcmlzayB1bmRlciBzcXVhcmVkIGxvc3MgaGF2ZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZGVub21pbmF0b3IgaXMgdGhlIG51bWJlciBvZiBkZWxpdmVyaWVzIGV2YWx1YXRlZCwgd2l0aCBubyBjb3JyZWN0aW9uLiBUaGUgZGlmZmVyZW5jZSBpcyBpbiBtaW51dGVzLCBpdHMgc3F1YXJlIGlzIGluIHNxdWFyZSBtaW51dGVzLCBhbmQgdGhlIG1lYW4gcmVtYWlucyBpbiBzcXVhcmUgbWludXRlcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA2Ny1tMTpkZXBlbmRhbmNlLXBlcnRlIiwKICAgICAgInVuaXRlIjogImMwNjctbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJjaG9peC1kZS1wZXJ0ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJEb2VzIGEgcmFua2luZyBvYnRhaW5lZCB3aXRoIHNxdWFyZXMgcmVtYWluIHZhbGlkIHdpdGggYWJzb2x1dGUgZGlzdGFuY2VzPyIsCiAgICAgICJyZXBvbnNlIjogIk5vdCBuZWNlc3NhcmlseS4gVGhlIHBlbmFsdGllcyBjaGFuZ2U6IGluIG91ciBiYXRjaCwgQSBpcyBwcmVmZXJhYmxlIHdpdGggc3F1YXJlcyBhbmQgQiB3aXRoIGFic29sdXRlIGRpc3RhbmNlcy4gQSByYW5raW5nIG11c3Qgc3RhdGUgaXRzIGxvc3MgYW5kIGJhdGNoLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDY3LW0xOnBvcnRlZSIsCiAgICAgICJ1bml0ZSI6ICJjMDY3LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicG9ydGVlLWVtcGlyaXF1ZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvZXMgYSBsb3cgcmlzayBjYWxjdWxhdGVkIG9uIHRoZSBhdmFpbGFibGUgcmVjb3JkcyBmYWlsIHRvIGRlbW9uc3RyYXRlPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGRvZXMgbm90LCBieSBpdHNlbGYsIGRlbW9uc3RyYXRlIGEgbG93IGxvc3MgaW4gZnV0dXJlIHNpdHVhdGlvbnMuIEFkZGl0aW9uYWwgZXZpZGVuY2UgaXMgbmVlZGVkIGFib3V0IHRoZSBjb25uZWN0aW9uIGJldHdlZW4gdGhlIG9ic2VydmVkIGJhdGNoIGFuZCB0aGUgc2l0dWF0aW9ucyB3ZSB3YW50IHRvIHByZWRpY3QuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c067-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IGJlIGZpeGVkIGZvciDigJxlbXBpcmljYWwgcmlza+KAnSB0byByZWZlciB0byBhIHByZWNpc2UgcXVhbnRpdHk/CVRoZSBiYXRjaCBvZiBvYnNlcnZhdGlvbnMsIHRoZSBwcmVkaWN0aW9uIHJ1bGUsIHRoZSBsb3NzLCBhbmQgdGhlIHdlaWdodHMuIEhlcmUsIHRoZSB3ZWlnaHRzIGFyZSBlcXVhbDogYWRkIGEgbG9zcyBmb3IgZWFjaCBvYnNlcnZhdGlvbiBhbmQgZGl2aWRlIGJ5IHRoZSBudW1iZXIgb2Ygb2JzZXJ2YXRpb25zLgl0b2RhaSBjMDY3LW0xIHJpc3F1ZS1lbXBpcmlxdWUKV2h5IGFwcGx5IHRoZSBsb3NzIGJlZm9yZSBzdW1taW5nIHRoZSBkaWZmZXJlbmNlcz8JQSBzaWduZWQgc3VtIGNhbiBjYW5jZWwgb3Bwb3NpdGUgZGlmZmVyZW5jZXMuIFNxdWFyaW5nIGVhY2ggZGlmZmVyZW5jZSBwZW5hbGl6ZXMgZWFjaCBpbmFjY3VyYXRlIGFubm91bmNlbWVudCBzZXBhcmF0ZWx5OyB0aGUgc3F1YXJlIG9mIHRoZWlyIHN1bSBkb2VzIG5vdCBtZWFzdXJlIHRoZSBzYW1lIHRoaW5nLgl0b2RhaSBjMDY3LW0xIHBlcnRlLXF1YWRyYXRpcXVlCldoYXQgZGVub21pbmF0b3IgYW5kIHVuaXQgZG9lcyBvdXIgcmlzayB1bmRlciBzcXVhcmVkIGxvc3MgaGF2ZT8JVGhlIGRlbm9taW5hdG9yIGlzIHRoZSBudW1iZXIgb2YgZGVsaXZlcmllcyBldmFsdWF0ZWQsIHdpdGggbm8gY29ycmVjdGlvbi4gVGhlIGRpZmZlcmVuY2UgaXMgaW4gbWludXRlcywgaXRzIHNxdWFyZSBpcyBpbiBzcXVhcmUgbWludXRlcywgYW5kIHRoZSBtZWFuIHJlbWFpbnMgaW4gc3F1YXJlIG1pbnV0ZXMuCXRvZGFpIGMwNjctbTEgbW95ZW5uZS1kZXMtcGVydGVzCkRvZXMgYSByYW5raW5nIG9idGFpbmVkIHdpdGggc3F1YXJlcyByZW1haW4gdmFsaWQgd2l0aCBhYnNvbHV0ZSBkaXN0YW5jZXM/CU5vdCBuZWNlc3NhcmlseS4gVGhlIHBlbmFsdGllcyBjaGFuZ2U6IGluIG91ciBiYXRjaCwgQSBpcyBwcmVmZXJhYmxlIHdpdGggc3F1YXJlcyBhbmQgQiB3aXRoIGFic29sdXRlIGRpc3RhbmNlcy4gQSByYW5raW5nIG11c3Qgc3RhdGUgaXRzIGxvc3MgYW5kIGJhdGNoLgl0b2RhaSBjMDY3LW0xIGNob2l4LWRlLXBlcnRlCldoYXQgZG9lcyBhIGxvdyByaXNrIGNhbGN1bGF0ZWQgb24gdGhlIGF2YWlsYWJsZSByZWNvcmRzIGZhaWwgdG8gZGVtb25zdHJhdGU/CUl0IGRvZXMgbm90LCBieSBpdHNlbGYsIGRlbW9uc3RyYXRlIGEgbG93IGxvc3MgaW4gZnV0dXJlIHNpdHVhdGlvbnMuIEFkZGl0aW9uYWwgZXZpZGVuY2UgaXMgbmVlZGVkIGFib3V0IHRoZSBjb25uZWN0aW9uIGJldHdlZW4gdGhlIG9ic2VydmVkIGJhdGNoIGFuZCB0aGUgc2l0dWF0aW9ucyB3ZSB3YW50IHRvIHByZWRpY3QuCXRvZGFpIGMwNjctbTEgcG9ydGVlLWVtcGlyaXF1ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">kaafog qoglqo brcw</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">hwkgck kxkmpx puzb</span></span></h3><dl><div><dt>What you understand</dt><dd>An empirical metric aggregates a loss defined on matched pairs. Its unit and interpretation come from the loss; its result must remain tied to the batch evaluated.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ragvep tdskuu mzpdka jqixkp sluymj uhoyri qypsoq koxbdl fjqmak mkvjdw lubyhx hqzjgt qtlkac vvcxir ooegge bninkj zjnqwc hytuct vklrmc tcwndk xrjcxn qkpaxx qqhbxl lsqimn</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: reconstruct the formula, justify the denominator and units, then explain the reversal of the ranking between the losses without consulting the correction. Reading or answering after a hint remains a preparation step; it does not establish any attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ebhvde kkhxwg ucsmsn jqkxtd neblny bsxbge mkcxky rhjshs zyzxab fqqmcu fqfzny xfdkrw bxaktj zgnluv msdmnm rlgbii dihreh syzqsv sdnkzu kejtqb btrfho ydtfdj ijketk degkrg</span></span></dd></div><div><dt>Next step</dt><dd>Try the exercises again without support on another day and explain the limitations in your own words. The next unit will introduce the training set. For an actual evaluation, the pairing, units, role of the data, and path actually executed would still need to be established under a separate assignment.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c067-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c066-m5.html">Previous</a> · <a href="c067-m2.html">Next</a></nav>
+<footer><p>Course book · C067·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

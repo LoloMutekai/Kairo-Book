@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Prepare a consistent checkpoint, calculate the work that must be replayed after an interruption, and verify that resuming preserves the same trial.">
+<title>C075·M4 · Checkpoint and interruption — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xxzkui pqseoq zyvy</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 3 <span>·</span> C075·M4</p><h1>Checkpoint and interruption</h1><p class="objectif"><span>Your goal</span>Prepare a consistent checkpoint, calculate the work that must be replayed after an interruption, and verify that resuming preserves the same trial.</p><p class="prerequis"><strong>Before you start</strong><br>c067-m5 : pipeline · c074-m5 : identification assumptions · c073-m5 : interaction and repeated measures · c063-m5 : synthetic dataset and external validity · c062-m5 : prior audit and sensitivity · c072-m5 : extracted text, metadata and verification · c075-m1 : baseline and declared hypothesis · c075-m2 : synthetic data and external data · c075-m3 : ablation, comparability and leakage</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are comparing a candidate method for ranking maintenance tickets with a reference method. The tickets are entirely fictional, the methods remain fixed, and no real ticket is sent. The candidate evaluation processes 12 batches in a fixed order. We focus only on resuming it: the score comparison was prepared in earlier units.</p><p>The screen shows 10 completed batches. Yet the last state that was saved and read back covers only 8 batches. If the process disappears now, the displayed counter disappears with it. Reliable resumption starts from the 8 saved batches, then repeats the next 2 batches before continuing.</p><p>A checkpoint is a state package that allows the same computation to continue. It combines what has been computed, how far the computation has progressed, and the identity of the trial. A line saying “save started” or a file with a recent name is insufficient to establish that this package is complete and readable.</p><p>Interrupting means stopping work according to an explicit rule. A request for a clean stop can arrive during a batch and then take effect at its end boundary. A failure can cut off the process in the middle of an operation. Prepare for these cases before relying on resumption. Saving does not give permission to restart a trial while its stop instruction remains in force.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The counter is ahead of the saved checkpoint</title><desc>Of 12 batches, 8 are saved. The next 2 are complete but unsaved; the final 2 still need processing. After the failure, the last 4 batches must be computed.</desc><text x="24" y="28">Computation and saving</text><rect x="24" y="57" width="208" height="42" rx="4" class="cadre-resultat" /><rect x="232" y="57" width="52" height="42" class="cadre-prediction" /><rect x="284" y="57" width="52" height="42" rx="4" class="cadre-neutre" /><text x="24" y="125" text-anchor="middle">0</text><text x="232" y="125" text-anchor="middle">8</text><text x="284" y="125" text-anchor="middle">10</text><text x="336" y="125" text-anchor="middle">12</text><text x="24" y="157" class="resultat">Saved: 8 batches</text><text x="24" y="186" class="prediction">Replay: 2 batches</text><text x="24" y="215">Unprocessed: 2 batches</text><path d="M232 45v-9h104v9" class="trait" /><text x="284" y="27" text-anchor="middle" class="petite-etiquette">Resume</text></svg><figcaption>The lengths represent batch counts. Gold: saved state; pink: computation completed but lost in the failure; light area: work still unprocessed. The counter 10 does not replace checkpoint 8.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>Publish a consistent package</title><desc>At a batch boundary, freeze the state and position together, write a candidate package, read it back and check its identity, then publish the checkpoint. If verification fails, keep the previous checkpoint.</desc><rect x="24" y="12" width="312" height="48" rx="7" class="cadre-neutre" /><text x="180" y="42" text-anchor="middle">State + position + identity</text><path d="M180 60v20m-5-5 5 5 5-5" class="trait" /><rect x="24" y="81" width="312" height="48" rx="7" class="cadre-prediction" /><text x="180" y="111" text-anchor="middle">Write, read back, verify</text><path d="M180 129v20m-5-5 5 5 5-5" class="trait" /><rect x="24" y="150" width="312" height="48" rx="7" class="cadre-resultat" /><text x="180" y="180" text-anchor="middle">Publish validated checkpoint</text><text x="180" y="230" text-anchor="middle" class="petite-etiquette">Failure: keep previous checkpoint</text></svg><figcaption>Publishing makes the new package available for selection when resuming. The provisional package must not replace the previous one until acceptance succeeds. Consistency must survive an interruption during writing.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Start again from the last complete, compatible state that has been read back; resume after its last batch; check resumption against the same computation without interruption.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>A failure after 10 batches, a saved checkpoint after 8</h3><p>The fictional trial contains N = 12 batches. An intermediate checkpoint is published after each group of b = 4 batches; those for batches 4 and 8 have been read back. The failure occurs just after batch a = 10, before the next one. Each batch takes exactly τ = 90 s per batch in our duration model; restoring takes r = 30 s. Writing, verification and waiting costs are excluded from this estimate.</p><ol class="etapes"><li><h3>Define the state boundary</h3><p>A batch is a fixed portion of the fictional dataset. Sⱼ denotes the state after batch j: results associated with identifiers already processed, counts and sums used by the score. Dⱼ denotes the contents of batch j. F is the evaluation operation; θ denotes the fixed code, parameters and settings of the candidate. A complete transition is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>S</mi><mi>j</mi></msub><mo>=</mo><mi>F</mi><mo>(</mo><msub><mi>S</mi><mrow><mi>j</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>,</mo><msub><mi>D</mi><mi>j</mi></msub><mo>;</mo><mi>θ</mi><mo>)</mo></mrow></math></div><p>j is a batch index; S at index 0 is the empty initial state. The state index means “after”, never “next batch”. Processing is sequential, the batches and their order remain identical after resumption, and F is deterministic under the chosen conditions: the same state and inputs give the same result. Our evaluation produces no external effect.</p><p>N, a and k count all batches, batches completed at the time of failure, and batches included in the last validated checkpoint, respectively. They satisfy 0 ≤ k ≤ a ≤ N. b counts the batches between periodic checkpoints. τ is a duration per batch, in seconds per batch; r is a duration, in seconds. The quantities L and R introduced below also count batches.</p></li><li><h3>Freeze state, position and identity together</h3><p>Package C<sub>k</sub> contains k, S<sub>k</sub> and I. I is the description that links the state to the trial: trial identifier, version of the code and its relevant environment, parameters, fingerprint of the ticket dataset, batch order and scoring rule. A fingerprint is a digest of the contents, useful for detecting a change; it does not demonstrate dataset quality.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>C</mi><mi>k</mi></msub><mo>=</mo><mo>(</mo><mi>k</mi><mo>,</mo><msub><mi>S</mi><mi>k</mi></msub><mo>,</mo><mi>I</mi><mo>)</mo></mrow></math></div><p>Freeze the package at a boundary where the batch result is fully incorporated. Writing the counter after a batch and the sum before that batch would create an inconsistent state. In a variant using a pseudorandom generator, saving its current state and the position in the data would also be necessary; an initial seed alone does not describe its progress.</p><p>First write a separate candidate package, read it back, check its contents and identity, then publish it through an atomic replacement: readers must select a whole package. The old checkpoint remains available until the new one is accepted. Resistance to a power failure also requires filesystem synchronization guarantees; the word “atomic” does not demonstrate it. Here, we assume that the last published checkpoint survives the process stopping.</p></li><li><h3>Calculate what the failure forces you to repeat</h3><p>The 2 accepted checkpoints are those for batches 4 and 8. Their last index is k = 2 × 4 = 8 batches. The last displayed index is a = 10; simply copying it does not make it k.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>=</mo><mi>a</mi><mo>−</mo><mi>k</mi><mo>=</mo><mn>10</mn><mo>−</mo><mn>8</mn><mo>=</mo><mn>2</mn><mtext> lots</mtext></mrow></math></div><p>L counts the completed work that must be replayed. Its duration is L × τ = 2 × 90 = 180 s, or 180 ÷ 60 = 3 min. The corresponding results are not added to those in the checkpoint: start again from S<sub>k</sub> and recompute them.</p><p>Assuming synchronous saving at each interval, no new batch starts until that save is published. Unsaved computation then remains at most b × τ = 360 s, or 6 min, including any batch already started. This bound excludes writing and does not describe a system that continues computing despite failed saves.</p></li><li><h3>Calculate what remains after restoration</h3><p>The first batch to run is k + 1 = 9, because S<sub>k</sub> already contains results up to and including batch 8. The number R of batches to compute from the checkpoint is:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>R</mi><mo>=</mo><mi>N</mi><mo>−</mo><mi>k</mi><mo>=</mo><mn>12</mn><mo>−</mo><mn>8</mn><mo>=</mo><mn>4</mn><mtext> lots</mtext></mrow></math></div><p>Of these, 2 must be replayed and N − a = 2 have not yet been processed. Check with another decomposition: 2 + 2 = 4 batches. Resuming at batch 11 would skip the lost results; resuming at batch 8 would count that batch a second time.</p><p>T is the estimated duration from the start of restoration to the end of computation, with the exclusions given in the problem. Add restoration only once and multiply the duration per batch by the number of remaining batches:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>T</mi><mo>=</mo><mi>r</mi><mo>+</mo><mi>R</mi><mi>τ</mi><mo>=</mo><mn>30</mn><mo>+</mo><mn>4</mn><mo>×</mo><mn>90</mn><mo>=</mo><mn>390</mn><mtext> s</mtext></mrow></math></div><p>The 360 s of computation and 30 s of restoration give 390 ÷ 60 = 6.5 min. The loss of 3 min is already included in this remaining computation: adding it again would count the replay twice. This number follows from the fictional durations and is not a measured performance.</p></li><li><h3>Handle a stop request without confusing it with a failure</h3><p>If the instruction allows stopping at the next boundary and the current batch has a bounded duration, start no further batch, finish the current one, then publish and read back the package for that boundary. After batch 10, an additional accepted checkpoint would give k = a = 10: L = 0 batches to replay.</p><p>In this variant of the same scene, 2 batches would remain. Computing them would take 180 s; with restoration, 210 s, or 3.5 min. The cost of creating the new checkpoint is still excluded. This difference therefore cannot be presented as an overall gain.</p><p>If the stop must be immediate, do not delay it to finish a batch or write a file. Any later resumption will start from the last checkpoint already accepted. If the candidate save is incomplete, keep the previous checkpoint and report what is lost. In all cases, resumption requires that the trial conditions and authorization remain valid.</p></li><li><h3>Check resumption against an uninterrupted reference run</h3><p>Before using this procedure, prepare an isolated trial on the same fictional tickets. Run the complete computation without interruption and save its expected final state. Then repeat the trial with interruption, writing, reading back and resumption; compare the ordered list of processed identifiers, results per ticket, counts and sums, and the final position N. An identical final average can hide a duplicate and an omission.</p><p>The 8 batches in the checkpoint and the 4 resumed batches must cover the 12 expected batches without overlap. Also check the initial and final boundaries: from index 0, everything remains to be computed; from index N, no batch should be replayed. Introducing an interruption during writing and a package with a different identity lets you check that rejection remains visible to the checkpoint reader.</p><p>With exact calculations and the stated determinism, expect the same final state. For approximate calculations, specify the comparison fields and tolerance in advance, then justify the tolerance. Equal rounded scores are insufficient. The duration calculation on this page does not constitute execution of this resumption check.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Without rereading, explain why completed batches, saved batches and batches remaining after resumption have different counts. Then state aloud the package contents and the check that could refute a claim of correct resumption.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The counter shows 10, so I can resume after that batch.”</h3><p>The counter measures work completed before the failure; the accepted checkpoint preserves only 8 batches. Restore that checkpoint and resume at batch 9. Check the position and saved results together.</p><a href="#exemple">Repeat the calculation of lost and remaining work</a></li><li><h3>“The file has the right name, so I can use it.”</h3><p>Read the whole package back, and check its consistency and trial identity before publication. A truncated file or one linked to a different ticket order must be rejected. Keep the previous accepted checkpoint.</p><a href="#intuition">Review the package publication diagram</a></li><li><h3>“The final score is identical, so resumption is proved.”</h3><p>A score can hide omissions and duplicates. Compare identifiers, results and all relevant state with an uninterrupted reference run; declare tolerances. The milestone also distinguishes an implemented comparison from an executed comparison.</p><a href="#jalon"><span class="milestone-label">Read the available evidence and its limitation</span></a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-frontiere"><p class="repere">Exercise 1 · Identifying the boundary</p>
+<h3>After which batch should you restart?</h3><p>In the trial, the accepted package says k = 8 and contains the results of all batches up to that index. The screen displayed 10 before disappearing. What is the next batch? What should you check if the package contains only a counter and no results?</p>
+<label for="reponse-ex-frontiere">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-frontiere" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-frontiere" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-frontiere" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-frontiere" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The package index means “after the batch”, not “next batch”.</p></details><details class="indice"><summary>Hint 2</summary><p>To continue the sums used for the score, ask where their accumulated values are stored.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The next batch is 8 + 1 = 9. The displayed index 10 is not a save. The checkpoint must contain, or verifiably reference, the state accumulated up to batch 8.</p><p>A counter alone cannot continue the sums and results already produced. Without an accepted corresponding state, do not declare this package usable: look for an earlier complete checkpoint, or restart the trial from its initial state and report that decision.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name batch 9 and justify the offset.</li><li>Reject treating a counter as the state needed for the computation.</li><li>Keep the absence of a complete package visible.</li></ul></details></article><article class="exercice" id="ex-panne-tardive"><p class="repere">Exercise 2 · Calculation and interpretation</p>
+<h3>The failure occurs one batch later</h3><p>This time, the same run stops after a = 11 batches; the last accepted checkpoint remains k = 8. Calculate the loss in batches and minutes, then the resumption duration T with the same exclusions. Why can T remain unchanged while the loss increases?</p>
+<label for="reponse-ex-panne-tardive">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-panne-tardive" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-panne-tardive" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-panne-tardive" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-panne-tardive" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Calculate a − k and N − k separately.</p></details><details class="indice"><summary>Hint 2</summary><p>Split the batches remaining after restoration into batches to replay and batches still unprocessed.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The loss is 11 − 8 = 3 batches, or 3 × 90 = 270 s and 4.5 min. Only 1 unprocessed batch remains.</p><p>From the checkpoint, R is still 12 − 8 = 4 batches: 3 to replay + 1 unprocessed = 4. T remains 30 + 4 × 90 = 390 s, or 6.5 min. The starting point and target are unchanged; only the split between replay and previously unprocessed work has changed.</p><p class="petit-titre">Check your reasoning</p><ul><li>Find 3 lost batches and 4.5 min.</li><li>Retain 4 batches to compute from the checkpoint and 6.5 min for T.</li><li>Explain the decomposition without adding the lost duration a second time.</li><li>Recall that excluded costs prevent a complete prediction of actual elapsed time.</li></ul></details></article><article class="exercice" id="ex-identite"><p class="repere">Exercise 3 · Diagnosis and protocol</p>
+<h3>Same counter, reordered tickets</h3><p>A readable package is found at index 8, but the ticket list has been reordered and its fingerprint differs. Someone proposes resuming anyway: “The batch count is the same; we will only look at the score.” Write a reasoned refusal or agreement, then describe the check to prepare before any resumption of this trial.</p>
+<label for="reponse-ex-identite">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-identite" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-identite" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-identite" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-identite" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The index denotes a position in a specific order.</p></details><details class="indice"><summary>Hint 2</summary><p>Identify an uninterrupted computation that could serve as a reference without mixing trials.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Resuming from this package with the reordered list must be rejected. The same index no longer denotes the same prefix of tickets; some could be omitted or processed again. A readable file and a plausible count do not establish compatibility.</p><p>Restore the dataset, order, code, parameters and scoring rule corresponding to I, then verify their identity. If the change is intentional, start a separate trial from its initial state instead of attaching the old trial results to it.</p><p>Prepare an uninterrupted computation and a resumed run on the fictional dataset under identical conditions. Compare ordered identifiers, results and the complete final state; also exercise identity rejection and interruption during writing. Describe this check as prepared until it has been executed. Resumption alone does not imply any improvement in the candidate.</p><p class="petit-titre">Check your reasoning</p><ul><li>Reject mixing identities despite the plausible counter.</li><li>Explain concretely how reordering can cause omission or repetition.</li><li>Propose a comparable uninterrupted reference run and precise comparison fields.</li><li>Distinguish a prepared protocol, an executed check and a decision about the candidate.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="paquet"><summary><span class="repere">Recall 1</span><span>What must a usable checkpoint combine?</span></summary><p>A complete state, its exact position in the computation, and the identity of the inputs, code and settings that give it meaning. The package must have been read back and accepted.</p></details><details class="carte" data-carte="position"><summary><span class="repere">Recall 2</span><span>If Sₖ is the state after batch k, which batch should run next?</span></summary><p>Batch k + 1, after a compatibility check. Repeating k would introduce a duplicate; following the last displayed counter could omit lost work.</p></details><details class="carte" data-carte="perte"><summary><span class="repere">Recall 3</span><span>How do you distinguish lost work from work remaining after restoration?</span></summary><p>With a completed batches, k saved batches and N planned batches: the loss is a − k; the remaining work is N − k. This includes replay and the N − a batches still unprocessed.</p></details><details class="carte" data-carte="arret"><summary><span class="repere">Recall 4</span><span>How do a clean stop and an immediate stop differ for saving?</span></summary><p>A clean stop can reach a boundary within a bounded time and publish a new state if the instruction allows it. An immediate stop must not wait for this operation; the last checkpoint already accepted provides the fallback.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>Why does an identical rounded score fail to prove correct resumption?</span></summary><p>It can hide omissions, duplicates or different states. Compare identifiers, results and relevant state with a comparable uninterrupted run, using declared tolerances if needed.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Hide the page and reconstruct the chain: trial identity → state at a boundary → package written and read back → publication → stop → compatibility check → resumption after the last saved batch → comparison with an uninterrupted reference run. Also recall the expressions for loss, remaining work and its duration. Reading or an assisted answer prepares this reconstruction; it never constitutes an attained level.</p></div><div class="exports"><a class="bouton" download="c075-m4-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzUtbTQ6cGFxdWV0IiwKICAgICAgInVuaXRlIjogImMwNzUtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb2ludC1kZS1yZXByaXNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgbXVzdCBhIHVzYWJsZSBjaGVja3BvaW50IGNvbWJpbmU/IiwKICAgICAgInJlcG9uc2UiOiAiQSBjb21wbGV0ZSBzdGF0ZSwgaXRzIGV4YWN0IHBvc2l0aW9uIGluIHRoZSBjb21wdXRhdGlvbiwgYW5kIHRoZSBpZGVudGl0eSBvZiB0aGUgaW5wdXRzLCBjb2RlIGFuZCBzZXR0aW5ncyB0aGF0IGdpdmUgaXQgbWVhbmluZy4gVGhlIHBhY2thZ2UgbXVzdCBoYXZlIGJlZW4gcmVhZCBiYWNrIGFuZCBhY2NlcHRlZC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3NS1tNDpwb3NpdGlvbiIsCiAgICAgICJ1bml0ZSI6ICJjMDc1LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiZnJvbnRpZXJlIiwKICAgICAgInF1ZXN0aW9uIjogIklmIFPigpYgaXMgdGhlIHN0YXRlIGFmdGVyIGJhdGNoIGssIHdoaWNoIGJhdGNoIHNob3VsZCBydW4gbmV4dD8iLAogICAgICAicmVwb25zZSI6ICJCYXRjaCBrICsgMSwgYWZ0ZXIgYSBjb21wYXRpYmlsaXR5IGNoZWNrLiBSZXBlYXRpbmcgayB3b3VsZCBpbnRyb2R1Y2UgYSBkdXBsaWNhdGU7IGZvbGxvd2luZyB0aGUgbGFzdCBkaXNwbGF5ZWQgY291bnRlciBjb3VsZCBvbWl0IGxvc3Qgd29yay4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3NS1tNDpwZXJ0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMDc1LW00IiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidHJhdmFpbC1wZXJkdSIsCiAgICAgICJxdWVzdGlvbiI6ICJIb3cgZG8geW91IGRpc3Rpbmd1aXNoIGxvc3Qgd29yayBmcm9tIHdvcmsgcmVtYWluaW5nIGFmdGVyIHJlc3RvcmF0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIldpdGggYSBjb21wbGV0ZWQgYmF0Y2hlcywgayBzYXZlZCBiYXRjaGVzIGFuZCBOIHBsYW5uZWQgYmF0Y2hlczogdGhlIGxvc3MgaXMgYSDiiJIgazsgdGhlIHJlbWFpbmluZyB3b3JrIGlzIE4g4oiSIGsuIFRoaXMgaW5jbHVkZXMgcmVwbGF5IGFuZCB0aGUgTiDiiJIgYSBiYXRjaGVzIHN0aWxsIHVucHJvY2Vzc2VkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc1LW00OmFycmV0IiwKICAgICAgInVuaXRlIjogImMwNzUtbTQiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJpbnRlcnJ1cHRpb24iLAogICAgICAicXVlc3Rpb24iOiAiSG93IGRvIGEgY2xlYW4gc3RvcCBhbmQgYW4gaW1tZWRpYXRlIHN0b3AgZGlmZmVyIGZvciBzYXZpbmc/IiwKICAgICAgInJlcG9uc2UiOiAiQSBjbGVhbiBzdG9wIGNhbiByZWFjaCBhIGJvdW5kYXJ5IHdpdGhpbiBhIGJvdW5kZWQgdGltZSBhbmQgcHVibGlzaCBhIG5ldyBzdGF0ZSBpZiB0aGUgaW5zdHJ1Y3Rpb24gYWxsb3dzIGl0LiBBbiBpbW1lZGlhdGUgc3RvcCBtdXN0IG5vdCB3YWl0IGZvciB0aGlzIG9wZXJhdGlvbjsgdGhlIGxhc3QgY2hlY2twb2ludCBhbHJlYWR5IGFjY2VwdGVkIHByb3ZpZGVzIHRoZSBmYWxsYmFjay4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3NS1tNDpwcmV1dmUiLAogICAgICAidW5pdGUiOiAiYzA3NS1tNCIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInByZXV2ZS1kZS1yZXByaXNlIiwKICAgICAgInF1ZXN0aW9uIjogIldoeSBkb2VzIGFuIGlkZW50aWNhbCByb3VuZGVkIHNjb3JlIGZhaWwgdG8gcHJvdmUgY29ycmVjdCByZXN1bXB0aW9uPyIsCiAgICAgICJyZXBvbnNlIjogIkl0IGNhbiBoaWRlIG9taXNzaW9ucywgZHVwbGljYXRlcyBvciBkaWZmZXJlbnQgc3RhdGVzLiBDb21wYXJlIGlkZW50aWZpZXJzLCByZXN1bHRzIGFuZCByZWxldmFudCBzdGF0ZSB3aXRoIGEgY29tcGFyYWJsZSB1bmludGVycnVwdGVkIHJ1biwgdXNpbmcgZGVjbGFyZWQgdG9sZXJhbmNlcyBpZiBuZWVkZWQuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c075-m4-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBtdXN0IGEgdXNhYmxlIGNoZWNrcG9pbnQgY29tYmluZT8JQSBjb21wbGV0ZSBzdGF0ZSwgaXRzIGV4YWN0IHBvc2l0aW9uIGluIHRoZSBjb21wdXRhdGlvbiwgYW5kIHRoZSBpZGVudGl0eSBvZiB0aGUgaW5wdXRzLCBjb2RlIGFuZCBzZXR0aW5ncyB0aGF0IGdpdmUgaXQgbWVhbmluZy4gVGhlIHBhY2thZ2UgbXVzdCBoYXZlIGJlZW4gcmVhZCBiYWNrIGFuZCBhY2NlcHRlZC4JdG9kYWkgYzA3NS1tNCBwb2ludC1kZS1yZXByaXNlCklmIFPigpYgaXMgdGhlIHN0YXRlIGFmdGVyIGJhdGNoIGssIHdoaWNoIGJhdGNoIHNob3VsZCBydW4gbmV4dD8JQmF0Y2ggayArIDEsIGFmdGVyIGEgY29tcGF0aWJpbGl0eSBjaGVjay4gUmVwZWF0aW5nIGsgd291bGQgaW50cm9kdWNlIGEgZHVwbGljYXRlOyBmb2xsb3dpbmcgdGhlIGxhc3QgZGlzcGxheWVkIGNvdW50ZXIgY291bGQgb21pdCBsb3N0IHdvcmsuCXRvZGFpIGMwNzUtbTQgZnJvbnRpZXJlCkhvdyBkbyB5b3UgZGlzdGluZ3Vpc2ggbG9zdCB3b3JrIGZyb20gd29yayByZW1haW5pbmcgYWZ0ZXIgcmVzdG9yYXRpb24/CVdpdGggYSBjb21wbGV0ZWQgYmF0Y2hlcywgayBzYXZlZCBiYXRjaGVzIGFuZCBOIHBsYW5uZWQgYmF0Y2hlczogdGhlIGxvc3MgaXMgYSDiiJIgazsgdGhlIHJlbWFpbmluZyB3b3JrIGlzIE4g4oiSIGsuIFRoaXMgaW5jbHVkZXMgcmVwbGF5IGFuZCB0aGUgTiDiiJIgYSBiYXRjaGVzIHN0aWxsIHVucHJvY2Vzc2VkLgl0b2RhaSBjMDc1LW00IHRyYXZhaWwtcGVyZHUKSG93IGRvIGEgY2xlYW4gc3RvcCBhbmQgYW4gaW1tZWRpYXRlIHN0b3AgZGlmZmVyIGZvciBzYXZpbmc/CUEgY2xlYW4gc3RvcCBjYW4gcmVhY2ggYSBib3VuZGFyeSB3aXRoaW4gYSBib3VuZGVkIHRpbWUgYW5kIHB1Ymxpc2ggYSBuZXcgc3RhdGUgaWYgdGhlIGluc3RydWN0aW9uIGFsbG93cyBpdC4gQW4gaW1tZWRpYXRlIHN0b3AgbXVzdCBub3Qgd2FpdCBmb3IgdGhpcyBvcGVyYXRpb247IHRoZSBsYXN0IGNoZWNrcG9pbnQgYWxyZWFkeSBhY2NlcHRlZCBwcm92aWRlcyB0aGUgZmFsbGJhY2suCXRvZGFpIGMwNzUtbTQgaW50ZXJydXB0aW9uCldoeSBkb2VzIGFuIGlkZW50aWNhbCByb3VuZGVkIHNjb3JlIGZhaWwgdG8gcHJvdmUgY29ycmVjdCByZXN1bXB0aW9uPwlJdCBjYW4gaGlkZSBvbWlzc2lvbnMsIGR1cGxpY2F0ZXMgb3IgZGlmZmVyZW50IHN0YXRlcy4gQ29tcGFyZSBpZGVudGlmaWVycywgcmVzdWx0cyBhbmQgcmVsZXZhbnQgc3RhdGUgd2l0aCBhIGNvbXBhcmFibGUgdW5pbnRlcnJ1cHRlZCBydW4sIHVzaW5nIGRlY2xhcmVkIHRvbGVyYW5jZXMgaWYgbmVlZGVkLgl0b2RhaSBjMDc1LW00IHByZXV2ZS1kZS1yZXByaXNlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xxzkui pqseoq zyvy</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3>Prepare the milestone on interruptible learning</h3><dl><div><dt>What you understand</dt><dd>A checkpoint links a state to its boundary and its trial. An interruption can lose computation without invalidating the last accepted package; correct resumption must preserve the inputs and process no batch twice.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ybrghu iymwvd fftynv tatzjr qqezbb nkmbpf qnlzut zarbge ewxsge bngogc lbdezg xpppmk qjvcsx bjqdak mukwzs pnpmky zkkdvv vaefza mxyyjo xxeovv bvdjax ojsdxp jefmme zubziz ziggzf gdztsf mmhwtg petgdx frmjyb uwkhfm qxkbpb gqqjlm mwswyf nxkwlw affldh kcdakh ynkjwk ip</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 3: justify the package and boundary, calculate losses, defend rejection of an incompatible resumption and propose a comparison that could be refuted. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lumcwj zgjhcw qtdogf njmfvg venzjn uegmrc rhtl</span></span> Reading and an assisted answer never constitute an attained level.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">pwatvm lpgiyq lhdudl nrtlwj qjljnb quazop hlgpmp gybnas xvyyxt oiujgv rynrtq tpcqfw fziskz hprnik yrrihu pavyhh auozew dkozeo uxxwff ktztdm oqoowk grayxr cpbtmd jrsjbr cbzqny hbzzfd aurzqj izobib mbgrjz mohqqt ksyxhk bdnqqk bwdgye qnqiux epeeuw zvcsux xvpfsl qw</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the calculation and refusal in the exercise without help on another day. Then prepare interruption and incompatibility cases on fictional data for comparison with an uninterrupted reference run. Unit c075-m5 will address the human decision and rollback; availability of a checkpoint authorizes neither automatic resumption nor activation.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c075-m4" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c075-m3.html">Previous</a> · <a href="c075-m5.html">Next</a></nav>
+<footer><p>Course book · C075·M4</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

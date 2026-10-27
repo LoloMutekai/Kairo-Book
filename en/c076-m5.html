@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Write static findings in which every conclusion stays within the bytes actually read, the bounds of the format and the limits of the evidence.">
+<title>C076·M5 · Static analysis and limits of inference — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fnldms uhgcqk ewgy</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 2 <span>·</span> C076·M5</p><h1>Static analysis and limits of inference</h1><p class="objectif"><span>Your goal</span>Write static findings in which every conclusion stays within the bytes actually read, the bounds of the format and the limits of the evidence.</p><p class="prerequis"><strong>Before you start</strong><br>c069-m5 : congruences and Euclid · c019-m5 : clocks and persistence · c053-m5 : proxy, construct and validity · c076-m1 : bits, bytes and representation · c076-m2 : endianness, offset and structure · c076-m3 : header and section table · c076-m4 : strings, entropy and evidence</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You receive an attachment named carnet.lumi. Before opening it in an application, you can examine its bytes as you would inspect the pages of a closed object: locate its header, check the stated locations and record text. This analysis is static: it does not run any instructions the file might contain. It does not authorize running the file afterwards.</p><p>The file, its LUMI format and all the values in this scene are fictional. LUMI is a small teaching format, separate from real formats. Its header specifies a table describing the note and bloc regions. The note contains the word “connexion” (meaning “connection”). The block contains every possible byte value once, in ascending order. We will use this same object through to the final report.</p><p>An observation describes what is read: a position, a length, a string. An interpretation applies a stated rule: under the LUMI format, these fields describe a section. A hypothesis proposes a possible explanation: content with widely spread values could be compressed. A behavior would be an event occurring during execution. Moving from one to another requires further justification.</p><p>The previous units provided the tools for reading. Here, we learn where to stop a conclusion. Reading “connexion” does not show that a connection occurred; a byte histogram does not reveal intent. A partial analysis can also establish an exact local fact, provided it states which region and which rule were checked.</p><div class="schemas"><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>Map of the fictional file regions</title><desc>From 0 to 320 bytes: a 16-byte header, a 16-byte table, a 32-byte note and a 256-byte block. End positions are excluded. Box heights do not represent lengths.</desc><text x="180" y="25" text-anchor="middle">carnet.lumi: 320 bytes</text><rect x="18" y="42" width="324" height="52" rx="6" class="cadre-neutre" /><text x="180" y="64" text-anchor="middle">Header: [0 ; 16[</text><text x="180" y="84" text-anchor="middle" class="petite-etiquette">Format and table position</text><rect x="18" y="104" width="324" height="52" rx="6" class="cadre-prediction" /><text x="180" y="126" text-anchor="middle">Table: [16 ; 32[</text><text x="180" y="146" text-anchor="middle" class="petite-etiquette">2 entries of 8 bytes</text><rect x="18" y="166" width="324" height="52" rx="6" class="cadre-neutre" /><text x="180" y="188" text-anchor="middle">note : [32 ; 64[</text><text x="180" y="208" text-anchor="middle" class="petite-etiquette">The string “connexion” is present</text><rect x="18" y="228" width="324" height="52" rx="6" class="cadre-resultat" /><text x="180" y="250" text-anchor="middle">bloc : [64 ; 320[</text><text x="180" y="270" text-anchor="middle" class="petite-etiquette">256 bytes to examine</text><text x="180" y="302" text-anchor="middle" class="petite-etiquette">Logical map; lengths are not to scale</text></svg><figcaption>The intervals describe byte positions. The end of each box is the start of the next; no line represents execution.</figcaption></figure><figure><svg viewBox="0 0 360 310" xmlns="http://www.w3.org/2000/svg" role="img"><title>A finding and its limits</title><desc>The block has a histogram entropy of 8 bits per byte. Compression or encryption remain possible explanations among others. An actual connection and malicious intent have not been established. Here, the block is an ordered sequence of byte values.</desc><rect x="18" y="18" width="324" height="66" rx="6" class="cadre-resultat" /><text x="180" y="43" text-anchor="middle">Finding for the complete block</text><text x="180" y="67" text-anchor="middle">H = 8 bits/byte</text><line x1="180" y1="84" x2="180" y2="119" class="trait" /><rect x="18" y="119" width="324" height="66" rx="6" class="cadre-prediction" /><text x="180" y="144" text-anchor="middle">Several possible explanations</text><text x="180" y="168" text-anchor="middle" class="petite-etiquette">Here: all values in order</text><rect x="18" y="214" width="324" height="76" rx="6" class="cadre-neutre" /><text x="180" y="239" text-anchor="middle">This finding does not establish</text><text x="180" y="261" text-anchor="middle">an actual connection</text><text x="180" y="282" text-anchor="middle">or malicious intent</text></svg><figcaption>The line links an observation to explanations to examine. The bottom box remains separate: behavior does not follow from this statistic alone.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Tie each finding to a region read and a rule; state hypotheses as hypotheses and keep executed behavior among the facts that have not been established.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Examine carnet.lumi and write defensible findings</h3><p>The static inspection records N = 320 bytes actually available. The 16-byte header carries the LUMI signature and specifies little endianness: within an integer, the least significant byte comes first. The table position field contains the decimal values 16, then 0. The table specifies 2 entries of 8 bytes: note starts at 32 and is 32 bytes long; bloc starts at 64 and is 256 bytes long. The exercise format requires contiguous regions with no overlap. We have the complete file and it remains unchanged throughout the examination.</p><ol class="etapes"><li><h3>State the reading rules</h3><p>N is the size actually available, in bytes. For a region, o is its position from the start, L its length and E its exclusive end, all expressed in bytes. The notation [o ; E[ includes o and excludes E. Positions start at 0: the last byte of a nonempty region is therefore at E − 1.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mi>o</mi><mo>+</mo><mi>L</mi><mo>;</mo><mn>0</mn><mo>≤</mo><mi>o</mi><mo>;</mo><mn>0</mn><mo>≤</mo><mi>L</mi><mo>;</mo><mi>E</mi><mo>≤</mo><mi>N</mi></mrow></math></div><p>These conditions check that a range fits within the file; they prove neither the validity of all fields nor the safety of the content. We use exact integers. A program with bounded integers would also need to prevent overflow in the addition. Here, the signature and endianness are data from the inspection, rather than the result of running the file.</p></li><li><h3>Decode the table position, then check its bounds</h3><p>In little endianness, the value of the second byte is multiplied by 256, the number of possible byte values. The decoded position is 16 + 0 × 256 = 16 bytes. This calculation locates the table; recognizing LUMI alone does not locate it.</p><p>The table contains 2 entries of 8 bytes: its length is 2 × 8 = 16 bytes. Its exclusive end is 16 + 16 = 32 bytes. It starts at the end of the header and its end remains below N: the entire table is available.</p></li><li><h3>Check the sections and recalculate the total</h3><p>For note, the exclusive end is 32 + 32 = 64 bytes. For bloc, it is 64 + 256 = 320 bytes. The table ends at the start of note; note ends at the start of bloc. The contiguity and nonoverlap conditions of our format are therefore satisfied.</p><p>The last byte of the block is at 319, since 320 is excluded. The comparison 320 ≤ 320 holds with equality: 0 bytes remain after the block. Rejecting this equality would reject a file that ends exactly where it should.</p><p>Independent check using lengths: the header and table occupy 32 bytes; including note brings the total to 64 bytes; then 64 + 256 = 320 bytes, equal to N. This total confirms our partition without replacing the checks on each start and each end.</p></li><li><h3>Calculate the indicator without attributing intent</h3><p>H denotes the entropy calculated from the histogram of byte values in the complete block, in bits per byte. Each value appears 1 time among 256 positions; its frequency p, which has no unit, is 1/256. Recalling C076·M4, this uniform histogram gives:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>H</mi><mo>=</mo><msub><mi>log</mi><mn>2</mn></msub><mo>(</mo><mn>256</mn><mo>)</mo><mo>=</mo><mn>8</mn><mtext> bits/octet</mtext></mrow></math></div><p>The logarithm to base 2 gives the number of bits, because 2 to the power 8 equals 256. This check is enough for our uniform block; we do not repeat the entropy lesson here.</p><p>The exercise screening rule flags H ≥ s, with s = 72/10 = 7.2 bits/byte. The margin H − s is 4/5, or 0.8 bits/byte: the signal is present. This margin is a difference between statistics, without a probability of malicious intent. The rule is chosen for the exercise, with no measured performance.</p><p>However, the block is simply the ordered list of all byte values. Its histogram is uniform and its description is short. H ignores order: here, its maximum value proves neither encryption, compression nor difficulty in predicting the next byte. A packing hypothesis, meaning content stored in another representation, still needs to be checked against other evidence.</p></li><li><h3>Separate text from behavior</h3><p>The word “connexion” is readable in note. The defensible finding is its presence in this region. It could serve as a displayed message or documentation. We have identified no instruction using it, no execution path reaching it and no connection event. The inspection does not provide the link between text and action.</p><p>The absence of another word would likewise not be enough to establish that the file is harmless: a different representation or a limited read can prevent its extraction. To support a claim of absence, state exactly the pattern sought, the region and the search method; this conclusion remains tied to that scope.</p></li><li><h3>Report the result and the limits of its evidence</h3><p>Possible report: “Within the 320 bytes available, the ranges of the table and sections fit within the bounds of the LUMI teaching format and form the expected partition. The note region contains ‘connexion’. The histogram of the complete block gives 8 bits/byte, above the exercise threshold of 7.2 bits/byte; the ordered byte sequence provides a direct explanation here. This examination establishes neither an actual connection nor malicious intent.”</p><p>Static analysis can sometimes demonstrate a specific property of content or code, under explicit assumptions. Our limit comes from the observations and rules used here; it is not a general impossibility of reasoning without execution. Further investigation would begin with an authorized static examination linking the evidence to its use. Any observation of behavior would require a separate protocol.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Reconstruct why the exclusive end can equal the file size, then explain why the ordered block triggers the entropy signal without establishing encryption. Finish by restating the finding about “connexion” without attributing an action to it.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The header is recognized, so the whole file is valid and safe.”</h3><p>The signature suggests an interpretation. Check the table and the stated ranges separately; a structurally consistent file can still contain dangerous content. Our checks establish only the named structural properties.</p><a href="#exemple">Review the reading rules and bounds</a></li><li><h3>“Entropy is maximal: it must be encrypted.”</h3><p>Return to the block where each byte value appears in order. The histogram is uniform, but its construction is explicit and ordered. Marginal entropy ignores order; keep the signal as evidence and look for what would distinguish the explanations.</p><a href="#intuition">Reread the diagram of the finding and its limits</a></li><li><h3>“The word “connexion” proves a connection; its absence would prove the opposite.”</h3><p>The presence of text does not prove its use. Failing to find text does not prove the absence of a behavior. State what was searched for and where, then ask for evidence that would link this text to an action.</p><a href="#exercices">Defend a report in the final exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-fin-exclue"><p class="repere">Exercise 1 · Applying bounds</p>
+<h3>The block reaches the end of the file</h3><p>The file still has 320 bytes; bloc starts at 64 and is 256 bytes long. What is its last index? Is the rule “reject if the exclusive end is greater than or equal to N” correct? Justify your answer using the bytes actually counted.</p>
+<label for="reponse-ex-fin-exclue">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fin-exclue" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fin-exclue" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fin-exclue" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fin-exclue" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The exclusive end is not the index of the last byte.</p></details><details class="indice"><summary>Hint 2</summary><p>An interval starting at o and containing L positions ends at index o + L − 1.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The exclusive end is 64 + 256 = 320. The last index is 320 − 1 = 319. The file indexed from 0 has exactly 319 as its last index.</p><p>The proposed rule wrongly rejects equality. Reject an exclusive end strictly greater than N; here 320 = 320, so the range fits. Counting from 64 to 319 inclusive gives exactly 256 positions. This validates this bound without certifying the content.</p><p class="petit-titre">Check your reasoning</p><ul><li>Give 319 as the last index and 320 as the exclusive end.</li><li>Accept equality between the exclusive end and N.</li><li>Limit the conclusion to the range checked.</li></ul></details></article><article class="exercice" id="ex-fichier-coupe"><p class="repere">Exercise 2 · Diagnosis on paper</p>
+<h3>The same attachment arrives incomplete</h3><p>The received copy now contains only 304 bytes. The header and table are unchanged; bloc still specifies 256 bytes starting at 64. How many bytes of bloc are available and how many are missing? Which parts of the previous findings can you keep? Can you reuse H = 8 bits/byte as a measurement of the complete block received?</p>
+<label for="reponse-ex-fichier-coupe">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-fichier-coupe" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-fichier-coupe" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-fichier-coupe" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-fichier-coupe" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>First calculate the length between the block position and the new end of the file.</p></details><details class="indice"><summary>Hint 2</summary><p>A value stated in the table adds no bytes to the received copy. Separate the stated block from the part actually present.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>There are 304 − 64 = 240 bytes available for bloc. The stated end is still 320; 320 − 304 = 16 bytes are missing. Check: 240 + 16 = 256 bytes.</p><p>The header, table and note are still entirely present; note ends at 64, before 304. Under the same reading rules, the presence of “connexion” in note remains a finding. However, the full range of bloc extends beyond the copy: its incompleteness must be reported.</p><p>Do not report the entropy of the old complete block as a measurement of the new block received. A calculation on the remaining prefix would have its own histogram and should be presented as covering 240 bytes. No missing byte is replaced by 0; unknown does not mean 0.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 240 bytes present and 16 missing, with a sum check.</li><li>Keep the observations about regions that remain complete, naming those regions.</li><li>Reject reuse of a statistic from the complete block as a measurement of the fragment.</li></ul></details></article><article class="exercice" id="ex-rapport"><p class="repere">Exercise 3 · Transfer and objection</p>
+<h3>Correct an overbroad verdict</h3><p>Return to the complete 320-byte file. A colleague writes: “The bounds are correct; ‘connexion’ and H = 8 prove an encrypted program that communicates. Removing this word from the report would be enough to prove it is harmless.” Rewrite the verdict with a finding, a hypothesis and a limit. Also give a specific next static check and what it could establish.</p>
+<label for="reponse-ex-rapport">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-rapport" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-rapport" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-rapport" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-rapport" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The ordered block sequence already provides another explanation for its uniform histogram.</p></details><details class="indice"><summary>Hint 2</summary><p>Evidence of presence, evidence of use and evidence of an event are different. Removing a word from the report does not change the file bytes.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Finding: the checked ranges fit within the 320 bytes; the note region contains “connexion” and the histogram of the complete block gives 8 bits/byte. Hypothesis: this type of histogram can motivate an examination for compression or encryption. In this file, the ordered sequence of all byte values already explains H without these mechanisms.</p><p>Limit: these elements alone demonstrate neither an executable program, communication nor intent. The teaching format contains data regions; their existence is not enough to make them instructions. Removing a word from the report changes the description and no property of the file.</p><p>Possible next check: compare every byte of bloc with the stated ascending sequence, across its entire range. A match confirms this local description and the explanation of the histogram. It does not prove how an application would use this block. Investigating that use would require authorization to examine the application code; an actual connection would still require an appropriate observation.</p><p class="petit-titre">Check your reasoning</p><ul><li>Separate observations tied to specific regions, a possible explanation and behavior that has not been established.</li><li>Use the ordered block as a counterexample to the implication “high entropy therefore encrypted”.</li><li>Propose a check that settles a specific question, with a stated limit.</li><li>Do not infer harmlessness from an altered report.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="borne"><summary><span class="repere">Recall 1</span><span>A region ends exactly at N. What distinction lets you decide whether it extends beyond the file?</span></summary><p>The exclusive end E = o + L can equal N. For a nonempty region, the last index is E − 1. Also check o ≥ 0 and L ≥ 0; these bounds do not certify the content.</p></details><details class="carte" data-carte="statique"><summary><span class="repere">Recall 2</span><span>What is the unjustified step between “connexion is present” and “a connection occurred”?</span></summary><p>The string is an observation about the bytes. Justification of its use and evidence of the event are missing. A documentation string can be present without having caused an action.</p></details><details class="carte" data-carte="histogramme"><summary><span class="repere">Recall 3</span><span>Why does the ordered sequence of all byte values contradict “maximum entropy therefore encryption”?</span></summary><p>Each value has the same frequency, so the histogram gives 8 bits/byte. Yet the sequence is constructed in ascending order and has a simple description. The entropy of this histogram ignores order and demonstrates no encryption mechanism.</p></details><details class="carte" data-carte="fragment"><summary><span class="repere">Recall 4</span><span>What happens to a finding when the copy is truncated?</span></summary><p>Recheck the ranges using the new size. Keep facts about regions that are still present, flag missing parts and report a statistic with the actual region used to calculate it. Missing bytes are not equivalent to a sequence of 0 bytes.</p></details><details class="carte" data-carte="preuve"><summary><span class="repere">Recall 5</span><span>What must a report contain so another person can judge the scope of its conclusion?</span></summary><p>The file and regions concerned, the reading rules, the facts checked, competing hypotheses and what remains unestablished. A next check must state the question it will settle, without promising more.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without reopening the solution, reconstruct the steps from header to report: decoding, bounds, observation, interpretation and limit. Draw the file ranges and justify equality at the exclusive end. Finish with the ordered block counterexample and a sentence about what more would be needed to establish executed behavior. Reading or answering with a hint remains assisted performance; an independent reconstruction after a delay will still need to be assessed.</p></div><div class="exports"><a class="bouton" download="c076-m5-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTU6Ym9ybmUiLAogICAgICAidW5pdGUiOiAiYzA3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImZpbi1leGNsdWUiLAogICAgICAicXVlc3Rpb24iOiAiQSByZWdpb24gZW5kcyBleGFjdGx5IGF0IE4uIFdoYXQgZGlzdGluY3Rpb24gbGV0cyB5b3UgZGVjaWRlIHdoZXRoZXIgaXQgZXh0ZW5kcyBiZXlvbmQgdGhlIGZpbGU/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIGV4Y2x1c2l2ZSBlbmQgRSA9IG8gKyBMIGNhbiBlcXVhbCBOLiBGb3IgYSBub25lbXB0eSByZWdpb24sIHRoZSBsYXN0IGluZGV4IGlzIEUg4oiSIDEuIEFsc28gY2hlY2sgbyDiiaUgMCBhbmQgTCDiiaUgMDsgdGhlc2UgYm91bmRzIGRvIG5vdCBjZXJ0aWZ5IHRoZSBjb250ZW50LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDc2LW01OnN0YXRpcXVlIiwKICAgICAgInVuaXRlIjogImMwNzYtbTUiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJwb3J0ZWUtc3RhdGlxdWUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBpcyB0aGUgdW5qdXN0aWZpZWQgc3RlcCBiZXR3ZWVuIOKAnGNvbm5leGlvbiBpcyBwcmVzZW504oCdIGFuZCDigJxhIGNvbm5lY3Rpb24gb2NjdXJyZWTigJ0/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHN0cmluZyBpcyBhbiBvYnNlcnZhdGlvbiBhYm91dCB0aGUgYnl0ZXMuIEp1c3RpZmljYXRpb24gb2YgaXRzIHVzZSBhbmQgZXZpZGVuY2Ugb2YgdGhlIGV2ZW50IGFyZSBtaXNzaW5nLiBBIGRvY3VtZW50YXRpb24gc3RyaW5nIGNhbiBiZSBwcmVzZW50IHdpdGhvdXQgaGF2aW5nIGNhdXNlZCBhbiBhY3Rpb24uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTU6aGlzdG9ncmFtbWUiLAogICAgICAidW5pdGUiOiAiYzA3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImVudHJvcGllLWV0LWluZmVyZW5jZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyB0aGUgb3JkZXJlZCBzZXF1ZW5jZSBvZiBhbGwgYnl0ZSB2YWx1ZXMgY29udHJhZGljdCDigJxtYXhpbXVtIGVudHJvcHkgdGhlcmVmb3JlIGVuY3J5cHRpb27igJ0/IiwKICAgICAgInJlcG9uc2UiOiAiRWFjaCB2YWx1ZSBoYXMgdGhlIHNhbWUgZnJlcXVlbmN5LCBzbyB0aGUgaGlzdG9ncmFtIGdpdmVzIDggYml0cy9ieXRlLiBZZXQgdGhlIHNlcXVlbmNlIGlzIGNvbnN0cnVjdGVkIGluIGFzY2VuZGluZyBvcmRlciBhbmQgaGFzIGEgc2ltcGxlIGRlc2NyaXB0aW9uLiBUaGUgZW50cm9weSBvZiB0aGlzIGhpc3RvZ3JhbSBpZ25vcmVzIG9yZGVyIGFuZCBkZW1vbnN0cmF0ZXMgbm8gZW5jcnlwdGlvbiBtZWNoYW5pc20uIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfSwKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwNzYtbTU6ZnJhZ21lbnQiLAogICAgICAidW5pdGUiOiAiYzA3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogInBlcmltZXRyZS1vYnNlcnZlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaGFwcGVucyB0byBhIGZpbmRpbmcgd2hlbiB0aGUgY29weSBpcyB0cnVuY2F0ZWQ/IiwKICAgICAgInJlcG9uc2UiOiAiUmVjaGVjayB0aGUgcmFuZ2VzIHVzaW5nIHRoZSBuZXcgc2l6ZS4gS2VlcCBmYWN0cyBhYm91dCByZWdpb25zIHRoYXQgYXJlIHN0aWxsIHByZXNlbnQsIGZsYWcgbWlzc2luZyBwYXJ0cyBhbmQgcmVwb3J0IGEgc3RhdGlzdGljIHdpdGggdGhlIGFjdHVhbCByZWdpb24gdXNlZCB0byBjYWxjdWxhdGUgaXQuIE1pc3NpbmcgYnl0ZXMgYXJlIG5vdCBlcXVpdmFsZW50IHRvIGEgc2VxdWVuY2Ugb2YgMCBieXRlcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzA3Ni1tNTpwcmV1dmUiLAogICAgICAidW5pdGUiOiAiYzA3Ni1tNSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImh5cG90aGVzZS1ldC1wcmV1dmUiLAogICAgICAicXVlc3Rpb24iOiAiV2hhdCBtdXN0IGEgcmVwb3J0IGNvbnRhaW4gc28gYW5vdGhlciBwZXJzb24gY2FuIGp1ZGdlIHRoZSBzY29wZSBvZiBpdHMgY29uY2x1c2lvbj8iLAogICAgICAicmVwb25zZSI6ICJUaGUgZmlsZSBhbmQgcmVnaW9ucyBjb25jZXJuZWQsIHRoZSByZWFkaW5nIHJ1bGVzLCB0aGUgZmFjdHMgY2hlY2tlZCwgY29tcGV0aW5nIGh5cG90aGVzZXMgYW5kIHdoYXQgcmVtYWlucyB1bmVzdGFibGlzaGVkLiBBIG5leHQgY2hlY2sgbXVzdCBzdGF0ZSB0aGUgcXVlc3Rpb24gaXQgd2lsbCBzZXR0bGUsIHdpdGhvdXQgcHJvbWlzaW5nIG1vcmUuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c076-m5-cartes.tsv" href="data:text/tab-separated-values;base64,QSByZWdpb24gZW5kcyBleGFjdGx5IGF0IE4uIFdoYXQgZGlzdGluY3Rpb24gbGV0cyB5b3UgZGVjaWRlIHdoZXRoZXIgaXQgZXh0ZW5kcyBiZXlvbmQgdGhlIGZpbGU/CVRoZSBleGNsdXNpdmUgZW5kIEUgPSBvICsgTCBjYW4gZXF1YWwgTi4gRm9yIGEgbm9uZW1wdHkgcmVnaW9uLCB0aGUgbGFzdCBpbmRleCBpcyBFIOKIkiAxLiBBbHNvIGNoZWNrIG8g4omlIDAgYW5kIEwg4omlIDA7IHRoZXNlIGJvdW5kcyBkbyBub3QgY2VydGlmeSB0aGUgY29udGVudC4JdG9kYWkgYzA3Ni1tNSBmaW4tZXhjbHVlCldoYXQgaXMgdGhlIHVuanVzdGlmaWVkIHN0ZXAgYmV0d2VlbiDigJxjb25uZXhpb24gaXMgcHJlc2VudOKAnSBhbmQg4oCcYSBjb25uZWN0aW9uIG9jY3VycmVk4oCdPwlUaGUgc3RyaW5nIGlzIGFuIG9ic2VydmF0aW9uIGFib3V0IHRoZSBieXRlcy4gSnVzdGlmaWNhdGlvbiBvZiBpdHMgdXNlIGFuZCBldmlkZW5jZSBvZiB0aGUgZXZlbnQgYXJlIG1pc3NpbmcuIEEgZG9jdW1lbnRhdGlvbiBzdHJpbmcgY2FuIGJlIHByZXNlbnQgd2l0aG91dCBoYXZpbmcgY2F1c2VkIGFuIGFjdGlvbi4JdG9kYWkgYzA3Ni1tNSBwb3J0ZWUtc3RhdGlxdWUKV2h5IGRvZXMgdGhlIG9yZGVyZWQgc2VxdWVuY2Ugb2YgYWxsIGJ5dGUgdmFsdWVzIGNvbnRyYWRpY3Qg4oCcbWF4aW11bSBlbnRyb3B5IHRoZXJlZm9yZSBlbmNyeXB0aW9u4oCdPwlFYWNoIHZhbHVlIGhhcyB0aGUgc2FtZSBmcmVxdWVuY3ksIHNvIHRoZSBoaXN0b2dyYW0gZ2l2ZXMgOCBiaXRzL2J5dGUuIFlldCB0aGUgc2VxdWVuY2UgaXMgY29uc3RydWN0ZWQgaW4gYXNjZW5kaW5nIG9yZGVyIGFuZCBoYXMgYSBzaW1wbGUgZGVzY3JpcHRpb24uIFRoZSBlbnRyb3B5IG9mIHRoaXMgaGlzdG9ncmFtIGlnbm9yZXMgb3JkZXIgYW5kIGRlbW9uc3RyYXRlcyBubyBlbmNyeXB0aW9uIG1lY2hhbmlzbS4JdG9kYWkgYzA3Ni1tNSBlbnRyb3BpZS1ldC1pbmZlcmVuY2UKV2hhdCBoYXBwZW5zIHRvIGEgZmluZGluZyB3aGVuIHRoZSBjb3B5IGlzIHRydW5jYXRlZD8JUmVjaGVjayB0aGUgcmFuZ2VzIHVzaW5nIHRoZSBuZXcgc2l6ZS4gS2VlcCBmYWN0cyBhYm91dCByZWdpb25zIHRoYXQgYXJlIHN0aWxsIHByZXNlbnQsIGZsYWcgbWlzc2luZyBwYXJ0cyBhbmQgcmVwb3J0IGEgc3RhdGlzdGljIHdpdGggdGhlIGFjdHVhbCByZWdpb24gdXNlZCB0byBjYWxjdWxhdGUgaXQuIE1pc3NpbmcgYnl0ZXMgYXJlIG5vdCBlcXVpdmFsZW50IHRvIGEgc2VxdWVuY2Ugb2YgMCBieXRlcy4JdG9kYWkgYzA3Ni1tNSBwZXJpbWV0cmUtb2JzZXJ2ZQpXaGF0IG11c3QgYSByZXBvcnQgY29udGFpbiBzbyBhbm90aGVyIHBlcnNvbiBjYW4ganVkZ2UgdGhlIHNjb3BlIG9mIGl0cyBjb25jbHVzaW9uPwlUaGUgZmlsZSBhbmQgcmVnaW9ucyBjb25jZXJuZWQsIHRoZSByZWFkaW5nIHJ1bGVzLCB0aGUgZmFjdHMgY2hlY2tlZCwgY29tcGV0aW5nIGh5cG90aGVzZXMgYW5kIHdoYXQgcmVtYWlucyB1bmVzdGFibGlzaGVkLiBBIG5leHQgY2hlY2sgbXVzdCBzdGF0ZSB0aGUgcXVlc3Rpb24gaXQgd2lsbCBzZXR0bGUsIHdpdGhvdXQgcHJvbWlzaW5nIG1vcmUuCXRvZGFpIGMwNzYtbTUgaHlwb3RoZXNlLWV0LXByZXV2ZQo=">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fnldms uhgcqk ewgy</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">sbpfio qnnjpy kzimik utzgwn ojevgl jbaumu kiof</span></span></h3><dl><div><dt>What you understand</dt><dd>A valid range, an extracted string and histogram entropy answer different questions. The ordered sequence in the lesson shows why an indicator is not enough to identify a transformation or intent. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">nbyfuv guirzf xpmrig xsgnah dodfnq azvaot lgel</span></span></dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fpopkb oirysx nhtsjd wbbbsp fyiqdc rbicwf hpraea jhuiox bdfpof qehswj ywvvtg oyyoov xjzfxp iimdoj xueiot pnwxki uizorn kyvehk kqfrgb wkiqrw uivugr jskyhk pjwdpm rzodpd</span></span></dd></div><div><dt>Level to prepare for</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">neehwq mxpoxn cjpkgo smcywf okbuws kuhlmj smny</span></span> <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jitoxx ssfczi wsnmln okdtjl rknthf gjqobw aivg</span></span> <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wlptum ayjkpq xpjdgp cgjqhb fnvflz yelfzv bimb</span></span> Reading, consulting the solution and an assisted answer do not establish any acquired level.</dd></div><div><dt>Evidence and limit</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">jkkrbt duwgzs fxknmj hgixvc mqvjhk rcahcr rpjhwd qmupxs bqlbje yvebfv ewsyjp xnzpqn nvevkp fcgppb djegdy paczvw hyuxfz fummsi ueztdv vpaiol flvohs tfpoxm jiqfrv wbfrkh grjczn xjmqax vpaimd mqcfia fbtydf rtebha dlzkvp zoxaou qicszp umfcqy xyfhuk dddvsx kmhxvy qm</span></span></dd></div><div><dt>Next step</dt><dd>Reconstruct the report and the truncated case without support after a delay. To aim for d after preparing for b and c, C119·M4 requires a dated artifact and its provenance: prepare a folder of small synthetic files and findings with explicit limits. Studying actual integration or behavior would then require authorization and separate evidence; nothing is launched here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c076-m5" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c076-m4.html">Previous</a> · <a href="c077-m1.html">Next</a></nav>
+<footer><p>Course book · C076·M5</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

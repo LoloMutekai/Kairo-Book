@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Follow threads of execution in shared memory and construct an order of actions that loses an update.">
+<title>C019·M2 · Threads and race conditions — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uegyyv jatwfk khfq</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C019·M2</p><h1>Threads and race conditions</h1><p class="objectif"><span>Your goal</span>Follow threads of execution in shared memory and construct an order of actions that loses an update.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c007-m5 : execution traces · c012-m5 : counterexamples · c019-m1 : processes and memory space</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>In a fictional application, a counter shows how many tickets have been recorded. It displays 10 tickets. Threads A and B each finish recording a new ticket, so each must add 1 ticket to the counter. Yet after their updates, the screen may display only 11 tickets. Where did the missing update go?</p><p>A thread, or thread of execution, is a sequence of instructions with its own position in the program. In our process, A and B use the same counter in memory. They also keep separate working copies: changing the counter does not automatically overwrite a value that A or B has already read.</p><p>The system can let A advance, switch to B, then resume A. These threads are concurrent when their work is in progress during the same period. They do not need to execute their instructions at the same instant: a single core can alternate their actions. Actual simultaneous execution on several cores is parallelism; it is not needed for the fault studied here.</p><p>A race condition occurs when the order of accesses to the same shared state can change whether the result is correct. Here, the addition seems correct in each thread; using an old read value can lose an update. The values and traces are fictional. We will work through an explicit model, without claiming to reproduce the instructions of a particular language or interpreter.</p><div class="schemas"><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>A shared counter and separate copies</title><desc>Within the same process, counter C holds 10 tickets. A and B read it before any write. Each keeps its own copy, r A and r B, holding 10 tickets. The lines run down from the counter to these copies; they represent reads.</desc><rect x="12" y="12" width="336" height="280" rx="9" class="cadre-neutre" /><text x="180" y="40" text-anchor="middle">Same process</text><rect x="86" y="62" width="188" height="64" rx="7" class="cadre-resultat" /><text x="180" y="88" text-anchor="middle">Shared counter</text><text x="180" y="113" text-anchor="middle">C = 10 tickets</text><path d="M138 126L94 187m-2-9 2 9 9-3M222 126L266 187m-9-3 9 3 2-9" class="trait" /><text x="52" y="158" class="petite-etiquette">read</text><text x="267" y="158" class="petite-etiquette">read</text><rect x="26" y="198" width="140" height="70" rx="7" class="cadre-prediction" /><text x="96" y="225" text-anchor="middle">Thread A</text><text x="96" y="250" text-anchor="middle">r of A = 10</text><rect x="194" y="198" width="140" height="70" rx="7" class="cadre-neutre" /><text x="264" y="225" text-anchor="middle">Thread B</text><text x="264" y="250" text-anchor="middle">r of B = 10</text><text x="180" y="317" text-anchor="middle" class="petite-etiquette">Each copy keeps the value read.</text></svg><figcaption>Boxes A and B are working areas within the same process. All values are in tickets. The central box is the single counter value that their writes will replace. The letters identify threads, not separate machines.</figcaption></figure><figure><svg viewBox="0 0 360 330" xmlns="http://www.w3.org/2000/svg" role="img"><title>An interleaving that loses an update</title><desc>Read from top to bottom: A reads 10, B reads 10, A computes 11, B computes 11, A writes 11, B writes 11. The shared counter stays at 10 until the writes, then stays at 11. The expected total is 12 tickets.</desc><text x="42" y="31">Successive actions</text><text x="317" y="31" text-anchor="middle">C</text><path d="M20 53V259m-5-7 5 7 5-7" class="trait" /><line x1="279" y1="48" x2="279" y2="266" class="trait" /><text x="42" y="71" class="prediction">A reads 10</text><text x="317" y="71" text-anchor="middle">10</text><text x="42" y="107">B reads 10</text><text x="317" y="107" text-anchor="middle">10</text><text x="42" y="143" class="prediction">A computes 11</text><text x="317" y="143" text-anchor="middle">10</text><text x="42" y="179">B computes 11</text><text x="317" y="179" text-anchor="middle">10</text><text x="42" y="215" class="prediction">A writes 11</text><text x="317" y="215" text-anchor="middle">11</text><text x="42" y="251">B writes 11</text><text x="317" y="251" text-anchor="middle">11</text><text x="180" y="293" text-anchor="middle" class="resultat">11 tickets instead of 12</text><text x="180" y="317" text-anchor="middle" class="petite-etiquette">The arrow shows order, not duration.</text></svg><figcaption>Each line finishes before the next begins. Column C gives the counter after that line, in tickets. Local calculations do not change C; the last write replaces the previous one.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>To look for a race condition, distinguish the shared value from the local copies, then interleave the actions while preserving the order within each thread.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The tickets are recorded, but the counter loses an update</h3><p>The shared counter starts at 10 tickets. The 2 threads A and B must each add 1 ticket. Let us break each update into 3 actions: read the counter, calculate the increased value, write that value to the counter.</p><ol class="etapes"><li><h3>Name the state and define the model</h3><p>C denotes the shared counter. n denotes its initial value, 10 tickets; u is the amount each thread is asked to add, 1 ticket. m is the number of requested updates, here 2. A and B are thread labels. For a thread named T, r with subscript T is its copy of the value read, and v with that subscript is its calculated value. C, n, u, r and v are expressed in tickets; m counts updates.</p><p>The arrow ← means “receives the value of”. L, K and E stand for read, calculate and write, respectively; they are action names with no unit. An update always follows this order within each thread:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>L</mi><mo>:</mo><msub><mi>r</mi><mi>T</mi></msub><mo>←</mo><mi>C</mi><mo>;</mo><mi>K</mi><mo>:</mo><msub><mi>v</mi><mi>T</mi></msub><mo>←</mo><msub><mi>r</mi><mi>T</mi></msub><mo>+</mo><mi>u</mi><mo>;</mo><mi>E</mi><mo>:</mo><mi>C</mi><mo>←</mo><msub><mi>v</mi><mi>T</mi></msub></mrow></math></div><p>We assume that each read and each write of an integer is indivisible: no thread reads part of a number. The actions form a common order visible to the threads, and each thread retains its L, K, E order. Each action executes exactly once, with no failure or other writer; integers do not overflow. The system can switch threads between these actions. These assumptions define the model studied here; they are not a guarantee for every language or every piece of hardware.</p></li><li><h3>Calculate the result that would meet the requirement</h3><p>Each new ticket must contribute u to the counter. Multiplying m by u gives the total contribution; adding it to n gives the expected result, written as C with subscript attendu, meaning “expected”.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>C</mi><mtext>attendu</mtext></msub><mo>=</mo><mi>n</mi><mo>+</mo><mi>m</mi><mi>u</mi><mo>=</mo><mn>10</mn><mo>+</mo><mn>2</mn><mo>×</mo><mn>1</mn><mo>=</mo><mn>12</mn><mtext> tickets</mtext></mrow></math></div><p>This calculation expresses what the updates must accomplish. It does not yet describe the order in which the threads will act.</p></li><li><h3>Have the threads read before any write</h3><p>A reads C and keeps r with subscript A = 10 tickets. B then reads C: no write has occurred, so r with subscript B = 10 tickets. The shared counter still holds 10 tickets. The local copies are separate, but their values are equal.</p><p>A calculates v with subscript A = 10 + 1 = 11 tickets. B calculates v with subscript B = 10 + 1 = 11 tickets. Each addition is correct. These calculations change the local values, but do not yet change counter C.</p></li><li><h3>Write the results and measure the shortfall</h3><p>A writes its calculated value: C receives 11 tickets. B then writes its own: C receives 11 tickets. Writing means replacing C with the prepared value; B does not read again when writing. Its write therefore does not add 1 to the new counter value written by A.</p><p>Let C with subscript final denote the counter after all the actions, and d the shortfall from the expected result. These quantities are expressed in tickets. Subtracting the obtained result from the expected one measures the lost update:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>d</mi><mo>=</mo><msub><mi>C</mi><mtext>attendu</mtext></msub><mo>−</mo><msub><mi>C</mi><mtext>final</mtext></msub><mo>=</mo><mn>12</mn><mo>−</mo><mn>11</mn><mo>=</mo><mn>1</mn><mtext> ticket</mtext></mrow></math></div><p>Check by counting: the 2 writes have taken place, but the counter has increased by only 11 − 10 = 1 ticket. The fault requires neither an incorrect addition nor a torn number; the threads started from the same old value.</p></li><li><h3>Change only the order of actions</h3><p>Start again from the same n. Let A complete L, K, E before B reads: A writes 11 tickets. B then reads r with subscript B = 11 tickets, calculates 11 + 1 = 12 tickets and writes 12 tickets. The shortfall becomes 12 − 12 = 0 ticket.</p><p>Independent check: counting the new tickets gives 10 + 1 + 1 = 12 tickets, matching this sequential order. We kept the data and instructions of each thread; only the interleaving changed. An interleaving mixes actions while respecting the internal order of each thread. The one that loses an update is enough to refute the guarantee “the counter is always correct” in our model.</p></li><li><h3>Describe what a fix must guarantee</h3><p>The boundary to protect covers the entire read, calculate, write sequence on C. If A has read a value and is preparing its replacement, letting B prepare its own replacement from the same old value allows the fault. A future protection mechanism must prevent this situation or detect the change and recalculate correctly.</p><p>This unit establishes the need; the next will study locks and semaphores. A randomly chosen delay does not enforce the required order. Seeing a correct result in a trial also does not demonstrate that all permitted interleavings are correct. This model describes a possible lost update without estimating its frequency in a real program.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculations. Draw C and the copies held by A and B, then describe an order that loses an update and an order that preserves it. At what point does the value read by B become stale? Explain why an indivisible write is not enough.</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“There cannot be a race condition on a single core.”</h3><p>Switching from A to B between the read and the write is enough. Replay the diagram line by line, with no simultaneous execution; the value read by B remains old when A writes.</p><a href="#intuition">Review the successive actions in the diagram</a></li><li><h3>“Adding to the counter fits on a single line, so everything happens as one block.”</h3><p>The written length of the program does not prove that its effect is indivisible. In our model, the update has 3 separate actions. Look for a guarantee covering the complete sequence; do not infer it from the write of an integer alone.</p><a href="#exemple">Review the assumptions and the L, K, E breakdown</a></li><li><h3>“I got the correct total, so the race condition is fixed.”</h3><p>The total can be correct when A finishes before B reads. That still allows the order in which all threads read the initial value. Produce that adverse order before drawing a conclusion; a delay with no guarantee does not rule it out.</p><a href="#exercices">Test the claimed guarantee</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-copies"><p class="repere">Exercise 1 · Identify and explain</p>
+<h3>The counter changes while the copy waits</h3><p>Start again from 10 tickets. A reads, then B reads. A calculates and writes its update. B has not yet calculated or written. Give C and the copy r held by B at this point; then predict the value B will write.</p>
+<label for="reponse-ex-copies">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-copies" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-copies" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-copies" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-copies" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Draw separate boxes for the shared counter and the value B has already read and kept.</p></details><details class="indice"><summary>Hint 2</summary><p>The write by A replaces C. No action refreshes the copy held by B.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A has written 10 + 1 = 11 tickets: C therefore holds 11 tickets. B read before this write; its copy remains 10 tickets.</p><p>B will calculate 10 + 1 = 11 tickets and write that value. The final counter will hold 11 tickets. The calculation does not start from 11, since B does not read C again.</p><p class="petit-titre">Check your reasoning</p><ul><li>Give C and r of B separately, using tickets as the unit.</li><li>Justify the old copy by the position of the read.</li><li>Predict the write from the copy, without inventing another read.</li></ul></details></article><article class="exercice" id="ex-ordres"><p class="repere">Exercise 2 · Reconstruct a counterexample</p>
+<h3>The same actions, different results</h3><p>Starting from 10 tickets, write a trace in which B completes its update before A reads. Then write a trace in which B reads, A reads, B calculates and writes, then A calculates and writes. Calculate the final counter values and explain what changed.</p>
+<label for="reponse-ex-ordres">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ordres" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ordres" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ordres" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ordres" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Each thread must keep its own read, calculate, write order.</p></details><details class="indice"><summary>Hint 2</summary><p>For each read, note the most recently written C, or the initial value if no thread has written yet.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>Sequential trace: B reads 10, calculates 11, writes 11; A then reads 11, calculates 12, writes 12 tickets. The threads have switched roles compared with the example, but the total increase remains 2 tickets.</p><p>Interleaved trace: B reads 10, A reads 10, B calculates 11 and writes 11, A calculates 11 and writes 11. The final counter holds 11 tickets. The 2 threads have executed their actions; the last write uses a stale read value.</p><p>The requirement and additions are identical. The position of the read by A relative to the write by B changes the total from 12 to 11 tickets. This trace is enough to show that a race condition is possible; it does not give a frequency of occurrence.</p><p class="petit-titre">Check your reasoning</p><ul><li>Write all the actions of each thread in their internal order.</li><li>Obtain 12 tickets, then 11 tickets, justifying the reads.</li><li>Explain the difference through interleaving, without assuming simultaneous execution.</li></ul></details></article><article class="exercice" id="ex-garantie"><p class="repere">Exercise 3 · Transfer and critique</p>
+<h3>Is an indivisible integer write a sufficient guarantee?</h3><p>The same fictional counter now starts at 20 tickets. A colleague guarantees that each read and each write of an integer is indivisible, then concludes that the 2 updates will necessarily produce the correct total. Each thread still adds 1 ticket. Refute or justify this conclusion with a complete trace, a shortfall calculation and the boundary that a fix must cover.</p>
+<label for="reponse-ex-garantie">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-garantie" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-garantie" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-garantie" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-garantie" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The assumptions in the example already guaranteed indivisible reads and writes.</p></details><details class="indice"><summary>Hint 2</summary><p>Have the threads read the counter before any write. Does the stated guarantee forbid this order?</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The expected result is 20 + 2 × 1 = 22 tickets. Permitted trace: A reads 20, B reads 20, A calculates 21, B calculates 21, A writes 21, B writes 21 tickets.</p><p>Each read and each write was indeed indivisible. Yet the result is 21 tickets and the shortfall is 22 − 21 = 1 ticket. The stated guarantee still permits the faulty interleaving.</p><p>The fix must address the relationship between reading and writing: prevent concurrent updates from replacing C using the same old value, or detect this situation and repeat the calculation. Making only the last write indivisible does not cover the read, calculate, write sequence. The mechanisms that ensure this property will be studied in the next unit.</p><p class="petit-titre">Check your reasoning</p><ul><li>Preserve the stated assumptions in the counterexample.</li><li>Detail the expected result, the final result and the shortfall, with their units.</li><li>Locate the need for protection across the complete update.</li><li>Do not treat a result obtained with a hint as an achieved level; repeat the reasoning without support on another day.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="fil"><summary><span class="repere">Recall 1</span><span>What do A and B share, and what do they keep separately?</span></summary><p>They use the same counter within the same process. Each thread has its position in its instructions and its working copies; writing to the counter does not refresh a value already read and kept.</p></details><details class="carte" data-carte="entrelacement"><summary><span class="repere">Recall 2</span><span>How can a race condition occur without simultaneous execution?</span></summary><p>By alternating actions: A reads, B reads, each calculates from that old read value, then each writes. This interleaving respects the order of each thread and is enough to lose an update on a single core.</p></details><details class="carte" data-carte="indivisible"><summary><span class="repere">Recall 3</span><span>Why does an indivisible write not make the update indivisible?</span></summary><p>The update also includes the read and the calculation. The counter can change between the read value being kept and its replacement being written, even if no write can be split.</p></details><details class="carte" data-carte="contre-exemple"><summary><span class="repere">Recall 4</span><span>What do a faulty order and a trial with a correct result prove?</span></summary><p>A permitted faulty order refutes the guarantee of correctness in the model. A correct trial establishes only its result for the order actually followed; it does not rule out other interleavings. Neither alone measures a real frequency.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the diagrams, reconstruct the process, the shared counter and the local copies. State the assumptions, then describe a trace that preserves the updates and a trace that loses one. Recalculate the expected result and the shortfall; finish with the boundary to protect and the proof that a successful trial does not provide. Reading this summary or giving an assisted answer does not establish an achieved level.</p></div><div class="exports"><a class="bouton" download="c019-m2-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTI6ZmlsIiwKICAgICAgInVuaXRlIjogImMwMTktbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJmaWwtZXhlY3V0aW9uIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgZG8gQSBhbmQgQiBzaGFyZSwgYW5kIHdoYXQgZG8gdGhleSBrZWVwIHNlcGFyYXRlbHk/IiwKICAgICAgInJlcG9uc2UiOiAiVGhleSB1c2UgdGhlIHNhbWUgY291bnRlciB3aXRoaW4gdGhlIHNhbWUgcHJvY2Vzcy4gRWFjaCB0aHJlYWQgaGFzIGl0cyBwb3NpdGlvbiBpbiBpdHMgaW5zdHJ1Y3Rpb25zIGFuZCBpdHMgd29ya2luZyBjb3BpZXM7IHdyaXRpbmcgdG8gdGhlIGNvdW50ZXIgZG9lcyBub3QgcmVmcmVzaCBhIHZhbHVlIGFscmVhZHkgcmVhZCBhbmQga2VwdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMjplbnRyZWxhY2VtZW50IiwKICAgICAgInVuaXRlIjogImMwMTktbTIiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJlbnRyZWxhY2VtZW50IiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gYSByYWNlIGNvbmRpdGlvbiBvY2N1ciB3aXRob3V0IHNpbXVsdGFuZW91cyBleGVjdXRpb24/IiwKICAgICAgInJlcG9uc2UiOiAiQnkgYWx0ZXJuYXRpbmcgYWN0aW9uczogQSByZWFkcywgQiByZWFkcywgZWFjaCBjYWxjdWxhdGVzIGZyb20gdGhhdCBvbGQgcmVhZCB2YWx1ZSwgdGhlbiBlYWNoIHdyaXRlcy4gVGhpcyBpbnRlcmxlYXZpbmcgcmVzcGVjdHMgdGhlIG9yZGVyIG9mIGVhY2ggdGhyZWFkIGFuZCBpcyBlbm91Z2ggdG8gbG9zZSBhbiB1cGRhdGUgb24gYSBzaW5nbGUgY29yZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMjppbmRpdmlzaWJsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWlzZS1hLWpvdXIiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgYW4gaW5kaXZpc2libGUgd3JpdGUgbm90IG1ha2UgdGhlIHVwZGF0ZSBpbmRpdmlzaWJsZT8iLAogICAgICAicmVwb25zZSI6ICJUaGUgdXBkYXRlIGFsc28gaW5jbHVkZXMgdGhlIHJlYWQgYW5kIHRoZSBjYWxjdWxhdGlvbi4gVGhlIGNvdW50ZXIgY2FuIGNoYW5nZSBiZXR3ZWVuIHRoZSByZWFkIHZhbHVlIGJlaW5nIGtlcHQgYW5kIGl0cyByZXBsYWNlbWVudCBiZWluZyB3cml0dGVuLCBldmVuIGlmIG5vIHdyaXRlIGNhbiBiZSBzcGxpdC4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMjpjb250cmUtZXhlbXBsZSIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0yIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJldXZlLWNvdXJzZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGRvIGEgZmF1bHR5IG9yZGVyIGFuZCBhIHRyaWFsIHdpdGggYSBjb3JyZWN0IHJlc3VsdCBwcm92ZT8iLAogICAgICAicmVwb25zZSI6ICJBIHBlcm1pdHRlZCBmYXVsdHkgb3JkZXIgcmVmdXRlcyB0aGUgZ3VhcmFudGVlIG9mIGNvcnJlY3RuZXNzIGluIHRoZSBtb2RlbC4gQSBjb3JyZWN0IHRyaWFsIGVzdGFibGlzaGVzIG9ubHkgaXRzIHJlc3VsdCBmb3IgdGhlIG9yZGVyIGFjdHVhbGx5IGZvbGxvd2VkOyBpdCBkb2VzIG5vdCBydWxlIG91dCBvdGhlciBpbnRlcmxlYXZpbmdzLiBOZWl0aGVyIGFsb25lIG1lYXN1cmVzIGEgcmVhbCBmcmVxdWVuY3kuIiwKICAgICAgInZlcnNpb24iOiAxLAogICAgICAic3RhdHV0IjogIm5vbi1ldmFsdWVlIgogICAgfQogIF0KfQo=">Export cards · JSON</a><a class="bouton" download="c019-m2-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBkbyBBIGFuZCBCIHNoYXJlLCBhbmQgd2hhdCBkbyB0aGV5IGtlZXAgc2VwYXJhdGVseT8JVGhleSB1c2UgdGhlIHNhbWUgY291bnRlciB3aXRoaW4gdGhlIHNhbWUgcHJvY2Vzcy4gRWFjaCB0aHJlYWQgaGFzIGl0cyBwb3NpdGlvbiBpbiBpdHMgaW5zdHJ1Y3Rpb25zIGFuZCBpdHMgd29ya2luZyBjb3BpZXM7IHdyaXRpbmcgdG8gdGhlIGNvdW50ZXIgZG9lcyBub3QgcmVmcmVzaCBhIHZhbHVlIGFscmVhZHkgcmVhZCBhbmQga2VwdC4JdG9kYWkgYzAxOS1tMiBmaWwtZXhlY3V0aW9uCkhvdyBjYW4gYSByYWNlIGNvbmRpdGlvbiBvY2N1ciB3aXRob3V0IHNpbXVsdGFuZW91cyBleGVjdXRpb24/CUJ5IGFsdGVybmF0aW5nIGFjdGlvbnM6IEEgcmVhZHMsIEIgcmVhZHMsIGVhY2ggY2FsY3VsYXRlcyBmcm9tIHRoYXQgb2xkIHJlYWQgdmFsdWUsIHRoZW4gZWFjaCB3cml0ZXMuIFRoaXMgaW50ZXJsZWF2aW5nIHJlc3BlY3RzIHRoZSBvcmRlciBvZiBlYWNoIHRocmVhZCBhbmQgaXMgZW5vdWdoIHRvIGxvc2UgYW4gdXBkYXRlIG9uIGEgc2luZ2xlIGNvcmUuCXRvZGFpIGMwMTktbTIgZW50cmVsYWNlbWVudApXaHkgZG9lcyBhbiBpbmRpdmlzaWJsZSB3cml0ZSBub3QgbWFrZSB0aGUgdXBkYXRlIGluZGl2aXNpYmxlPwlUaGUgdXBkYXRlIGFsc28gaW5jbHVkZXMgdGhlIHJlYWQgYW5kIHRoZSBjYWxjdWxhdGlvbi4gVGhlIGNvdW50ZXIgY2FuIGNoYW5nZSBiZXR3ZWVuIHRoZSByZWFkIHZhbHVlIGJlaW5nIGtlcHQgYW5kIGl0cyByZXBsYWNlbWVudCBiZWluZyB3cml0dGVuLCBldmVuIGlmIG5vIHdyaXRlIGNhbiBiZSBzcGxpdC4JdG9kYWkgYzAxOS1tMiBtaXNlLWEtam91cgpXaGF0IGRvIGEgZmF1bHR5IG9yZGVyIGFuZCBhIHRyaWFsIHdpdGggYSBjb3JyZWN0IHJlc3VsdCBwcm92ZT8JQSBwZXJtaXR0ZWQgZmF1bHR5IG9yZGVyIHJlZnV0ZXMgdGhlIGd1YXJhbnRlZSBvZiBjb3JyZWN0bmVzcyBpbiB0aGUgbW9kZWwuIEEgY29ycmVjdCB0cmlhbCBlc3RhYmxpc2hlcyBvbmx5IGl0cyByZXN1bHQgZm9yIHRoZSBvcmRlciBhY3R1YWxseSBmb2xsb3dlZDsgaXQgZG9lcyBub3QgcnVsZSBvdXQgb3RoZXIgaW50ZXJsZWF2aW5ncy4gTmVpdGhlciBhbG9uZSBtZWFzdXJlcyBhIHJlYWwgZnJlcXVlbmN5Lgl0b2RhaSBjMDE5LW0yIHByZXV2ZS1jb3Vyc2UK">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">uegyyv jatwfk khfq</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">ruoamf kutfzf zugwse oihnte zxepgq tyjvgc oilm</span></span></h3><dl><div><dt>What you understand</dt><dd>A shared counter can lose an update even though the additions in each thread are correct. The proof depends on the retained read values and a permitted interleaving. The tickets are a fictional scene; the cited code constructs identifiers, not this ticket counter.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">bvbdoj zjfdvi ljgsrj vgmzzf bjdnzh xvsxwf vhjyig vmylwi ozwshl blgoqz ntwfrc ozlgue xmwxxm mqvqqq cglihk owhgxf ovoxih daoens kpfqbo wqllcm vydumn gqttda hytytn ccsolx</span></span></dd></div><div><dt>The level to prepare for</dt><dd>At the level targeted by this unit, reconstruct the local copies, the shared state and an order that loses an update without support. Reading, consulting a correction and giving an assisted answer never constitute an achieved level. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vbnvxf ihuehn aedxnw qntcxb tikdql giskgp clps</span></span></dd></div><div><dt>Evidence and limits</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mulkjk ipoexw nfekxj kryplq wovplj hrzefq qkjbex fneoxz crxplw gxaxfb zoayow kaypjg ztjgkr nzwkft vmspyg spwuka hswvip gatygp gxyute kxnqnw kxyygl kiyeys bqwfsr urfqjh</span></span></dd></div><div><dt>Next step</dt><dd>Repeat the traces without help on another day, then study locks and semaphores in the next unit. For a later real verification, the remaining work would be to inventory accesses to the state concerned and trace the calls actually used, under separate authorization. This page entails no project change or launch.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c019-m2" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c019-m1.html">Previous</a> · <a href="c019-m3.html">Next</a></nav>
+<footer><p>Course book · C019·M2</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

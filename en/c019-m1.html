@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish a program from its processes, track their private values, and explain why an address must be accompanied by its address space.">
+<title>C019·M1 · Processes and address spaces — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lvjacs huvvnp zcyu</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 1 <span>·</span> C019·M1</p><h1>Processes and address spaces</h1><p class="objectif"><span>Your goal</span>Distinguish a program from its processes, track their private values, and explain why an address must be accompanied by its address space.</p><p class="prerequis"><strong>Before you start</strong><br>c016-m5 : documentation · c007-m5 : execution traces · c012-m5 : counterexamples</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>You are preparing drafts of label sheets. A small program keeps a counter n: the number of labels planned in the current draft. You run this same program in processes A and B. Each starts with 12 labels. You add 3 in A: should the counter in B change?</p><p>Think of the program as an instruction sheet, and each process as a workstation that follows it with its own draft. A program is a set of instructions stored, for example, in a file. A process is an execution of a program managed by the operating system: it has an execution state, including its current position in the instructions, and an address space. The system assigns it a process identifier, often abbreviated PID, that distinguishes it from other processes currently alive on the same system.</p><p>An address space is the set of addresses that this process can use, together with the rules governing their use. A virtual address is a number interpreted in that space; it does not directly specify a location in physical memory modules. Here, the counter is private: a write by A changes only the draft in A. A and B can exist at the same time without executing their instructions at exactly the same instant.</p><p>The entire scenario and its numbers are fictional. We choose independent launches, each initializing n to 12, with no communication between them and no shared memory configured. The isolation of the counters is an explicit assumption of this example. The private data of separate processes do not become shared just because the program or variable name is the same.</p><div class="schemas"><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>One program, separate states</title><desc>The same program initializes processes A and B. Initially, each has a private counter of 12 labels. The branches show launches, not communication between the counters.</desc><rect x="66" y="12" width="228" height="57" rx="7" class="cadre-neutre" /><text x="180" y="36" text-anchor="middle">Stored program</text><text x="180" y="57" text-anchor="middle" class="petite-etiquette">Initialize, then change n</text><path d="M180 69V92H90V119M180 92H270V119" class="trait" /><path d="M86 114L90 119L94 114M266 114L270 119L274 114" class="trait" /><rect x="14" y="119" width="152" height="88" rx="7" class="cadre-prediction" /><rect x="194" y="119" width="152" height="88" rx="7" class="cadre-resultat" /><text x="90" y="144" text-anchor="middle">Process A</text><text x="90" y="169" text-anchor="middle">n = 12</text><text x="90" y="192" text-anchor="middle" class="petite-etiquette">Private draft</text><text x="270" y="144" text-anchor="middle">Process B</text><text x="270" y="169" text-anchor="middle">n = 12</text><text x="270" y="192" text-anchor="middle" class="petite-etiquette">Private draft</text><text x="180" y="238" text-anchor="middle" class="petite-etiquette">n counts labels in each draft.</text></svg><figcaption>The top describes the instructions; the lower boxes represent the executions and their initial states. A and B identify processes, not different programs.</figcaption></figure><figure><svg viewBox="0 0 360 260" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same address in separate spaces</title><desc>After the changes, the private block starting at the fictional address 128 contains 15 labels in A and 7 in B. Each block occupies 4 bytes. The address alone therefore does not identify a unique value.</desc><text x="180" y="28" text-anchor="middle">After the changes</text><rect x="14" y="47" width="152" height="143" rx="7" class="cadre-prediction" /><rect x="194" y="47" width="152" height="143" rx="7" class="cadre-resultat" /><text x="90" y="74" text-anchor="middle">Space of A</text><text x="270" y="74" text-anchor="middle">Space of B</text><rect x="28" y="91" width="124" height="78" rx="5" class="cadre-neutre" /><rect x="208" y="91" width="124" height="78" rx="5" class="cadre-neutre" /><text x="90" y="115" text-anchor="middle" class="petite-etiquette">Address 128</text><text x="90" y="146" text-anchor="middle">n = 15</text><text x="270" y="115" text-anchor="middle" class="petite-etiquette">Address 128</text><text x="270" y="146" text-anchor="middle">n = 7</text><text x="180" y="218" text-anchor="middle" class="petite-etiquette">4 bytes per fictional counter.</text><text x="180" y="242" text-anchor="middle" class="petite-etiquette">The boundary indicates private data.</text></svg><figcaption>The numbers n count labels; bytes measure the size of the blocks. Equal addresses are a choice for the diagram: a real system does not guarantee the same address for variables in independent launches.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Before reading or changing a value, name the process and the address in its space. The same program, name, and address number are not enough to identify shared data.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>Track each draft to its final value</h3><p>Initially, A and B each have n = 12 labels. A adds 3 labels, then B removes 5. Our fictional machine stores each integer counter in a private block of 4 bytes starting at virtual address 128. We track the values and the space occupied by the counters alone.</p><ol class="etapes"><li><h3>Define what is read and what is counted</h3><p>A and B denote the processes. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">dspqjk russqi hczbmy afbpus kzijhx oqxirb szqezo hezxlt xhyaje gyuiih pbauxj aqclmi jnbsfw kz</span></span> A byte is a unit of storage. The size s = 4 bytes is imposed by our fictional machine; it is not the size of a Python integer.</p><p>M_P(a) denotes the integer value decoded from the block of s bytes starting at a in process P. This notation reads the entire block, not just the byte at a. Here, it gives a number of labels. The pair (P, a) specifies where we read; the value read is a separate piece of information.</p><p>At initialization: M_A(a) = M_B(a) = 12 labels. Equal values do not demonstrate that the blocks are shared. We assume that the operations can be represented in the chosen blocks and that readings take place after each change is complete.</p></li><li><h3>Add in the intended process</h3><p>The addition applies to draft A. We read its value, add the requested quantity, then write the result back to its block. The prime symbol below denotes the value after this step.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>n</mi><mi>A</mi><mo>′</mo></msubsup><mo>=</mo><msub><mi>n</mi><mi>A</mi></msub><mo>+</mo><mn>3</mn><mo>=</mo><mn>12</mn><mo>+</mo><mn>3</mn><mo>=</mo><mn>15</mn><mtext> étiquettes</mtext></mrow></math></div><p>A now contains 15 labels. B has received no operation: 12 + 0 = 12 labels. Writing in A has not changed the private block of B.</p></li><li><h3>Subtract starting from the value in B</h3><p>The removal applies to B. We must therefore start from 12, the value in B after the previous step, rather than 15, which belongs to A.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msubsup><mi>n</mi><mi>B</mi><mo>′</mo></msubsup><mo>=</mo><msub><mi>n</mi><mi>B</mi></msub><mo>−</mo><mn>5</mn><mo>=</mo><mn>12</mn><mo>−</mo><mn>5</mn><mo>=</mo><mn>7</mn><mtext> étiquettes</mtext></mrow></math></div><p>A has received no further operation: 15 + 0 = 15 labels. The final state is therefore A: 15 labels; B: 7 labels. Their difference is 15 − 7 = 8 labels.</p></li><li><h3>Locate the block and distinguish its address from its contents</h3><p>The block contains s consecutive bytes, with the first at a. The last address is therefore a + (s − 1), because the starting byte already counts as part of the block. The final offset is 4 − 1 = 3 bytes; the last address is 128 + 3 = 131.</p><p>In each space, the block therefore runs from 128 to 131, including both endpoints. Reverse check: 131 − 128 + 1 = 4 bytes. The contents can change from 12 to 15 labels without changing the size or address of this fictional block.</p><p>At the same number a = 128, M_A(a) ends up equal to 15 labels and M_B(a) equals 7 labels. The system interprets addresses within their spaces; equal numbers prove neither the same private data nor the same physical memory location.</p></li><li><h3>Count the space actually described by the model</h3><p>Each process has its private block of s bytes. The number of processes p is 2; it is a count, with no physical unit. The space S occupied by the counters alone is the product p × s.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>S</mi><mo>=</mo><mi>p</mi><mo>×</mo><mi>s</mi><mo>=</mo><mn>2</mn><mo>×</mo><mn>4</mn><mo>=</mo><mn>8</mn><mtext> octets</mtext></mrow></math></div><p>Check by addition: 4 + 4 = 8 bytes. The values 15 and 7 are not sizes: they count labels. S does not measure all the memory used by the processes. Instructions, other data, and management overhead are outside this small model; in particular, instruction pages can be physically shared.</p></li><li><h3>Check the operations and the isolation</h3><p>Return to the start using the inverse operations: 15 − 3 = 12 labels in A; 7 + 5 = 12 labels in B. The calculations recover the initial values separately.</p><p>Then check the targets: the step affecting A left B at 12, and the step affecting B left A at 15. An arithmetically correct result in the wrong space would still be incorrect. If a real system showed the counters influencing each other, we would need to examine its communication and actual sharing before applying our assumptions to it.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the results and draw the blocks for A and B. Describe each read and each write. Why must we know the process to interpret the address, and why does the number of labels not tell us the size of the counter?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“It is the same program: changing n in A also changes n in B.”</h3><p>The program supplies the instructions. The processes in our scenario keep separate private data. Track the changes with their target: after the addition in A, B stays at 12 labels. Any sharing would require an additional mechanism, which is absent from the assumptions of this scenario.</p><a href="#intuition">Review the branches from the program to the processes</a></li><li><h3>“The address 128 is identical: the values must be identical too.”</h3><p>The space in which the number is interpreted is missing. Read the pair (A, 128), then the pair (B, 128). Their private blocks contain 15 and 7 labels respectively at the end of the example.</p><a href="#exemple">Revisit the location of the block and its value</a></li><li><h3>“The counter changes to 15: it occupies 15 bytes.”</h3><p>15 counts the labels in the draft; 4 bytes is the fixed size of its representation. Keep the units on every line. In our fictional machine, the changes in the example retain this same size.</p><a href="#exemple">Count the space again, keeping the units</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-situer"><p class="repere">Exercise 1 · Warm-up · distinguish the objects</p>
+<h3>Count the executions and the data</h3><p>Just after A and B are launched, before any changes, give the number of distinct programs used, processes, and private counter blocks. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wjkipy wsgsdn buja</span></span> Does the identical name n prove sharing?</p>
+<label for="reponse-ex-situer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-situer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-situer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-situer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-situer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Separate the instruction sheet from the workstations executing it.</p></details><details class="indice"><summary>Hint 2</summary><p>Count the process boxes, then the private block of each.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The scenario uses 1 distinct program, executed by 2 processes. Each has 1 private block: there are 2 counter blocks. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">cybsoa ebijhn fzzw</span></span></p><p>The identical name comes from the same instructions. The initial equality comes from the same initialization. Neither demonstrates sharing; sharing would contradict the assumption of private blocks in the scenario.</p><p class="petit-titre">Check your reasoning</p><ul><li>You distinguish 1 program, 2 processes, and 2 private blocks.</li><li>You justify the equal values by initialization, without inferring shared data.</li></ul></details></article><article class="exercice" id="ex-ecrire"><p class="repere">Exercise 2 · Application · track a write</p>
+<h3>A further change in A</h3><p>Start from the final state of the example: A contains 15 labels and B contains 7. A adds another 2 labels. Give the new values, their difference A minus B, then the space occupied by the counters alone. Do the addresses of their blocks change in our model?</p>
+<label for="reponse-ex-ecrire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-ecrire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-ecrire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-ecrire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-ecrire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Only the counter in the target process A receives the addition.</p></details><details class="indice"><summary>Hint 2</summary><p>For the space, use the number of blocks and their fixed size again; numbers of labels are not bytes.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>In A: 15 + 2 = 17 labels. B stays at 7 labels. The difference is 17 − 7 = 10 labels. Reverse check of the addition: 17 − 2 = 15 labels.</p><p>The blocks each remain 4 bytes in size: 2 × 4 = 8 bytes for the counters alone. Each still starts at the fictional address 128 in its own space. A different value does not require the block to move here.</p><p class="petit-titre">Check your reasoning</p><ul><li>You obtain A = 17 and B = 7 labels, explaining why B does not change.</li><li>You give a difference of 10 labels and 8 bytes of space, with their units.</li><li>You place the addresses in their spaces and limit the fixed size to our model.</li></ul></details></article><article class="exercice" id="ex-relancer"><p class="repere">Exercise 3 · Transfer · discuss a claim</p>
+<h3>The program still exists; the process has changed</h3><p>Start again from the end of the example, without the addition in the previous exercise. A stays open. B is closed, then the same program is relaunched in a new process C, initialized as specified in the scenario. Someone claims: “C must recover 7 labels, since the program has not changed.” Respond. Give the values in A and C, their difference, and the space occupied by the counters while B is closed, then after the new launch.</p>
+<label for="reponse-ex-relancer">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-relancer" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-relancer" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-relancer" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-relancer" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The scenario provides no saving or transmission of the counter in B. A new execution goes through initialization again.</p></details><details class="indice"><summary>Hint 2</summary><p>Separate the moments: after B closes, only the counter in A remains in our model; after C launches, a new block is added.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The program file stores the instructions, including initialization. It is not the private block of process B. With no saving or transmission mechanism in the scenario, the new execution C therefore initializes its counter to 12 labels. A stays at 15 labels. The difference A minus C is 15 − 12 = 3 labels.</p><p>While B is closed and before C launches, the space occupied by the counters still associated with the processes in the scenario is 8 − 4 = 4 bytes. After C launches: 4 + 4 = 8 bytes. This block count does not measure the immediate physical release of memory by a real system.</p><p>The proposed statement confuses the stored program with the state of its previous execution. C is a new process; it does not automatically receive the identity or state of B. The system can reuse process numbers after processes end: an isolated PID is therefore not enough to identify an execution throughout an entire history.</p><p class="petit-titre">Check your reasoning</p><ul><li>You keep A at 15 labels and initialize C to 12 labels, with a difference of 3 labels.</li><li>You explain the role of the initialization instructions and the assumption of no transmission.</li><li>You distinguish 4 bytes while B is closed from 8 bytes after the launch, without claiming a measurement of physical memory.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="programme-processus"><summary><span class="repere">Recall 1</span><span>Why does running the same program in A and B not create a single shared counter?</span></summary><p>The program supplies the same instructions. Each process in the scenario initializes its own state in its address space. The counter blocks are private and no communication is specified.</p></details><details class="carte" data-carte="adresse-espace"><summary><span class="repere">Recall 2</span><span>What is missing from the statement “read the counter at address 128”?</span></summary><p>The process and its address space. In the final state of the example, the block starting at this address contains 15 labels in A and 7 in B. The virtual address alone does not identify a shared value.</p></details><details class="carte" data-carte="valeur-taille"><summary><span class="repere">Recall 3</span><span>How can a counter of 15 labels fit in 4 bytes?</span></summary><p>The number of labels is the value represented; bytes measure the space occupied by its representation. Our fictional machine imposes a block of 4 bytes for the values used. This choice does not describe the size of a Python integer.</p></details><details class="carte" data-carte="controle-local"><summary><span class="repere">Recall 4</span><span>What checks should you perform after the addition in A and the removal in B?</span></summary><p>Undo each operation to recover 12 labels, then check that each write changed only its target. A correct addition assigned to the wrong process is still an error.</p></details><details class="carte" data-carte="nouvelle-execution"><summary><span class="repere">Recall 5</span><span>Why does the new process C not automatically recover the final counter value from B?</span></summary><p>The stored program contains the initialization instructions. In this scenario with no saving or transmission, C executes them and starts with 12 labels. Keeping the program does not preserve the private state of the previous process.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without looking at the diagrams, reconstruct this sequence with the counter: stored instructions → executions A and B → private blocks → process and address pair → write to its target → reverse check and check of the other block. Finally, explain why a new execution starts from initialization again in this scenario. Each time, distinguish the value in labels from the space in bytes.</p></div><div class="exports"><a class="bouton" download="c019-m1-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMwMTktbTE6cHJvZ3JhbW1lLXByb2Nlc3N1cyIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAicHJvZ3JhbW1lLWV0LXByb2Nlc3N1cyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaHkgZG9lcyBydW5uaW5nIHRoZSBzYW1lIHByb2dyYW0gaW4gQSBhbmQgQiBub3QgY3JlYXRlIGEgc2luZ2xlIHNoYXJlZCBjb3VudGVyPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBwcm9ncmFtIHN1cHBsaWVzIHRoZSBzYW1lIGluc3RydWN0aW9ucy4gRWFjaCBwcm9jZXNzIGluIHRoZSBzY2VuYXJpbyBpbml0aWFsaXplcyBpdHMgb3duIHN0YXRlIGluIGl0cyBhZGRyZXNzIHNwYWNlLiBUaGUgY291bnRlciBibG9ja3MgYXJlIHByaXZhdGUgYW5kIG5vIGNvbW11bmljYXRpb24gaXMgc3BlY2lmaWVkLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMDE5LW0xOmFkcmVzc2UtZXNwYWNlIiwKICAgICAgInVuaXRlIjogImMwMTktbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJhZHJlc3NlLXZpcnR1ZWxsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGlzIG1pc3NpbmcgZnJvbSB0aGUgc3RhdGVtZW50IOKAnHJlYWQgdGhlIGNvdW50ZXIgYXQgYWRkcmVzcyAxMjjigJ0/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHByb2Nlc3MgYW5kIGl0cyBhZGRyZXNzIHNwYWNlLiBJbiB0aGUgZmluYWwgc3RhdGUgb2YgdGhlIGV4YW1wbGUsIHRoZSBibG9jayBzdGFydGluZyBhdCB0aGlzIGFkZHJlc3MgY29udGFpbnMgMTUgbGFiZWxzIGluIEEgYW5kIDcgaW4gQi4gVGhlIHZpcnR1YWwgYWRkcmVzcyBhbG9uZSBkb2VzIG5vdCBpZGVudGlmeSBhIHNoYXJlZCB2YWx1ZS4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMTp2YWxldXItdGFpbGxlIiwKICAgICAgInVuaXRlIjogImMwMTktbTEiLAogICAgICAibGFuZ3VlIjogImVuIiwKICAgICAgIm5vdGlvbiI6ICJ2YWxldXItZXQtc3RvY2thZ2UiLAogICAgICAicXVlc3Rpb24iOiAiSG93IGNhbiBhIGNvdW50ZXIgb2YgMTUgbGFiZWxzIGZpdCBpbiA0IGJ5dGVzPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSBudW1iZXIgb2YgbGFiZWxzIGlzIHRoZSB2YWx1ZSByZXByZXNlbnRlZDsgYnl0ZXMgbWVhc3VyZSB0aGUgc3BhY2Ugb2NjdXBpZWQgYnkgaXRzIHJlcHJlc2VudGF0aW9uLiBPdXIgZmljdGlvbmFsIG1hY2hpbmUgaW1wb3NlcyBhIGJsb2NrIG9mIDQgYnl0ZXMgZm9yIHRoZSB2YWx1ZXMgdXNlZC4gVGhpcyBjaG9pY2UgZG9lcyBub3QgZGVzY3JpYmUgdGhlIHNpemUgb2YgYSBQeXRob24gaW50ZWdlci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMTpjb250cm9sZS1sb2NhbCIsCiAgICAgICJ1bml0ZSI6ICJjMDE5LW0xIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiY29udHJvbGUtZGVzLWVjcml0dXJlcyIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IGNoZWNrcyBzaG91bGQgeW91IHBlcmZvcm0gYWZ0ZXIgdGhlIGFkZGl0aW9uIGluIEEgYW5kIHRoZSByZW1vdmFsIGluIEI/IiwKICAgICAgInJlcG9uc2UiOiAiVW5kbyBlYWNoIG9wZXJhdGlvbiB0byByZWNvdmVyIDEyIGxhYmVscywgdGhlbiBjaGVjayB0aGF0IGVhY2ggd3JpdGUgY2hhbmdlZCBvbmx5IGl0cyB0YXJnZXQuIEEgY29ycmVjdCBhZGRpdGlvbiBhc3NpZ25lZCB0byB0aGUgd3JvbmcgcHJvY2VzcyBpcyBzdGlsbCBhbiBlcnJvci4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzAxOS1tMTpub3V2ZWxsZS1leGVjdXRpb24iLAogICAgICAidW5pdGUiOiAiYzAxOS1tMSIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImV0YXQtZHVuZS1leGVjdXRpb24iLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGRvZXMgdGhlIG5ldyBwcm9jZXNzIEMgbm90IGF1dG9tYXRpY2FsbHkgcmVjb3ZlciB0aGUgZmluYWwgY291bnRlciB2YWx1ZSBmcm9tIEI/IiwKICAgICAgInJlcG9uc2UiOiAiVGhlIHN0b3JlZCBwcm9ncmFtIGNvbnRhaW5zIHRoZSBpbml0aWFsaXphdGlvbiBpbnN0cnVjdGlvbnMuIEluIHRoaXMgc2NlbmFyaW8gd2l0aCBubyBzYXZpbmcgb3IgdHJhbnNtaXNzaW9uLCBDIGV4ZWN1dGVzIHRoZW0gYW5kIHN0YXJ0cyB3aXRoIDEyIGxhYmVscy4gS2VlcGluZyB0aGUgcHJvZ3JhbSBkb2VzIG5vdCBwcmVzZXJ2ZSB0aGUgcHJpdmF0ZSBzdGF0ZSBvZiB0aGUgcHJldmlvdXMgcHJvY2Vzcy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9CiAgXQp9Cg==">Export cards · JSON</a><a class="bouton" download="c019-m1-cartes.tsv" href="data:text/tab-separated-values;base64,V2h5IGRvZXMgcnVubmluZyB0aGUgc2FtZSBwcm9ncmFtIGluIEEgYW5kIEIgbm90IGNyZWF0ZSBhIHNpbmdsZSBzaGFyZWQgY291bnRlcj8JVGhlIHByb2dyYW0gc3VwcGxpZXMgdGhlIHNhbWUgaW5zdHJ1Y3Rpb25zLiBFYWNoIHByb2Nlc3MgaW4gdGhlIHNjZW5hcmlvIGluaXRpYWxpemVzIGl0cyBvd24gc3RhdGUgaW4gaXRzIGFkZHJlc3Mgc3BhY2UuIFRoZSBjb3VudGVyIGJsb2NrcyBhcmUgcHJpdmF0ZSBhbmQgbm8gY29tbXVuaWNhdGlvbiBpcyBzcGVjaWZpZWQuCXRvZGFpIGMwMTktbTEgcHJvZ3JhbW1lLWV0LXByb2Nlc3N1cwpXaGF0IGlzIG1pc3NpbmcgZnJvbSB0aGUgc3RhdGVtZW50IOKAnHJlYWQgdGhlIGNvdW50ZXIgYXQgYWRkcmVzcyAxMjjigJ0/CVRoZSBwcm9jZXNzIGFuZCBpdHMgYWRkcmVzcyBzcGFjZS4gSW4gdGhlIGZpbmFsIHN0YXRlIG9mIHRoZSBleGFtcGxlLCB0aGUgYmxvY2sgc3RhcnRpbmcgYXQgdGhpcyBhZGRyZXNzIGNvbnRhaW5zIDE1IGxhYmVscyBpbiBBIGFuZCA3IGluIEIuIFRoZSB2aXJ0dWFsIGFkZHJlc3MgYWxvbmUgZG9lcyBub3QgaWRlbnRpZnkgYSBzaGFyZWQgdmFsdWUuCXRvZGFpIGMwMTktbTEgYWRyZXNzZS12aXJ0dWVsbGUKSG93IGNhbiBhIGNvdW50ZXIgb2YgMTUgbGFiZWxzIGZpdCBpbiA0IGJ5dGVzPwlUaGUgbnVtYmVyIG9mIGxhYmVscyBpcyB0aGUgdmFsdWUgcmVwcmVzZW50ZWQ7IGJ5dGVzIG1lYXN1cmUgdGhlIHNwYWNlIG9jY3VwaWVkIGJ5IGl0cyByZXByZXNlbnRhdGlvbi4gT3VyIGZpY3Rpb25hbCBtYWNoaW5lIGltcG9zZXMgYSBibG9jayBvZiA0IGJ5dGVzIGZvciB0aGUgdmFsdWVzIHVzZWQuIFRoaXMgY2hvaWNlIGRvZXMgbm90IGRlc2NyaWJlIHRoZSBzaXplIG9mIGEgUHl0aG9uIGludGVnZXIuCXRvZGFpIGMwMTktbTEgdmFsZXVyLWV0LXN0b2NrYWdlCldoYXQgY2hlY2tzIHNob3VsZCB5b3UgcGVyZm9ybSBhZnRlciB0aGUgYWRkaXRpb24gaW4gQSBhbmQgdGhlIHJlbW92YWwgaW4gQj8JVW5kbyBlYWNoIG9wZXJhdGlvbiB0byByZWNvdmVyIDEyIGxhYmVscywgdGhlbiBjaGVjayB0aGF0IGVhY2ggd3JpdGUgY2hhbmdlZCBvbmx5IGl0cyB0YXJnZXQuIEEgY29ycmVjdCBhZGRpdGlvbiBhc3NpZ25lZCB0byB0aGUgd3JvbmcgcHJvY2VzcyBpcyBzdGlsbCBhbiBlcnJvci4JdG9kYWkgYzAxOS1tMSBjb250cm9sZS1kZXMtZWNyaXR1cmVzCldoeSBkb2VzIHRoZSBuZXcgcHJvY2VzcyBDIG5vdCBhdXRvbWF0aWNhbGx5IHJlY292ZXIgdGhlIGZpbmFsIGNvdW50ZXIgdmFsdWUgZnJvbSBCPwlUaGUgc3RvcmVkIHByb2dyYW0gY29udGFpbnMgdGhlIGluaXRpYWxpemF0aW9uIGluc3RydWN0aW9ucy4gSW4gdGhpcyBzY2VuYXJpbyB3aXRoIG5vIHNhdmluZyBvciB0cmFuc21pc3Npb24sIEMgZXhlY3V0ZXMgdGhlbSBhbmQgc3RhcnRzIHdpdGggMTIgbGFiZWxzLiBLZWVwaW5nIHRoZSBwcm9ncmFtIGRvZXMgbm90IHByZXNlcnZlIHRoZSBwcml2YXRlIHN0YXRlIG9mIHRoZSBwcmV2aW91cyBwcm9jZXNzLgl0b2RhaSBjMDE5LW0xIGV0YXQtZHVuZS1leGVjdXRpb24K">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">lvjacs huvvnp zcyu</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">xpqdxp seiqpi lxdsvu dhlmqf cvuhym iepwvh yzcl</span></span></h3><dl><div><dt>What you understand</dt><dd>A program name is not enough to identify an execution. A process has its own state; interpreting an address requires its address space. Our fictional counter makes this distinction visible without representing all the memory of a real process.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">olbcza nqmjld ltnpgg eqgzey lkjcdj zabemh hecwum mowktr ihlzaj yughxb iglrfr fujbqf lahyyw cgsiul oqcsbm adzaja knuoqy pnmuos laahiy bxdadq nmzsow qqepcr bhewwp zblwdl</span></span></dd></div><div><dt>Your level</dt><dd>To prepare: distinguish program, process, address, and value, then track a private write without a hint. Reading, consulting a correction, and giving an assisted answer do not confer any achieved level. <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">yfcsfu jggtid yzsgjo ndkxyh lfgisg cjdgvy cvkb</span></span></dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">wfmvlq flgurw mcavdg htzpzl xtkjqf pqrkxe xrzmvh abkfzv wfgvfh vmyxdz lsvjnn cykaue hnztos xkaitz zkimzx lvgkyf oykewx bbrmyv trzgaj agmgaf fgychj ngqrgv yqrlre rxuodo bejhix lprqro cxwspo jgmjwt nlzqbs aabmdc hueayj wuahbf trzvqk aiwney jikhfv iihdsv moxptr rb</span></span></dd></div><div><dt>To continue</dt><dd>Redo the example and the relaunch without help on another day, justifying the assumptions. Then move on to C019·M2, which will introduce threads and races. An actual check of the cited module would require a separate mandate and evidence of its invocation; no system manipulation is needed for this course.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c019-m1" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c018-m5.html">Previous</a> · <a href="c019-m2.html">Next</a></nav>
+<footer><p>Course book · C019·M1</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>

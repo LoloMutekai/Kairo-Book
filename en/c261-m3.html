@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="Distinguish persistence from long memory, then calculate what temporal dependencies add to the variance of a mean.">
+<title>C261·M3 · Long memory — Course book</title>
+<style>:root {
+  color-scheme:light;
+  --fond:#fbf6f8;
+  --surface:#fffafd;
+  --encre:#1f1a24;
+  --secondaire:#62596a;
+  --filet:#ded2dd;
+  --rose:#8c355d;
+  --rose-fond:#f5e6ed;
+  --lavande:#66508c;
+  --or:#765518;
+  --or-fond:#f5eedf;
+  --focus:#74449a;
+  --serif:"Newsreader","Nimbus Roman","Noto Serif",Georgia,serif;
+  --mono:"IBM Plex Mono","DejaVu Sans Mono",monospace
+}
+@media(prefers-color-scheme:dark) {
+  :root:not([data-theme=clair]) {
+    color-scheme:dark;
+    --fond:#0d0e12;
+    --surface:#16131a;
+    --encre:#f2e8ed;
+    --secondaire:#b4acbc;
+    --filet:#42394a;
+    --rose:#efa5c3;
+    --rose-fond:#2b1c27;
+    --lavande:#c8b5ed;
+    --or:#e6c37b;
+    --or-fond:#272219;
+    --focus:#d8b5fb
+  }
+}
+:root[data-theme=sombre] {
+  color-scheme:dark;
+  --fond:#0d0e12;
+  --surface:#16131a;
+  --encre:#f2e8ed;
+  --secondaire:#b4acbc;
+  --filet:#42394a;
+  --rose:#efa5c3;
+  --rose-fond:#2b1c27;
+  --lavande:#c8b5ed;
+  --or:#e6c37b;
+  --or-fond:#272219;
+  --focus:#d8b5fb
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-padding-top:1.5rem
+}
+body {
+  margin:0;
+  background:var(--fond);
+  color:var(--encre);
+  font-family:var(--serif);
+  font-size:20px;
+  line-height:1.65
+}
+a {
+  color:var(--rose);
+  text-underline-offset:.22em
+}
+a:hover {
+  text-decoration-thickness:2px
+}
+button,select,textarea,input {
+  font:inherit;
+  color:inherit
+}
+button,select {
+  cursor:pointer
+}
+button,a,summary,select,textarea {
+  touch-action:manipulation
+}
+:focus-visible {
+  outline:3px solid var(--focus);
+  outline-offset:5px
+}
+::selection {
+  background:var(--rose-fond);
+  color:var(--encre)
+}
+.js-seulement {
+  display:none
+}
+.avec-js .js-seulement {
+  display:flex
+}
+.evitement {
+  position:absolute;
+  top:-100px;
+  left:1rem;
+  z-index:10;
+  padding:.7rem;
+  background:var(--surface)
+}
+.evitement:focus {
+  top:1rem
+}
+.barre {
+  max-width:1260px;
+  margin:auto;
+  padding:22px 48px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  border-bottom:1px solid var(--filet)
+}
+.marque {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  color:var(--encre);
+  font-size:25px;
+  font-weight:bold;
+  min-height:44px
+}
+.marque svg {
+  width:36px;
+  height:28px;
+  fill:none;
+  stroke:var(--rose);
+  stroke-width:2
+}
+.marque span {
+  font-weight:normal;
+  font-size:14px;
+  color:var(--secondaire);
+  margin-left:12px;
+  letter-spacing:.03em
+}
+.theme {
+  gap:10px;
+  align-items:center;
+  font-size:14px;
+  font-family:system-ui,sans-serif
+}
+.theme select {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  min-height:44px;
+  padding:6px 10px
+}
+.composition {
+  max-width:1164px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:210px minmax(0,790px);
+  column-gap:70px;
+  padding:64px 24px 24px
+}
+.sommaire {
+  align-self:start;
+  position:sticky;
+  top:38px;
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  line-height:1.6
+}
+.repere {
+  text-transform:uppercase;
+  letter-spacing:.13em;
+  font-size:12px;
+  font-family:system-ui,sans-serif;
+  font-weight:600;
+  color:var(--secondaire);
+  line-height:1.6
+}
+.sommaire ol {
+  padding:0;
+  list-style:none;
+  counter-reset:sommaire
+}
+.sommaire li {
+  counter-increment:sommaire;
+  border-bottom:1px solid var(--filet)
+}
+.sommaire a {
+  color:var(--secondaire);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  text-decoration:none;
+  min-height:48px
+}
+.sommaire a:before {
+  content:counter(sommaire,decimal);
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--rose)
+}
+.sommaire a:hover {
+  color:var(--rose)
+}
+.note-marge {
+  font-family:var(--serif);
+  font-size:19px;
+  line-height:1.6;
+  font-style:italic;
+  color:var(--secondaire);
+  margin-top:34px
+}
+main {
+  min-width:0
+}
+.ouverture {
+  padding:8px 0 38px
+}
+.ouverture>.repere {
+  color:var(--rose)
+}
+.repere span {
+  padding:0 8px
+}
+h1,h2,h3,p {
+  margin-top:0
+}
+h1 {
+  font-weight:500;
+  font-size:clamp(2.5rem,4.8vw,3.7rem);
+  line-height:1.08;
+  letter-spacing:-.035em;
+  margin:22px 0 30px;
+  max-width:740px
+}
+h2 {
+  font-size:28px;
+  font-weight:500;
+  line-height:1.3;
+  display:flex;
+  gap:12px;
+  align-items:baseline;
+  margin-bottom:28px;
+  letter-spacing:-.02em
+}
+h3 {
+  font-size:23px;
+  line-height:1.35;
+  font-weight:600;
+  margin-bottom:10px
+}
+.fleur {
+  color:var(--rose);
+  font-size:17px;
+  align-self:center
+}
+.numero {
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0;
+  color:var(--secondaire)
+}
+.objectif {
+  border-left:3px solid var(--rose);
+  padding:4px 0 4px 22px;
+  font-size:23px;
+  line-height:1.5;
+  max-width:680px;
+  margin-bottom:26px
+}
+.objectif span {
+  display:block;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--rose);
+  margin-bottom:7px
+}
+.prerequis {
+  font-size:16px;
+  color:var(--secondaire);
+  line-height:1.7
+}
+.prerequis strong {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:500
+}
+section {
+  border-top:1px solid var(--filet);
+  padding:38px 0 44px;
+  scroll-margin-top:24px
+}
+p {
+  margin-bottom:20px
+}
+.schemas {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin:28px 0
+}
+figure {
+  margin:0;
+  min-width:0;
+  padding:14px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px
+}
+figure svg {
+  display:block;
+  width:100%;
+  height:auto;
+  overflow:visible
+}
+figcaption {
+  font-size:15px;
+  color:var(--secondaire);
+  line-height:1.5;
+  border-top:1px solid var(--filet);
+  padding-top:12px;
+  margin-top:4px
+}
+svg text {
+  font-family:var(--serif);
+  font-size:18px;
+  fill:var(--encre)
+}
+svg .petite-etiquette {
+  font-size:15px;
+  fill:var(--secondaire)
+}
+svg .gobelet-c {
+  stroke:var(--lavande);
+  fill:var(--rose-fond);
+  stroke-width:2
+}
+svg .gobelet-e {
+  stroke:var(--encre);
+  fill:none;
+  stroke-width:2
+}
+svg .repere-dose {
+  stroke:var(--lavande);
+  fill:none;
+  stroke-width:2
+}
+svg .trait {
+  stroke:var(--secondaire);
+  fill:none;
+  stroke-width:1.5
+}
+svg .resultat {
+  fill:var(--or)
+}
+svg .prediction,svg .point-prediction {fill:var(--rose)}
+svg .mesure,svg .point-mesure {fill:var(--lavande)}
+svg .chemin-correction {stroke:var(--or);stroke-width:4;fill:none}
+svg .cadre-neutre {fill:var(--surface);stroke:var(--filet)}
+svg .cadre-prediction {fill:var(--rose-fond);stroke:var(--rose)}
+svg .cadre-resultat {fill:var(--or-fond);stroke:var(--or)}
+.regle,.pause,.espacement {
+  padding:24px 26px;
+  background:var(--rose-fond);
+  border-radius:8px;
+  border-left:3px solid var(--rose)
+}
+.regle p:last-child,.pause p:last-child,.espacement p:last-child {
+  margin-bottom:0
+}
+.regle .repere {
+  color:var(--rose);
+  margin-bottom:8px
+}
+.regle p:last-child {
+  font-size:22px
+}
+.exemple {
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:10px;
+  padding:28px
+}
+.exemple>.repere {
+  color:var(--or)
+}
+.etapes {
+  padding-left:28px;
+  margin:30px 0
+}
+.etapes>li {
+  padding-left:12px;
+  margin:24px 0
+}
+.etapes>li::marker {
+  font:14px var(--mono);
+  color:var(--or)
+}
+.etapes h3 {
+  font-size:20px
+}
+.etapes p {
+  font-size:18px;
+  margin-bottom:10px
+}
+math {
+  font-size:1.15em;
+  text-align:left;
+  margin:16px 0;
+  color:var(--or)
+}
+.formule {
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto;
+  padding:4px 2px 10px;
+  margin:12px 0 16px
+}
+.formule math {
+  width:max-content;
+  margin:8px 0;
+  text-align:left
+}
+.pause {
+  background:var(--or-fond);
+  border-color:var(--or);
+  font-size:18px
+}
+.petit-titre {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  margin-bottom:12px
+}
+.erreurs {
+  list-style:none;
+  padding:0;
+  margin:0
+}
+.erreurs li {
+  padding:24px 0;
+  border-top:1px dashed var(--filet)
+}
+.erreurs li:first-child {
+  border-top:0;
+  padding-top:0
+}
+.erreurs h3 {
+  font-size:21px
+}
+.erreurs p {
+  font-size:18px;
+  margin-bottom:8px
+}
+.erreurs a {
+  font-size:16px;
+  min-height:44px;
+  display:inline-flex;
+  align-items:center
+}
+.exercice {
+  padding:28px;
+  margin-top:24px;
+  border:1px solid var(--filet);
+  border-radius:10px;
+  background:var(--surface)
+}
+.exercice>.repere {
+  color:var(--rose);
+  margin-bottom:12px
+}
+.exercice>label {
+  font-size:16px;
+  display:block;
+  margin-bottom:8px
+}
+.exercice>label span {
+  color:var(--secondaire);
+  font-size:14px
+}
+textarea {
+  width:100%;
+  min-height:95px;
+  resize:vertical;
+  background:var(--fond);
+  border:1px solid var(--filet);
+  border-radius:6px;
+  padding:12px;
+  font-size:17px;
+  line-height:1.5
+}
+textarea::placeholder {
+  color:var(--secondaire);
+  opacity:1
+}
+fieldset {
+  border:0;
+  padding:12px 0 16px;
+  margin:0;
+  font-family:system-ui,sans-serif;
+  font-size:14px
+}
+legend {
+  font-size:13px;
+  padding:12px 0 0;
+  color:var(--secondaire)
+}
+fieldset label {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  min-height:44px;
+  margin-right:20px
+}
+input[type=radio] {
+  width:18px;
+  height:18px;
+  accent-color:var(--rose);
+  margin:0
+}
+details {
+  border-top:1px solid var(--filet)
+}
+summary {
+  cursor:pointer;
+  min-height:48px;
+  padding:12px 6px;
+  font-size:17px;
+  color:var(--rose)
+}
+details>p,details>ul {
+  font-size:18px;
+  margin:8px 6px 20px
+}
+details li {
+  margin-bottom:8px
+}
+.correction {
+  border-top:2px solid var(--filet)
+}
+.correction summary {
+  font-weight:600
+}
+.etat-aide {
+  font-size:14px;
+  padding:10px 14px;
+  border-left:3px solid var(--or);
+  background:var(--or-fond);
+  margin:10px 0
+}
+.discret {
+  font-size:15px;
+  line-height:1.6;
+  color:var(--secondaire)
+}
+.carte {
+  margin-top:12px;
+  background:var(--surface);
+  border:1px solid var(--filet);
+  border-radius:8px;
+  padding:6px 18px
+}
+.carte summary {
+  font-size:20px;
+  color:var(--encre)
+}
+.carte summary .repere {
+  display:block;
+  margin:0 0 4px 20px;
+  color:var(--rose);
+  font-size:11px
+}
+.carte summary>span:last-child {
+  padding-left:20px;
+  display:block
+}
+.carte>p {
+  padding:12px 20px 6px;
+  margin:0 0 12px
+}
+.secondaire,.bouton {
+  font-family:system-ui,sans-serif;
+  font-size:13px;
+  border:1px solid var(--filet);
+  background:var(--surface);
+  border-radius:6px;
+  padding:11px 15px;
+  min-height:44px;
+  text-decoration:none;
+  align-items:center;
+  justify-content:center
+}
+.secondaire {
+  margin-top:16px
+}
+.exports {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin:24px 0 16px
+}
+.bouton {
+  display:inline-flex;
+  color:var(--rose)
+}
+.bouton:hover,.secondaire:hover {
+  border-color:var(--rose)
+}
+.synthese {
+  margin-top:28px;
+  padding-top:24px;
+  border-top:1px dashed var(--filet)
+}
+.espacement {
+  margin-top:28px;
+  font-size:18px;
+  background:var(--surface);
+  border-color:var(--lavande)
+}
+.jalon dl {
+  font-size:17px
+}
+.jalon dl>div {
+  display:grid;
+  grid-template-columns:145px 1fr;
+  gap:24px;
+  padding:18px 0;
+  border-bottom:1px solid var(--filet)
+}
+dt {
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  font-weight:650
+}
+dd {
+  margin:0;
+  overflow-wrap:anywhere
+}
+footer {
+  border-top:1px solid var(--filet);
+  padding:26px 0 18px;
+  font-family:system-ui,sans-serif;
+  font-size:12px;
+  color:var(--secondaire);
+  display:flex;
+  gap:18px;
+  justify-content:space-between
+}
+footer p {
+  margin:0
+}
+@media(max-width:1000px) {
+  .composition {
+    column-gap:35px;
+    grid-template-columns:170px minmax(0,1fr)
+  }
+  .barre {
+    padding-inline:24px
+  }
+  .schemas {
+    grid-template-columns:1fr
+  }
+  .schemas figure {
+    max-width:420px;
+    width:100%;
+    margin-inline:auto
+  }
+}
+@media(max-width:700px) {
+  body {
+    font-size:19px
+  }
+  .barre {
+    padding:14px 20px;
+    gap:12px;
+    align-items:flex-start
+  }
+  .marque {
+    font-size:23px;
+    gap:8px
+  }
+  .marque span {
+    display:none
+  }
+  .marque svg {
+    width:29px
+  }
+  .theme {
+    font-size:12px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch
+  }
+  .theme label {
+    text-align:right
+  }
+  .theme select {
+    font-size:13px;
+    padding:5px 8px
+  }
+  .composition {
+    display:flex;
+    flex-direction:column;
+    padding:20px
+  }
+  .sommaire {
+    position:static;
+    width:100%;
+    margin-bottom:28px
+  }
+  .sommaire ol {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px
+  }
+  .sommaire .repere {
+    margin-bottom:4px
+  }
+  .sommaire a {
+    font-size:12px;
+    gap:7px
+  }
+  .note-marge {
+    display:none
+  }
+  h1 {
+    font-size:42px;
+    margin:18px 0 24px
+  }
+  h2 {
+    font-size:25px;
+    gap:9px
+  }
+  h3 {
+    font-size:22px
+  }
+  .objectif {
+    font-size:21px;
+    padding-left:16px
+  }
+  .ouverture {
+    padding-bottom:24px
+  }
+  section {
+    padding:30px 0 34px
+  }
+  .schemas {
+    gap:18px
+  }
+  .exemple,.exercice {
+    padding:20px
+  }
+  .regle,.pause,.espacement {
+    padding:20px
+  }
+  .etapes {
+    padding-left:18px
+  }
+  .etapes>li {
+    padding-left:8px
+  }
+  .jalon dl>div {
+    grid-template-columns:1fr;
+    gap:8px
+  }
+  fieldset label {
+    margin-right:12px
+  }
+  footer {
+    flex-direction:column;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior:auto
+  }
+  *,*:before,*:after {
+    animation:none!important;
+    transition:none!important
+  }
+}
+@media print {
+  body {
+    background:white;
+    color:black;
+    font-size:11pt
+  }
+  .barre,.sommaire,.exports,.secondaire,.theme {
+    display:none!important
+  }
+  .composition {
+    display:block;
+    padding:0;
+    max-width:none
+  }
+  main {
+    max-width:none
+  }
+  section {
+    padding:16px 0
+  }
+  h1 {
+    font-size:30pt
+  }
+  .schemas {
+    grid-template-columns:1fr 1fr
+  }
+  figure,.exercice,.exemple {
+    break-inside:avoid
+  }
+  summary {
+    color:black
+  }
+  .exercice textarea,fieldset {
+    display:none
+  }
+  details:not([open])>*:not(summary) {
+    display:block!important
+  }
+  details>p,details>ul {
+    display:block!important
+  }
+  footer {
+    font-size:9pt
+  }
+}
+
+.blurred{display:inline;position:relative;border-bottom:1.5px dotted #cf859f;box-decoration-break:clone;cursor:help}
+.blurred-glyphs{display:inline;filter:blur(4.6px);opacity:.78;user-select:none;letter-spacing:.02em;overflow-wrap:anywhere}
+.blurred::after{content:attr(data-label);position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;padding:4px 8px;border:1px solid #cf859f;border-radius:5px;background:Canvas;color:CanvasText;font:11px/1.4 sans-serif;white-space:nowrap;visibility:hidden;pointer-events:none}
+.blurred:hover::after,.blurred:focus::after{visibility:visible}
+.blurred:focus-visible{outline:2px solid #cf859f;outline-offset:4px}
+.milestone-label{min-width:0}
+#titre-jalon>.fleur{align-self:baseline}
+</style>
+</head>
+<body>
+<a class="evitement" href="#cours">Skip to the lesson</a>
+<header class="barre"><a href="#cours" class="marque" aria-label="Course book, lesson start"><svg viewBox="0 0 48 32" aria-hidden="true"><path d="M24 16C10-4 0 4 6 18c5 8 13 0 18-2ZM24 16C38-4 48 4 42 18c-5 8-13 0-18-2ZM22 18l-7 12M26 18l7 12"/></svg>Course book<span>The course book</span></a>
+<div class="theme js-seulement"><label for="theme">Appearance</label><select id="theme"><option value="systeme">System</option><option value="clair">Light</option><option value="sombre">Dark</option></select></div></header>
+<div class="composition">
+<nav aria-label="Lesson contents" class="sommaire"><p class="repere">On this page</p><ol><li><a href="#intuition">See the idea</a></li><li><a href="#exemple">Follow an example</a></li><li><a href="#erreurs">Common mistakes</a></li><li><a href="#exercices">Try it yourself</a></li><li><a href="#rappel">Recall from memory</a></li><li><a href="#jalon"><span class="milestone-label">Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vqpgsk qyneyh sswg</span></span></span></a></li></ol><p class="note-marge">Use a pencil.<br>Hide, recall,<br>then check.</p></nav>
+<main id="cours" tabindex="-1">
+<div class="ouverture"><p class="repere">Level 4 <span>·</span> C261·M3</p><h1>Long memory</h1><p class="objectif"><span>Your goal</span>Distinguish persistence from long memory, then calculate what temporal dependencies add to the variance of a mean.</p><p class="prerequis"><strong>Before you start</strong><br>c257-m5 : frequency-domain choice and MSE · c145-m5 : policy evaluation · c197-m5 : introductory extreme values · c200-m5 : AR-OU correspondence · c073-m5 : interaction and repeated measures · c261-m1 : extreme values · c261-m2 : structural breaks</p></div>
+<section id="intuition" aria-labelledby="titre-intuition"><h2 id="titre-intuition"><span class="fleur" aria-hidden="true">✿</span><span class="numero">01</span> See the idea</h2><p>An analyst tracks the magnitude of daily movements in the same fictional asset. She takes the absolute value of each day’s return: a fall and a rise of the same size therefore have the same magnitude. Adjacent volatile days can provide partly redundant information. The mean can still be calculated, but its precision can no longer be inferred from the number of days alone.</p><p>The sample contains 4 days: 1, 3, 3, 1 percentage points. All observations and parameters are fictional. The quantity tracked is the absolute return, an indicator of volatility; we do not confuse its mean with the standard deviation of returns.</p><p>Long memory concerns how dependence weakens as days become further apart. Dependence can remain visible for a long time yet decay quickly enough to have short memory. Conversely, individually small dependencies can accumulate without bound over ever larger lags.</p><p>The sample is used to calculate a mean and the uncertainty assigned to it by a model. It cannot determine a dependence law over an infinite horizon. We will therefore compare assumptions, then keep their calculation and validation distinct.</p><div class="schemas"><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same days, a single mean</title><desc>The fictional magnitudes are 1, 3, 3 and 1 percentage points. Their sum 8 divided by 4 gives 2. The lines between days indicate possible dependence without measuring it.</desc><text x="180" y="30" text-anchor="middle">Daily magnitudes</text><text x="180" y="57" text-anchor="middle" class="petite-etiquette">in percentage points</text><line x1="60" y1="114" x2="300" y2="114" class="trait" /><rect x="28" y="83" width="64" height="62" rx="7" class="cadre-prediction" /><rect x="108" y="83" width="64" height="62" rx="7" class="cadre-prediction" /><rect x="188" y="83" width="64" height="62" rx="7" class="cadre-prediction" /><rect x="268" y="83" width="64" height="62" rx="7" class="cadre-prediction" /><text x="60" y="121" text-anchor="middle">1</text><text x="140" y="121" text-anchor="middle">3</text><text x="220" y="121" text-anchor="middle">3</text><text x="300" y="121" text-anchor="middle">1</text><text x="180" y="176" text-anchor="middle" class="petite-etiquette">Order of days preserved</text><rect x="45" y="193" width="270" height="42" rx="7" class="cadre-resultat" /><text x="180" y="220" text-anchor="middle">Mean: 8 / 4 = 2 pp</text></svg><figcaption>The lines express a question about time, rather than a measured covariance. Calculating the mean does not settle this question.</figcaption></figure><figure><svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg" role="img"><title>The same start, different decay rates</title><desc>The theoretical short- and long-memory profiles both have correlation 1/2 at a lag of 1 day. At a lag of 4 days, their correlations are 1/16 and 1/4. The long-memory profile remains at 1/8 at a lag of 16 days. These are dimensionless assumptions.</desc><text x="180" y="30" text-anchor="middle">Assumed correlations</text><text x="55" y="73" text-anchor="middle" class="petite-etiquette">Lag</text><text x="174" y="73" text-anchor="middle" class="prediction">Short</text><text x="292" y="73" text-anchor="middle" class="resultat">Long</text><line x1="20" y1="86" x2="340" y2="86" class="trait" /><text x="55" y="116" text-anchor="middle">1 day</text><text x="174" y="116" text-anchor="middle">1/2</text><text x="292" y="116" text-anchor="middle">1/2</text><text x="55" y="158" text-anchor="middle">4 days</text><text x="174" y="158" text-anchor="middle">1/16</text><text x="292" y="158" text-anchor="middle">1/4</text><line x1="20" y1="178" x2="340" y2="178" class="trait" /><text x="180" y="209" text-anchor="middle">Long profile at 16 days: 1/8</text><text x="180" y="235" text-anchor="middle" class="petite-etiquette">The subsequent decay matters.</text></svg><figcaption>The same correlation between adjacent days can accompany very different behavior at large lags. The exact laws are defined in the example.</figcaption></figure></div><aside class="regle"><p class="repere">The rule to remember</p><p>Long memory is assessed by the accumulation of dependencies at large lags. A mean of correlated days also requires the covariances between those days.</p></aside></section>
+<section id="exemple" aria-labelledby="titre-exemple"><h2 id="titre-exemple"><span class="fleur" aria-hidden="true">✿</span><span class="numero">02</span> Follow an example</h2><div class="exemple"><p class="repere">Worked example</p><h3>The mean is 2 pp; what variance should be assigned to it?</h3><p>Keep the 4 magnitudes in the diagram. Under the models being compared, the daily variance σ² is assumed known and equal to 4 pp². It is not estimated from this sample. We will calculate the full variance of the mean under the short-memory profile before examining what a long dependence tail would change.</p><ol class="etapes"><li><h3>Define the quantity before discussing memory</h3><p>r<sub>t</sub> is the return on day t, expressed in percentage points; X<sub>t</sub> = |r<sub>t</sub>| is its magnitude, in the same unit, denoted pp. t is a trading-day index and k an integer number of days of lag. An uppercase letter represents a random quantity; the observed values of X are the numbers in the diagram.</p><p>We assume X is second-order stationary: its mean μ is constant, its variance σ² is finite and strictly positive, and its covariance between any two days depends only on their lag. E denotes the expectation. The covariance γ(k) measures the mean product of deviations from μ; its unit is pp². The autocorrelation ρ(k) is this covariance divided by σ²; it is dimensionless.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>γ</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><mi>E</mi><mo>[</mo><mo>(</mo><msub><mi>X</mi><mi>t</mi></msub><mo>−</mo><mi>μ</mi><mo>)</mo><mo>(</mo><msub><mi>X</mi><mrow><mi>t</mi><mo>+</mo><mi>k</mi></mrow></msub><mo>−</mo><mi>μ</mi><mo>)</mo><mo>]</mo></mrow></math></div><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ρ</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mi>γ</mi><mo>(</mo><mi>k</mi><mo>)</mo></mrow><msup><mi>σ</mi><mn>2</mn></msup></mfrac><mo>;</mo><mi>ρ</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>=</mo><mn>1</mn></mrow></math></div><p>For X = |r|, a finite variance requires, in particular, a finite second moment of returns. If this assumption fails, this characterization of memory through covariance is unavailable. A break in the mean, studied in the previous unit, also requires stationarity to be reexamined.</p></li><li><h3>Separate prolonged persistence from long memory</h3><p>Here we define short memory as absolute summability of autocorrelations: the sum of |ρ(k)| over positive lags remains finite. For long memory, we study the case of a positive power-law tail: ρ(k) is asymptotically equivalent to C k to the power −α, with C positive and 0 &lt; α &lt; 1. The symbol ∼ means that the ratio of the two expressions tends to 1 as k grows without bound.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>ρ</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>∼</mo><mi>C</mi><msup><mi>k</mi><mrow><mo>−</mo><mi>α</mi></mrow></msup><mo>;</mo><mn>0</mn><mo>&lt;</mo><mi>α</mi><mo>&lt;</mo><mn>1</mn></mrow></math></div><p>C and α are dimensionless. In this positive case, the terms tend to 0 but their sum diverges. To see this, the lags from m to 2m contribute at least an amount of order m × (2m) to the power −α: this amount grows like m to the power (1 − α). It cannot remain bounded. Here m denotes an integer lag that we increase. A few large correlations are therefore insufficient; their tail matters.</p><p>Compare two theoretical profiles, with ρ(0) = 1. The short-memory profile S uses ρ<sub>s</sub>(k) = φ to the power k with φ = 1/2, dimensionless. The long-memory profile L uses ρ<sub>l</sub>(k) = C/√k for k ≥ 1, with C = 1/2 and α = 1/2. √k denotes the square root of the number of lags. These are assumed covariance models, rather than fits to the sample.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><msub><mi>ρ</mi><mi>S</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><msup><mrow><mo>(</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>)</mo></mrow><mi>k</mi></msup><mo>;</mo><msub><mi>ρ</mi><mi>L</mi></msub><mo>(</mo><mi>k</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>2</mn><msqrt><mi>k</mi></msqrt></mrow></mfrac></mrow></math></div><p>For S, the geometric series over positive lags equals φ/(1 − φ) = 1/2/1/2 = 1: it is finite. L has a divergent sum. Yet both start with ρ(1) = 1/2. Even a much more persistent geometric profile would retain short memory as long as |φ| &lt; 1. We do not study oscillating correlations here.</p></li><li><h3>Calculate the mean and derive its variance</h3><p>n denotes the number of days; X̄<sub>n</sub> is their random mean. For the sample, n = 4. The sum is (1 + 3) + (3 + 1) = 4 + 4 = 8 pp, then the observed mean is 8/4 = 2 pp. This observed value is not necessarily μ.</p><p>The variance of a sum adds all the covariances. Each of the n diagonal terms equals σ². At lag k, there are n − k pairs of days; each pair appears in both directions. Finally, dividing the sum by n divides its variance by n squared. This gives the exact formula:</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><msub><mover><mi>X</mi><mo>¯</mo></mover><mi>n</mi></msub><mo>)</mo><mo>=</mo><mfrac><msup><mi>σ</mi><mn>2</mn></msup><msup><mi>n</mi><mn>2</mn></msup></mfrac><mo>[</mo><mi>n</mi><mo>+</mo><mn>2</mn><msubsup><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msubsup><mo>(</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo>)</mo><mi>ρ</mi><mo>(</mo><mi>k</mi><mo>)</mo><mo>]</mo></mrow></math></div><p>Var denotes variance and ∑ denotes summation over the indicated lags. The result is in pp². If all off-diagonal covariances are 0, we recover σ²/n. Independence is sufficient for these covariances to vanish; it is not necessary.</p></li><li><h3>Count each pair under the short-memory model</h3><p>For S, lags 1, 2 and 3 give 1/2, 1/4 and 1/8, respectively. These values are obtained by multiplying by φ = 1/2 at each step.</p><p>Lag 1: the pairs of days (1, 2), (2, 3), (3, 4) number 3. Their normalized contribution is 3 × 1/2 = 3/2. Lag 2: (1, 3) and (2, 4) give 2 × 1/4 = 1/2. Lag 3: (1, 4) gives 1 × 1/8 = 1/8.</p><p>The sum over unordered pairs is 3/2 + 1/2 + 1/8 = 17/8. The factor 2 restores both directions: 17/4. Including the 4 diagonal terms, the full bracket equals 4 + 17/4 = 33/4.</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Var</mi><mo>(</mo><msub><mover><mi>X</mi><mo>¯</mo></mover><mn>4</mn></msub><mo>)</mo><mo>=</mo><mfrac><mn>33</mn><mn>16</mn></mfrac><mo>=</mo><mn>2.0625</mn><mtext> pp²</mtext></mrow></math></div><p>In other words, the variance of the sum equals 4 × 33/4 = 33 pp². Taking the mean divides this variance by 4 squared, or 16. We obtain 33/16 pp², or 2.0625 pp². This is not a standard deviation, which would be the square root of this variance.</p></li><li><h3>Check without recounting the same terms</h3><p>Construct the covariance matrix of the days. i and j denote its row and column indices. Its entry (i, j) equals σ²ρ(|i − j|). The diagonal equals 4 pp²; the next bands equal 2, 1 and 1/2 pp².</p><div class="formule" role="group" tabindex="0" aria-label="Mathematical formula; scroll horizontally if needed"><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>Σ</mi><mo>=</mo><mo>[</mo><mtable><mtr><mtd><mn>4</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>1</mn></mtd><mtd><mn>1/2</mn></mtd></mtr><mtr><mtd><mn>2</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>4</mn></mtd><mtd><mn>2</mn></mtd></mtr><mtr><mtd><mn>1/2</mn></mtd><mtd><mn>1</mn></mtd><mtd><mn>2</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable><mo>]</mo><mtext> pp²</mtext></mrow></math></div><p>Σ denotes this matrix. Directly adding all its entries gives 33 pp²; dividing by 16 confirms 33/16 pp². Setting all its off-diagonal entries to 0 instead gives 1 pp², or σ²/n. The variance ratio is 33/16, or 2.0625, dimensionless. This extra uncertainty already appears in a short-memory model: it does not prove long memory.</p></li><li><h3>Understand what changes as the horizon grows</h3><p>Under short memory, the bracket in the formula grows at most like n and the variance of the mean is at most of order the inverse of n. For a positive tail ρ(k) ∼ C k to the power −α with 0 &lt; α &lt; 1, the weighted sum grows like n to the power (2 − α). Dividing by n squared leaves a variance of order n to the power −α: it decreases more slowly than the inverse of n.</p><p>Why this order? For lags up to a fixed fraction of n, the weight n − k remains comparable to n. The accumulation of k to the power −α up to n is of order n to the power (1 − α). Their product gives n to the power (2 − α). Here “of order” compares rates of change without giving an equality for small n.</p><p>For profile L, α = 1/2: the variance of the mean decreases like the inverse of √n in order of magnitude; its standard deviation therefore decreases like the inverse of the 4th root of n. This behavior concerns the series of absolute returns under model L, without predicting the behavior of signed returns or any actual forecasting gain.</p><p>The sample of 4 days does not establish any of these tail laws. A level shift can give the appearance of persistence; a heavy tail can make covariances difficult to estimate, or even undefined. Before interpreting an observed slow decay, we must therefore specify the variable, examine structural breaks and compare conclusions across several window lengths. This is a verification procedure, rather than validation already obtained.</p></li></ol><aside class="pause"><p class="petit-titre">Explain it in your own words</p><p>Hide the calculation. Reconstruct the pairs for each lag, explain the double counting and the final division, then answer: why does the result obtained under S fail to establish long memory?</p></aside></div></section>
+<section id="erreurs" aria-labelledby="titre-erreurs"><h2 id="titre-erreurs"><span class="fleur" aria-hidden="true">✿</span><span class="numero">03</span> Common mistakes</h2><ul class="erreurs"><li><h3>“The correlation remains positive even at large time separations: this is long memory.”</h3><p>Examine the model’s entire tail. Geometric decay has a finite sum, even with a coefficient very close to 1. In our profile S, dependence changes the variance of the mean without having long memory.</p><a href="#exemple">Review the summability criterion</a></li><li><h3>“I have 4 days, so I simply divide the daily variance by 4.”</h3><p>This simplification requires 0 off-diagonal covariances. Count the pairs first: under S, they raise the variance from 1 to 33/16 pp². The calculation of the observed mean itself remains the same.</p><a href="#exemple">Identify the covariances in the matrix</a></li><li><h3>“A lasting change in magnitude proves stationary long memory.”</h3><p>A level shift mixes regimes and calls the constant-mean assumption into question. Examine structural breaks again and check sensitivity to windows before attributing this pattern to a stationary dependence tail.</p><a href="#exercices">Address the objection in the diagnostic exercise</a></li></ul></section>
+<section id="exercices" aria-labelledby="titre-exercices"><h2 id="titre-exercices"><span class="fleur" aria-hidden="true">✿</span><span class="numero">04</span> Try it yourself</h2><p>Put the example aside. Write an attempt and rate your confidence before comparing. If you are unsure, open one hint, then continue your reasoning.</p><p class="discret">Your answers stay in the open page. No text is sent or saved.</p><article class="exercice" id="ex-retards"><p class="repere">Exercise 1 · Warm-up · exact calculation</p>
+<h3>Extend both profiles</h3><p>For the same fictional asset, calculate ρₛ(4) and ρₗ(4), then their ratio L/S. Next calculate ρₗ(16). Explain what has changed even though the two profiles coincide at lag 1.</p>
+<label for="reponse-ex-retards">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-retards" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-retards" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-retards" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-retards" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>For S, multiply 1/2 by itself as many times as the lag indicates.</p></details><details class="indice"><summary>Hint 2</summary><p>For L, √4 = 2 and √16 = 4. The denominator is 2 times this root.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>For S: 1/2 × 1/2 = 1/4, then × 1/2 = 1/8, then × 1/2 = 1/16. For L: 1/(2 × 2) = 1/4. At the same lag, L/S equals 1/4 ÷ 1/16 = 4, dimensionless.</p><p>At lag 16, L equals 1/(2 × 4) = 1/8. Agreement at the first lag does not constrain the subsequent decay. These calculations check the assumed profiles; they do not fit them to the observations.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 1/16, 1/4, 4 and 1/8 using the indicated operations.</li><li>Keep the correlations and their ratio dimensionless.</li><li>Distinguish a property of the models from a measurement on the asset.</li></ul></details></article><article class="exercice" id="ex-paire"><p class="repere">Exercise 2 · Application · covariance</p>
+<h3>Keep only adjacent days</h3><p>The analyst keeps only the first 2 days. With σ² = 4 pp² and ρ(1) = 1/2, calculate the variance of their mean. Can this calculation distinguish S from L?</p>
+<label for="reponse-ex-paire">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-paire" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-paire" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-paire" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-paire" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>The variance of X on the first day plus X on the second adds their variances and twice their covariance.</p></details><details class="indice"><summary>Hint 2</summary><p>The covariance equals σ²ρ(1) = 2 pp². The mean divides the sum by 2, and therefore its variance by 4.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>The variance of the sum equals 4 + 4 + 2 × 2 pp². After division by 4, we can regroup: σ²(1 + ρ(1))/2 = 4 × 3/2/2 = 6/2 = 3 pp².</p><p>S and L give exactly this result, because only lag 1 is involved and their correlations there are equal. They differ at other lags, particularly in the tail. A variance correctly calculated over these days therefore cannot distinguish them.</p><p class="petit-titre">Check your reasoning</p><ul><li>Obtain 3 pp² with the covariance term counted in both directions.</li><li>Divide the variance of the sum by the square of the number of days.</li><li>Justify why this calculation is identical under S and L.</li></ul></details></article><article class="exercice" id="ex-diagnostic"><p class="repere">Exercise 3 · Transfer · objection to investigate</p>
+<h3>Is a long volatile episode enough?</h3><p>In a fictional continuation of the same series, the magnitude undergoes a lasting level shift. Someone pools the entire period, sees a slow decay in correlations and concludes: “Long memory is established; the uncertainty of the mean must follow L.” Write an answer and propose a check that distinguishes this hypothesis from a structural break.</p>
+<label for="reponse-ex-diagnostic">Your attempt <span>(optional; you can use paper)</span></label>
+<textarea id="reponse-ex-diagnostic" rows="3" maxlength="2000" placeholder="Write your reasoning before opening the next section."></textarea>
+<fieldset><legend>Rate your confidence before comparing</legend><label><input type="radio" name="confiance-ex-diagnostic" value="0"> Unsure</label><label><input type="radio" name="confiance-ex-diagnostic" value="1"> Somewhat sure</label><label><input type="radio" name="confiance-ex-diagnostic" value="2"> Sure</label></fieldset>
+<p class="etat-aide" role="status" hidden>Assisted answer: try this exercise without help later.</p>
+<div class="indices"><details class="indice"><summary>Hint 1</summary><p>Start with the assumption that X has a constant mean, before interpreting the correlation tail.</p></details><details class="indice"><summary>Hint 2</summary><p>Compare what you would calculate over the entire period and over segments where the level appears stable. If persistence disappears after segmentation, this does not mean all dependence has disappeared.</p></details></div>
+<details class="correction"><summary>Compare with the solution</summary><p>A structural break can produce apparent persistence by mixing regimes. Examine the level shift and the stability of the variance, compare correlations within consistent segments and check sensitivity to window length. The definition of X and the existence of its second moment must remain explicit.</p><p>If the slow decay disappears after separating the regimes, this weakens the stationary long-memory interpretation. If it remains, this warrants further study; it does not by itself establish a law over infinite lags. We therefore do not automatically replace the variance calculated under S with a formula derived from L.</p><p class="petit-titre">Check your reasoning</p><ul><li>Name the assumption that may fail: a constant mean over the entire period.</li><li>Propose a comparison of the entire period, segments and windows, including the outcomes that would change the diagnosis.</li><li>Distinguish suspected long memory, the chosen model and empirical evidence that remains limited.</li></ul></details></article></section>
+<section id="rappel" aria-labelledby="titre-rappel"><h2 id="titre-rappel"><span class="fleur" aria-hidden="true">✿</span><span class="numero">05</span> Recall from memory</h2><p>Close the lesson, answer each question, then reveal the answer. Explain any missing steps in your own words.</p><details class="carte" data-carte="objet"><summary><span class="repere">Recall 1</span><span>What quantity do we track, and under what assumptions can we discuss memory through covariance here?</span></summary><p>We track Xₜ = |rₜ|, the magnitude of the daily return in percentage points. We assume a constant mean, a finite positive variance and covariance that depends only on lag. This conclusion does not automatically extend to signed returns.</p></details><details class="carte" data-carte="queue"><summary><span class="repere">Recall 2</span><span>Why can a correlation that tends to 0 still involve long memory?</span></summary><p>Small dependencies can accumulate without bound. A positive tail C k to the power −α with 0 &lt; α &lt; 1 is not summable; a geometric tail with |φ| &lt; 1 is absolutely summable. The rate of decay matters.</p></details><details class="carte" data-carte="variance"><summary><span class="repere">Recall 3</span><span>How can we derive the variance of a mean without assuming independent days?</span></summary><p>Add all the covariances, then divide by n squared. Under stationarity, count n diagonal variances and n − k pairs for each lag k, each in both directions. The variance σ²/n alone requires 0 off-diagonal covariances.</p></details><details class="carte" data-carte="limite"><summary><span class="repere">Recall 4</span><span>What is proved by neither our sample nor the calculated increase in its variance?</span></summary><p>They do not prove an infinite dependence tail. The increase already appears under S, which has short memory. A structural break or nonfinite moments require the assumptions to be revisited before interpreting a slow decay.</p></details><details class="carte" data-carte="vitesse"><summary><span class="repere">Recall 5</span><span>With a positive power-law tail whose exponent α is between 0 and 1, why does the uncertainty of the mean decrease more slowly?</span></summary><p>The weighted accumulation of lags is of order n to the power (2 − α). After division by n squared, the variance remains of order n to the power −α, slower than the inverse of n. Variance and standard deviation have different rates.</p></details><button class="secondaire js-seulement" id="remasquer" type="button">Hide all answers</button><div class="synthese"><p class="repere">Reconstruct the reasoning</p><p>Without rereading, reconstruct the following steps: name X and its units; state stationarity and finite variance; distinguish summability from persistence alone; derive the variance of the mean through pairs; explain why a structural break must be examined before attributing a long tail. Reproduce the calculation and the objection without hints at least 2 days later. Reading or an assisted answer never constitutes an attained level.</p></div><div class="exports"><a class="bouton" download="c261-m3-cartes.json" href="data:application/json;base64,ewogICJmb3JtYXQiOiAidG9kYWktcmFwcGVsIiwKICAidmVyc2lvbiI6IDEsCiAgImNhcnRlcyI6IFsKICAgIHsKICAgICAgImlkIjogInRvZGFpOmMyNjEtbTM6b2JqZXQiLAogICAgICAidW5pdGUiOiAiYzI2MS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogImF1dG9jb3JyZWxhdGlvbi1ldC12YXJpYWJsZSIsCiAgICAgICJxdWVzdGlvbiI6ICJXaGF0IHF1YW50aXR5IGRvIHdlIHRyYWNrLCBhbmQgdW5kZXIgd2hhdCBhc3N1bXB0aW9ucyBjYW4gd2UgZGlzY3VzcyBtZW1vcnkgdGhyb3VnaCBjb3ZhcmlhbmNlIGhlcmU/IiwKICAgICAgInJlcG9uc2UiOiAiV2UgdHJhY2sgWOKCnCA9IHxy4oKcfCwgdGhlIG1hZ25pdHVkZSBvZiB0aGUgZGFpbHkgcmV0dXJuIGluIHBlcmNlbnRhZ2UgcG9pbnRzLiBXZSBhc3N1bWUgYSBjb25zdGFudCBtZWFuLCBhIGZpbml0ZSBwb3NpdGl2ZSB2YXJpYW5jZSBhbmQgY292YXJpYW5jZSB0aGF0IGRlcGVuZHMgb25seSBvbiBsYWcuIFRoaXMgY29uY2x1c2lvbiBkb2VzIG5vdCBhdXRvbWF0aWNhbGx5IGV4dGVuZCB0byBzaWduZWQgcmV0dXJucy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MS1tMzpxdWV1ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjYxLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAibWVtb2lyZS1sb25ndWUiLAogICAgICAicXVlc3Rpb24iOiAiV2h5IGNhbiBhIGNvcnJlbGF0aW9uIHRoYXQgdGVuZHMgdG8gMCBzdGlsbCBpbnZvbHZlIGxvbmcgbWVtb3J5PyIsCiAgICAgICJyZXBvbnNlIjogIlNtYWxsIGRlcGVuZGVuY2llcyBjYW4gYWNjdW11bGF0ZSB3aXRob3V0IGJvdW5kLiBBIHBvc2l0aXZlIHRhaWwgQyBrIHRvIHRoZSBwb3dlciDiiJLOsSB3aXRoIDAgPCDOsSA8IDEgaXMgbm90IHN1bW1hYmxlOyBhIGdlb21ldHJpYyB0YWlsIHdpdGggfM+GfCA8IDEgaXMgYWJzb2x1dGVseSBzdW1tYWJsZS4gVGhlIHJhdGUgb2YgZGVjYXkgbWF0dGVycy4iLAogICAgICAidmVyc2lvbiI6IDEsCiAgICAgICJzdGF0dXQiOiAibm9uLWV2YWx1ZWUiCiAgICB9LAogICAgewogICAgICAiaWQiOiAidG9kYWk6YzI2MS1tMzp2YXJpYW5jZSIsCiAgICAgICJ1bml0ZSI6ICJjMjYxLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAidmFyaWFuY2UtbW95ZW5uZS1kZXBlbmRhbnRlIiwKICAgICAgInF1ZXN0aW9uIjogIkhvdyBjYW4gd2UgZGVyaXZlIHRoZSB2YXJpYW5jZSBvZiBhIG1lYW4gd2l0aG91dCBhc3N1bWluZyBpbmRlcGVuZGVudCBkYXlzPyIsCiAgICAgICJyZXBvbnNlIjogIkFkZCBhbGwgdGhlIGNvdmFyaWFuY2VzLCB0aGVuIGRpdmlkZSBieSBuIHNxdWFyZWQuIFVuZGVyIHN0YXRpb25hcml0eSwgY291bnQgbiBkaWFnb25hbCB2YXJpYW5jZXMgYW5kIG4g4oiSIGsgcGFpcnMgZm9yIGVhY2ggbGFnIGssIGVhY2ggaW4gYm90aCBkaXJlY3Rpb25zLiBUaGUgdmFyaWFuY2Ugz4PCsi9uIGFsb25lIHJlcXVpcmVzIDAgb2ZmLWRpYWdvbmFsIGNvdmFyaWFuY2VzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjYxLW0zOmxpbWl0ZSIsCiAgICAgICJ1bml0ZSI6ICJjMjYxLW0zIiwKICAgICAgImxhbmd1ZSI6ICJlbiIsCiAgICAgICJub3Rpb24iOiAiaW5mZXJlbmNlLW1lbW9pcmUtbG9uZ3VlIiwKICAgICAgInF1ZXN0aW9uIjogIldoYXQgaXMgcHJvdmVkIGJ5IG5laXRoZXIgb3VyIHNhbXBsZSBub3IgdGhlIGNhbGN1bGF0ZWQgaW5jcmVhc2UgaW4gaXRzIHZhcmlhbmNlPyIsCiAgICAgICJyZXBvbnNlIjogIlRoZXkgZG8gbm90IHByb3ZlIGFuIGluZmluaXRlIGRlcGVuZGVuY2UgdGFpbC4gVGhlIGluY3JlYXNlIGFscmVhZHkgYXBwZWFycyB1bmRlciBTLCB3aGljaCBoYXMgc2hvcnQgbWVtb3J5LiBBIHN0cnVjdHVyYWwgYnJlYWsgb3Igbm9uZmluaXRlIG1vbWVudHMgcmVxdWlyZSB0aGUgYXNzdW1wdGlvbnMgdG8gYmUgcmV2aXNpdGVkIGJlZm9yZSBpbnRlcnByZXRpbmcgYSBzbG93IGRlY2F5LiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0sCiAgICB7CiAgICAgICJpZCI6ICJ0b2RhaTpjMjYxLW0zOnZpdGVzc2UiLAogICAgICAidW5pdGUiOiAiYzI2MS1tMyIsCiAgICAgICJsYW5ndWUiOiAiZW4iLAogICAgICAibm90aW9uIjogIm1veWVubmUtZXQtcXVldWUtcG9zaXRpdmUiLAogICAgICAicXVlc3Rpb24iOiAiV2l0aCBhIHBvc2l0aXZlIHBvd2VyLWxhdyB0YWlsIHdob3NlIGV4cG9uZW50IM6xIGlzIGJldHdlZW4gMCBhbmQgMSwgd2h5IGRvZXMgdGhlIHVuY2VydGFpbnR5IG9mIHRoZSBtZWFuIGRlY3JlYXNlIG1vcmUgc2xvd2x5PyIsCiAgICAgICJyZXBvbnNlIjogIlRoZSB3ZWlnaHRlZCBhY2N1bXVsYXRpb24gb2YgbGFncyBpcyBvZiBvcmRlciBuIHRvIHRoZSBwb3dlciAoMiDiiJIgzrEpLiBBZnRlciBkaXZpc2lvbiBieSBuIHNxdWFyZWQsIHRoZSB2YXJpYW5jZSByZW1haW5zIG9mIG9yZGVyIG4gdG8gdGhlIHBvd2VyIOKIks6xLCBzbG93ZXIgdGhhbiB0aGUgaW52ZXJzZSBvZiBuLiBWYXJpYW5jZSBhbmQgc3RhbmRhcmQgZGV2aWF0aW9uIGhhdmUgZGlmZmVyZW50IHJhdGVzLiIsCiAgICAgICJ2ZXJzaW9uIjogMSwKICAgICAgInN0YXR1dCI6ICJub24tZXZhbHVlZSIKICAgIH0KICBdCn0K">Export cards · JSON</a><a class="bouton" download="c261-m3-cartes.tsv" href="data:text/tab-separated-values;base64,V2hhdCBxdWFudGl0eSBkbyB3ZSB0cmFjaywgYW5kIHVuZGVyIHdoYXQgYXNzdW1wdGlvbnMgY2FuIHdlIGRpc2N1c3MgbWVtb3J5IHRocm91Z2ggY292YXJpYW5jZSBoZXJlPwlXZSB0cmFjayBY4oKcID0gfHLigpx8LCB0aGUgbWFnbml0dWRlIG9mIHRoZSBkYWlseSByZXR1cm4gaW4gcGVyY2VudGFnZSBwb2ludHMuIFdlIGFzc3VtZSBhIGNvbnN0YW50IG1lYW4sIGEgZmluaXRlIHBvc2l0aXZlIHZhcmlhbmNlIGFuZCBjb3ZhcmlhbmNlIHRoYXQgZGVwZW5kcyBvbmx5IG9uIGxhZy4gVGhpcyBjb25jbHVzaW9uIGRvZXMgbm90IGF1dG9tYXRpY2FsbHkgZXh0ZW5kIHRvIHNpZ25lZCByZXR1cm5zLgl0b2RhaSBjMjYxLW0zIGF1dG9jb3JyZWxhdGlvbi1ldC12YXJpYWJsZQpXaHkgY2FuIGEgY29ycmVsYXRpb24gdGhhdCB0ZW5kcyB0byAwIHN0aWxsIGludm9sdmUgbG9uZyBtZW1vcnk/CVNtYWxsIGRlcGVuZGVuY2llcyBjYW4gYWNjdW11bGF0ZSB3aXRob3V0IGJvdW5kLiBBIHBvc2l0aXZlIHRhaWwgQyBrIHRvIHRoZSBwb3dlciDiiJLOsSB3aXRoIDAgPCDOsSA8IDEgaXMgbm90IHN1bW1hYmxlOyBhIGdlb21ldHJpYyB0YWlsIHdpdGggfM+GfCA8IDEgaXMgYWJzb2x1dGVseSBzdW1tYWJsZS4gVGhlIHJhdGUgb2YgZGVjYXkgbWF0dGVycy4JdG9kYWkgYzI2MS1tMyBtZW1vaXJlLWxvbmd1ZQpIb3cgY2FuIHdlIGRlcml2ZSB0aGUgdmFyaWFuY2Ugb2YgYSBtZWFuIHdpdGhvdXQgYXNzdW1pbmcgaW5kZXBlbmRlbnQgZGF5cz8JQWRkIGFsbCB0aGUgY292YXJpYW5jZXMsIHRoZW4gZGl2aWRlIGJ5IG4gc3F1YXJlZC4gVW5kZXIgc3RhdGlvbmFyaXR5LCBjb3VudCBuIGRpYWdvbmFsIHZhcmlhbmNlcyBhbmQgbiDiiJIgayBwYWlycyBmb3IgZWFjaCBsYWcgaywgZWFjaCBpbiBib3RoIGRpcmVjdGlvbnMuIFRoZSB2YXJpYW5jZSDPg8KyL24gYWxvbmUgcmVxdWlyZXMgMCBvZmYtZGlhZ29uYWwgY292YXJpYW5jZXMuCXRvZGFpIGMyNjEtbTMgdmFyaWFuY2UtbW95ZW5uZS1kZXBlbmRhbnRlCldoYXQgaXMgcHJvdmVkIGJ5IG5laXRoZXIgb3VyIHNhbXBsZSBub3IgdGhlIGNhbGN1bGF0ZWQgaW5jcmVhc2UgaW4gaXRzIHZhcmlhbmNlPwlUaGV5IGRvIG5vdCBwcm92ZSBhbiBpbmZpbml0ZSBkZXBlbmRlbmNlIHRhaWwuIFRoZSBpbmNyZWFzZSBhbHJlYWR5IGFwcGVhcnMgdW5kZXIgUywgd2hpY2ggaGFzIHNob3J0IG1lbW9yeS4gQSBzdHJ1Y3R1cmFsIGJyZWFrIG9yIG5vbmZpbml0ZSBtb21lbnRzIHJlcXVpcmUgdGhlIGFzc3VtcHRpb25zIHRvIGJlIHJldmlzaXRlZCBiZWZvcmUgaW50ZXJwcmV0aW5nIGEgc2xvdyBkZWNheS4JdG9kYWkgYzI2MS1tMyBpbmZlcmVuY2UtbWVtb2lyZS1sb25ndWUKV2l0aCBhIHBvc2l0aXZlIHBvd2VyLWxhdyB0YWlsIHdob3NlIGV4cG9uZW50IM6xIGlzIGJldHdlZW4gMCBhbmQgMSwgd2h5IGRvZXMgdGhlIHVuY2VydGFpbnR5IG9mIHRoZSBtZWFuIGRlY3JlYXNlIG1vcmUgc2xvd2x5PwlUaGUgd2VpZ2h0ZWQgYWNjdW11bGF0aW9uIG9mIGxhZ3MgaXMgb2Ygb3JkZXIgbiB0byB0aGUgcG93ZXIgKDIg4oiSIM6xKS4gQWZ0ZXIgZGl2aXNpb24gYnkgbiBzcXVhcmVkLCB0aGUgdmFyaWFuY2UgcmVtYWlucyBvZiBvcmRlciBuIHRvIHRoZSBwb3dlciDiiJLOsSwgc2xvd2VyIHRoYW4gdGhlIGludmVyc2Ugb2Ygbi4gVmFyaWFuY2UgYW5kIHN0YW5kYXJkIGRldmlhdGlvbiBoYXZlIGRpZmZlcmVudCByYXRlcy4JdG9kYWkgYzI2MS1tMyBtb3llbm5lLWV0LXF1ZXVlLXBvc2l0aXZlCg==">Export for Anki · TSV</a></div><p class="discret">Exports contain the lesson questions and answers. They exclude your attempts and the private milestone. In Anki, use three plain text fields separated by tabs; the third field contains tags.</p><aside class="espacement"><p class="petit-titre">Plan another recall session</p><p>Try these questions on another day before rereading. If you cannot answer, read the solution and try again later. Space sessions further apart when you can recall the idea without help.</p><p>A first attempt after two days is a practical starting point to adjust. Immediate success does not establish that you will still be able to explain it later.</p></aside></section>
+<section id="jalon" aria-labelledby="titre-jalon" class="jalon"><h2 id="titre-jalon"><span class="fleur" aria-hidden="true">✿</span><span class="numero">06</span><span class="milestone-label"> Milestone <span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">vqpgsk qyneyh sswg</span></span></span></h2><p class="discret">This passage links the notion to a private project: it is blurred in this edition.</p><p class="repere">Progress reference · no automatic assessment</p><h3><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">srxdol yphufy awbdpo fbjxqm mzxhsf fajnto xqlz</span></span></h3><dl><div><dt>What you understand</dt><dd>Observations close together can be redundant. Temporal dependence requires a method that accounts for it; its existence is insufficient to establish long memory.</dd></div><div><dt>In the code</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">mimohi nqlkfv okscgs swcwps jdhqmq amhkod kbuemh gvmxuj qkxccb qwcgne zfmihx nuobeq amsjvj hbgxpz kvpald hkmmxv vcwkbo qwpyjk togqxd ojvirc wvpwed jxeksc gkzutq edmkvv</span></span></dd></div><div><dt>Level to prepare for</dt><dd>Level 4 to prepare for: reconstruct the variance through pairs, distinguish a geometric tail from a positive nonsummable tail and investigate the structural-break objection. Neither the page nor a consulted solution awards this level. The architecture provides no numbered private milestone here.</dd></div><div><dt>Evidence and limitation</dt><dd><span class="blurred" tabindex="0" role="img" aria-label="blurred passage" data-label="BLURRED"><span class="blurred-glyphs" aria-hidden="true">fsphhj zxxutb kysckn wwegpq vscbod tqnxjn ftyaoo yvztoh djczku dloxvh dolmqv oxxeud ctlknu gebhfw gwubdo dqijub jrbdtg ntqlpf vyakna txypht xtfuhy vpfhjk fjwbxb rmwppt</span></span></dd></div><div><dt>Next step</dt><dd>Redo the calculation and diagnosis without assistance, then prepare the next unit on multiple testing. An actual study of this code would require a separate mandate to check the code that consumes it, the assumptions of the test and its behavior; none of these checks is claimed to have been completed here.</dd></div></dl></section>
+<nav id="navigation-unites" data-unite="c261-m3" aria-label="Book navigation"><a href="index.html">Contents</a> · <a href="c261-m2.html">Previous</a> · <a href="c261-m4.html">Next</a></nav>
+<footer><p>Course book · C261·M3</p><p>Classic edition · English · mathematics, programming and neuroscience</p></footer>
+</main></div>
+<script>"use strict";
+(() => {
+  const racine = document.documentElement;
+  racine.classList.add("avec-js");
+  const choix = document.querySelector("#theme");
+  const appliquer = valeur => {
+    if (["clair", "sombre"].includes(valeur)) racine.dataset.theme = valeur;
+    else delete racine.dataset.theme;
+  };
+  let preference = "systeme";
+  try { preference = localStorage.getItem("todai-classique-theme") || "systeme"; }
+  catch { /* Le cours reste entièrement utilisable sans stockage. */ }
+  if (!["systeme", "clair", "sombre"].includes(preference)) preference = "systeme";
+  appliquer(preference);
+  choix.value = preference;
+  choix.addEventListener("change", () => {
+    appliquer(choix.value);
+    try { localStorage.setItem("todai-classique-theme", choix.value); }
+    catch { /* Seul le thème de cet onglet est conservé. */ }
+  });
+  for (const exercice of document.querySelectorAll(".exercice")) {
+    for (const aide of exercice.querySelectorAll("details")) {
+      aide.addEventListener("toggle", () => {
+        if (aide.open) exercice.querySelector(".etat-aide").hidden = false;
+      });
+    }
+  }
+  document.querySelector("#remasquer").addEventListener("click", () => {
+    document.querySelectorAll(".carte").forEach(carte => { carte.open = false; });
+  });
+})();
+</script>
+
+</body></html>
